@@ -1,0 +1,53 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+.eggs/
+
+# Virtualenvs
+.venv/
+venv/
+env/
+
+# Build / packaging
+build/
+dist/
+*.whl
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
+*.swp
+*.swo
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Data / weights — never commit
+*.safetensors
+*.pt
+*.bin
+*.gguf
+*.npy
+*.npz
+
+# Local artifacts
+data/
+artifacts/
+checkpoints/
+runs/
+reports/
+
+# Local notes (use docs/ for public)
+NOTES.md
+TODO.md
+.env

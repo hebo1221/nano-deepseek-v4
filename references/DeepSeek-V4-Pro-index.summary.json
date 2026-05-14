@@ -1,0 +1,7 @@
+{
+  "source": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/resolve/main/model.safetensors.index.json",
+  "sha256": "a3a39b9ccb4e729851922fc9c770f5c5755e7b9d7e96cd02c23f0e12b5e25cb9",
+  "metadata_total_size": 864704792696,
+  "weight_map_entries": 145116,
+  "shard_count": 64
+}

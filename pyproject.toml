@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nano-deepseek-v4"
+version = "0.1.0"
+description = "A compact, readable PyTorch reference implementation of the DeepSeek-V4 architecture (Flash and Pro)."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [{ name = "nano-deepseek-v4 contributors" }]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "torch>=2.4",
+    "numpy>=1.24",
+    "safetensors>=0.4",
+]
+
+[project.optional-dependencies]
+official = [
+    "huggingface_hub>=0.20",
+    "tokenizers>=0.20",
+]
+dev = [
+    "pytest>=7.0",
+]
+notebook = [
+    "jupyter",
+    "matplotlib",
+    "ipywidgets",
+]
+
+[project.urls]
+Homepage = "https://github.com/hebo1221/nano-deepseek-v4"
+Repository = "https://github.com/hebo1221/nano-deepseek-v4"
+
+[tool.setuptools.packages.find]
+include = ["nano_deepseek_v4*"]
+exclude = ["tests*", "notebooks*", "references*"]
