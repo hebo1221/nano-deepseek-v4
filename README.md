@@ -116,7 +116,7 @@ Start with the [`Adaptive V4 Memory` research index](research/adaptive_v4_memory
 The proposal, related-work matrix, and preregistered experimental protocol make
 no performance claim. M0 instrumentation and the M1 replay/predictive-signal
 gate and M2 offline training-free controller gate are complete. M3 learned-risk
-controller work is now permitted by the protocol.
+evaluation is a negative result, so M4 runtime work uses the retained M2 rule.
 
 M0 tracing is an observer-only API. It records native CSA block selections and
 cache byte accounting without logging token IDs or changing cache residency:
@@ -146,6 +146,10 @@ emits digest-replayable actions. At memory-matched operating points it improved
 associative-recall accuracy over fixed top-k at both tested scales. This remains
 offline logical-selection evidence: physical GPU residency does not change.
 
+The M3 learned risk controller reduced some prediction errors but used 57–63%
+dense fallback and failed to improve the M2 quality/block Pareto at both scales.
+It remains a reproducible negative baseline rather than the M4 default.
+
 ## What's inside
 
 ```
@@ -162,6 +166,7 @@ nano_deepseek_v4/
 ├── memory_replay.py  # deterministic replay policies, oracle, and signal analysis
 ├── memory_probe.py   # opt-in differentiable CSA research objectives
 ├── memory_controller.py # M2 global-budget rules, fallback, plans, and replay
+├── learned_memory_controller.py # M3 calibrated learned-risk negative baseline
 └── demo.py           # 20-line forward demo
 ```
 

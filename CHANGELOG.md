@@ -28,6 +28,9 @@ All notable changes to this project are documented here. The format follows
   protected block pinning, uncertainty fallback, movement accounting,
   digest-exact action replay, counterfactual model plans, and two-scale checked
   Pareto evidence.
+- Adaptive V4 Memory M3 asymmetric learned budget/dense-risk controller,
+  calibration utilities, split-safe two-scale evaluation, ablations, and a
+  checked negative result retaining M2 for runtime work.
 - Security and contribution policies.
 
 ### Changed

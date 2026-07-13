@@ -48,6 +48,18 @@ from .evaluation import (
     evaluate_multiple_choice,
     score_choice_loglikelihood,
 )
+from .learned_memory_controller import (
+    RISK_FEATURE_NAMES,
+    LearnedRiskController,
+    RiskCalibration,
+    RiskExample,
+    RiskMetrics,
+    calibrate_learned_risk_controller,
+    evaluate_learned_risk_controller,
+    examples_to_tensors,
+    extract_request_risk_features,
+    train_learned_risk_controller,
+)
 from .memory_controller import (
     ControllerAction,
     ControllerLayerAction,
@@ -188,6 +200,17 @@ __all__ = [
     "TrainingFreeControllerResult",
     "CSASelectionPlan",
     "build_csa_selection_plan",
+    # Adaptive V4 Memory M3 learned risk controller
+    "RISK_FEATURE_NAMES",
+    "RiskExample",
+    "RiskCalibration",
+    "RiskMetrics",
+    "LearnedRiskController",
+    "extract_request_risk_features",
+    "examples_to_tensors",
+    "train_learned_risk_controller",
+    "calibrate_learned_risk_controller",
+    "evaluate_learned_risk_controller",
     "run_training_free_controller",
     "validate_controller_replay",
     # optimizer

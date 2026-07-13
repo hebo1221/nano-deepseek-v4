@@ -20,7 +20,7 @@ resident on the accelerator.
 
 ## Current status
 
-Status: **M2 training-free offline replay gate complete; M3 in progress**
+Status: **M3 learned-controller negative result complete; M4 uses M2**
 
 No performance or systems claim has been made. M1 adds deterministic baselines,
 an exhaustive Tier-T oracle, differentiable CSA training probes, and two
@@ -89,3 +89,12 @@ movement accounting, and immutable counterfactual selection plans. The M2
 report records calibration/test isolation, memory-matched fixed baselines, a
 forced fallback stress arm, and the first overhead-gate failure. M3 learned-risk
 work may proceed, but actual hot/cold allocation remains an M4 requirement.
+
+## M3 decision
+
+The learned risk controller used disjoint train/calibration/test examples,
+asymmetric budget loss, calibrated dense fallback, and feature/loss/size
+ablations. At both scales it improved some predictive metrics but required
+57–63% fallback and failed to improve the M2 quality/block Pareto. The checked
+negative-result report freezes that outcome; M4 therefore uses M2 rather than
+the learned controller.

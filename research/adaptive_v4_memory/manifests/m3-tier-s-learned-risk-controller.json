@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "experiment_id": "m3-tier-s-learned-risk-controller-v1",
+  "date": "2026-07-14",
+  "task": "generated associative recall; no raw token persistence",
+  "splits": {
+    "train": {"seed": 50560714, "batches_per_length": 8},
+    "calibration": {"seed": 60660714, "batches_per_length": 4},
+    "test": {"seed": 70760714, "batches_per_length": 8},
+    "batch_size": 32,
+    "sequence_lengths": [48, 64, 80]
+  },
+  "labels": {
+    "budget": "minimum shared per-layer top-k producing exact match",
+    "dense": "no tested top-k at or below four produces exact match"
+  },
+  "model": {
+    "hidden_size": 32,
+    "budget_loss": "Smooth L1 with 4x under-allocation weight",
+    "dense_loss": "binary cross entropy",
+    "steps": 500,
+    "learning_rate": 0.003
+  },
+  "calibration": {
+    "budget_coverage": 0.9,
+    "dense_recall": 0.9,
+    "thresholds_frozen_before_test": true
+  },
+  "ablations": [
+    "context-and-layer features only",
+    "symmetric budget loss",
+    "hidden size 8",
+    "fallback disabled",
+    "refresh ablation unavailable on the single-control-point task"
+  ],
+  "positive_gate": "both scales improve M2 Pareto and predictive calibration; refresh ablation must be available",
+  "fallback_on_failure": "retain the M2 training-free controller for M4"
+}

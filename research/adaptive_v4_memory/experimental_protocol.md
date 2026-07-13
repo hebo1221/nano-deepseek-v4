@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Protocol version | 0.1 |
-| Status | M2 offline training-free gate passed; M3 implementation in progress |
+| Status | M3 negative result complete; M4 proceeds with M2 controller |
 | Last updated | 2026-07-14 |
 
 This protocol is the preregistered evaluation contract for Adaptive V4 Memory.

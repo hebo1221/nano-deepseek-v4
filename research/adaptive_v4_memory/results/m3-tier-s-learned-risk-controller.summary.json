@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "experiment_id": "m3-tier-s-learned-risk-controller-v1",
+  "date": "2026-07-14",
+  "protocol": {
+    "train_examples_per_scale": 768,
+    "calibration_examples_per_scale": 384,
+    "test_examples_per_scale": 768,
+    "split_seeds": {"train": 50560714, "calibration": 60660714, "test": 70760714},
+    "model": "two-head 32-hidden MLP",
+    "budget_loss": "4x asymmetric under-allocation Smooth L1",
+    "dense_loss": "binary cross entropy",
+    "calibration": "90% budget coverage and 90% dense recall targets"
+  },
+  "scales": {
+    "s55": {
+      "raw_summary_sha256": "21c3720aecbe19f27bd0b15e2204f90f375d1363a3f31aec7739ae36a2faf6d8",
+      "learned_predictive": {"budget_mae": 6.386414051055908, "underallocation_rate": 0.0989583358168602, "dense_recall": 0.914893627166748, "fallback_rate": 0.6302083134651184},
+      "context_layer_predictive": {"budget_mae": 11.665939331054688, "underallocation_rate": 0.0546875},
+      "learned_actual": {"accuracy": 0.7200520833333334, "mean_selected_blocks": 36.640625},
+      "m2_actual": {"accuracy": 0.6614583333333334, "mean_selected_blocks": 6.0},
+      "pareto_improved": false,
+      "passes_scale_gate": false
+    },
+    "s151": {
+      "raw_summary_sha256": "68196cee83c82837f67d904473ca525072cac7b33f14e93b197a027ed5a21293",
+      "learned_predictive": {"budget_mae": 5.320987224578857, "underallocation_rate": 0.1041666641831398, "dense_recall": 0.9191176295280457, "fallback_rate": 0.5703125},
+      "context_layer_predictive": {"budget_mae": 5.870054721832275, "underallocation_rate": 0.1028645858168602},
+      "learned_actual": {"accuracy": 0.7578125, "mean_selected_blocks": 54.752604166666664},
+      "m2_actual": {"accuracy": 0.7356770833333334, "mean_selected_blocks": 5.0},
+      "pareto_improved": false,
+      "passes_scale_gate": false
+    }
+  },
+  "ablations": {
+    "context_layer_only": "lower under-allocation on S55 and nearly equal on S151, but worse MAE",
+    "symmetric_loss": "worse coverage and MAE at both scales",
+    "hidden_size_8": "lower fallback on S151 but no gate-changing improvement",
+    "fallback_disabled": "represented by M2 comparison; learned quality gain required excessive fallback",
+    "refresh": "not available on the single-answer-control-point dataset"
+  },
+  "m3_gate": "failed_on_both_scales",
+  "decision": "retain M2 training-free controller for M4",
+  "claim_eligible": false
+}
