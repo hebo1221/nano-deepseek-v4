@@ -119,6 +119,10 @@ from .modeling import (
     DeepSeekV4ForCausalLM,
     DeepSeekV4Model,
 )
+from .online_memory_controller import (
+    OnlineControllerStats,
+    OnlineTrainingFreeController,
+)
 from .optim import (
     Muon,
     deepseek_v4_optimizer_groups,
@@ -201,6 +205,8 @@ __all__ = [
     "TrainingFreeControllerResult",
     "CSASelectionPlan",
     "build_csa_selection_plan",
+    "OnlineControllerStats",
+    "OnlineTrainingFreeController",
     # Adaptive V4 Memory M3 learned risk controller
     "RISK_FEATURE_NAMES",
     "RiskExample",

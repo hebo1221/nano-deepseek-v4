@@ -1538,6 +1538,11 @@ def save_deepseek_v4_cache(cache: DeepSeekV4Cache, cache_dir: str | Path) -> Non
         "seen_tokens": cache.seen_tokens,
         "num_layers": len(cache.layers),
         "tiered_layers": {},
+        "online_memory_controller": (
+            cache.online_memory_controller.to_dict()
+            if cache.online_memory_controller is not None
+            else None
+        ),
     }
     for layer_idx, layer in enumerate(cache.layers):
         prefix = f"layers.{layer_idx}"
@@ -1701,6 +1706,17 @@ def load_deepseek_v4_cache(
                 async_transfer=async_transfer,
                 initial_hot_blocks=protected,
             )
+    controller_payload = manifest.get("online_memory_controller")
+    if controller_payload is not None:
+        if not isinstance(controller_payload, dict):
+            raise ValueError("Cache manifest online_memory_controller must be an object.")
+        from .online_memory_controller import OnlineTrainingFreeController
+
+        try:
+            controller = OnlineTrainingFreeController.from_dict(controller_payload)
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError("Cache manifest online memory controller is invalid.") from exc
+        cache._attach_online_controller(controller)
     _validate_cache_structure(cache)
     return cache
 

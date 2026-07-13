@@ -8,9 +8,10 @@ import torch.nn.functional as F
 from torch import nn
 
 from .config import DeepSeekV4Config
-from .memory_controller import CSASelectionPlan
+from .memory_controller import CSASelectionPlan, TrainingFreeControllerConfig
 from .memory_probe import CSASelectionProbe
 from .memory_trace import AdaptiveMemoryTraceCollector, measure_csa_block_bytes
+from .online_memory_controller import OnlineControllerStats, OnlineTrainingFreeController
 from .tiered_memory import TieredBlockStore, TieredMemoryStats
 
 
@@ -182,6 +183,7 @@ class DeepSeekV4LayerCache:
         self.overlap_gate: dict[str, torch.Tensor | None] = {}
         self.overlap_positions: dict[str, torch.Tensor | None] = {}
         self.tiered_compressor: TieredBlockStore | None = None
+        self.online_memory_controller: OnlineTrainingFreeController | None = None
 
     def update_local(
         self,
@@ -508,12 +510,22 @@ class DeepSeekV4Cache:
         self.layers = [DeepSeekV4LayerCache() for _ in range(config.num_hidden_layers)]
         self.seen_tokens = 0
         self.memory_trace = memory_trace
+        self.online_memory_controller: OnlineTrainingFreeController | None = None
+
+    def _attach_online_controller(
+        self, controller: OnlineTrainingFreeController | None
+    ) -> None:
+        self.online_memory_controller = controller
+        for layer in self.layers:
+            layer.online_memory_controller = controller
 
     def get_seq_length(self) -> int:
         return self.seen_tokens
 
     def advance(self, tokens: int) -> None:
         seen_tokens_before = self.seen_tokens
+        if self.online_memory_controller is not None:
+            self.online_memory_controller.finalize()
         self.seen_tokens += tokens
         if self.memory_trace is not None:
             self.memory_trace.record_cache_advance(self, tokens, seen_tokens_before)
@@ -524,6 +536,11 @@ class DeepSeekV4Cache:
         other.layers = [layer.clone() for layer in self.layers]
         other.seen_tokens = self.seen_tokens
         other.memory_trace = self.memory_trace
+        other._attach_online_controller(
+            self.online_memory_controller.clone()
+            if self.online_memory_controller is not None
+            else None
+        )
         return other
 
     def select_batch(self, index: int) -> DeepSeekV4Cache:
@@ -532,6 +549,11 @@ class DeepSeekV4Cache:
         other.layers = [layer.select_batch(index) for layer in self.layers]
         other.seen_tokens = self.seen_tokens
         other.memory_trace = self.memory_trace
+        other._attach_online_controller(
+            self.online_memory_controller.select_batch(index)
+            if self.online_memory_controller is not None
+            else None
+        )
         return other
 
     @classmethod
@@ -558,6 +580,17 @@ class DeepSeekV4Cache:
         if len(collectors) > 1:
             raise ValueError("Cannot stack caches with different memory trace collectors.")
         other.memory_trace = next(iter(collectors.values()))
+        controllers = [cache.online_memory_controller for cache in caches]
+        if any(controller is not None for controller in controllers):
+            if not all(controller is not None for controller in controllers):
+                raise ValueError("Cannot stack caches with partially enabled online controllers.")
+            other._attach_online_controller(
+                OnlineTrainingFreeController.stack(
+                    [controller for controller in controllers if controller is not None]
+                )
+            )
+        else:
+            other._attach_online_controller(None)
         return other
 
     def crop(self, max_length: int, config: DeepSeekV4Config) -> None:
@@ -568,7 +601,42 @@ class DeepSeekV4Cache:
             raise RuntimeError("config.layer_types was not initialized.")
         for layer, layer_type in zip(self.layers, layer_types, strict=True):
             layer.crop(max_length, config.sliding_window, layer_type, config.compress_rates)
+        if self.online_memory_controller is not None:
+            self.online_memory_controller.crop(max_length)
         self.seen_tokens = max_length
+
+    def enable_online_memory_controller(
+        self,
+        config: TrainingFreeControllerConfig,
+        *,
+        protected_end_positions: tuple[int, ...] = (),
+        trace_id: str = "online-m2",
+        request_id: str = "request-0",
+    ) -> None:
+        if self.online_memory_controller is not None:
+            raise RuntimeError("Online memory controller is already enabled.")
+        layer_types = self.config.layer_types
+        if layer_types is None:
+            raise RuntimeError("config.layer_types was not initialized.")
+        csa_layers = tuple(
+            index
+            for index, layer_type in enumerate(layer_types)
+            if layer_type == "compressed_sparse_attention"
+        )
+        self._attach_online_controller(
+            OnlineTrainingFreeController(
+                config,
+                csa_layers,
+                trace_id=trace_id,
+                request_id=request_id,
+                protected_end_positions=protected_end_positions,
+            )
+        )
+
+    def online_controller_stats(self) -> OnlineControllerStats | None:
+        if self.online_memory_controller is None:
+            return None
+        return self.online_memory_controller.stats()
 
     def enable_csa_tiering(
         self,
@@ -784,6 +852,18 @@ class CSAIndexer(nn.Module):
         indexer_started = perf_counter_ns() if memory_trace is not None else 0
         compressed, end_positions = self._compress(hidden_states, position_ids, cache)
         if compressed.shape[1] == 0:
+            if cache is not None and cache.online_memory_controller is not None:
+                empty_scores = hidden_states.new_empty(
+                    (*position_ids.shape, end_positions.shape[1]), dtype=torch.float32
+                )
+                cache.online_memory_controller.observe(
+                    layer_index=layer_index,
+                    query_positions=position_ids,
+                    block_end_positions=end_positions,
+                    scores=empty_scores,
+                    native_mask=torch.zeros_like(empty_scores, dtype=torch.bool),
+                    block_bytes=measure_csa_block_bytes(cache, end_positions.shape[1]),
+                )
             if memory_trace is not None:
                 memory_trace.record_csa_selection(
                     layer_index=layer_index,
@@ -824,13 +904,14 @@ class CSAIndexer(nn.Module):
                 block_end_positions=end_positions,
                 native_mask=sparse_mask,
             )
+        traced_mask = sparse_mask
         if memory_trace is not None:
             memory_trace.record_csa_selection(
                 layer_index=layer_index,
                 seen_tokens=seen_tokens,
                 query_positions=position_ids,
                 block_end_positions=end_positions,
-                sparse_mask=sparse_mask,
+                sparse_mask=traced_mask,
                 scores=scores,
                 block_bytes=(
                     measure_csa_block_bytes(cache, end_positions.shape[1])
@@ -838,6 +919,21 @@ class CSAIndexer(nn.Module):
                     else 0
                 ),
                 indexer_wall_time_ns=perf_counter_ns() - indexer_started,
+            )
+        if cache is not None and cache.online_memory_controller is not None:
+            sparse_mask = cache.online_memory_controller.apply(
+                layer_index=layer_index,
+                query_positions=position_ids,
+                block_end_positions=end_positions,
+                native_mask=traced_mask,
+            )
+            cache.online_memory_controller.observe(
+                layer_index=layer_index,
+                query_positions=position_ids,
+                block_end_positions=end_positions,
+                scores=scores,
+                native_mask=traced_mask,
+                block_bytes=measure_csa_block_bytes(cache, end_positions.shape[1]),
             )
         return sparse_mask, end_positions, scores
 
