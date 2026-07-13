@@ -1,7 +1,9 @@
 # Research proposal: risk-aware adaptive residency for DeepSeek-V4
 
-Status: draft v0.1  
-Date: 2026-07-14
+| Field | Value |
+| --- | --- |
+| Status | Draft v0.1 |
+| Date | 2026-07-14 |
 
 ## Abstract
 
@@ -235,4 +237,3 @@ memory metrics.
 5. a hot/cold cache prototype with transfer-aware measurements;
 6. benchmark manifests, raw run metadata, and Pareto plots; and
 7. a paper or negative-results report with reproducible artifacts.
-

@@ -150,4 +150,3 @@ It should be reviewed before expanding the controller action space:
 - [The Sparse Frontier](https://arxiv.org/abs/2504.17768): sparse-attention
   trade-offs; and
 - [Understanding the Physics of KV Cache Compression](https://arxiv.org/abs/2603.01426): attention-dynamics analysis.
-

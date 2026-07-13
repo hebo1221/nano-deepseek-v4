@@ -1,8 +1,10 @@
 # Experimental protocol
 
-Protocol version: 0.1  
-Status: pre-implementation  
-Last updated: 2026-07-14
+| Field | Value |
+| --- | --- |
+| Protocol version | 0.1 |
+| Status | Pre-implementation |
+| Last updated | 2026-07-14 |
 
 This protocol is the preregistered evaluation contract for Adaptive V4 Memory.
 Changing a primary metric, benchmark, exclusion rule, or acceptance threshold
@@ -389,4 +391,3 @@ Implement a passive native-memory trace collector with the following scope:
 
 The first issue must not implement pruning, residency changes, a controller, or
 performance claims. Instrumentation correctness is the only M0 objective.
-

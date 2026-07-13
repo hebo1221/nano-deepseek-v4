@@ -57,4 +57,3 @@ The first code change must be instrumentation only:
 - record logical-cache, hot-residency, transfer, and latency counters separately;
 - write a versioned trace without changing logits or cache contents;
 - prove trace-on and trace-off numerical equivalence in tests.
-
