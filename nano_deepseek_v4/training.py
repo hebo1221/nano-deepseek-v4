@@ -132,8 +132,9 @@ def _sample_next_token(
         sorted_logits, sorted_indices = scaled.sort(dim=-1, descending=True)
         sorted_probs = sorted_logits.softmax(dim=-1)
         cumulative = sorted_probs.cumsum(dim=-1)
-        keep = cumulative <= top_p
-        keep[..., 0] = True
+        # Keep the first token that crosses the threshold; otherwise the
+        # retained set can have total probability strictly below `top_p`.
+        keep = cumulative - sorted_probs < top_p
         filtered = torch.full_like(scaled, float("-inf"))
         filtered.scatter_(-1, sorted_indices, sorted_logits.masked_fill(~keep, float("-inf")))
         scaled = filtered

@@ -5,25 +5,24 @@ on the tiny default config. They run on CPU in seconds.
 """
 from __future__ import annotations
 
-import json
 import math
-import tempfile
+from importlib.metadata import version
 from pathlib import Path
 
 import pytest
 import torch
-import torch.nn.functional as F
 
+import nano_deepseek_v4
 from nano_deepseek_v4 import (
     CausalLMOutput,
     DeepSeekV4Cache,
     DeepSeekV4Config,
     DeepSeekV4ForCausalLM,
-    DeepSeekV4Model,
     Muon,
     PagedKVCacheAllocator,
-    analyze_deepseek_official_index,
+    SupervisedExample,
     build_deepseek_v4_optimizers,
+    build_sft_batch,
     convert_deepseek_official_state_dict,
     deepseek_v4_optimizer_groups,
     estimate_deepseek_v4_parameter_counts,
@@ -34,10 +33,13 @@ from nano_deepseek_v4 import (
     zeropower_via_newton_schulz,
 )
 
-
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
+
+
+def test_public_version_matches_distribution_metadata():
+    assert nano_deepseek_v4.__version__ == version("nano-deepseek-v4")
 
 
 def test_default_config_round_trips():
@@ -52,6 +54,7 @@ def test_flash_and_pro_presets_have_official_dimensions():
     flash = DeepSeekV4Config.flash()
     assert flash.hidden_size == 4096
     assert flash.num_hidden_layers == 43
+    assert len(flash.compress_ratios) == flash.num_hidden_layers
     assert flash.n_routed_experts == 256
     assert flash.num_experts_per_tok == 6
     assert flash.max_position_embeddings == 1_048_576
@@ -59,13 +62,78 @@ def test_flash_and_pro_presets_have_official_dimensions():
     pro = DeepSeekV4Config.pro()
     assert pro.hidden_size == 7168
     assert pro.num_hidden_layers == 61
+    assert len(pro.compress_ratios) == pro.num_hidden_layers
     assert pro.n_routed_experts == 384
     assert pro.num_experts_per_tok == 6
+
+
+def test_official_compress_ratio_sentinel_is_normalized():
+    cfg = DeepSeekV4Config(num_hidden_layers=2, compress_ratios=[0, 4, 0])
+    assert cfg.compress_ratios == [0, 4]
+    assert cfg.layer_types == ["sliding_attention", "compressed_sparse_attention"]
+
+
+def test_invalid_compress_ratio_schedule_is_rejected():
+    with pytest.raises(ValueError, match="compress_ratios length"):
+        DeepSeekV4Config(num_hidden_layers=2, compress_ratios=[0, 4, 128, 4])
+
+
+def test_unknown_compress_ratio_is_rejected():
+    with pytest.raises(ValueError, match="Unsupported compress ratio"):
+        DeepSeekV4Config(num_hidden_layers=2, compress_ratios=[0, 16])
 
 
 def test_invalid_config_rejects_multi_kv_heads():
     with pytest.raises(ValueError, match="shared K=V"):
         DeepSeekV4Config(num_key_value_heads=2)
+
+
+@pytest.mark.parametrize(
+    ("overrides", "message"),
+    [
+        ({"hidden_size": 0}, "hidden_size must be a positive integer"),
+        ({"num_hash_layers": -1}, "num_hash_layers must be a non-negative integer"),
+        ({"attention_dropout": 1.0}, "attention_dropout must be in"),
+        ({"attention_dropout": float("nan")}, "attention_dropout must be a finite"),
+        ({"rope_theta": float("inf")}, "rope_theta must be a finite"),
+        ({"eos_token_id": 512}, "eos_token_id must be in"),
+        (
+            {"compress_rates": {"compressed_sparse_attention": 4}},
+            "compress_rates is missing required keys",
+        ),
+    ],
+)
+def test_invalid_config_values_fail_early(overrides, message):
+    with pytest.raises(ValueError, match=message):
+        DeepSeekV4Config(**overrides)
+
+
+# ---------------------------------------------------------------------------
+# Data preparation
+# ---------------------------------------------------------------------------
+
+
+def test_sft_batch_preserves_response_targets_when_prompt_is_truncated():
+    example = SupervisedExample(
+        prompt=torch.arange(10),
+        response=torch.tensor([91, 92]),
+    )
+    batch = build_sft_batch([example], max_length=4, eos_token_id=1)
+
+    assert batch.input_ids.tolist() == [[9, 91, 92, 1]]
+    assert batch.labels.tolist() == [[-100, 91, 92, 1]]
+    assert batch.attention_mask.all()
+
+
+def test_sft_batch_keeps_eos_when_response_fills_context():
+    example = SupervisedExample(
+        prompt=torch.tensor([10, 11]),
+        response=torch.tensor([20, 21, 22, 23, 24]),
+    )
+    batch = build_sft_batch([example], max_length=4, eos_token_id=1)
+
+    assert batch.input_ids.tolist() == [[20, 21, 22, 1]]
+    assert batch.labels.tolist() == [[20, 21, 22, 1]]
 
 
 # ---------------------------------------------------------------------------
@@ -87,6 +155,41 @@ def test_forward_returns_logits_and_loss():
     assert isinstance(out, CausalLMOutput)
     assert out.logits.shape == (2, 12, model.config.vocab_size)
     assert torch.isfinite(out.loss)
+
+
+def test_forward_rejects_invalid_training_shapes():
+    model = _tiny_model()
+    with pytest.raises(ValueError, match="labels must have the same shape"):
+        model(torch.ones(1, 3, dtype=torch.long), labels=torch.ones(1, 2, dtype=torch.long))
+    with pytest.raises(ValueError, match="at least two tokens"):
+        ids = torch.ones(1, 1, dtype=torch.long)
+        model(ids, labels=ids)
+
+
+def test_forward_rejects_attention_mask_with_silent_length_mismatch():
+    model = _tiny_model()
+    ids = torch.ones(1, 3, dtype=torch.long)
+
+    with pytest.raises(ValueError, match="attention_mask sequence length"):
+        model(ids, attention_mask=torch.ones(1, 2))
+
+    cache = model(ids, use_cache=True).past_key_values
+    assert cache is not None
+    with pytest.raises(ValueError, match="past cache length plus input length"):
+        model(
+            torch.ones(1, 1, dtype=torch.long),
+            attention_mask=torch.ones(1, 1),
+            past_key_values=cache,
+            use_cache=True,
+        )
+
+    output = model(
+        torch.ones(1, 1, dtype=torch.long),
+        attention_mask=torch.ones(1, 4),
+        past_key_values=cache,
+        use_cache=True,
+    )
+    assert output.logits.shape == (1, 1, model.config.vocab_size)
 
 
 def test_loss_decreases_after_one_step():
@@ -200,7 +303,6 @@ def test_hyperconnection_combination_is_doubly_stochastic():
 def test_hash_moe_uses_static_token_table():
     torch.manual_seed(0)
     config = DeepSeekV4Config(num_hash_layers=2)
-    model = DeepSeekV4Model(config)
     # The first num_hash_layers should be hash-routed
     for layer_idx in range(config.num_hash_layers):
         assert config.mlp_layer_types[layer_idx] == "hash_moe"
@@ -284,6 +386,32 @@ def test_sharded_safetensors_round_trip(tmp_path: Path):
         assert torch.equal(v, model.state_dict()[k])
 
 
+def test_checkpoint_loader_rejects_key_mapping_collisions(tmp_path: Path):
+    checkpoint_dir = tmp_path / "collision"
+    save_sharded_safetensors(
+        {"first": torch.ones(2, 2), "second": torch.zeros(2, 2)},
+        checkpoint_dir,
+        max_tensors_per_shard=1,
+    )
+    model = torch.nn.Linear(2, 2, bias=False)
+    with pytest.raises(ValueError, match="Checkpoint key collision"):
+        load_safetensors_checkpoint(
+            model,
+            checkpoint_dir,
+            key_mapping={"first": "weight", "second": "weight"},
+        )
+
+
+@pytest.mark.parametrize("state_dict, shard_size", [({}, 1), ({"weight": torch.ones(1)}, 0)])
+def test_checkpoint_writer_rejects_invalid_inputs(tmp_path: Path, state_dict, shard_size):
+    with pytest.raises(ValueError):
+        save_sharded_safetensors(
+            state_dict,
+            tmp_path / "invalid",
+            max_tensors_per_shard=shard_size,
+        )
+
+
 # ---------------------------------------------------------------------------
 # Paged cache
 # ---------------------------------------------------------------------------
@@ -331,6 +459,18 @@ def test_estimate_parameter_counts_runs_on_flash_config():
     assert counts["total_parameters"] > 0
     assert counts["activated_parameters"] > 0
     assert counts["activated_parameters"] < counts["total_parameters"]
+
+
+@pytest.mark.parametrize("variant", ["Flash", "Pro"])
+def test_parameter_counts_are_independent_of_fp4_storage_shape(variant: str):
+    preset = getattr(DeepSeekV4Config, variant.lower())()
+    official = DeepSeekV4Config.from_official_json(
+        Path(f"references/DeepSeek-V4-{variant}-config.json")
+    )
+
+    assert estimate_deepseek_v4_parameter_counts(official) == (
+        estimate_deepseek_v4_parameter_counts(preset)
+    )
 
 
 # ---------------------------------------------------------------------------
