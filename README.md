@@ -105,6 +105,18 @@ Cache files are written atomically and bound to the exact model configuration.
 The loader verifies the manifest version, payload SHA-256, tensor schema, layer
 count, shapes, and position ranges before returning a cache.
 
+## Research: Adaptive V4 Memory
+
+The first research track studies risk-aware, reversible hot/cold residency for
+V4's heterogeneous long-context memory. It asks whether native Lightning
+Indexer statistics can adapt per-layer CSA budgets, indexer refresh, and block
+prefetch while retaining the complete compressed history for later turns.
+
+Start with the [`Adaptive V4 Memory` research index](research/adaptive_v4_memory/README.md).
+The proposal, related-work matrix, and preregistered experimental protocol make
+no performance claim; instrumentation must pass the protocol's M0 gate before
+any controller or pruning behavior is introduced.
+
 ## What's inside
 
 ```

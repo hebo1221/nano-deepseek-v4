@@ -16,6 +16,8 @@ All notable changes to this project are documented here. The format follows
 - Checkpoint streaming, path-safety, collision, shape, and metadata validation.
 - Reproducible validation evidence for the complete 46-shard official Flash
   checkpoint and an explicit production-readiness support boundary.
+- Adaptive V4 Memory research proposal, related-work matrix, falsification
+  criteria, and preregistered experimental protocol.
 - Security and contribution policies.
 
 ### Changed

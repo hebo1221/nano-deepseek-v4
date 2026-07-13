@@ -41,6 +41,14 @@ pytest -m gpu tests/test_accelerator.py
   state. Never add pickle-based loading for untrusted artifacts.
 - Keep unrelated formatting or generated files out of the change.
 
+Research changes under `research/` must additionally:
+
+- distinguish hypotheses and planned features from achieved results;
+- cite primary sources and state the closest competing method;
+- follow the preregistered protocol or record a dated amendment;
+- report negative results and all configured falsification criteria; and
+- keep large traces, checkpoints, datasets, and private prompts out of Git.
+
 Pull requests should explain the problem, the chosen tradeoffs, and the exact
 commands used for verification. Architecture changes should cite the relevant
 technical-report section or another primary source.
