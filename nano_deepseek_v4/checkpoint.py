@@ -2,16 +2,39 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import dataclass
-from pathlib import Path
+import os
 import struct
-from typing import Any, Callable
+import tempfile
+from collections.abc import Callable
+from dataclasses import asdict, dataclass
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 import torch
 from safetensors import safe_open
 from safetensors.torch import load_file, save_file
 
 from .config import DeepSeekV4Config
+
+if TYPE_CHECKING:
+    from .modeling import DeepSeekV4Cache, DeepSeekV4LayerCache
+
+
+_CACHE_FORMAT_VERSION = 1
+_CACHE_TENSOR_ATTRIBUTES = {"local_kv", "local_positions"}
+_CACHE_DICT_ATTRIBUTES = {
+    "buffer_kv",
+    "buffer_gate",
+    "buffer_positions",
+    "history_kv",
+    "history_gate",
+    "history_positions",
+    "compressed_kv",
+    "compressed_positions",
+    "overlap_kv",
+    "overlap_gate",
+    "overlap_positions",
+}
 
 
 @dataclass
@@ -95,6 +118,19 @@ class OfficialCheckpointSnapshotReport:
     is_complete: bool
 
 
+def _resolve_index_shard(root: Path, shard: str) -> Path:
+    shard_path = Path(shard)
+    if shard_path.is_absolute():
+        raise ValueError(f"Unsafe absolute shard path in checkpoint index: {shard!r}")
+    resolved_root = root.resolve()
+    resolved = (root / shard_path).resolve()
+    try:
+        resolved.relative_to(resolved_root)
+    except ValueError as exc:
+        raise ValueError(f"Unsafe shard path outside checkpoint directory: {shard!r}") from exc
+    return resolved
+
+
 def _resolve_shards(path: str | Path) -> list[Path]:
     path = Path(path)
     if path.is_file():
@@ -102,7 +138,7 @@ def _resolve_shards(path: str | Path) -> list[Path]:
     index_path = path / "model.safetensors.index.json"
     if index_path.exists():
         index = json.loads(index_path.read_text())
-        return sorted({path / shard for shard in index["weight_map"].values()})
+        return sorted({_resolve_index_shard(path, shard) for shard in index["weight_map"].values()})
     single = path / "model.safetensors"
     if single.exists():
         return [single]
@@ -142,6 +178,13 @@ def _sha256_path(path: Path) -> str:
     raise ValueError(f"cannot hash unsupported checkpoint path: {path}")
 
 
+def _checkpoint_shard_names(checkpoint_path: Path, shards: list[Path]) -> list[str]:
+    if not checkpoint_path.is_dir():
+        return [str(shard) for shard in shards]
+    root = checkpoint_path.resolve()
+    return [str(shard.resolve().relative_to(root)) for shard in shards]
+
+
 def load_safetensors_checkpoint(
     model: torch.nn.Module,
     checkpoint: str | Path,
@@ -154,14 +197,23 @@ def load_safetensors_checkpoint(
     onto this compact reference model without rewriting checkpoint shards.
     """
 
-    state_dict = {}
+    state_dict: dict[str, torch.Tensor] = {}
+    source_keys: dict[str, str] = {}
     for shard in _resolve_shards(checkpoint):
-        for key, value in load_file(shard).items():
+        for source_key, value in load_file(shard).items():
+            key = source_key
             if callable(key_mapping):
                 key = key_mapping(key)
             elif isinstance(key_mapping, dict):
                 key = key_mapping.get(key, key)
+            if key in state_dict:
+                previous = source_keys[key]
+                current = f"{shard}:{source_key}"
+                raise ValueError(
+                    f"Checkpoint key collision: {previous!r} and {current!r} both map to {key!r}."
+                )
             state_dict[key] = value
+            source_keys[key] = f"{shard}:{source_key}"
     incompatible = model.load_state_dict(state_dict, strict=strict)
     return CheckpointLoadReport(
         missing_keys=list(incompatible.missing_keys),
@@ -335,12 +387,26 @@ def _resolve_index_path(path: str | Path) -> Path:
 
 
 def _safetensors_payload_size(path: Path) -> int:
+    file_size = path.stat().st_size
     with path.open("rb") as handle:
         header_length_bytes = handle.read(8)
         if len(header_length_bytes) != 8:
             raise ValueError(f"{path} is not a valid safetensors file: missing header length")
         header_length = struct.unpack("<Q", header_length_bytes)[0]
-        header = json.loads(handle.read(header_length))
+        if header_length > file_size - 8:
+            raise ValueError(
+                f"{path} is not a valid safetensors file: header exceeds file size"
+            )
+        header_bytes = handle.read(header_length)
+        if len(header_bytes) != header_length:
+            raise ValueError(f"{path} is not a valid safetensors file: truncated header")
+        try:
+            header = json.loads(header_bytes)
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise ValueError(f"{path} has an invalid safetensors JSON header") from exc
+    if not isinstance(header, dict):
+        raise ValueError(f"{path} has a non-object safetensors header")
+    payload_size = file_size - 8 - header_length
     total = 0
     for key, metadata in header.items():
         if key == "__metadata__":
@@ -351,11 +417,11 @@ def _safetensors_payload_size(path: Path) -> int:
         if not (
             isinstance(offsets, list)
             and len(offsets) == 2
-            and all(isinstance(item, int) for item in offsets)
+            and all(type(item) is int for item in offsets)
         ):
             raise ValueError(f"{path}:{key} is missing safetensors data_offsets")
         start, end = offsets
-        if end < start:
+        if start < 0 or end < start or end > payload_size:
             raise ValueError(f"{path}:{key} has invalid safetensors data_offsets")
         total += end - start
     return total
@@ -564,6 +630,17 @@ def _shape_numel(shape: tuple[int, ...]) -> int:
     return numel
 
 
+def _logical_parameter_numel(
+    config: DeepSeekV4Config,
+    key: str,
+    stored_shape: tuple[int, ...],
+) -> int:
+    numel = _shape_numel(stored_shape)
+    if config.expert_dtype == "fp4" and ".ffn.experts." in key and key.endswith(".weight"):
+        return numel * 2
+    return numel
+
+
 def estimate_deepseek_v4_parameter_counts(config: DeepSeekV4Config) -> dict[str, int]:
     """Estimate total and per-token active parameter counts from official tensor shapes."""
 
@@ -573,7 +650,7 @@ def estimate_deepseek_v4_parameter_counts(config: DeepSeekV4Config) -> dict[str,
     for key, shape in _expected_official_tensor_shapes(config).items():
         if key.endswith(".scale") or key.endswith("tid2eid"):
             continue
-        numel = _shape_numel(shape)
+        numel = _logical_parameter_numel(config, key, shape)
         total_parameters += numel
         if ".ffn.experts." in key:
             routed_expert_parameters += numel
@@ -608,6 +685,10 @@ def verify_deepseek_checkpoint_snapshot(
     expected_shapes = _expected_official_tensor_shapes(config) if config is not None else {}
     index = json.loads(index_path.read_text())
     index_total_size_bytes, index_metadata_errors = _index_total_size(index)
+    if config is None:
+        index_metadata_errors.append(
+            "checkpoint snapshot is missing config.json; tensor shapes cannot be verified"
+        )
     weight_map: dict[str, str] = dict(index["weight_map"])
     missing_expected_keys = sorted(key for key in expected_shapes if key not in weight_map)
     coverage = analyze_deepseek_official_index(index_path)
@@ -621,7 +702,12 @@ def verify_deepseek_checkpoint_snapshot(
     total_size_bytes = 0
     total_tensor_bytes = 0
     for shard in sorted(shard_to_keys):
-        shard_path = root / shard
+        try:
+            shard_path = _resolve_index_shard(root, shard)
+        except ValueError as exc:
+            index_metadata_errors.append(str(exc))
+            missing_shards.append(shard)
+            continue
         if shard_path.exists():
             present_shards.append(shard)
             total_size_bytes += shard_path.stat().st_size
@@ -650,30 +736,36 @@ def verify_deepseek_checkpoint_snapshot(
     if inspect_shards:
         for shard in present_shards:
             expected = set(shard_to_keys[shard])
-            with safe_open(root / shard, framework="pt", device="cpu") as tensors:
-                actual = set(tensors.keys())
-                for key in sorted(expected & actual):
-                    tensor_slice = tensors.get_slice(key)
-                    dtype = str(tensor_slice.get_dtype())
-                    dtype_counts[dtype] = dtype_counts.get(dtype, 0) + 1
-                    if dtype == "U8" and not key.endswith(".scale"):
-                        quantized_tensor_count += 1
-                        if not _has_scale_sidecar(key, indexed_keys):
-                            dtype_metadata_errors.append(
-                                f"{shard}:{key}: U8 quantized tensor is missing scale sidecar"
+            try:
+                with safe_open(
+                    _resolve_index_shard(root, shard), framework="pt", device="cpu"
+                ) as tensors:
+                    actual = set(tensors.keys())
+                    for key in sorted(expected & actual):
+                        tensor_slice = tensors.get_slice(key)
+                        dtype = str(tensor_slice.get_dtype())
+                        dtype_counts[dtype] = dtype_counts.get(dtype, 0) + 1
+                        if dtype in {"I8", "U8"} and not key.endswith(".scale"):
+                            quantized_tensor_count += 1
+                            if not _has_scale_sidecar(key, indexed_keys):
+                                dtype_metadata_errors.append(
+                                    f"{shard}:{key}: 8-bit packed tensor is missing scale sidecar"
+                                )
+                        if key.endswith(".scale"):
+                            continue
+                        actual_shape = tuple(int(dim) for dim in tensor_slice.get_shape())
+                        expected_shape = expected_shapes.get(key)
+                        if expected_shape is None:
+                            if key not in unchecked_shape_key_set:
+                                unchecked_shape_key_set.add(key)
+                                unchecked_shape_keys.append(key)
+                        elif actual_shape != expected_shape:
+                            shape_mismatches.append(
+                                f"{shard}:{key}: expected shape {expected_shape}, got {actual_shape}"
                             )
-                    if key.endswith(".scale"):
-                        continue
-                    actual_shape = tuple(int(dim) for dim in tensor_slice.get_shape())
-                    expected_shape = expected_shapes.get(key)
-                    if expected_shape is None:
-                        if key not in unchecked_shape_key_set:
-                            unchecked_shape_key_set.add(key)
-                            unchecked_shape_keys.append(key)
-                    elif actual_shape != expected_shape:
-                        shape_mismatches.append(
-                            f"{shard}:{key}: expected shape {expected_shape}, got {actual_shape}"
-                        )
+            except Exception as exc:
+                index_metadata_errors.append(f"{shard}: safetensors metadata check failed: {exc}")
+                continue
             missing_keys.extend(f"{shard}:{key}" for key in sorted(expected - actual))
             unexpected_keys.extend(f"{shard}:{key}" for key in sorted(actual - expected))
 
@@ -765,7 +857,7 @@ def _expand_scale(scale: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
     if scale.ndim != target.ndim:
         raise ValueError(f"Cannot broadcast scale shape {tuple(scale.shape)} to target {tuple(target.shape)}.")
     expanded = scale
-    for dim, (scale_size, target_size) in enumerate(zip(scale.shape, target.shape)):
+    for dim, (scale_size, target_size) in enumerate(zip(scale.shape, target.shape, strict=True)):
         if scale_size == target_size:
             continue
         repeats = (target_size + scale_size - 1) // scale_size
@@ -785,31 +877,35 @@ def dequantize_with_scale(
     """Best-effort dequantization for DeepSeek scale-sidecar checkpoint tensors.
 
     Floating and torch-native FP8 tensors are converted to fp32 and scaled.
-    Raw uint8 tensors can be decoded as packed E2M1 FP4 nibbles or E4M3FN FP8
-    bytes. In `auto` mode, uint8 tensors with the same element count as the
-    target shape are treated as FP8; otherwise they are treated as packed FP4.
+    Raw signed or unsigned 8-bit tensors can be decoded as packed E2M1 FP4
+    nibbles or E4M3FN FP8 bytes. In `auto` mode, byte tensors with the same
+    element count as the target shape are treated as FP8; otherwise they are
+    treated as packed FP4.
     Block scales are expanded by repeat/crop when direct broadcasting is not
     possible.
     """
 
     if scale is None:
         return tensor
-    if tensor.dtype == torch.uint8:
+    if tensor.dtype in {torch.int8, torch.uint8}:
+        codes = tensor.view(torch.uint8) if tensor.dtype == torch.int8 else tensor
         if target_shape is not None:
             target_numel = int(torch.tensor(tuple(target_shape)).prod().item())
         else:
-            target_numel = tensor.numel()
+            target_numel = codes.numel()
         fmt = uint8_format
         if fmt == "auto":
-            fmt = "fp8_e4m3fn" if tensor.numel() == target_numel else "fp4_e2m1"
+            fmt = "fp8_e4m3fn" if codes.numel() == target_numel else "fp4_e2m1"
         if fmt == "fp8_e4m3fn":
-            value = _fp8_e4m3fn_values(tensor)
+            value = _fp8_e4m3fn_values(codes)
             if target_shape is not None and tuple(value.shape) != tuple(target_shape):
                 value = value.reshape(tuple(target_shape))
         elif fmt == "fp4_e2m1":
-            low = tensor & 0x0F
-            high = tensor >> 4
-            unpacked = torch.stack((low, high), dim=-1).reshape(*tensor.shape[:-1], tensor.shape[-1] * 2)
+            low = codes & 0x0F
+            high = codes >> 4
+            unpacked = torch.stack((low, high), dim=-1).reshape(
+                *codes.shape[:-1], codes.shape[-1] * 2
+            )
             if target_shape is not None:
                 flat = unpacked.reshape(-1)
                 unpacked = flat[:target_numel].reshape(tuple(target_shape))
@@ -1004,9 +1100,10 @@ def load_deepseek_official_checkpoint(
     checkpoint: str | Path,
     strict: bool = False,
 ) -> OfficialCheckpointLoadReport:
-    official_state_dict = {}
+    official_state_dict: dict[str, torch.Tensor] = {}
     for shard in _resolve_shards(checkpoint):
-        official_state_dict.update(load_file(shard))
+        shard_state = load_file(shard)
+        _merge_official_checkpoint_shard(official_state_dict, shard_state, shard)
     converted, conversion = convert_deepseek_official_state_dict(official_state_dict, model)
     incompatible = model.load_state_dict(converted, strict=strict)
     return OfficialCheckpointLoadReport(
@@ -1014,6 +1111,20 @@ def load_deepseek_official_checkpoint(
         unexpected_keys=list(incompatible.unexpected_keys),
         conversion=conversion,
     )
+
+
+def _merge_official_checkpoint_shard(
+    state_dict: dict[str, torch.Tensor],
+    shard_state: dict[str, torch.Tensor],
+    shard: Path,
+) -> None:
+    duplicates = state_dict.keys() & shard_state.keys()
+    if duplicates:
+        duplicate = min(duplicates)
+        raise ValueError(
+            f"Official checkpoint contains duplicate tensor key {duplicate!r} in shard {shard}."
+        )
+    state_dict.update(shard_state)
 
 
 def build_deepseek_official_checkpoint_load_report(
@@ -1032,8 +1143,8 @@ def build_deepseek_official_checkpoint_load_report(
     loaded_bytes = 0
     for shard in shards:
         shard_state = load_file(shard)
-        for key, tensor in shard_state.items():
-            official_state_dict[key] = tensor
+        _merge_official_checkpoint_shard(official_state_dict, shard_state, shard)
+        for tensor in shard_state.values():
             loaded_bytes += int(tensor.numel() * tensor.element_size())
 
     converted, conversion = convert_deepseek_official_state_dict(official_state_dict, model)
@@ -1054,10 +1165,7 @@ def build_deepseek_official_checkpoint_load_report(
 
     if checkpoint_sha256 is None:
         checkpoint_sha256 = _sha256_path(checkpoint_path)
-    shard_names = [
-        str(shard.relative_to(checkpoint_path)) if checkpoint_path.is_dir() else str(shard)
-        for shard in shards
-    ]
+    shard_names = _checkpoint_shard_names(checkpoint_path, shards)
     loaded_parameter_count = sum(int(tensor.numel()) for tensor in converted.values())
     return OfficialCheckpointLoadEvidenceReport(
         is_complete=not errors,
@@ -1124,6 +1232,8 @@ def build_deepseek_official_checkpoint_streaming_load_report(
     unconverted_keys: list[str] = []
     ignored_keys: list[str] = []
     converted_keys: list[str] = []
+    shape_mismatches: list[str] = []
+    dtype_errors: list[str] = []
 
     for shard in shards:
         with safe_open(shard, framework="pt", device="cpu") as tensors:
@@ -1138,13 +1248,35 @@ def build_deepseek_official_checkpoint_streaming_load_report(
                         ignored_keys.append(key)
                     else:
                         unconverted_keys.append(key)
+                    del tensor
                     continue
                 if _map_official_simple_key(key) is not None or _is_official_complex_key(key):
+                    expected_shape = expected_shapes.get(key)
+                    actual_shape = tuple(int(dim) for dim in tensor.shape)
+                    if expected_shape is None:
+                        unconverted_keys.append(key)
+                        del tensor
+                        continue
+                    if actual_shape != expected_shape:
+                        shape_mismatches.append(
+                            f"{shard.name}:{key}: expected shape {expected_shape}, got {actual_shape}"
+                        )
+                        del tensor
+                        continue
+                    if tensor.dtype in {torch.int8, torch.uint8} and not _has_scale_sidecar(
+                        key, actual_keys
+                    ):
+                        dtype_errors.append(
+                            f"{shard.name}:{key}: 8-bit packed tensor is missing scale sidecar"
+                        )
                     converted_tensor_count += 1
                     converted_keys.append(key)
-                    expected_shape = expected_shapes.get(key)
-                    if expected_shape is not None and not key.endswith("tid2eid"):
-                        loaded_parameter_count += _shape_numel(expected_shape)
+                    if not key.endswith("tid2eid"):
+                        loaded_parameter_count += _logical_parameter_numel(
+                            config,
+                            key,
+                            expected_shape,
+                        )
                 else:
                     unconverted_keys.append(key)
                 del tensor
@@ -1168,6 +1300,8 @@ def build_deepseek_official_checkpoint_streaming_load_report(
         errors.extend(f"unexpected tensor key {item}" for item in snapshot.unexpected_keys_in_shards)
         errors.extend(f"shape mismatch {item}" for item in snapshot.shape_mismatches)
         errors.extend(f"unrecognized key {item}" for item in snapshot.coverage.unrecognized_keys)
+    errors.extend(f"shape mismatch {item}" for item in shape_mismatches)
+    errors.extend(f"dtype metadata error {item}" for item in dtype_errors)
     if missing_keys:
         errors.append(f"checkpoint streaming scan found {len(missing_keys)} missing expected keys")
     if unexpected_keys:
@@ -1177,10 +1311,7 @@ def build_deepseek_official_checkpoint_streaming_load_report(
 
     if checkpoint_sha256 is None:
         checkpoint_sha256 = _sha256_path(checkpoint_path)
-    shard_names = [
-        str(shard.relative_to(checkpoint_path)) if checkpoint_path.is_dir() else str(shard)
-        for shard in shards
-    ]
+    shard_names = _checkpoint_shard_names(checkpoint_path, shards)
     return OfficialCheckpointLoadEvidenceReport(
         is_complete=not errors,
         checkpoint_path=str(checkpoint_path),
@@ -1211,18 +1342,191 @@ def build_deepseek_official_checkpoint_streaming_load_report(
     )
 
 
+def _cache_config_sha256(config: DeepSeekV4Config) -> str:
+    payload = json.dumps(
+        asdict(config),
+        allow_nan=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
 def _put_tensor(tensors: dict[str, torch.Tensor], key: str, tensor: torch.Tensor | None) -> None:
     if tensor is not None:
-        tensors[key] = tensor.detach().cpu().contiguous()
+        # Cache buffers can be overlapping views of the same storage. Safetensors
+        # rejects shared storage, so every serialized entry must own its payload.
+        tensors[key] = tensor.detach().cpu().contiguous().clone()
 
 
-def save_deepseek_v4_cache(cache, cache_dir: str | Path) -> None:
+def _validate_position_tensor(
+    positions: torch.Tensor,
+    name: str,
+    seen_tokens: int,
+) -> None:
+    integer_dtypes = {torch.int8, torch.int16, torch.int32, torch.int64, torch.uint8}
+    if positions.dtype not in integer_dtypes:
+        raise ValueError(f"{name} must use an integer dtype.")
+    if positions.numel() == 0:
+        return
+    minimum = int(positions.min().item())
+    maximum = int(positions.max().item())
+    if minimum < 0 or maximum >= seen_tokens:
+        raise ValueError(
+            f"{name} contains positions outside the cached token range [0, {seen_tokens})."
+        )
+
+
+def _validate_cache_layer(
+    layer: DeepSeekV4LayerCache,
+    layer_idx: int,
+    seen_tokens: int,
+) -> None:
+    prefix = f"layers.{layer_idx}"
+    if (layer.local_kv is None) != (layer.local_positions is None):
+        raise ValueError(f"{prefix} has a partially populated local cache.")
+    if layer.local_kv is None or layer.local_positions is None:
+        if seen_tokens:
+            raise ValueError(f"{prefix} is missing local cache tensors for {seen_tokens} tokens.")
+    else:
+        local_kv = layer.local_kv
+        local_positions = layer.local_positions
+        if local_kv.ndim != 4 or local_positions.ndim != 2:
+            raise ValueError(f"{prefix} local cache tensors have invalid ranks.")
+        if local_kv.shape[0] != local_positions.shape[0] or local_kv.shape[2] != local_positions.shape[1]:
+            raise ValueError(f"{prefix} local cache tensor shapes are inconsistent.")
+        if local_positions.shape[1] != seen_tokens:
+            raise ValueError(
+                f"{prefix}.local_positions length does not match seen_tokens={seen_tokens}."
+            )
+        _validate_position_tensor(local_positions, f"{prefix}.local_positions", seen_tokens)
+
+    for stem in ("buffer", "history"):
+        kv_values = getattr(layer, f"{stem}_kv")
+        gate_values = getattr(layer, f"{stem}_gate")
+        position_values = getattr(layer, f"{stem}_positions")
+        if kv_values.keys() != gate_values.keys() or kv_values.keys() != position_values.keys():
+            raise ValueError(f"{prefix} has a partially populated {stem} cache.")
+        for name in kv_values:
+            kv = kv_values[name]
+            gate = gate_values[name]
+            positions = position_values[name]
+            if kv is None or gate is None or positions is None:
+                raise ValueError(f"{prefix}.{stem}.{name} contains a null tensor.")
+            if kv.shape != gate.shape or kv.ndim < 3 or positions.ndim != 2:
+                raise ValueError(f"{prefix}.{stem}.{name} tensor shapes are inconsistent.")
+            if kv.shape[:2] != positions.shape:
+                raise ValueError(f"{prefix}.{stem}.{name} position shape is inconsistent.")
+            _validate_position_tensor(
+                positions,
+                f"{prefix}.{stem}_positions.{name}",
+                seen_tokens,
+            )
+
+    if layer.compressed_kv.keys() != layer.compressed_positions.keys():
+        raise ValueError(f"{prefix} has a partially populated compressed cache.")
+    for name in layer.compressed_kv:
+        kv = layer.compressed_kv[name]
+        positions = layer.compressed_positions[name]
+        if kv is None or positions is None or kv.ndim < 3 or positions.ndim != 2:
+            raise ValueError(f"{prefix}.compressed.{name} tensor shapes are invalid.")
+        if kv.shape[:2] != positions.shape:
+            raise ValueError(f"{prefix}.compressed.{name} position shape is inconsistent.")
+        _validate_position_tensor(
+            positions,
+            f"{prefix}.compressed_positions.{name}",
+            seen_tokens,
+        )
+
+    overlap_keys = layer.overlap_kv.keys()
+    if overlap_keys != layer.overlap_gate.keys() or overlap_keys != layer.overlap_positions.keys():
+        raise ValueError(f"{prefix} has a partially populated overlap cache.")
+    for name in layer.overlap_kv:
+        kv = layer.overlap_kv[name]
+        gate = layer.overlap_gate[name]
+        positions = layer.overlap_positions[name]
+        if kv is None or gate is None or positions is None:
+            raise ValueError(f"{prefix}.overlap.{name} contains a null tensor.")
+        if kv.shape != gate.shape or kv.ndim < 2 or positions.ndim != 1:
+            raise ValueError(f"{prefix}.overlap.{name} tensor shapes are inconsistent.")
+        if kv.shape[0] != positions.shape[0]:
+            raise ValueError(f"{prefix}.overlap.{name} position shape is inconsistent.")
+        _validate_position_tensor(
+            positions,
+            f"{prefix}.overlap_positions.{name}",
+            seen_tokens,
+        )
+
+
+def _validate_cache_structure(cache: DeepSeekV4Cache) -> None:
+    if isinstance(cache.seen_tokens, bool) or not isinstance(cache.seen_tokens, int):
+        raise ValueError("cache.seen_tokens must be an integer.")
+    if cache.seen_tokens < 0:
+        raise ValueError("cache.seen_tokens must be non-negative.")
+    if len(cache.layers) != cache.config.num_hidden_layers:
+        raise ValueError("cache layer count does not match its model configuration.")
+    for layer_idx, layer in enumerate(cache.layers):
+        _validate_cache_layer(layer, layer_idx, cache.seen_tokens)
+
+
+def _write_cache_files_atomically(
+    cache_dir: Path,
+    tensors: dict[str, torch.Tensor],
+    manifest: dict[str, Any],
+) -> None:
+    tensor_path = cache_dir / "cache.safetensors"
+    manifest_path = cache_dir / "cache.json"
+    tensor_temp: Path | None = None
+    manifest_temp: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            dir=cache_dir,
+            prefix=".cache-",
+            suffix=".safetensors.tmp",
+            delete=False,
+        ) as handle:
+            tensor_temp = Path(handle.name)
+        save_file(tensors, tensor_temp)
+        manifest["tensor_sha256"] = _sha256_file(tensor_temp)
+
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=cache_dir,
+            prefix=".cache-",
+            suffix=".json.tmp",
+            delete=False,
+        ) as handle:
+            manifest_temp = Path(handle.name)
+            json.dump(manifest, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+
+        os.replace(tensor_temp, tensor_path)
+        tensor_temp = None
+        os.replace(manifest_temp, manifest_path)
+        manifest_temp = None
+    finally:
+        if tensor_temp is not None:
+            tensor_temp.unlink(missing_ok=True)
+        if manifest_temp is not None:
+            manifest_temp.unlink(missing_ok=True)
+
+
+def save_deepseek_v4_cache(cache: DeepSeekV4Cache, cache_dir: str | Path) -> None:
     """Persist a DeepSeekV4Cache to disk for serving/offload workflows."""
 
+    _validate_cache_structure(cache)
     cache_dir = Path(cache_dir)
     cache_dir.mkdir(parents=True, exist_ok=True)
     tensors: dict[str, torch.Tensor] = {}
-    manifest = {"seen_tokens": cache.seen_tokens, "num_layers": len(cache.layers)}
+    manifest = {
+        "format_version": _CACHE_FORMAT_VERSION,
+        "config_sha256": _cache_config_sha256(cache.config),
+        "seen_tokens": cache.seen_tokens,
+        "num_layers": len(cache.layers),
+    }
     for layer_idx, layer in enumerate(cache.layers):
         prefix = f"layers.{layer_idx}"
         _put_tensor(tensors, f"{prefix}.local_kv", layer.local_kv)
@@ -1243,31 +1547,94 @@ def save_deepseek_v4_cache(cache, cache_dir: str | Path) -> None:
             values = getattr(layer, attr)
             for name, tensor in values.items():
                 _put_tensor(tensors, f"{prefix}.{attr}.{name}", tensor)
-    save_file(tensors, cache_dir / "cache.safetensors")
-    (cache_dir / "cache.json").write_text(json.dumps(manifest, indent=2, sort_keys=True))
+    _write_cache_files_atomically(cache_dir, tensors, manifest)
 
 
-def load_deepseek_v4_cache(config, cache_dir: str | Path, device: torch.device | str | None = None):
+def _load_cache_manifest(cache_dir: Path, config: DeepSeekV4Config) -> dict[str, Any]:
+    manifest_path = cache_dir / "cache.json"
+    tensor_path = cache_dir / "cache.safetensors"
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except FileNotFoundError as exc:
+        raise FileNotFoundError(f"Cache manifest not found: {manifest_path}") from exc
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Cache manifest is not valid JSON: {manifest_path}") from exc
+    if not isinstance(manifest, dict):
+        raise ValueError("Cache manifest must be a JSON object.")
+    if manifest.get("format_version") != _CACHE_FORMAT_VERSION:
+        raise ValueError(
+            f"Unsupported cache format version: {manifest.get('format_version')!r}."
+        )
+    seen_tokens = manifest.get("seen_tokens")
+    num_layers = manifest.get("num_layers")
+    if isinstance(seen_tokens, bool) or not isinstance(seen_tokens, int) or seen_tokens < 0:
+        raise ValueError("Cache manifest seen_tokens must be a non-negative integer.")
+    if isinstance(num_layers, bool) or not isinstance(num_layers, int) or num_layers <= 0:
+        raise ValueError("Cache manifest num_layers must be a positive integer.")
+    if num_layers != config.num_hidden_layers:
+        raise ValueError(
+            f"Cache has {num_layers} layers but the model configuration has "
+            f"{config.num_hidden_layers}."
+        )
+    expected_config_sha = _cache_config_sha256(config)
+    if manifest.get("config_sha256") != expected_config_sha:
+        raise ValueError("Cache was created for a different model configuration.")
+    expected_tensor_sha = manifest.get("tensor_sha256")
+    if not isinstance(expected_tensor_sha, str) or len(expected_tensor_sha) != 64:
+        raise ValueError("Cache manifest tensor_sha256 is invalid.")
+    if not tensor_path.is_file():
+        raise FileNotFoundError(f"Cache tensor payload not found: {tensor_path}")
+    actual_tensor_sha = _sha256_file(tensor_path)
+    if actual_tensor_sha != expected_tensor_sha:
+        raise ValueError("Cache tensor payload checksum does not match its manifest.")
+    return manifest
+
+
+def _restore_cache_tensor(
+    cache: DeepSeekV4Cache,
+    key: str,
+    tensor: torch.Tensor,
+) -> None:
+    parts = key.split(".")
+    if len(parts) not in {3, 4} or parts[0] != "layers":
+        raise ValueError(f"Unexpected cache tensor key: {key}")
+    try:
+        layer_idx = int(parts[1])
+    except ValueError as exc:
+        raise ValueError(f"Invalid cache layer index in tensor key: {key}") from exc
+    if str(layer_idx) != parts[1] or not 0 <= layer_idx < len(cache.layers):
+        raise ValueError(f"Cache tensor layer index is out of range: {key}")
+    layer = cache.layers[layer_idx]
+    attribute = parts[2]
+    if len(parts) == 3:
+        if attribute not in _CACHE_TENSOR_ATTRIBUTES:
+            raise ValueError(f"Unexpected cache tensor attribute: {key}")
+        setattr(layer, attribute, tensor)
+        return
+    if attribute not in _CACHE_DICT_ATTRIBUTES or not parts[3]:
+        raise ValueError(f"Unexpected cache tensor attribute: {key}")
+    getattr(layer, attribute)[parts[3]] = tensor
+
+
+def load_deepseek_v4_cache(
+    config: DeepSeekV4Config,
+    cache_dir: str | Path,
+    device: torch.device | str | None = None,
+) -> DeepSeekV4Cache:
     """Restore a DeepSeekV4Cache saved by `save_deepseek_v4_cache`."""
 
     from .modeling import DeepSeekV4Cache
 
     cache_dir = Path(cache_dir)
-    manifest = json.loads((cache_dir / "cache.json").read_text())
+    manifest = _load_cache_manifest(cache_dir, config)
     cache = DeepSeekV4Cache(config)
     cache.seen_tokens = int(manifest["seen_tokens"])
     tensors = load_file(cache_dir / "cache.safetensors")
     for key, tensor in tensors.items():
         if device is not None:
             tensor = tensor.to(device)
-        parts = key.split(".")
-        layer = cache.layers[int(parts[1])]
-        if len(parts) == 3:
-            setattr(layer, parts[2], tensor)
-        elif len(parts) == 4:
-            getattr(layer, parts[2])[parts[3]] = tensor
-        else:
-            raise ValueError(f"Unexpected cache tensor key: {key}")
+        _restore_cache_tensor(cache, key, tensor)
+    _validate_cache_structure(cache)
     return cache
 
 
@@ -1278,6 +1645,10 @@ def save_sharded_safetensors(
 ) -> None:
     """Save a deterministic sharded safetensors checkpoint for tests/conversion."""
 
+    if max_tensors_per_shard <= 0:
+        raise ValueError("max_tensors_per_shard must be positive.")
+    if not state_dict:
+        raise ValueError("state_dict must contain at least one tensor.")
     checkpoint_dir = Path(checkpoint_dir)
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
     items = sorted(state_dict.items())

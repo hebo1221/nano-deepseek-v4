@@ -1,5 +1,10 @@
 # nano-deepseek-v4
 
+[![CI](https://github.com/hebo1221/nano-deepseek-v4/actions/workflows/ci.yml/badge.svg)](https://github.com/hebo1221/nano-deepseek-v4/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/hebo1221/nano-deepseek-v4/actions/workflows/codeql.yml/badge.svg)](https://github.com/hebo1221/nano-deepseek-v4/actions/workflows/codeql.yml)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
+[![License](https://img.shields.io/badge/license-Apache--2.0-green.svg)](LICENSE)
+
 A compact, readable PyTorch reference implementation of the **DeepSeek-V4**
 architecture, in the spirit of [nanoGPT](https://github.com/karpathy/nanoGPT).
 The model code in `nano_deepseek_v4/modeling.py` is a single ~1,300-line file
@@ -29,7 +34,7 @@ training framework.
 
 ```bash
 pip install -e ".[official]"   # editable + huggingface_hub for checkpoint download
-pip install -e ".[dev]"        # + pytest
+pip install -e ".[dev]"        # tests, coverage, lint, typing, and packaging tools
 ```
 
 Requires Python ≥ 3.10 and PyTorch ≥ 2.4.
@@ -58,8 +63,8 @@ from nano_deepseek_v4 import (
 )
 
 # Download the official Flash snapshot first:
-#   huggingface-cli download deepseek-ai/DeepSeek-V4-Flash \
-#       --local-dir ./checkpoints/flash --local-dir-use-symlinks False
+#   hf download deepseek-ai/DeepSeek-V4-Flash \
+#       --local-dir ./checkpoints/flash
 
 snapshot = "./checkpoints/flash"
 
@@ -71,10 +76,34 @@ assert report.is_complete
 config = DeepSeekV4Config.from_official_json(f"{snapshot}/config.json")
 model = DeepSeekV4ForCausalLM(config)
 
-# 3) Convert and load the official safetensors shards:
-model, conversion = load_deepseek_official_checkpoint(model, snapshot)
-print(conversion.converted_key_count, "tensors loaded")
+# 3) Convert and load the official safetensors shards into `model`:
+report = load_deepseek_official_checkpoint(model, snapshot)
+print(len(report.conversion.converted_keys), "tensors loaded")
 ```
+
+For snapshots too large to materialize with a model, use
+`build_deepseek_official_checkpoint_streaming_load_report` to scan every tensor
+payload and emit conversion evidence without constructing the full model.
+
+The checked-in
+[`DeepSeek-V4-Flash-validation.summary.json`](references/DeepSeek-V4-Flash-validation.summary.json)
+records a complete 46-shard official Flash preflight and streaming payload scan,
+including content digests, dtype/shape coverage, and logical parameter counts.
+
+## Persisting an inference cache
+
+```python
+from nano_deepseek_v4 import load_deepseek_v4_cache, save_deepseek_v4_cache
+
+prefill = model(ids, use_cache=True)
+assert prefill.past_key_values is not None
+save_deepseek_v4_cache(prefill.past_key_values, "./cache/session-1")
+cache = load_deepseek_v4_cache(config, "./cache/session-1")
+```
+
+Cache files are written atomically and bound to the exact model configuration.
+The loader verifies the manifest version, payload SHA-256, tensor schema, layer
+count, shapes, and position ranges before returning a cache.
 
 ## What's inside
 
@@ -125,8 +154,14 @@ modify, and experiment.
 ## Citing
 
 If you found this useful in research, please cite the DeepSeek-V4 report itself
-and link this repository. A standalone `CITATION.cff` will be added with the
-first tagged release.
+and use the metadata in [`CITATION.cff`](CITATION.cff) for this implementation.
+
+## Project policies
+
+See [`PRODUCTION_READINESS.md`](PRODUCTION_READINESS.md),
+[`CONTRIBUTING.md`](CONTRIBUTING.md), [`SECURITY.md`](SECURITY.md), and
+[`CHANGELOG.md`](CHANGELOG.md). The readiness document defines the supported
+production boundary and the required release gates.
 
 ## License
 

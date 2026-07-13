@@ -1,0 +1,11 @@
+cff-version: 1.2.0
+message: If you use this software, please cite it using the metadata below.
+title: nano-deepseek-v4
+type: software
+authors:
+  - name: nano-deepseek-v4 contributors
+repository-code: https://github.com/hebo1221/nano-deepseek-v4
+url: https://github.com/hebo1221/nano-deepseek-v4
+license: Apache-2.0
+version: 0.1.0
+date-released: 2026-05-14

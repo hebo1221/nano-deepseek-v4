@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
+from math import isfinite
+from numbers import Real
 from pathlib import Path
 from typing import Any
-
 
 ATTENTION_TYPES = {
     "sliding_attention",
@@ -13,6 +14,28 @@ ATTENTION_TYPES = {
 }
 
 MLP_TYPES = {"hash_moe", "moe"}
+
+_REQUIRED_COMPRESS_RATES = {
+    "compressed_sparse_attention",
+    "heavily_compressed_attention",
+}
+
+
+def _normalize_compress_ratios(
+    compress_ratios: list[int] | None,
+    num_hidden_layers: int,
+) -> list[int] | None:
+    if compress_ratios is None:
+        return None
+    ratios = [int(ratio) for ratio in compress_ratios]
+    if len(ratios) == num_hidden_layers:
+        return ratios
+    if len(ratios) == num_hidden_layers + 1 and ratios[-1] == 0:
+        return ratios[:-1]
+    raise ValueError(
+        "compress_ratios length must match num_hidden_layers, or be an "
+        "official config schedule with one trailing output-layer sentinel."
+    )
 
 
 @dataclass
@@ -75,6 +98,112 @@ class DeepSeekV4Config:
     quantization_weight_block_size: tuple[int, int] | None = None
 
     def __post_init__(self) -> None:
+        positive_int_fields = (
+            "vocab_size",
+            "hidden_size",
+            "moe_intermediate_size",
+            "num_hidden_layers",
+            "num_attention_heads",
+            "num_key_value_heads",
+            "head_dim",
+            "q_lora_rank",
+            "num_experts_per_tok",
+            "n_routed_experts",
+            "max_position_embeddings",
+            "hc_mult",
+            "hc_sinkhorn_iters",
+            "sliding_window",
+            "o_groups",
+            "o_lora_rank",
+            "index_n_heads",
+            "index_head_dim",
+            "index_topk",
+        )
+        for name in positive_int_fields:
+            value = getattr(self, name)
+            if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+                raise ValueError(f"{name} must be a positive integer.")
+
+        if isinstance(self.n_shared_experts, bool) or not isinstance(self.n_shared_experts, int) or self.n_shared_experts < 0:
+            raise ValueError("n_shared_experts must be a non-negative integer.")
+        if (
+            isinstance(self.num_hash_layers, bool)
+            or not isinstance(self.num_hash_layers, int)
+            or self.num_hash_layers < 0
+        ):
+            raise ValueError("num_hash_layers must be a non-negative integer.")
+        if (
+            isinstance(self.num_nextn_predict_layers, bool)
+            or not isinstance(self.num_nextn_predict_layers, int)
+            or self.num_nextn_predict_layers < 0
+        ):
+            raise ValueError("num_nextn_predict_layers must be non-negative.")
+        finite_float_fields = (
+            "partial_rotary_factor",
+            "attention_dropout",
+            "routed_scaling_factor",
+            "rope_theta",
+            "compress_rope_theta",
+            "hc_eps",
+            "swiglu_limit",
+            "rms_norm_eps",
+            "initializer_range",
+            "mtp_loss_weight",
+            "router_bias_update_speed",
+        )
+        for name in finite_float_fields:
+            value = getattr(self, name)
+            if isinstance(value, bool) or not isinstance(value, Real) or not isfinite(float(value)):
+                raise ValueError(f"{name} must be a finite real number.")
+
+        if not 0.0 < self.partial_rotary_factor <= 1.0:
+            raise ValueError("partial_rotary_factor must be in (0, 1].")
+        if not 0.0 <= self.attention_dropout < 1.0:
+            raise ValueError("attention_dropout must be in [0, 1).")
+
+        positive_float_fields = (
+            "routed_scaling_factor",
+            "rope_theta",
+            "compress_rope_theta",
+            "hc_eps",
+            "swiglu_limit",
+            "rms_norm_eps",
+            "initializer_range",
+        )
+        for name in positive_float_fields:
+            if getattr(self, name) <= 0:
+                raise ValueError(f"{name} must be positive.")
+        for name in ("mtp_loss_weight", "router_bias_update_speed"):
+            if getattr(self, name) < 0:
+                raise ValueError(f"{name} must be non-negative.")
+
+        missing_rates = _REQUIRED_COMPRESS_RATES - self.compress_rates.keys()
+        if missing_rates:
+            raise ValueError(f"compress_rates is missing required keys: {sorted(missing_rates)}")
+        for name, rate in self.compress_rates.items():
+            if isinstance(rate, bool) or not isinstance(rate, int) or rate <= 0:
+                raise ValueError(f"compress rate for {name} must be a positive integer.")
+
+        for name in ("pad_token_id", "bos_token_id", "eos_token_id"):
+            token_id = getattr(self, name)
+            if token_id is not None and not 0 <= token_id < self.vocab_size:
+                raise ValueError(f"{name} must be in [0, vocab_size).")
+        if self.quantization_weight_block_size is not None:
+            if (
+                len(self.quantization_weight_block_size) != 2
+                or any(
+                    isinstance(size, bool) or not isinstance(size, int) or size <= 0
+                    for size in self.quantization_weight_block_size
+                )
+            ):
+                raise ValueError(
+                    "quantization_weight_block_size must contain two positive integers."
+                )
+
+        self.compress_ratios = _normalize_compress_ratios(
+            self.compress_ratios,
+            self.num_hidden_layers,
+        )
         if self.num_key_value_heads != 1:
             raise ValueError("DeepSeek-V4 uses shared K=V MQA; num_key_value_heads must be 1.")
         if self.num_attention_heads % self.o_groups != 0:
@@ -95,9 +224,12 @@ class DeepSeekV4Config:
                 self.compress_rates["compressed_sparse_attention"]: "compressed_sparse_attention",
                 self.compress_rates["heavily_compressed_attention"]: "heavily_compressed_attention",
             }
-            self.layer_types = [ratio_to_type[ratio] for ratio in self.compress_ratios]
+            try:
+                self.layer_types = [ratio_to_type[ratio] for ratio in self.compress_ratios]
+            except KeyError as exc:
+                raise ValueError(f"Unsupported compress ratio: {exc.args[0]!r}") from exc
         if self.layer_types is not None:
-            self.layer_types = self.layer_types[: self.num_hidden_layers]
+            self.layer_types = list(self.layer_types)
         if self.layer_types is None:
             # DeepSeek-V4-Flash checkpoint schedule: first two bootstrap layers use
             # sliding attention, then CSA/HCA interleave for long-context layers.
@@ -123,10 +255,6 @@ class DeepSeekV4Config:
         if unknown_mlp:
             raise ValueError(f"Unsupported MLP layer types: {sorted(unknown_mlp)}")
 
-        for name, rate in self.compress_rates.items():
-            if rate <= 0:
-                raise ValueError(f"compress rate for {name} must be positive.")
-
     @property
     def qk_rope_head_dim(self) -> int:
         return int(self.head_dim * self.partial_rotary_factor)
@@ -136,8 +264,8 @@ class DeepSeekV4Config:
         return self.num_attention_heads * self.head_dim
 
     @classmethod
-    def flash(cls, **overrides) -> "DeepSeekV4Config":
-        values = dict(
+    def flash(cls, **overrides) -> DeepSeekV4Config:
+        values: dict[str, Any] = dict(
             vocab_size=129280,
             hidden_size=4096,
             moe_intermediate_size=2048,
@@ -173,8 +301,8 @@ class DeepSeekV4Config:
         return cls(**values)
 
     @classmethod
-    def pro(cls, **overrides) -> "DeepSeekV4Config":
-        values = dict(
+    def pro(cls, **overrides) -> DeepSeekV4Config:
+        values: dict[str, Any] = dict(
             vocab_size=129280,
             hidden_size=7168,
             moe_intermediate_size=3072,
@@ -210,7 +338,7 @@ class DeepSeekV4Config:
         return cls(**values)
 
     @classmethod
-    def from_official_json(cls, path_or_dict: str | Path | dict[str, Any], **overrides) -> "DeepSeekV4Config":
+    def from_official_json(cls, path_or_dict: str | Path | dict[str, Any], **overrides) -> DeepSeekV4Config:
         if isinstance(path_or_dict, (str, Path)):
             official = json.loads(Path(path_or_dict).read_text())
         else:

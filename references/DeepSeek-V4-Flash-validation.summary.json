@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "source": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash",
+  "validated_at": "2026-07-14",
+  "checkpoint": {
+    "model_files_sha256": "72582bf3995f176dd81b441e271b1d5f0ea2f64dfe6d470427ad0501fb36a15b",
+    "model_files_sha256_scope": "config.json, model.safetensors.index.json, and 46 model safetensors shards",
+    "download_tree_sha256": "6c1f2baea0bac2294ea940f4396331cb9cdb486eb121eb9750b96214fd7e30a8",
+    "sha256_algorithm": "SHA-256 over sorted relative paths and file contents, NUL-delimited",
+    "index_sha256": "7e975ba3bef8947a94e7da0abd60888375b232b4dfad883d59653e65c6ba522a",
+    "model_file_count": 48,
+    "shard_count": 46,
+    "indexed_tensor_count": 69187,
+    "checkpoint_file_bytes": 159617149040,
+    "indexed_tensor_bytes": 159609485896,
+    "logical_parameter_count": 290942289362,
+    "active_parameter_count": 14118225362
+  },
+  "preflight": {
+    "is_complete": true,
+    "dtype_counts": {
+      "BF16": 433,
+      "F32": 417,
+      "F8_E4M3": 375,
+      "F8_E8M0": 34167,
+      "I64": 3,
+      "I8": 33792
+    },
+    "quantized_tensor_count": 33792,
+    "scale_tensor_count": 34167,
+    "missing_shards": 0,
+    "missing_expected_keys": 0,
+    "missing_keys_in_shards": 0,
+    "unexpected_keys_in_shards": 0,
+    "shape_mismatches": 0,
+    "unchecked_shape_keys": 0,
+    "unrecognized_keys": 0,
+    "metadata_errors": 0,
+    "dtype_metadata_errors": 0
+  },
+  "streaming_payload_scan": {
+    "is_complete": true,
+    "loaded_tensor_count": 69187,
+    "loaded_bytes": 159609485896,
+    "loaded_shard_count": 46,
+    "converted_tensor_count": 35020,
+    "ignored_scale_tensor_count": 34167,
+    "missing_key_count": 0,
+    "unexpected_key_count": 0,
+    "unconverted_key_count": 0,
+    "error_count": 0
+  },
+  "accelerator_validation": {
+    "device": "NVIDIA GB10",
+    "torch_version": "2.13.0+cu130",
+    "cuda_available": true,
+    "gpu_test_count": 4,
+    "status": "passed",
+    "covered_modes": [
+      "BF16 autocast full-vs-cache equivalence",
+      "FP16 autocast full-vs-cache equivalence",
+      "native BF16 training step",
+      "GPU cache CPU-storage round trip"
+    ]
+  }
+}
