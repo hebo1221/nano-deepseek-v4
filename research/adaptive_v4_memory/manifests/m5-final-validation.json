@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "experiment_id": "m5-final-validation-v1",
+  "date": "2026-07-14",
+  "official_snapshots": {
+    "flash": {
+      "repository": "deepseek-ai/DeepSeek-V4-Flash",
+      "revision": "60d8d70770c6776ff598c94bb586a859a38244f1"
+    },
+    "pro": {
+      "repository": "deepseek-ai/DeepSeek-V4-Pro",
+      "revision": "b5968e9190ef611bbf34a7229255be88a0e937c1"
+    }
+  },
+  "tier_s_checkpoints": [
+    {
+      "scale": "s55",
+      "sha256": "5156747b2af10ca0b67a227ae037bdb9d18c1caf8eced7e067c90825300c7847"
+    },
+    {
+      "scale": "s151",
+      "sha256": "628c1a65cf464a6ae4f9c31b626465abcc374a15b75f7d33b861342f5848f4b3"
+    }
+  ],
+  "workloads": [
+    {"name": "single-retrieval", "sequence_length": 80, "queries": 1},
+    {"name": "query-shift", "sequence_length": 128, "queries": 4},
+    {"name": "dense-memory", "sequence_length": 160, "queries": 8}
+  ],
+  "examples_per_family_mode_scale": 32,
+  "modes": ["native", "memory-matched fixed-top-k", "online M2", "dense"],
+  "online_semantics": "one-token lookahead after a native bootstrap token",
+  "seed": 8071401,
+  "gates": {
+    "quality": "online M2 accuracy must be no worse than memory-matched fixed-top-k on both scales and all families",
+    "budget": "zero controller action budget violations",
+    "runtime": "quality-matched online p95 <= 1.25x native or throughput >= 0.80x",
+    "memory": "positive measured hot-resident cache reduction",
+    "official": "official run only if pinned payload fits memory and a supported runtime is installed"
+  },
+  "privacy": "generated tokens and raw predictions are not committed; only digests and aggregates"
+}

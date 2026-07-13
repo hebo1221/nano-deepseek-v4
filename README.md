@@ -116,7 +116,8 @@ Start with the [`Adaptive V4 Memory` research index](research/adaptive_v4_memory
 The proposal, related-work matrix, and preregistered experimental protocol make
 no performance claim. M0 instrumentation and the M1 replay/predictive-signal
 gate and M2 offline training-free controller gate are complete. M3 learned-risk
-evaluation is a negative result, so M4 runtime work uses the retained M2 rule.
+evaluation is a negative result. M4 established correct fixed-top-k tiering;
+M5 then falsified the online adaptive M2 hypothesis.
 
 M0 tracing is an observer-only API. It records native CSA block selections and
 cache byte accounting without logging token IDs or changing cache residency:
@@ -149,6 +150,13 @@ offline logical-selection evidence: physical GPU residency does not change.
 The M3 learned risk controller reduced some prediction errors but used 57–63%
 dense fallback and failed to improve the M2 quality/block Pareto at both scales.
 It remains a reproducible negative baseline rather than the M4 default.
+
+M4's pinned-CPU/GPU-hot CSA value store preserved quality and reduced that
+component by about 91%, but reduced total cache allocation by only about 2% and
+did not improve speed. M5 connected M2 to actual cached decode; its one-token
+lookahead respected every budget but failed quality on both scales and all
+three final workload families. Official Flash/Pro execution was infeasible on
+the audited host. The research index links the digest-bound final report.
 
 ## What's inside
 

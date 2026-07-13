@@ -20,7 +20,7 @@ resident on the accelerator.
 
 ## Current status
 
-Status: **M4 reference runtime complete; strict speedup gate failed**
+Status: **M5 complete; online adaptive hypothesis falsified**
 
 No performance or systems claim has been made. M1 adds deterministic baselines,
 an exhaustive Tier-T oracle, differentiable CSA training probes, and two
@@ -110,3 +110,18 @@ value component, but only about 1.9% of total measured cache allocation because
 index and rollback state remain resident. Batch-1 throughput retained 94–95%;
 no speedup was observed. See the checked M4 report and summary for the bounded
 claim and negative strict-gate decision.
+
+## M5 final decision
+
+`nano_deepseek_v4/online_memory_controller.py` connects M2 actions to the real
+tier fetch with deterministic lifecycle and persistence support. Across three
+synthetic workload families and both Tier-S scales, it respected every budget
+but lost substantial quality because a cross-layer global decision can only be
+applied one token after its scores are complete. Total hot-cache reduction was
+only 1.51–1.92%, p95 latency was 1.11–1.29x native, and no speedup was observed.
+
+The pinned official Flash (159.62 GB) and Pro (864.72 GB) payloads cannot be run
+on the available host, so official-scale execution remains explicitly
+unverified. The checked M5 report records the final negative result, official
+feasibility audit, minimum fused-kernel contract, and the retained bounded M4
+fixed-top-k result.

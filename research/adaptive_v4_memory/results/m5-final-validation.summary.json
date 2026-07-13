@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "experiment_id": "m5-final-validation-v1",
+  "date": "2026-07-14",
+  "environment": {
+    "device": "NVIDIA GB10",
+    "torch": "2.13.0+cu130",
+    "cuda": "13.0",
+    "dtype": "bfloat16"
+  },
+  "raw_artifacts": {
+    "official_audit": {
+      "path": "artifacts/adaptive_v4_memory/m5-official-feasibility.json",
+      "sha256": "42b9a348ecf8c7e6c4690cd599385a04d2a4362c0640b1bb93097d161ae266af"
+    },
+    "s55": {
+      "path": "artifacts/adaptive_v4_memory/tier_s/s55/m5-online-controller.json",
+      "sha256": "945448d0b26e5f9404fc16056140239039c096389eaf9d0d0316bae6205c2552"
+    },
+    "s151": {
+      "path": "artifacts/adaptive_v4_memory/tier_s/s151/m5-online-controller.json",
+      "sha256": "8e08bea8cb0d9e6af569127a9a46790e7110d196f5da859e7d7e2e2eecb02c7f"
+    }
+  },
+  "official_feasibility": {
+    "available_memory_plus_swap_bytes": 142335508480,
+    "disk_free_bytes": 290384891904,
+    "supported_runtime_installed": false,
+    "flash": {
+      "revision": "60d8d70770c6776ff598c94bb586a859a38244f1",
+      "safetensors_files": 46,
+      "safetensors_bytes": 159617149040,
+      "runnable": false
+    },
+    "pro": {
+      "revision": "b5968e9190ef611bbf34a7229255be88a0e937c1",
+      "safetensors_files": 64,
+      "safetensors_bytes": 864721029744,
+      "runnable": false
+    }
+  },
+  "accuracy": {
+    "s55": {
+      "single-retrieval": {"native": 0.8125, "fixed": 0.8125, "online": 0.28125, "dense": 0.8125},
+      "query-shift": {"native": 0.6171875, "fixed": 0.5078125, "online": 0.140625, "dense": 0.609375},
+      "dense-memory": {"native": 0.625, "fixed": 0.54296875, "online": 0.14453125, "dense": 0.62890625}
+    },
+    "s151": {
+      "single-retrieval": {"native": 0.84375, "fixed": 0.78125, "online": 0.09375, "dense": 0.84375},
+      "query-shift": {"native": 0.3828125, "fixed": 0.3359375, "online": 0.125, "dense": 0.375},
+      "dense-memory": {"native": 0.359375, "fixed": 0.2890625, "online": 0.09765625, "dense": 0.375}
+    }
+  },
+  "online_runtime": {
+    "s55": {
+      "hot_cache_reduction_ratio_range": [0.015115092040702077, 0.01819500767044441],
+      "p95_ratio_range": [1.1138383634046711, 1.2894642451167335],
+      "controller_us_per_control_point_range": [241.578421875, 1595.1158736979166],
+      "maximum_fallback_rate": 0.15625
+    },
+    "s151": {
+      "hot_cache_reduction_ratio_range": [0.016245850518056534, 0.01919896245455274],
+      "p95_ratio_range": [1.1085921402282548, 1.2711692661611886],
+      "controller_us_per_control_point_range": [272.52065625, 2329.7734622395833],
+      "maximum_fallback_rate": 0.07161458333333333
+    },
+    "budget_violations": 0,
+    "late_misses": 0
+  },
+  "gates": {
+    "official_weight_run": false,
+    "budget_safety": true,
+    "memory_reduction": true,
+    "runtime_competitive_all_families": false,
+    "quality_vs_fixed": false,
+    "strict_speedup": false
+  },
+  "decision": "negative_result",
+  "conclusion": "Offline M2 does not transfer to a causal one-token-lookahead runtime. Keep fixed-top-k tiering as the bounded reference result; a same-token fused hierarchical controller is required before further scale claims."
+}
