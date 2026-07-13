@@ -8,7 +8,8 @@ import torch.nn.functional as F
 from torch import nn
 
 from .config import DeepSeekV4Config
-from .memory_trace import AdaptiveMemoryTraceCollector
+from .memory_probe import CSASelectionProbe
+from .memory_trace import AdaptiveMemoryTraceCollector, measure_csa_block_bytes
 
 
 @dataclass
@@ -52,13 +53,11 @@ def rotate_half(x: torch.Tensor) -> torch.Tensor:
     return torch.stack((-odd, even), dim=-1).flatten(-2)
 
 
-def rope_cos_sin(position_ids: torch.Tensor, dim: int, theta: float) -> tuple[torch.Tensor, torch.Tensor]:
+def rope_cos_sin(
+    position_ids: torch.Tensor, dim: int, theta: float
+) -> tuple[torch.Tensor, torch.Tensor]:
     inv_freq = 1.0 / (
-        theta
-        ** (
-            torch.arange(0, dim, 2, device=position_ids.device, dtype=torch.float32)
-            / dim
-        )
+        theta ** (torch.arange(0, dim, 2, device=position_ids.device, dtype=torch.float32) / dim)
     )
     freqs = position_ids.float().unsqueeze(-1) * inv_freq
     return freqs.cos(), freqs.sin()
@@ -123,7 +122,10 @@ class HyperConnection(nn.Module):
         pre_scale, post_scale, comb_scale = self.scale.float().unbind(0)
         hc = self.hc_mult
         pre = torch.sigmoid(mix[..., :hc] * pre_scale + self.base[:hc].float()) + self.eps
-        post = torch.sigmoid(mix[..., hc : 2 * hc] * post_scale + self.base[hc : 2 * hc].float()) + self.eps
+        post = (
+            torch.sigmoid(mix[..., hc : 2 * hc] * post_scale + self.base[hc : 2 * hc].float())
+            + self.eps
+        )
         comb = (
             torch.sigmoid(
                 mix[..., 2 * hc :].view(*mix.shape[:-1], hc, hc) * comb_scale
@@ -153,7 +155,10 @@ class HyperHead(nn.Module):
 
     def forward(self, streams: torch.Tensor) -> torch.Tensor:
         flat = self.input_norm(streams.flatten(start_dim=2).float())
-        weights = torch.sigmoid(F.linear(flat, self.fn.float()) * self.scale.float() + self.base.float()) + self.eps
+        weights = (
+            torch.sigmoid(F.linear(flat, self.fn.float()) * self.scale.float() + self.base.float())
+            + self.eps
+        )
         return (weights.unsqueeze(-1) * streams).sum(dim=2).to(streams.dtype)
 
 
@@ -212,7 +217,9 @@ class DeepSeekV4LayerCache:
         else:
             self.history_kv[name] = torch.cat([self.history_kv[name], kv], dim=1)
             self.history_gate[name] = torch.cat([self.history_gate[name], gate], dim=1)
-            self.history_positions[name] = torch.cat([self.history_positions[name], position_ids], dim=1)
+            self.history_positions[name] = torch.cat(
+                [self.history_positions[name], position_ids], dim=1
+            )
         if buffered_kv is not None and buffered_kv.shape[1] > 0:
             kv = torch.cat([buffered_kv, kv], dim=1)
             gate = torch.cat([buffered_gate, gate], dim=1)
@@ -223,7 +230,9 @@ class DeepSeekV4LayerCache:
         self.buffer_positions[name] = position_ids[:, usable:]
         return kv[:, :usable], gate[:, :usable], position_ids[:, :usable]
 
-    def get_compressed(self, name: str, template: torch.Tensor, head_dim: int) -> tuple[torch.Tensor, torch.Tensor]:
+    def get_compressed(
+        self, name: str, template: torch.Tensor, head_dim: int
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         kv = self.compressed_kv.get(name)
         positions = self.compressed_positions.get(name)
         if kv is None:
@@ -243,7 +252,9 @@ class DeepSeekV4LayerCache:
             self.compressed_positions[name] = end_positions
         elif compressed.shape[1] > 0:
             self.compressed_kv[name] = torch.cat([self.compressed_kv[name], compressed], dim=1)
-            self.compressed_positions[name] = torch.cat([self.compressed_positions[name], end_positions], dim=1)
+            self.compressed_positions[name] = torch.cat(
+                [self.compressed_positions[name], end_positions], dim=1
+            )
         return self.compressed_kv[name], self.compressed_positions[name]
 
     def update_overlap(
@@ -291,8 +302,13 @@ class DeepSeekV4LayerCache:
         return tensor[index : index + 1].clone() if tensor is not None else None
 
     @staticmethod
-    def _select_dict(values: dict[str, torch.Tensor | None], index: int) -> dict[str, torch.Tensor | None]:
-        return {name: DeepSeekV4LayerCache._select_tensor(tensor, index) for name, tensor in values.items()}
+    def _select_dict(
+        values: dict[str, torch.Tensor | None], index: int
+    ) -> dict[str, torch.Tensor | None]:
+        return {
+            name: DeepSeekV4LayerCache._select_tensor(tensor, index)
+            for name, tensor in values.items()
+        }
 
     def select_batch(self, index: int) -> DeepSeekV4LayerCache:
         other = DeepSeekV4LayerCache()
@@ -328,7 +344,9 @@ class DeepSeekV4LayerCache:
         return torch.cat(present, dim=0)
 
     @staticmethod
-    def _stack_dict(attr: str, layers: list[DeepSeekV4LayerCache]) -> dict[str, torch.Tensor | None]:
+    def _stack_dict(
+        attr: str, layers: list[DeepSeekV4LayerCache]
+    ) -> dict[str, torch.Tensor | None]:
         keys: set[str] = set()
         for layer in layers:
             keys.update(getattr(layer, attr).keys())
@@ -345,7 +363,9 @@ class DeepSeekV4LayerCache:
             raise ValueError("Cannot stack an empty cache layer list.")
         other = cls()
         other.local_kv = cls._stack_tensor("local_kv", [layer.local_kv for layer in layers])
-        other.local_positions = cls._stack_tensor("local_positions", [layer.local_positions for layer in layers])
+        other.local_positions = cls._stack_tensor(
+            "local_positions", [layer.local_positions for layer in layers]
+        )
         other.buffer_kv = cls._stack_dict("buffer_kv", layers)
         other.buffer_gate = cls._stack_dict("buffer_gate", layers)
         other.buffer_positions = cls._stack_dict("buffer_positions", layers)
@@ -392,7 +412,9 @@ class DeepSeekV4LayerCache:
                 gate_values[name] = gate[:, keep]
             positions[name] = pos[:, keep]
 
-    def _rebuild_compressor_buffers(self, max_length: int, layer_type: str, compress_rates: dict[str, int]) -> None:
+    def _rebuild_compressor_buffers(
+        self, max_length: int, layer_type: str, compress_rates: dict[str, int]
+    ) -> None:
         for name, pos in list(self.history_positions.items()):
             kv = self.history_kv.get(name)
             gate = self.history_gate.get(name)
@@ -552,14 +574,20 @@ class HCACompressor(nn.Module):
         gate = self.gate_proj(hidden_states)
         if cache is None:
             usable = (seq_len // self.rate) * self.rate
-            chunk_kv, chunk_gate, chunk_positions = kv[:, :usable], gate[:, :usable], position_ids[:, :usable]
+            chunk_kv, chunk_gate, chunk_positions = (
+                kv[:, :usable],
+                gate[:, :usable],
+                position_ids[:, :usable],
+            )
         else:
             chunk_kv, chunk_gate, chunk_positions = cache.store_compression_inputs(
                 "compressor", kv, gate, position_ids, self.rate
             )
         if chunk_kv.shape[1] == 0:
             if cache is not None:
-                compressed, end_positions = cache.get_compressed("compressor", hidden_states, self.head_dim)
+                compressed, end_positions = cache.get_compressed(
+                    "compressor", hidden_states, self.head_dim
+                )
                 return compressed.unsqueeze(1), end_positions
             empty = hidden_states.new_zeros(batch, 1, 0, self.head_dim)
             return empty, position_ids.new_zeros(batch, 0)
@@ -577,7 +605,9 @@ class HCACompressor(nn.Module):
         end_positions = chunk_positions[:, :, -1]
         compressed = kv.squeeze(1)
         if cache is not None:
-            compressed, end_positions = cache.update_compressed("compressor", compressed, end_positions)
+            compressed, end_positions = cache.update_compressed(
+                "compressor", compressed, end_positions
+            )
             kv = compressed.unsqueeze(1)
         return kv, end_positions
 
@@ -593,7 +623,9 @@ class CSAIndexer(nn.Module):
         if self.rope_dim % 2 != 0:
             self.rope_dim -= 1
         self.compress_rope_theta = config.compress_rope_theta
-        self.q_b_proj = nn.Linear(config.q_lora_rank, config.index_n_heads * config.index_head_dim, bias=False)
+        self.q_b_proj = nn.Linear(
+            config.q_lora_rank, config.index_n_heads * config.index_head_dim, bias=False
+        )
         self.weights_proj = nn.Linear(config.hidden_size, config.index_n_heads, bias=False)
         self.kv_proj = nn.Linear(config.hidden_size, 2 * config.index_head_dim, bias=False)
         self.gate_proj = nn.Linear(config.hidden_size, 2 * config.index_head_dim, bias=False)
@@ -611,7 +643,11 @@ class CSAIndexer(nn.Module):
         gate = self.gate_proj(hidden_states)
         if cache is None:
             usable = (seq_len // self.rate) * self.rate
-            chunk_kv, chunk_gate, chunk_positions = kv[:, :usable], gate[:, :usable], position_ids[:, :usable]
+            chunk_kv, chunk_gate, chunk_positions = (
+                kv[:, :usable],
+                gate[:, :usable],
+                position_ids[:, :usable],
+            )
         else:
             chunk_kv, chunk_gate, chunk_positions = cache.store_compression_inputs(
                 "indexer", kv, gate, position_ids, self.rate
@@ -619,14 +655,14 @@ class CSAIndexer(nn.Module):
         if chunk_kv.shape[1] == 0:
             if cache is not None:
                 return cache.get_compressed("indexer", hidden_states, self.head_dim)
-            return hidden_states.new_zeros(batch, 0, self.head_dim), position_ids.new_zeros(batch, 0)
+            return hidden_states.new_zeros(batch, 0, self.head_dim), position_ids.new_zeros(
+                batch, 0
+            )
 
         n_windows = chunk_kv.shape[1] // self.rate
         chunk_positions = chunk_positions.view(batch, n_windows, self.rate)
         kv = chunk_kv.view(batch, n_windows, self.rate, 2 * self.head_dim)
-        gate = chunk_gate.view(
-            batch, n_windows, self.rate, 2 * self.head_dim
-        )
+        gate = chunk_gate.view(batch, n_windows, self.rate, 2 * self.head_dim)
         gate = gate + self.position_bias
 
         slots = kv.new_zeros(batch, n_windows, 2 * self.rate, self.head_dim)
@@ -637,7 +673,9 @@ class CSAIndexer(nn.Module):
             slots[:, 1:, : self.rate] = kv[:, :-1, :, : self.head_dim]
             slot_gate[:, 1:, : self.rate] = gate[:, :-1, :, : self.head_dim]
         if cache is not None:
-            prior_kv, prior_gate = cache.update_overlap("indexer", kv, gate, chunk_positions, self.head_dim)
+            prior_kv, prior_gate = cache.update_overlap(
+                "indexer", kv, gate, chunk_positions, self.head_dim
+            )
             if prior_kv is not None:
                 if prior_gate is None:
                     raise RuntimeError("cache overlap gate is missing.")
@@ -651,7 +689,9 @@ class CSAIndexer(nn.Module):
         compressed = apply_partial_rope(compressed.unsqueeze(1), cos, sin).squeeze(1)
         end_positions = chunk_positions[:, :, -1]
         if cache is not None:
-            compressed, end_positions = cache.update_compressed("indexer", compressed, end_positions)
+            compressed, end_positions = cache.update_compressed(
+                "indexer", compressed, end_positions
+            )
         return compressed, end_positions
 
     def forward(
@@ -663,7 +703,7 @@ class CSAIndexer(nn.Module):
         memory_trace: AdaptiveMemoryTraceCollector | None = None,
         layer_index: int = 0,
         seen_tokens: int = 0,
-    ) -> tuple[torch.Tensor | None, torch.Tensor]:
+    ) -> tuple[torch.Tensor | None, torch.Tensor, torch.Tensor | None]:
         indexer_started = perf_counter_ns() if memory_trace is not None else 0
         compressed, end_positions = self._compress(hidden_states, position_ids, cache)
         if compressed.shape[1] == 0:
@@ -674,9 +714,15 @@ class CSAIndexer(nn.Module):
                     query_positions=position_ids,
                     block_end_positions=end_positions,
                     sparse_mask=None,
+                    scores=None,
+                    block_bytes=(
+                        measure_csa_block_bytes(cache, end_positions.shape[1])
+                        if cache is not None
+                        else 0
+                    ),
                     indexer_wall_time_ns=perf_counter_ns() - indexer_started,
                 )
-            return None, end_positions
+            return None, end_positions, None
 
         batch, seq_len, _ = hidden_states.shape
         q = self.q_b_proj(q_residual).view(batch, seq_len, self.num_heads, self.head_dim)
@@ -701,9 +747,15 @@ class CSAIndexer(nn.Module):
                 query_positions=position_ids,
                 block_end_positions=end_positions,
                 sparse_mask=sparse_mask,
+                scores=scores,
+                block_bytes=(
+                    measure_csa_block_bytes(cache, end_positions.shape[1])
+                    if cache is not None
+                    else 0
+                ),
                 indexer_wall_time_ns=perf_counter_ns() - indexer_started,
             )
-        return sparse_mask, end_positions
+        return sparse_mask, end_positions, scores
 
 
 class CSACompressor(nn.Module):
@@ -728,21 +780,28 @@ class CSACompressor(nn.Module):
         memory_trace: AdaptiveMemoryTraceCollector | None = None,
         layer_index: int = 0,
         seen_tokens: int = 0,
+        csa_probe: CSASelectionProbe | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor | None]:
         batch, seq_len, _ = hidden_states.shape
         kv = self.kv_proj(hidden_states)
         gate = self.gate_proj(hidden_states)
         if cache is None:
             usable = (seq_len // self.rate) * self.rate
-            chunk_kv, chunk_gate, chunk_positions = kv[:, :usable], gate[:, :usable], position_ids[:, :usable]
+            chunk_kv, chunk_gate, chunk_positions = (
+                kv[:, :usable],
+                gate[:, :usable],
+                position_ids[:, :usable],
+            )
         else:
             chunk_kv, chunk_gate, chunk_positions = cache.store_compression_inputs(
                 "compressor", kv, gate, position_ids, self.rate
             )
         if chunk_kv.shape[1] == 0:
             if cache is not None:
-                compressed, end_positions = cache.get_compressed("compressor", hidden_states, self.head_dim)
-                sparse_mask, _ = self.indexer(
+                compressed, end_positions = cache.get_compressed(
+                    "compressor", hidden_states, self.head_dim
+                )
+                sparse_mask, _, _ = self.indexer(
                     hidden_states,
                     q_residual,
                     position_ids,
@@ -758,9 +817,7 @@ class CSACompressor(nn.Module):
         n_windows = chunk_kv.shape[1] // self.rate
         chunk_positions = chunk_positions.view(batch, n_windows, self.rate)
         kv = chunk_kv.view(batch, n_windows, self.rate, 2 * self.head_dim)
-        gate = chunk_gate.view(
-            batch, n_windows, self.rate, 2 * self.head_dim
-        )
+        gate = chunk_gate.view(batch, n_windows, self.rate, 2 * self.head_dim)
         gate = gate + self.position_bias
 
         slots = kv.new_zeros(batch, n_windows, 2 * self.rate, self.head_dim)
@@ -771,7 +828,9 @@ class CSACompressor(nn.Module):
             slots[:, 1:, : self.rate] = kv[:, :-1, :, : self.head_dim]
             slot_gate[:, 1:, : self.rate] = gate[:, :-1, :, : self.head_dim]
         if cache is not None:
-            prior_kv, prior_gate = cache.update_overlap("compressor", kv, gate, chunk_positions, self.head_dim)
+            prior_kv, prior_gate = cache.update_overlap(
+                "compressor", kv, gate, chunk_positions, self.head_dim
+            )
             if prior_kv is not None:
                 if prior_gate is None:
                     raise RuntimeError("cache overlap gate is missing.")
@@ -786,9 +845,11 @@ class CSACompressor(nn.Module):
         end_positions = chunk_positions[:, :, -1]
         compressed = kv.squeeze(1)
         if cache is not None:
-            compressed, end_positions = cache.update_compressed("compressor", compressed, end_positions)
+            compressed, end_positions = cache.update_compressed(
+                "compressor", compressed, end_positions
+            )
             kv = compressed.unsqueeze(1)
-        sparse_mask, _ = self.indexer(
+        sparse_mask, _, scores = self.indexer(
             hidden_states,
             q_residual,
             position_ids,
@@ -797,6 +858,17 @@ class CSACompressor(nn.Module):
             layer_index,
             seen_tokens,
         )
+        if csa_probe is not None:
+            if scores is None:
+                raise RuntimeError("CSA indexer did not return scores for a non-empty block set.")
+            csa_probe.record(
+                layer_index=layer_index,
+                scores=scores,
+                block_end_positions=end_positions,
+                query_positions=position_ids,
+                query_features=q_residual,
+                value_blocks=values,
+            )
         return kv, end_positions, sparse_mask
 
 
@@ -817,7 +889,9 @@ class DeepSeekV4Attention(nn.Module):
         self.kv_norm = RMSNorm(config.head_dim, config.rms_norm_eps)
         self.attention_sink = nn.Parameter(torch.zeros(config.num_attention_heads))
         self.o_a_proj = GroupedLinear(config.attention_width, config.o_lora_rank, config.o_groups)
-        self.o_b_proj = nn.Linear(config.o_groups * config.o_lora_rank, config.hidden_size, bias=False)
+        self.o_b_proj = nn.Linear(
+            config.o_groups * config.o_lora_rank, config.hidden_size, bias=False
+        )
         self.dropout = nn.Dropout(config.attention_dropout)
         self.hca = HCACompressor(config) if layer_type == "heavily_compressed_attention" else None
         self.csa = CSACompressor(config) if layer_type == "compressed_sparse_attention" else None
@@ -861,6 +935,7 @@ class DeepSeekV4Attention(nn.Module):
         memory_trace: AdaptiveMemoryTraceCollector | None = None,
         layer_index: int = 0,
         seen_tokens: int = 0,
+        csa_probe: CSASelectionProbe | None = None,
     ) -> torch.Tensor:
         batch, seq_len, _ = hidden_states.shape
         q_mid = self.q_a_norm(self.q_a_proj(hidden_states))
@@ -874,7 +949,9 @@ class DeepSeekV4Attention(nn.Module):
         if cache is None:
             local_positions = position_ids
         else:
-            local_kv, local_positions = cache.update_local(local_kv, position_ids, self.sliding_window)
+            local_kv, local_positions = cache.update_local(
+                local_kv, position_ids, self.sliding_window
+            )
         local_kv = local_kv.expand(batch, self.num_heads, -1, self.head_dim)
         masks = [self._local_mask(position_ids, local_positions, attention_mask)]
         kv_entries = [local_kv]
@@ -893,7 +970,19 @@ class DeepSeekV4Attention(nn.Module):
                 memory_trace,
                 layer_index,
                 seen_tokens,
+                csa_probe,
             )
+            if csa_probe is not None and comp_kv.shape[2] > 0:
+                read_scores = torch.matmul(q.float(), comp_kv.transpose(-1, -2).float())
+                read_scores = read_scores.mean(dim=1) * (self.head_dim**-0.5)
+                read_scores = read_scores.masked_fill(
+                    ~(comp_end.unsqueeze(1) <= position_ids.unsqueeze(-1)),
+                    float("-inf"),
+                )
+                csa_probe.attach_read_scores(
+                    layer_index=layer_index,
+                    read_scores=read_scores,
+                )
             if comp_kv.shape[2] > 0:
                 kv_entries.append(comp_kv.expand(batch, self.num_heads, -1, -1))
                 comp_mask = comp_end.unsqueeze(1) <= position_ids.unsqueeze(-1)
@@ -913,7 +1002,9 @@ class SwiGLUExpert(nn.Module):
     def __init__(self, config: DeepSeekV4Config) -> None:
         super().__init__()
         self.swiglu_limit = config.swiglu_limit
-        self.gate_up_proj = nn.Linear(config.hidden_size, 2 * config.moe_intermediate_size, bias=False)
+        self.gate_up_proj = nn.Linear(
+            config.hidden_size, 2 * config.moe_intermediate_size, bias=False
+        )
         self.down_proj = nn.Linear(config.moe_intermediate_size, config.hidden_size, bias=False)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -932,8 +1023,12 @@ class DeepSeekV4MoE(nn.Module):
         self.topk = config.num_experts_per_tok
         self.gate = nn.Linear(config.hidden_size, config.n_routed_experts, bias=False)
         self.experts = nn.ModuleList([SwiGLUExpert(config) for _ in range(config.n_routed_experts)])
-        self.shared_experts = nn.ModuleList([SwiGLUExpert(config) for _ in range(config.n_shared_experts)])
-        self.register_buffer("e_score_correction_bias", torch.zeros(config.n_routed_experts), persistent=True)
+        self.shared_experts = nn.ModuleList(
+            [SwiGLUExpert(config) for _ in range(config.n_shared_experts)]
+        )
+        self.register_buffer(
+            "e_score_correction_bias", torch.zeros(config.n_routed_experts), persistent=True
+        )
         self.register_buffer("tid2eid", self._build_hash_table(config), persistent=True)
 
     @staticmethod
@@ -966,16 +1061,22 @@ class DeepSeekV4MoE(nn.Module):
         return topk_idx, weights, logits
 
     @torch.no_grad()
-    def update_balance_bias(self, topk_idx: torch.Tensor, speed: float | None = None) -> torch.Tensor:
+    def update_balance_bias(
+        self, topk_idx: torch.Tensor, speed: float | None = None
+    ) -> torch.Tensor:
         """Auxiliary-loss-free routing-bias update from observed expert load."""
 
         speed = self.config.router_bias_update_speed if speed is None else speed
-        counts = torch.bincount(topk_idx.reshape(-1), minlength=self.config.n_routed_experts).float()
+        counts = torch.bincount(
+            topk_idx.reshape(-1), minlength=self.config.n_routed_experts
+        ).float()
         if counts.sum() == 0:
             return self.e_score_correction_bias
         target = counts.mean()
         adjustment = (target - counts) / target.clamp_min(1.0)
-        self.e_score_correction_bias.add_(adjustment.to(self.e_score_correction_bias.device) * speed)
+        self.e_score_correction_bias.add_(
+            adjustment.to(self.e_score_correction_bias.device) * speed
+        )
         return self.e_score_correction_bias
 
     def set_hash_routing_table(self, table: torch.Tensor) -> None:
@@ -983,7 +1084,9 @@ class DeepSeekV4MoE(nn.Module):
         if tuple(table.shape) != expected:
             raise ValueError(f"tid2eid table must have shape {expected}, got {tuple(table.shape)}.")
         if table.min() < 0 or table.max() >= self.config.n_routed_experts:
-            raise ValueError("tid2eid table contains expert ids outside the configured expert range.")
+            raise ValueError(
+                "tid2eid table contains expert ids outside the configured expert range."
+            )
         self.tid2eid.copy_(table.to(device=self.tid2eid.device, dtype=torch.long))
 
     def forward(
@@ -1002,7 +1105,9 @@ class DeepSeekV4MoE(nn.Module):
             route_mask = flat_idx == expert_id
             token_mask = route_mask.any(dim=-1)
             if token_mask.any():
-                expert_weight = (flat_weights[token_mask] * route_mask[token_mask].to(flat_weights.dtype)).sum(dim=-1)
+                expert_weight = (
+                    flat_weights[token_mask] * route_mask[token_mask].to(flat_weights.dtype)
+                ).sum(dim=-1)
                 output[token_mask] += expert(x[token_mask]) * expert_weight.unsqueeze(-1)
 
         for shared in self.shared_experts:
@@ -1032,6 +1137,7 @@ class DeepSeekV4DecoderLayer(nn.Module):
         memory_trace: AdaptiveMemoryTraceCollector | None = None,
         layer_index: int = 0,
         seen_tokens: int = 0,
+        csa_probe: CSASelectionProbe | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         post, comb, collapsed = self.attn_hc(streams)
         attn_output = self.self_attn(
@@ -1042,6 +1148,7 @@ class DeepSeekV4DecoderLayer(nn.Module):
             memory_trace,
             layer_index,
             seen_tokens,
+            csa_probe,
         )
         streams = post.unsqueeze(-1) * attn_output.unsqueeze(-2) + torch.matmul(comb, streams)
         router_logits: torch.Tensor | None = None
@@ -1079,8 +1186,12 @@ class DeepSeekV4MTPModule(nn.Module):
         input_ids: torch.Tensor,
         position_ids: torch.Tensor,
     ) -> torch.Tensor:
-        hidden_states = self.h_proj(self.hnorm(previous_hidden)) + self.e_proj(self.enorm(future_token_embeds))
-        streams = hidden_states.unsqueeze(2).expand(-1, -1, self.layer.attn_hc.hc_mult, -1).contiguous()
+        hidden_states = self.h_proj(self.hnorm(previous_hidden)) + self.e_proj(
+            self.enorm(future_token_embeds)
+        )
+        streams = (
+            hidden_states.unsqueeze(2).expand(-1, -1, self.layer.attn_hc.hc_mult, -1).contiguous()
+        )
         streams, _ = self.layer(streams, input_ids, position_ids, attention_mask=None)
         return self.norm(self.hc_head(streams))
 
@@ -1115,6 +1226,7 @@ class DeepSeekV4Model(nn.Module):
         past_key_values: DeepSeekV4Cache | None = None,
         use_cache: bool = False,
         memory_trace: AdaptiveMemoryTraceCollector | None = None,
+        csa_probe: CSASelectionProbe | None = None,
     ) -> tuple[torch.Tensor, list[torch.Tensor] | None, DeepSeekV4Cache | None]:
         if input_ids.ndim != 2 or input_ids.shape[0] == 0 or input_ids.shape[1] == 0:
             raise ValueError("input_ids must be a non-empty [batch, seq] tensor.")
@@ -1130,6 +1242,8 @@ class DeepSeekV4Model(nn.Module):
             raise ValueError("past_key_values was created for a different model configuration.")
         if memory_trace is not None and not use_cache:
             raise ValueError("memory_trace requires use_cache=True.")
+        if csa_probe is not None and use_cache:
+            raise ValueError("csa_probe supports full-sequence forwards without a cache.")
         active_cache = past_key_values
         if use_cache and active_cache is None:
             active_cache = DeepSeekV4Cache(self.config, memory_trace=memory_trace)
@@ -1147,7 +1261,9 @@ class DeepSeekV4Model(nn.Module):
                     f"input length ({expected_mask_length}), got {attention_mask.shape[1]}."
                 )
         if position_ids is None:
-            position_ids = torch.arange(input_ids.shape[1], device=input_ids.device).unsqueeze(0) + past_seen
+            position_ids = (
+                torch.arange(input_ids.shape[1], device=input_ids.device).unsqueeze(0) + past_seen
+            )
             position_ids = position_ids.expand(input_ids.shape[0], -1)
         hidden_states = self.embed_tokens(input_ids)
         streams = hidden_states.unsqueeze(2).expand(-1, -1, self.config.hc_mult, -1).contiguous()
@@ -1164,6 +1280,7 @@ class DeepSeekV4Model(nn.Module):
                 active_cache.memory_trace if active_cache is not None else None,
                 layer_idx,
                 past_seen,
+                csa_probe,
             )
             if output_router_logits:
                 router_logits.append(router)
@@ -1171,7 +1288,11 @@ class DeepSeekV4Model(nn.Module):
         hidden_states = self.norm(self.hc_head(streams))
         if active_cache is not None:
             active_cache.advance(input_ids.shape[1])
-        return hidden_states, router_logits if output_router_logits else None, active_cache if use_cache else None
+        return (
+            hidden_states,
+            router_logits if output_router_logits else None,
+            active_cache if use_cache else None,
+        )
 
 
 class DeepSeekV4ForCausalLM(nn.Module):
@@ -1221,9 +1342,16 @@ class DeepSeekV4ForCausalLM(nn.Module):
             previous_hidden = previous_hidden[:, :-1, :]
             future_ids = input_ids[:, depth : depth + previous_hidden.shape[1]]
             future_embeds = self.model.embed_tokens(future_ids)
-            position_ids = torch.arange(previous_hidden.shape[1], device=input_ids.device).unsqueeze(0)
+            position_ids = torch.arange(
+                previous_hidden.shape[1], device=input_ids.device
+            ).unsqueeze(0)
             position_ids = position_ids.expand(input_ids.shape[0], -1)
-            previous_hidden = module(previous_hidden, future_embeds, input_ids[:, : previous_hidden.shape[1]], position_ids)
+            previous_hidden = module(
+                previous_hidden,
+                future_embeds,
+                input_ids[:, : previous_hidden.shape[1]],
+                position_ids,
+            )
             logits = self.lm_head(previous_hidden)
             mtp_logits.append(logits)
             target = labels[:, depth + 1 : depth + 1 + logits.shape[1] - 1]
@@ -1250,6 +1378,7 @@ class DeepSeekV4ForCausalLM(nn.Module):
         past_key_values: DeepSeekV4Cache | None = None,
         use_cache: bool = False,
         memory_trace: AdaptiveMemoryTraceCollector | None = None,
+        csa_probe: CSASelectionProbe | None = None,
     ) -> CausalLMOutput:
         hidden_states, router_logits, next_cache = self.model(
             input_ids=input_ids,
@@ -1259,6 +1388,7 @@ class DeepSeekV4ForCausalLM(nn.Module):
             past_key_values=past_key_values,
             use_cache=use_cache,
             memory_trace=memory_trace,
+            csa_probe=csa_probe,
         )
         logits = self.lm_head(hidden_states)
         loss = None
@@ -1345,7 +1475,9 @@ class DeepSeekV4ForCausalLM(nn.Module):
 
         beams: list[tuple[torch.Tensor, DeepSeekV4Cache, torch.Tensor, torch.Tensor, bool]] = []
         first_log_probs = output.logits[:, -1].log_softmax(dim=-1)
-        top_scores, top_tokens = first_log_probs.topk(min(num_beams, first_log_probs.shape[-1]), dim=-1)
+        top_scores, top_tokens = first_log_probs.topk(
+            min(num_beams, first_log_probs.shape[-1]), dim=-1
+        )
         for score, token in zip(top_scores[0], top_tokens[0], strict=True):
             token = token.view(1, 1)
             step = self(token, past_key_values=output.past_key_values.clone(), use_cache=True)
@@ -1362,13 +1494,17 @@ class DeepSeekV4ForCausalLM(nn.Module):
             )
 
         for _ in range(max_new_tokens - 1):
-            candidates: list[tuple[torch.Tensor, DeepSeekV4Cache, torch.Tensor, torch.Tensor, bool]] = []
+            candidates: list[
+                tuple[torch.Tensor, DeepSeekV4Cache, torch.Tensor, torch.Tensor, bool]
+            ] = []
             for tokens, cache, score, logits, finished in beams:
                 if finished:
                     candidates.append((tokens, cache, score, logits, finished))
                     continue
                 log_probs = logits[:, -1].log_softmax(dim=-1)
-                next_scores, next_tokens = log_probs.topk(min(num_beams, log_probs.shape[-1]), dim=-1)
+                next_scores, next_tokens = log_probs.topk(
+                    min(num_beams, log_probs.shape[-1]), dim=-1
+                )
                 for next_score, next_token in zip(next_scores[0], next_tokens[0], strict=True):
                     next_token = next_token.view(1, 1)
                     step = self(next_token, past_key_values=cache.clone(), use_cache=True)
@@ -1384,7 +1520,9 @@ class DeepSeekV4ForCausalLM(nn.Module):
                         )
                     )
 
-            def rank(item: tuple[torch.Tensor, DeepSeekV4Cache, torch.Tensor, torch.Tensor, bool]) -> float:
+            def rank(
+                item: tuple[torch.Tensor, DeepSeekV4Cache, torch.Tensor, torch.Tensor, bool],
+            ) -> float:
                 tokens, _, score, _, _ = item
                 generated = max(tokens.shape[1] - input_ids.shape[1], 1)
                 return float(score / (generated**length_penalty))
@@ -1393,5 +1531,10 @@ class DeepSeekV4ForCausalLM(nn.Module):
             if all(finished for *_, finished in beams):
                 break
 
-        best = max(beams, key=lambda item: float(item[2] / ((item[0].shape[1] - input_ids.shape[1]) ** length_penalty)))
+        best = max(
+            beams,
+            key=lambda item: float(
+                item[2] / ((item[0].shape[1] - input_ids.shape[1]) ** length_penalty)
+            ),
+        )
         return best[0]

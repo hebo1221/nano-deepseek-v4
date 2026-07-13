@@ -27,6 +27,9 @@ dependencies = [
     "safetensors>=0.4",
 ]
 
+[project.scripts]
+adaptive-v4-replay = "nano_deepseek_v4.memory_replay:main"
+
 [project.optional-dependencies]
 official = [
     "huggingface_hub>=0.20",

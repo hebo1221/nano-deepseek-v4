@@ -1,0 +1,137 @@
+{
+  "calibrated_index_reuse": {
+    "mean_position_jaccard": [[2, 1.0]],
+    "reuse_layers": [[2, 1]]
+  },
+  "calibrated_layer_budgets": [[1, 4], [2, 4]],
+  "calibration_trace_count": 3,
+  "claim_eligible": false,
+  "evaluation_trace_count": 6,
+  "experiment_id": "m1-tier-t-smoke-v1",
+  "m1_predictive_gate": "not_evaluated",
+  "native_budget_proxy_signal": {
+    "baseline_mae": 0.4999695095133147,
+    "examples": 336,
+    "full_feature_mae": 0.17092173447583695,
+    "passes_predictive_gate": true,
+    "relative_mae_improvement": 0.6581356838295653
+  },
+  "next_required_evidence": "quality-derived sufficient-budget labels from trained Tier-S models",
+  "oracle_runs": [
+    {
+      "evaluated_subsets": 57,
+      "quality": 1.0,
+      "selected_block_ids": ["l2:b0:e19", "l2:b0:e11", "l2:b0:e15", "l2:b0:e23"],
+      "sufficient_budget": 4,
+      "threshold": 1.0
+    },
+    {
+      "evaluated_subsets": 163,
+      "quality": 1.0,
+      "selected_block_ids": ["l2:b0:e3", "l2:b0:e19", "l2:b0:e15", "l2:b0:e23"],
+      "sufficient_budget": 4,
+      "threshold": 1.0
+    },
+    {
+      "evaluated_subsets": 57,
+      "quality": 1.0,
+      "selected_block_ids": ["l2:b0:e11", "l2:b0:e7", "l2:b0:e3", "l2:b0:e15"],
+      "sufficient_budget": 4,
+      "threshold": 1.0
+    },
+    {
+      "evaluated_subsets": 163,
+      "quality": 1.0,
+      "selected_block_ids": ["l2:b0:e31", "l2:b0:e19", "l2:b0:e15", "l2:b0:e27"],
+      "sufficient_budget": 4,
+      "threshold": 1.0
+    },
+    {
+      "evaluated_subsets": 57,
+      "quality": 1.0,
+      "selected_block_ids": ["l2:b0:e7", "l2:b0:e15", "l2:b0:e19", "l2:b0:e23"],
+      "sufficient_budget": 4,
+      "threshold": 1.0
+    },
+    {
+      "evaluated_subsets": 163,
+      "quality": 1.0,
+      "selected_block_ids": ["l2:b0:e11", "l2:b0:e7", "l2:b0:e23", "l2:b0:e27"],
+      "sufficient_budget": 4,
+      "threshold": 1.0
+    }
+  ],
+  "policy_results": {
+    "fixed-top-k-2": {
+      "mean_native_jaccard": 0.7202380952380952,
+      "mean_native_recall": 0.7202380952380952,
+      "mean_selected_blocks": 1.6428571428571428,
+      "queries": 336,
+      "selected_blocks": 552,
+      "selected_bytes": 61824,
+      "traces": 6
+    },
+    "fixed-top-p-0.9": {
+      "mean_native_jaccard": 0.902125850340136,
+      "mean_native_recall": 1.0,
+      "mean_selected_blocks": 3.3214285714285716,
+      "queries": 336,
+      "selected_blocks": 1116,
+      "selected_bytes": 124992,
+      "traces": 6
+    },
+    "index-reuse-calibrated": {
+      "mean_native_jaccard": 0.6913690476190476,
+      "mean_native_recall": 0.6956845238095238,
+      "mean_selected_blocks": 1.6428571428571428,
+      "queries": 336,
+      "selected_blocks": 552,
+      "selected_bytes": 61824,
+      "traces": 6
+    },
+    "native": {
+      "mean_native_jaccard": 1.0,
+      "mean_native_recall": 1.0,
+      "mean_selected_blocks": 2.7142857142857144,
+      "queries": 336,
+      "selected_blocks": 912,
+      "selected_bytes": 102144,
+      "traces": 6
+    },
+    "per-layer-calibrated-p95": {
+      "mean_native_jaccard": 0.9988095238095239,
+      "mean_native_recall": 0.9992559523809523,
+      "mean_selected_blocks": 2.7142857142857144,
+      "queries": 336,
+      "selected_blocks": 912,
+      "selected_bytes": 102144,
+      "traces": 6
+    },
+    "random-2": {
+      "mean_native_jaccard": 0.6672619047619047,
+      "mean_native_recall": 0.6748511904761905,
+      "mean_selected_blocks": 1.6428571428571428,
+      "queries": 336,
+      "selected_blocks": 552,
+      "selected_bytes": 61824,
+      "traces": 6
+    },
+    "recency-2": {
+      "mean_native_jaccard": 0.6744047619047618,
+      "mean_native_recall": 0.6800595238095238,
+      "mean_selected_blocks": 1.6428571428571428,
+      "queries": 336,
+      "selected_blocks": 552,
+      "selected_bytes": 61824,
+      "traces": 6
+    }
+  },
+  "runtime": {
+    "device": "cpu",
+    "dtype": "float32",
+    "python": "3.12.3",
+    "torch": "2.13.0+cu130"
+  },
+  "schema_version": 1,
+  "trace_schema_version": 2
+}

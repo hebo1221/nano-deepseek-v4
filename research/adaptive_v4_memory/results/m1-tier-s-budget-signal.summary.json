@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "experiment_id": "m1-tier-s-budget-signal-v1",
+  "date": "2026-07-14",
+  "hardware": "NVIDIA GB10",
+  "training_seed": 20260714,
+  "evaluation_seed": 20270714,
+  "protocol": {
+    "task": "synthetic associative recall",
+    "sequence_lengths": [48, 64, 80],
+    "examples_per_scale": 768,
+    "topk_budgets": [0, 1, 2, 4, 8, 16, 64],
+    "predictive_gate": "native-feature MAE improves at least 5% over context-blocks plus layer-identity baseline",
+    "validation": "leave-one-generated-example-group-out ridge regression"
+  },
+  "scales": {
+    "s55": {
+      "parameters": 55387476,
+      "auxiliary_training_parameters": 839872,
+      "checkpoint": {
+        "bytes": 222269497,
+        "sha256": "5156747b2af10ca0b67a227ae037bdb9d18c1caf8eced7e067c90825300c7847"
+      },
+      "raw_training_summary_sha256": "2e3f057ff38b97a9543db36c274dbfc119517dc0353efd05b8239d9ab0941e48",
+      "raw_budget_summary_sha256": "60df3f628a6fefe9f93248cda850e1f8462696540e94f19d02845ee3446b653b",
+      "best_native_accuracy": 0.7408854166666666,
+      "best_native_step": 950,
+      "best_local_accuracy": 0.013020833333333334,
+      "accuracy_by_topk": {
+        "0": 0.024739583333333332,
+        "1": 0.5208333333333334,
+        "2": 0.6471354166666666,
+        "4": 0.72265625,
+        "8": 0.7291666666666666,
+        "16": 0.7278645833333334,
+        "64": 0.7278645833333334
+      },
+      "signal_report": {
+        "baseline_mae": 5.297923980380554,
+        "full_feature_mae": 4.667278779462615,
+        "relative_mae_improvement": 0.11903628728033182,
+        "passes_predictive_gate": true
+      }
+    },
+    "s151": {
+      "parameters": 151352716,
+      "auxiliary_training_parameters": 1134848,
+      "checkpoint": {
+        "bytes": 606450713,
+        "sha256": "628c1a65cf464a6ae4f9c31b626465abcc374a15b75f7d33b861342f5848f4b3"
+      },
+      "raw_training_summary_sha256": "909279cc6793dd46bb2baf6639fd270210e87ff99342a282e110e5cd8713948e",
+      "raw_budget_summary_sha256": "3dbc24d4aeb763aecd6024bc6aac9857dcb88c4c0f70694900997e03dfd9db49",
+      "best_native_accuracy": 0.8229166666666666,
+      "best_native_step": 950,
+      "best_local_accuracy": 0.013020833333333334,
+      "accuracy_by_topk": {
+        "0": 0.013020833333333334,
+        "1": 0.69140625,
+        "2": 0.734375,
+        "4": 0.7630208333333334,
+        "8": 0.7669270833333334,
+        "16": 0.765625,
+        "64": 0.765625
+      },
+      "signal_report": {
+        "baseline_mae": 4.4983261630539,
+        "full_feature_mae": 3.7665561145808906,
+        "relative_mae_improvement": 0.16267607593314504,
+        "passes_predictive_gate": true
+      }
+    }
+  },
+  "m1_predictive_gate": "passed_on_both_scales",
+  "training_accuracy_target": {
+    "threshold": 0.85,
+    "s55_passed": false,
+    "s151_passed": false
+  },
+  "claim_eligible": false,
+  "limitations": [
+    "one training seed per scale rather than the protocol's three seeds",
+    "synthetic associative recall only",
+    "both scales missed the preregistered 0.85 native-accuracy target",
+    "results support continuing to M2 but not a model-quality or systems claim"
+  ]
+}

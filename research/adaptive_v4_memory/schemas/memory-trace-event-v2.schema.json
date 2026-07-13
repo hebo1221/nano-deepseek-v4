@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hebo1221/nano-deepseek-v4/research/adaptive_v4_memory/schemas/memory-trace-event-v2.schema.json",
+  "title": "Adaptive V4 Memory trace event v2",
+  "oneOf": [
+    { "$ref": "#/$defs/csaSelection" },
+    { "$ref": "#/$defs/cacheAdvance" }
+  ],
+  "$defs": {
+    "rankedBlock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["block_id", "score"],
+      "properties": {
+        "block_id": { "type": "string", "pattern": "^l[0-9]+:b[0-9]+:e[0-9]+$" },
+        "score": { "type": "number" }
+      }
+    },
+    "nativeSelection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["batch_index", "query_position", "block_ids", "ranked_blocks"],
+      "properties": {
+        "batch_index": { "type": "integer", "minimum": 0 },
+        "query_position": { "type": "integer", "minimum": 0 },
+        "block_ids": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^l[0-9]+:b[0-9]+:e[0-9]+$" },
+          "uniqueItems": true
+        },
+        "ranked_blocks": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/rankedBlock" }
+        }
+      }
+    },
+    "accounting": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state_bytes",
+        "hca_bytes",
+        "csa_bytes",
+        "index_bytes",
+        "logical_cache_bytes",
+        "hot_resident_bytes",
+        "cold_resident_bytes"
+      ],
+      "properties": {
+        "state_bytes": { "type": "integer", "minimum": 0 },
+        "hca_bytes": { "type": "integer", "minimum": 0 },
+        "csa_bytes": { "type": "integer", "minimum": 0 },
+        "index_bytes": { "type": "integer", "minimum": 0 },
+        "logical_cache_bytes": { "type": "integer", "minimum": 0 },
+        "hot_resident_bytes": { "type": "integer", "minimum": 0 },
+        "cold_resident_bytes": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "csaSelection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "sequence_id",
+        "event_type",
+        "trace_id",
+        "request_id",
+        "layer_index",
+        "phase",
+        "logical_block_count",
+        "block_bytes",
+        "selections",
+        "indexer_wall_time_ns",
+        "observer_wall_time_ns"
+      ],
+      "properties": {
+        "schema_version": { "const": 2 },
+        "sequence_id": { "type": "integer", "minimum": 0 },
+        "event_type": { "const": "csa_selection" },
+        "trace_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "request_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "layer_index": { "type": "integer", "minimum": 0 },
+        "phase": { "enum": ["prefill", "decode"] },
+        "logical_block_count": { "type": "integer", "minimum": 0 },
+        "block_bytes": { "type": "integer", "minimum": 0 },
+        "selections": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/nativeSelection" }
+        },
+        "indexer_wall_time_ns": { "type": "integer", "minimum": 0 },
+        "observer_wall_time_ns": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "cacheAdvance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "sequence_id",
+        "event_type",
+        "trace_id",
+        "request_id",
+        "phase",
+        "tokens_added",
+        "seen_tokens_before",
+        "seen_tokens_after",
+        "accounting",
+        "host_to_device_bytes",
+        "device_to_host_bytes",
+        "observer_wall_time_ns"
+      ],
+      "properties": {
+        "schema_version": { "const": 2 },
+        "sequence_id": { "type": "integer", "minimum": 0 },
+        "event_type": { "const": "cache_advance" },
+        "trace_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "request_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "phase": { "enum": ["prefill", "decode"] },
+        "tokens_added": { "type": "integer", "minimum": 1 },
+        "seen_tokens_before": { "type": "integer", "minimum": 0 },
+        "seen_tokens_after": { "type": "integer", "minimum": 1 },
+        "accounting": { "$ref": "#/$defs/accounting" },
+        "host_to_device_bytes": { "type": "integer", "minimum": 0 },
+        "device_to_host_bytes": { "type": "integer", "minimum": 0 },
+        "observer_wall_time_ns": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

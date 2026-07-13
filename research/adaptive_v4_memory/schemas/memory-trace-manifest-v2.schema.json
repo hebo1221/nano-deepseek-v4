@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hebo1221/nano-deepseek-v4/research/adaptive_v4_memory/schemas/memory-trace-manifest-v2.schema.json",
+  "title": "Adaptive V4 Memory trace manifest v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "trace_id",
+    "request_id",
+    "event_count",
+    "events_filename",
+    "events_sha256",
+    "contains_raw_text"
+  ],
+  "properties": {
+    "schema_version": { "const": 2 },
+    "trace_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "request_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "event_count": { "type": "integer", "minimum": 0 },
+    "events_filename": { "const": "events.jsonl" },
+    "events_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "contains_raw_text": { "const": false }
+  }
+}

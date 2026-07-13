@@ -20,11 +20,14 @@ resident on the accelerator.
 
 ## Current status
 
-Status: **M0 Tier T instrumentation implemented**
+Status: **M1 replay and predictive-signal gate complete; M2 in progress**
 
-No performance or quality claim has been made. The read-only collector records
-native CSA selections and cache accounting. Controller work begins only after
-the native trace has been exercised beyond deterministic Tier T tests.
+No performance or systems claim has been made. M1 adds deterministic baselines,
+an exhaustive Tier-T oracle, differentiable CSA training probes, and two
+trained Tier-S scales. Native score features reduced sufficient-budget MAE by
+11.9% and 16.3% over the preregistered context+layer baseline, so the M2
+training-free controller track may proceed. The evidence is one-seed synthetic
+diagnostics only, and both scales missed the separate 85% training target.
 
 ## Working research question
 
@@ -49,7 +52,7 @@ while preserving native V4 quality in dense-memory and multi-turn workloads?
 
 ## M0 implementation
 
-The first code change is implemented as instrumentation only:
+The M0 instrumentation provides:
 
 - capture native CSA selected compressed blocks;
 - assign stable request, query-position, layer, and block identifiers;
@@ -58,7 +61,16 @@ The first code change is implemented as instrumentation only:
 - prove trace-on and trace-off numerical equivalence in tests.
 
 The implementation lives in `nano_deepseek_v4/memory_trace.py`, with the
-machine-readable contracts in [`schemas/`](schemas/). At M0 all logical cache
-bytes are hot, cold residency and transfers are zero, and no controller or
-eviction action exists. Indexer score summaries remain an M1 extension; M0
-records the native selected sets needed to establish replay correctness first.
+machine-readable contracts in [`schemas/`](schemas/).
+
+## M1 implementation and evidence
+
+`nano_deepseek_v4/memory_replay.py` runs native, recency, random, fixed top-k,
+fixed top-p, calibrated per-layer, and index-reuse policies from one v2 trace.
+It also extracts score and overlap features and evaluates the predictive gate
+with grouped holdout validation. `nano_deepseek_v4/memory_probe.py` exposes an
+opt-in differentiable research probe without changing normal model outputs.
+
+See the checked Tier-T and Tier-S reports in [`reports/`](reports/) and their
+small machine-readable summaries in [`results/`](results/). Checkpoints and raw
+training summaries remain ignored artifacts referenced by SHA-256.

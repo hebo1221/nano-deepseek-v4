@@ -6,3 +6,4 @@ include SECURITY.md
 recursive-include references *.json
 recursive-include research *.md
 recursive-include research *.json
+recursive-include research *.py

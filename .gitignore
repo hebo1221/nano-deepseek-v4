@@ -46,6 +46,8 @@ artifacts/
 checkpoints/
 runs/
 reports/
+!research/adaptive_v4_memory/reports/
+!research/adaptive_v4_memory/reports/*.md
 
 # Local notes (use docs/ for public)
 NOTES.md

@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "experiment_id": "m1-tier-t-smoke-v1",
+  "purpose": "Deterministic correctness smoke test for replay, calibration, features, and exhaustive oracle",
+  "claim_eligible": false,
+  "claim_limit": "Tiny untrained Tier-T models cannot support quality, controller, or serving claims",
+  "model": {
+    "class": "DeepSeekV4ForCausalLM",
+    "config": "DeepSeekV4Config defaults with two CSA layers",
+    "layer_types": [
+      "sliding_attention",
+      "compressed_sparse_attention",
+      "compressed_sparse_attention",
+      "heavily_compressed_attention"
+    ],
+    "dtype": "float32",
+    "device": "cpu",
+    "training": false
+  },
+  "workload": {
+    "kind": "deterministic synthetic token IDs",
+    "raw_tokens_persisted": false,
+    "seeds": [0, 1, 2],
+    "context_lengths": [16, 24, 32]
+  },
+  "policies": [
+    "native",
+    "recency-2",
+    "random-2",
+    "fixed-top-k-2",
+    "fixed-top-p-0.9",
+    "per-layer-calibrated-p95",
+    "index-reuse-calibrated"
+  ],
+  "oracle": {
+    "maximum_candidates": 20,
+    "quality_proxy": "recall of native selected blocks on the final query",
+    "threshold": 1.0,
+    "interpretation": "exhaustive-search correctness only"
+  },
+  "signal_analysis": {
+    "label_proxy": "native selected-block count",
+    "baseline": "context block count plus layer identity",
+    "full_features": "score concentration, margin, temporal overlap, and cross-layer overlap",
+    "interpretation": "pipeline smoke test only; not the M1 predictive gate"
+  }
+}

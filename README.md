@@ -114,8 +114,9 @@ prefetch while retaining the complete compressed history for later turns.
 
 Start with the [`Adaptive V4 Memory` research index](research/adaptive_v4_memory/README.md).
 The proposal, related-work matrix, and preregistered experimental protocol make
-no performance claim; instrumentation must pass the protocol's M0 gate before
-any controller or pruning behavior is introduced.
+no performance claim. M0 instrumentation and the M1 replay/predictive-signal
+gate are complete; M2 training-free controller work is now permitted by the
+protocol.
 
 M0 tracing is an observer-only API. It records native CSA block selections and
 cache byte accounting without logging token IDs or changing cache residency:
@@ -132,6 +133,13 @@ The output directory contains append-ordered `events.jsonl` and an atomic
 `manifest.json` with the payload SHA-256. `load_memory_trace` validates the
 schema version, identity, sequence, count, and digest before replay.
 
+Schema v2 traces also carry complete causal indexer rankings and resident bytes.
+The `adaptive-v4-replay` CLI runs deterministic native, recency, random, top-k,
+top-p, per-layer, and index-reuse policies. The checked M1 Tier-S result shows
+native features improving sufficient-budget MAE by 11.9% and 16.3% at two model
+scales, while explicitly withholding a research claim because only one seed and
+one synthetic task were evaluated.
+
 ## What's inside
 
 ```
@@ -144,7 +152,9 @@ nano_deepseek_v4/
 ├── data.py           # CLM packing, SFT batch builder with label masking
 ├── training.py       # single-step training loop, GRPO loss, distillation loss
 ├── evaluation.py     # next-token perplexity, multiple-choice scoring
-├── memory_trace.py   # M0 passive CSA/cache trace, digest, and replay
+├── memory_trace.py   # M0/M1 passive CSA/cache trace and digest validation
+├── memory_replay.py  # deterministic replay policies, oracle, and signal analysis
+├── memory_probe.py   # opt-in differentiable CSA research objectives
 └── demo.py           # 20-line forward demo
 ```
 

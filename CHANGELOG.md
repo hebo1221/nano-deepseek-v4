@@ -20,6 +20,10 @@ All notable changes to this project are documented here. The format follows
   criteria, and preregistered experimental protocol.
 - Adaptive V4 Memory M0 passive tracing for native CSA selections, cache-memory
   accounting, observer timing, checksummed JSONL export, and deterministic replay.
+- Adaptive V4 Memory M1 trace-v2 rankings, deterministic replay baselines and
+  CLI, exhaustive oracle, grouped signal analysis, differentiable CSA probe,
+  associative-recall training/evaluation scripts, and checked Tier-T/Tier-S
+  evidence.
 - Security and contribution policies.
 
 ### Changed

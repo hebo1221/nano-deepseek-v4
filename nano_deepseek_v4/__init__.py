@@ -11,6 +11,13 @@ Quickstart:
     >>> report = load_deepseek_official_checkpoint(model, "path/to/flash-snapshot")
 """
 
+from .adaptive_memory_data import (
+    AssociativeRecallBatch,
+    AssociativeRecallConfig,
+    AssociativeRecallTrainingBatch,
+    generate_associative_recall_batch,
+    generate_associative_recall_training_batch,
+)
 from .checkpoint import (
     CheckpointLoadReport,
     OfficialCheckpointLoadEvidenceReport,
@@ -41,6 +48,30 @@ from .evaluation import (
     evaluate_multiple_choice,
     score_choice_loglikelihood,
 )
+from .memory_probe import (
+    CSAProbeLoss,
+    CSAProbeObjective,
+    CSAProbeRecord,
+    CSASelectionProbe,
+    evidence_block_indices,
+)
+from .memory_replay import (
+    BudgetSignalReport,
+    IndexReuseCalibration,
+    OracleResult,
+    ReplayDecision,
+    ReplayFeatureRow,
+    ReplayPolicyConfig,
+    ReplayQuery,
+    ReplayResult,
+    analyze_budget_signals,
+    build_replay_queries,
+    calibrate_index_reuse,
+    calibrate_layer_budgets,
+    exhaustive_sufficient_subset,
+    extract_replay_features,
+    run_replay,
+)
 from .memory_trace import (
     MEMORY_TRACE_SCHEMA_VERSION,
     AdaptiveMemoryTraceCollector,
@@ -52,8 +83,10 @@ from .memory_trace import (
     MemoryTraceResult,
     NativeSelection,
     NativeSelectionReplay,
+    RankedBlock,
     load_memory_trace,
     measure_cache_memory,
+    measure_csa_block_bytes,
     replay_native_selected_sets,
 )
 from .modeling import (
@@ -85,6 +118,12 @@ __version__ = "0.1.0"
 __all__ = [
     # config
     "DeepSeekV4Config",
+    # Adaptive V4 Memory data
+    "AssociativeRecallConfig",
+    "AssociativeRecallBatch",
+    "AssociativeRecallTrainingBatch",
+    "generate_associative_recall_batch",
+    "generate_associative_recall_training_batch",
     # model
     "DeepSeekV4Cache",
     "DeepSeekV4ForCausalLM",
@@ -101,9 +140,33 @@ __all__ = [
     "CacheAdvanceEvent",
     "NativeSelection",
     "NativeSelectionReplay",
+    "RankedBlock",
     "measure_cache_memory",
+    "measure_csa_block_bytes",
     "load_memory_trace",
     "replay_native_selected_sets",
+    # Adaptive V4 Memory M1 replay
+    "ReplayPolicyConfig",
+    "ReplayQuery",
+    "ReplayDecision",
+    "ReplayResult",
+    "ReplayFeatureRow",
+    "OracleResult",
+    "BudgetSignalReport",
+    "IndexReuseCalibration",
+    "build_replay_queries",
+    "calibrate_layer_budgets",
+    "calibrate_index_reuse",
+    "run_replay",
+    "extract_replay_features",
+    "exhaustive_sufficient_subset",
+    "analyze_budget_signals",
+    # Adaptive V4 Memory M1 differentiable probe
+    "CSAProbeRecord",
+    "CSASelectionProbe",
+    "CSAProbeLoss",
+    "CSAProbeObjective",
+    "evidence_block_indices",
     # optimizer
     "Muon",
     "deepseek_v4_optimizer_groups",

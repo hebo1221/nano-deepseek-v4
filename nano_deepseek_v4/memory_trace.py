@@ -7,13 +7,15 @@ import re
 import tempfile
 import threading
 from dataclasses import asdict, dataclass, replace
+from math import isfinite
 from pathlib import Path
 from time import perf_counter_ns
 from typing import Any, Literal
 
 import torch
 
-MEMORY_TRACE_SCHEMA_VERSION = 1
+MEMORY_TRACE_SCHEMA_VERSION = 2
+_SUPPORTED_SCHEMA_VERSIONS = {1, MEMORY_TRACE_SCHEMA_VERSION}
 _EVENTS_FILENAME = "events.jsonl"
 _MANIFEST_FILENAME = "manifest.json"
 _BLOCK_ID_PATTERN = re.compile(r"^l[0-9]+:b[0-9]+:e[0-9]+$")
@@ -63,10 +65,25 @@ class CacheMemoryAccounting:
 
 
 @dataclass(frozen=True)
+class RankedBlock:
+    block_id: str
+    score: float
+
+    def __post_init__(self) -> None:
+        if _BLOCK_ID_PATTERN.fullmatch(self.block_id) is None:
+            raise ValueError("ranked block has an invalid block ID.")
+        if isinstance(self.score, bool) or not isinstance(self.score, (int, float)):
+            raise ValueError("ranked block score must be numeric.")
+        if not isfinite(float(self.score)):
+            raise ValueError("ranked block score must be finite.")
+
+
+@dataclass(frozen=True)
 class NativeSelection:
     batch_index: int
     query_position: int
     block_ids: tuple[str, ...]
+    ranked_blocks: tuple[RankedBlock, ...] = ()
 
     def __post_init__(self) -> None:
         _require_nonnegative_int("batch_index", self.batch_index)
@@ -75,6 +92,11 @@ class NativeSelection:
             raise ValueError("native selection block IDs must be unique.")
         if any(_BLOCK_ID_PATTERN.fullmatch(block_id) is None for block_id in self.block_ids):
             raise ValueError("native selection contains an invalid block ID.")
+        ranked_ids = tuple(block.block_id for block in self.ranked_blocks)
+        if len(set(ranked_ids)) != len(ranked_ids):
+            raise ValueError("ranked block IDs must be unique.")
+        if not set(self.block_ids).issubset(ranked_ids) and self.ranked_blocks:
+            raise ValueError("native selections must be present in ranked blocks.")
 
 
 @dataclass(frozen=True)
@@ -87,22 +109,37 @@ class CSASelectionEvent:
     layer_index: int
     phase: Literal["prefill", "decode"]
     logical_block_count: int
+    block_bytes: int
     selections: tuple[NativeSelection, ...]
     indexer_wall_time_ns: int
     observer_wall_time_ns: int
 
     def __post_init__(self) -> None:
-        if self.schema_version != MEMORY_TRACE_SCHEMA_VERSION or self.event_type != "csa_selection":
+        if (
+            self.schema_version not in _SUPPORTED_SCHEMA_VERSIONS
+            or self.event_type != "csa_selection"
+        ):
             raise ValueError("invalid CSA selection event identity.")
         MemoryTraceConfig(trace_id=self.trace_id, request_id=self.request_id)
         _require_nonnegative_int("sequence_id", self.sequence_id)
         _require_nonnegative_int("layer_index", self.layer_index)
         _require_nonnegative_int("logical_block_count", self.logical_block_count)
+        _require_nonnegative_int("block_bytes", self.block_bytes)
         _require_nonnegative_int("indexer_wall_time_ns", self.indexer_wall_time_ns)
         _require_nonnegative_int("observer_wall_time_ns", self.observer_wall_time_ns)
         _require_phase(self.phase)
-        if any(len(selection.block_ids) > self.logical_block_count for selection in self.selections):
+        if any(
+            len(selection.block_ids) > self.logical_block_count for selection in self.selections
+        ):
             raise ValueError("native selection exceeds the logical block count.")
+        if any(
+            len(selection.ranked_blocks) > self.logical_block_count for selection in self.selections
+        ):
+            raise ValueError("ranked blocks exceed the logical block count.")
+        if self.schema_version == 1 and (
+            self.block_bytes != 0 or any(selection.ranked_blocks for selection in self.selections)
+        ):
+            raise ValueError("schema v1 events cannot contain replay metadata.")
 
 
 @dataclass(frozen=True)
@@ -122,7 +159,10 @@ class CacheAdvanceEvent:
     observer_wall_time_ns: int
 
     def __post_init__(self) -> None:
-        if self.schema_version != MEMORY_TRACE_SCHEMA_VERSION or self.event_type != "cache_advance":
+        if (
+            self.schema_version not in _SUPPORTED_SCHEMA_VERSIONS
+            or self.event_type != "cache_advance"
+        ):
             raise ValueError("invalid cache advance event identity.")
         MemoryTraceConfig(trace_id=self.trace_id, request_id=self.request_id)
         for name in (
@@ -156,7 +196,7 @@ class MemoryTraceManifest:
     contains_raw_text: bool
 
     def __post_init__(self) -> None:
-        if self.schema_version != MEMORY_TRACE_SCHEMA_VERSION:
+        if self.schema_version not in _SUPPORTED_SCHEMA_VERSIONS:
             raise ValueError("unsupported memory trace manifest schema version.")
         MemoryTraceConfig(trace_id=self.trace_id, request_id=self.request_id)
         _require_nonnegative_int("event_count", self.event_count)
@@ -241,6 +281,32 @@ def measure_cache_memory(cache: Any) -> CacheMemoryAccounting:
     )
 
 
+def measure_csa_block_bytes(layer_cache: Any, logical_block_count: int) -> int:
+    """Return the resident CSA compressor+indexer bytes for one batch-local block."""
+
+    _require_nonnegative_int("logical_block_count", logical_block_count)
+    if logical_block_count == 0:
+        return 0
+    tensors: list[torch.Tensor | None] = []
+    for attribute in ("compressed_kv", "compressed_positions"):
+        values = getattr(layer_cache, attribute)
+        tensors.extend(values.get(name) for name in ("compressor", "indexer"))
+    present = [tensor for tensor in tensors if tensor is not None]
+    if not present:
+        return 0
+    batch_size = int(present[0].shape[0])
+    if batch_size <= 0:
+        raise ValueError("CSA cache tensors must have a positive batch dimension.")
+    for tensor in present:
+        if tensor.ndim < 2 or tuple(tensor.shape[:2]) != (batch_size, logical_block_count):
+            raise ValueError("CSA cache tensors do not match the logical block count.")
+    total_bytes = sum(_tensor_nbytes(tensor) for tensor in present)
+    slots = batch_size * logical_block_count
+    if total_bytes % slots != 0:
+        raise ValueError("CSA cache bytes are not uniform per logical block.")
+    return total_bytes // slots
+
+
 class AdaptiveMemoryTraceCollector:
     """Append-only M0 observer for native DeepSeek-V4 cache behavior.
 
@@ -270,6 +336,8 @@ class AdaptiveMemoryTraceCollector:
         query_positions: torch.Tensor,
         block_end_positions: torch.Tensor,
         sparse_mask: torch.Tensor | None,
+        scores: torch.Tensor | None,
+        block_bytes: int,
         indexer_wall_time_ns: int,
     ) -> None:
         started = perf_counter_ns()
@@ -278,6 +346,11 @@ class AdaptiveMemoryTraceCollector:
         mask_rows = (
             sparse_mask.detach().to(device="cpu", dtype=torch.bool).tolist()
             if sparse_mask is not None
+            else None
+        )
+        score_rows = (
+            scores.detach().to(device="cpu", dtype=torch.float32).tolist()
+            if scores is not None
             else None
         )
         selections: list[NativeSelection] = []
@@ -296,11 +369,31 @@ class AdaptiveMemoryTraceCollector:
                         )
                         if keep
                     )
+                ranked_blocks: tuple[RankedBlock, ...] = ()
+                if score_rows is not None:
+                    candidates = [
+                        (int(block_position), float(score))
+                        for block_position, score in zip(
+                            blocks,
+                            score_rows[batch_index][query_index],
+                            strict=True,
+                        )
+                        if isfinite(float(score))
+                    ]
+                    candidates.sort(key=lambda item: (-item[1], item[0]))
+                    ranked_blocks = tuple(
+                        RankedBlock(
+                            block_id=f"l{layer_index}:b{batch_index}:e{block_position}",
+                            score=score,
+                        )
+                        for block_position, score in candidates
+                    )
                 selections.append(
                     NativeSelection(
                         batch_index=batch_index,
                         query_position=int(query_position),
                         block_ids=selected,
+                        ranked_blocks=ranked_blocks,
                     )
                 )
         observer_wall_time_ns = perf_counter_ns() - started
@@ -314,6 +407,7 @@ class AdaptiveMemoryTraceCollector:
                 layer_index=layer_index,
                 phase="prefill" if seen_tokens == 0 else "decode",
                 logical_block_count=block_end_positions.shape[1],
+                block_bytes=block_bytes,
                 selections=tuple(selections),
                 indexer_wall_time_ns=max(int(indexer_wall_time_ns), 0),
                 observer_wall_time_ns=observer_wall_time_ns,
@@ -361,7 +455,9 @@ class AdaptiveMemoryTraceCollector:
         manifest_temp: Path | None = None
         try:
             events_temp = _write_temporary(trace_dir, ".memory-events-", payload)
-            manifest_payload = (json.dumps(asdict(manifest), indent=2, sort_keys=True) + "\n").encode()
+            manifest_payload = (
+                json.dumps(asdict(manifest), indent=2, sort_keys=True) + "\n"
+            ).encode()
             manifest_temp = _write_temporary(trace_dir, ".memory-manifest-", manifest_payload)
             os.replace(events_temp, trace_dir / _EVENTS_FILENAME)
             events_temp = None
@@ -375,7 +471,9 @@ class AdaptiveMemoryTraceCollector:
         return MemoryTraceResult(manifest=manifest, events=events)
 
 
-def _build_manifest(config: MemoryTraceConfig, event_count: int, digest: str) -> MemoryTraceManifest:
+def _build_manifest(
+    config: MemoryTraceConfig, event_count: int, digest: str
+) -> MemoryTraceManifest:
     return MemoryTraceManifest(
         schema_version=MEMORY_TRACE_SCHEMA_VERSION,
         trace_id=config.trace_id,
@@ -388,7 +486,9 @@ def _build_manifest(config: MemoryTraceConfig, event_count: int, digest: str) ->
 
 
 def _write_temporary(directory: Path, prefix: str, payload: bytes) -> Path:
-    with tempfile.NamedTemporaryFile(dir=directory, prefix=prefix, suffix=".tmp", delete=False) as handle:
+    with tempfile.NamedTemporaryFile(
+        dir=directory, prefix=prefix, suffix=".tmp", delete=False
+    ) as handle:
         path = Path(handle.name)
         handle.write(payload)
         handle.flush()
@@ -408,37 +508,46 @@ def _require_exact_keys(data: dict[str, Any], expected: set[str], label: str) ->
         raise ValueError(f"{label} fields do not match schema v{MEMORY_TRACE_SCHEMA_VERSION}.")
 
 
-def _parse_selection(data: dict[str, Any]) -> NativeSelection:
-    _require_exact_keys(data, {"batch_index", "query_position", "block_ids"}, "selection")
+def _parse_ranked_block(data: dict[str, Any]) -> RankedBlock:
+    _require_exact_keys(data, {"block_id", "score"}, "ranked block")
+    return RankedBlock(block_id=str(data["block_id"]), score=float(data["score"]))
+
+
+def _parse_selection(data: dict[str, Any], schema_version: int) -> NativeSelection:
+    expected = {"batch_index", "query_position", "block_ids"}
+    if schema_version >= 2:
+        expected.add("ranked_blocks")
+    _require_exact_keys(data, expected, "selection")
     return NativeSelection(
         batch_index=int(data["batch_index"]),
         query_position=int(data["query_position"]),
         block_ids=tuple(str(block_id) for block_id in data["block_ids"]),
+        ranked_blocks=tuple(_parse_ranked_block(item) for item in data.get("ranked_blocks", [])),
     )
 
 
 def _parse_event(data: dict[str, Any]) -> MemoryTraceEvent:
-    if data.get("schema_version") != MEMORY_TRACE_SCHEMA_VERSION:
+    schema_version = data.get("schema_version")
+    if schema_version not in _SUPPORTED_SCHEMA_VERSIONS:
         raise ValueError("memory trace event has an unsupported schema version.")
     event_type = data.get("event_type")
     if event_type == "csa_selection":
-        _require_exact_keys(
-            data,
-            {
-                "schema_version",
-                "sequence_id",
-                "event_type",
-                "trace_id",
-                "request_id",
-                "layer_index",
-                "phase",
-                "logical_block_count",
-                "selections",
-                "indexer_wall_time_ns",
-                "observer_wall_time_ns",
-            },
-            "CSA selection event",
-        )
+        expected = {
+            "schema_version",
+            "sequence_id",
+            "event_type",
+            "trace_id",
+            "request_id",
+            "layer_index",
+            "phase",
+            "logical_block_count",
+            "selections",
+            "indexer_wall_time_ns",
+            "observer_wall_time_ns",
+        }
+        if schema_version >= 2:
+            expected.add("block_bytes")
+        _require_exact_keys(data, expected, "CSA selection event")
         return CSASelectionEvent(
             schema_version=int(data["schema_version"]),
             sequence_id=int(data["sequence_id"]),
@@ -448,7 +557,10 @@ def _parse_event(data: dict[str, Any]) -> MemoryTraceEvent:
             layer_index=int(data["layer_index"]),
             phase=data["phase"],
             logical_block_count=int(data["logical_block_count"]),
-            selections=tuple(_parse_selection(item) for item in data["selections"]),
+            block_bytes=int(data.get("block_bytes", 0)),
+            selections=tuple(
+                _parse_selection(item, int(schema_version)) for item in data["selections"]
+            ),
             indexer_wall_time_ns=int(data["indexer_wall_time_ns"]),
             observer_wall_time_ns=int(data["observer_wall_time_ns"]),
         )
@@ -527,6 +639,8 @@ def load_memory_trace(trace_dir: str | Path) -> MemoryTraceResult:
             raise ValueError(f"invalid memory trace event on line {line_number}.") from exc
         if event.sequence_id != len(events):
             raise ValueError("memory trace sequence IDs are not contiguous.")
+        if event.schema_version != manifest.schema_version:
+            raise ValueError("memory trace event schema does not match its manifest.")
         if event.trace_id != manifest.trace_id or event.request_id != manifest.request_id:
             raise ValueError("memory trace event identity does not match its manifest.")
         events.append(event)
