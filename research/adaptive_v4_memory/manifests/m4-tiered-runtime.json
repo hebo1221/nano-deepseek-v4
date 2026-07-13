@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "experiment_id": "m4-tiered-runtime-v1",
+  "date": "2026-07-14",
+  "purpose": "Measure physical GPU-hot/CPU-cold CSA value-block tiering",
+  "checkpoints": "M1 S55 and S151 checkpoints referenced by SHA-256",
+  "hardware": "one CUDA accelerator; exact device recorded in result",
+  "dtype": "bfloat16",
+  "scenarios": [
+    {"name": "steady-b1", "context": 512, "batch": 1, "topk": "native"},
+    {"name": "batch-b4", "context": 512, "batch": 4, "topk": "native"},
+    {"name": "query-shift-b1", "context": 1024, "batch": 1, "topk": "native"},
+    {"name": "dense-fallback-b1", "context": 512, "batch": 1, "topk": "all blocks"},
+    {"name": "concurrent-r2", "context": 512, "requests": 2, "execution": "round-robin independent caches"}
+  ],
+  "decode_tokens": 16,
+  "quality": {
+    "task": "generated associative recall; no raw token persistence",
+    "sequence_length": 80,
+    "examples_per_scale": 32,
+    "comparison": "resident cached decode versus tiered cached decode"
+  },
+  "measurements": [
+    "allocated and reserved GPU bytes",
+    "resident compressor bytes and tier logical/hot/host bytes",
+    "H2D/D2H bytes and counts, useful bytes, prefetches, evictions, late misses",
+    "TTFT, inter-token p50/p95/p99, throughput",
+    "bitwise logits, greedy tokens, associative-recall accuracy"
+  ],
+  "gates": {
+    "correctness": "greedy tokens equal and logits allclose at bfloat16 tolerance (atol 0.125, rtol 0.01) in every runtime scenario; bitwise equality reported separately",
+    "quality": "tiered and resident associative-recall accuracy equal",
+    "memory": "positive torch.cuda.memory_allocated reduction in native-topk batch-1 scenarios",
+    "runtime": "native-topk batch-1 p95 latency <= 1.25x resident or throughput >= 0.80x",
+    "dense_fallback": "correctness preserved; memory reduction is not required"
+  },
+  "interpretation": "single-device reference-runtime evidence, not a production serving claim"
+}

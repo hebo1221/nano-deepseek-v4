@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "experiment_id": "m4-tiered-runtime-v1",
+  "date": "2026-07-14",
+  "environment": {
+    "device": "NVIDIA GB10",
+    "torch": "2.13.0+cu130",
+    "cuda": "13.0",
+    "dtype": "bfloat16"
+  },
+  "raw_artifacts": {
+    "s55": {
+      "path": "artifacts/adaptive_v4_memory/tier_s/s55/m4-tiered-runtime.json",
+      "sha256": "947453077a570379b4c0056acfe148dbd356b369a8bd58f8920c5702d21f7291"
+    },
+    "s151": {
+      "path": "artifacts/adaptive_v4_memory/tier_s/s151/m4-tiered-runtime.json",
+      "sha256": "079a0804b15492d0a28435bcdec8a45fbb026e43ab972d303d70a314b4310ac8"
+    }
+  },
+  "quality": {
+    "s55": {
+      "examples": 32,
+      "resident_accuracy": 0.78125,
+      "tiered_accuracy": 0.78125,
+      "bitwise_equal_examples": 32,
+      "max_absolute_logit_error": 0.0
+    },
+    "s151": {
+      "examples": 32,
+      "resident_accuracy": 0.875,
+      "tiered_accuracy": 0.875,
+      "bitwise_equal_examples": 31,
+      "max_absolute_logit_error": 0.03125
+    }
+  },
+  "native_topk_batch1": {
+    "s55_context512": {
+      "gpu_cache_allocated_reduction_bytes": 49152,
+      "gpu_cache_allocated_reduction_ratio": 0.01887905604719764,
+      "compressor_value_bytes": 53856,
+      "compressor_physical_reduction_ratio": 0.9124086452762924,
+      "p95_latency_ratio": 1.0623529280667758,
+      "throughput_ratio": 0.9516617161225173
+    },
+    "s55_context1024": {
+      "gpu_cache_allocated_reduction_bytes": 98304,
+      "gpu_cache_allocated_reduction_ratio": 0.018912529550827423,
+      "compressor_value_bytes": 107712,
+      "compressor_physical_reduction_ratio": 0.9127116765077243,
+      "p95_latency_ratio": 1.0768626062019726,
+      "throughput_ratio": 0.9542336984077479
+    },
+    "s151_context512": {
+      "gpu_cache_allocated_reduction_bytes": 81920,
+      "gpu_cache_allocated_reduction_ratio": 0.019279431256777925,
+      "compressor_value_bytes": 89760,
+      "compressor_physical_reduction_ratio": 0.9126559714795008,
+      "p95_latency_ratio": 1.0742378073239944,
+      "throughput_ratio": 0.9489104830699235
+    },
+    "s151_context1024": {
+      "gpu_cache_allocated_reduction_bytes": 163840,
+      "gpu_cache_allocated_reduction_ratio": 0.01931434089811685,
+      "compressor_value_bytes": 179520,
+      "compressor_physical_reduction_ratio": 0.9126559714795008,
+      "p95_latency_ratio": 1.0742888682087028,
+      "throughput_ratio": 0.9427999566572439
+    }
+  },
+  "batch4": {
+    "s55_p95_latency_ratio": 1.539467114718993,
+    "s55_throughput_ratio": 0.8398204775348742,
+    "s151_p95_latency_ratio": 1.6562809204708917,
+    "s151_throughput_ratio": 0.8119842084032448
+  },
+  "concurrent_requests2": {
+    "s55_gpu_reduction_bytes": 98304,
+    "s55_p95_latency_ratio": 1.0559263224759146,
+    "s55_throughput_ratio": 0.9488321813407914,
+    "s151_gpu_reduction_bytes": 163840,
+    "s151_p95_latency_ratio": 1.064464963388941,
+    "s151_throughput_ratio": 0.9438186723797851
+  },
+  "gates": {
+    "correctness_bfloat16_and_greedy": true,
+    "quality_equal": true,
+    "native_topk_batch1_gpu_allocation_reduced": true,
+    "native_topk_batch1_runtime_competitive": true,
+    "strict_latency_or_throughput_improvement": false
+  },
+  "decision": "M4 reference implementation is complete and meets the competitive-runtime gate, but does not support a positive speedup claim. Keep the tiered path experimental; fused gathering and tiering rollback history are required for a stronger systems result."
+}

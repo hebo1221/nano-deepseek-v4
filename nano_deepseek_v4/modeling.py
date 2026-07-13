@@ -11,6 +11,7 @@ from .config import DeepSeekV4Config
 from .memory_controller import CSASelectionPlan
 from .memory_probe import CSASelectionProbe
 from .memory_trace import AdaptiveMemoryTraceCollector, measure_csa_block_bytes
+from .tiered_memory import TieredBlockStore, TieredMemoryStats
 
 
 @dataclass
@@ -180,6 +181,7 @@ class DeepSeekV4LayerCache:
         self.overlap_kv: dict[str, torch.Tensor | None] = {}
         self.overlap_gate: dict[str, torch.Tensor | None] = {}
         self.overlap_positions: dict[str, torch.Tensor | None] = {}
+        self.tiered_compressor: TieredBlockStore | None = None
 
     def update_local(
         self,
@@ -296,6 +298,9 @@ class DeepSeekV4LayerCache:
         other.overlap_kv = self._clone_dict(self.overlap_kv)
         other.overlap_gate = self._clone_dict(self.overlap_gate)
         other.overlap_positions = self._clone_dict(self.overlap_positions)
+        other.tiered_compressor = (
+            self.tiered_compressor.clone() if self.tiered_compressor is not None else None
+        )
         return other
 
     @staticmethod
@@ -326,6 +331,11 @@ class DeepSeekV4LayerCache:
         other.overlap_kv = self._select_dict(self.overlap_kv, index)
         other.overlap_gate = self._select_dict(self.overlap_gate, index)
         other.overlap_positions = self._select_dict(self.overlap_positions, index)
+        other.tiered_compressor = (
+            self.tiered_compressor.select_batch(index)
+            if self.tiered_compressor is not None
+            else None
+        )
         return other
 
     @staticmethod
@@ -378,6 +388,13 @@ class DeepSeekV4LayerCache:
         other.overlap_kv = cls._stack_dict("overlap_kv", layers)
         other.overlap_gate = cls._stack_dict("overlap_gate", layers)
         other.overlap_positions = cls._stack_dict("overlap_positions", layers)
+        tiered = [layer.tiered_compressor for layer in layers]
+        if any(store is not None for store in tiered):
+            if not all(store is not None for store in tiered):
+                raise ValueError("Cannot stack partially tiered cache layers.")
+            other.tiered_compressor = TieredBlockStore.stack(
+                [store for store in tiered if store is not None]
+            )
         return other
 
     @staticmethod
@@ -468,6 +485,8 @@ class DeepSeekV4LayerCache:
 
         self._rebuild_compressor_buffers(max_length, layer_type, compress_rates)
         self._crop_time_axis(self.compressed_kv, self.compressed_positions, max_length)
+        if self.tiered_compressor is not None:
+            self.tiered_compressor.crop(max_length)
 
         for name, pos in list(self.overlap_positions.items()):
             if pos is not None and bool((pos < max_length).all()):
@@ -550,6 +569,62 @@ class DeepSeekV4Cache:
         for layer, layer_type in zip(self.layers, layer_types, strict=True):
             layer.crop(max_length, config.sliding_window, layer_type, config.compress_rates)
         self.seen_tokens = max_length
+
+    def enable_csa_tiering(
+        self,
+        hot_budget_blocks: int,
+        *,
+        protected_blocks: tuple[int, ...] = (),
+        async_transfer: bool = True,
+    ) -> list[TieredMemoryStats]:
+        """Move CSA value blocks to canonical pinned-CPU storage.
+
+        Indexer blocks remain on the accelerator so native block selection is
+        unchanged. Selected value blocks are fetched by ``CSACompressor``.
+        """
+
+        layer_types = self.config.layer_types
+        if layer_types is None:
+            raise RuntimeError("config.layer_types was not initialized.")
+        stats: list[TieredMemoryStats] = []
+        for layer, layer_type in zip(self.layers, layer_types, strict=True):
+            if layer_type != "compressed_sparse_attention":
+                continue
+            if layer.tiered_compressor is not None:
+                raise RuntimeError("CSA tiering is already enabled for this cache.")
+            values = layer.compressed_kv.pop("compressor", None)
+            positions = layer.compressed_positions.pop("compressor", None)
+            if values is None or positions is None:
+                continue
+            layer.tiered_compressor = TieredBlockStore.from_device_tensors(
+                values,
+                positions,
+                hot_budget_blocks=hot_budget_blocks,
+                device=values.device,
+                protected_blocks=protected_blocks,
+                async_transfer=async_transfer,
+                initial_hot_blocks=protected_blocks,
+            )
+            stats.append(layer.tiered_compressor.stats())
+        return stats
+
+    def disable_csa_tiering(self) -> None:
+        """Materialize the complete logical CSA value cache on its target device."""
+
+        for layer in self.layers:
+            store = layer.tiered_compressor
+            if store is None:
+                continue
+            layer.compressed_kv["compressor"] = store.host_values.to(store.device)
+            layer.compressed_positions["compressor"] = store.host_positions.to(store.device)
+            layer.tiered_compressor = None
+
+    def tiered_memory_stats(self) -> list[TieredMemoryStats]:
+        return [
+            layer.tiered_compressor.stats()
+            for layer in self.layers
+            if layer.tiered_compressor is not None
+        ]
 
 
 class HCACompressor(nn.Module):
@@ -780,6 +855,26 @@ class CSACompressor(nn.Module):
         self.norm = RMSNorm(config.head_dim, config.rms_norm_eps)
         self.indexer = CSAIndexer(config)
 
+    @staticmethod
+    def _resolve_tiered_blocks(
+        cache: DeepSeekV4LayerCache,
+        sparse_mask: torch.Tensor | None,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor | None]:
+        store = cache.tiered_compressor
+        if store is None:
+            raise RuntimeError("Tiered CSA resolution requires an enabled block store.")
+        if sparse_mask is None:
+            indices = tuple(range(store.num_blocks))
+        else:
+            selected = sparse_mask.any(dim=(0, 1)).nonzero(as_tuple=False).flatten()
+            indices = tuple(int(index) for index in selected.tolist())
+        store.prefetch(indices)
+        compressed, end_positions = store.resolve(indices)
+        if sparse_mask is not None:
+            index_tensor = torch.tensor(indices, dtype=torch.long, device=sparse_mask.device)
+            sparse_mask = torch.index_select(sparse_mask, -1, index_tensor)
+        return compressed.unsqueeze(1), end_positions, sparse_mask
+
     def forward(
         self,
         hidden_states: torch.Tensor,
@@ -808,9 +903,6 @@ class CSACompressor(nn.Module):
             )
         if chunk_kv.shape[1] == 0:
             if cache is not None:
-                compressed, end_positions = cache.get_compressed(
-                    "compressor", hidden_states, self.head_dim
-                )
                 sparse_mask, _, _ = self.indexer(
                     hidden_states,
                     q_residual,
@@ -820,6 +912,11 @@ class CSACompressor(nn.Module):
                     layer_index,
                     seen_tokens,
                     selection_plan,
+                )
+                if cache.tiered_compressor is not None:
+                    return self._resolve_tiered_blocks(cache, sparse_mask)
+                compressed, end_positions = cache.get_compressed(
+                    "compressor", hidden_states, self.head_dim
                 )
                 return compressed.unsqueeze(1), end_positions, sparse_mask
             empty = hidden_states.new_zeros(batch, 1, 0, self.head_dim)
@@ -856,10 +953,13 @@ class CSACompressor(nn.Module):
         end_positions = chunk_positions[:, :, -1]
         compressed = kv.squeeze(1)
         if cache is not None:
-            compressed, end_positions = cache.update_compressed(
-                "compressor", compressed, end_positions
-            )
-            kv = compressed.unsqueeze(1)
+            if cache.tiered_compressor is not None:
+                cache.tiered_compressor.append(compressed, end_positions)
+            else:
+                compressed, end_positions = cache.update_compressed(
+                    "compressor", compressed, end_positions
+                )
+                kv = compressed.unsqueeze(1)
         sparse_mask, _, scores = self.indexer(
             hidden_states,
             q_residual,
@@ -870,6 +970,8 @@ class CSACompressor(nn.Module):
             seen_tokens,
             selection_plan,
         )
+        if cache is not None and cache.tiered_compressor is not None:
+            kv, end_positions, sparse_mask = self._resolve_tiered_blocks(cache, sparse_mask)
         if csa_probe is not None:
             if scores is None:
                 raise RuntimeError("CSA indexer did not return scores for a non-empty block set.")

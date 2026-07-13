@@ -129,6 +129,7 @@ from .paged_cache import (
     PagedCacheStats,
     PagedKVCacheAllocator,
 )
+from .tiered_memory import TieredBlockStore, TieredMemoryStats
 from .training import (
     build_deepseek_v4_optimizers,
     compute_distillation_loss,
@@ -221,6 +222,8 @@ __all__ = [
     "PagedKVCacheAllocator",
     "PagedCacheAllocation",
     "PagedCacheStats",
+    "TieredBlockStore",
+    "TieredMemoryStats",
     # checkpoint
     "CheckpointLoadReport",
     "OfficialConversionReport",

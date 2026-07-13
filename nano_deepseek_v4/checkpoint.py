@@ -1437,6 +1437,17 @@ def _validate_cache_layer(
             f"{prefix}.compressed_positions.{name}",
             seen_tokens,
         )
+    tiered = layer.tiered_compressor
+    if tiered is not None:
+        if "compressor" in layer.compressed_kv or "compressor" in layer.compressed_positions:
+            raise ValueError(f"{prefix} contains duplicate resident and tiered compressor state.")
+        if tiered.host_values.shape[:2] != tiered.host_positions.shape:
+            raise ValueError(f"{prefix}.tiered_compressor tensor shapes are inconsistent.")
+        _validate_position_tensor(
+            tiered.host_positions,
+            f"{prefix}.tiered_compressor.positions",
+            seen_tokens,
+        )
 
     overlap_keys = layer.overlap_kv.keys()
     if overlap_keys != layer.overlap_gate.keys() or overlap_keys != layer.overlap_positions.keys():
@@ -1521,16 +1532,34 @@ def save_deepseek_v4_cache(cache: DeepSeekV4Cache, cache_dir: str | Path) -> Non
     cache_dir = Path(cache_dir)
     cache_dir.mkdir(parents=True, exist_ok=True)
     tensors: dict[str, torch.Tensor] = {}
-    manifest = {
+    manifest: dict[str, Any] = {
         "format_version": _CACHE_FORMAT_VERSION,
         "config_sha256": _cache_config_sha256(cache.config),
         "seen_tokens": cache.seen_tokens,
         "num_layers": len(cache.layers),
+        "tiered_layers": {},
     }
     for layer_idx, layer in enumerate(cache.layers):
         prefix = f"layers.{layer_idx}"
         _put_tensor(tensors, f"{prefix}.local_kv", layer.local_kv)
         _put_tensor(tensors, f"{prefix}.local_positions", layer.local_positions)
+        if layer.tiered_compressor is not None:
+            store = layer.tiered_compressor
+            _put_tensor(
+                tensors,
+                f"{prefix}.compressed_kv.compressor",
+                store.host_values,
+            )
+            _put_tensor(
+                tensors,
+                f"{prefix}.compressed_positions.compressor",
+                store.host_positions,
+            )
+            manifest["tiered_layers"][str(layer_idx)] = {
+                "hot_budget_blocks": store.hot_budget_blocks,
+                "protected_blocks": list(store.protected_blocks),
+                "async_transfer": store.async_transfer,
+            }
         for attr in (
             "buffer_kv",
             "buffer_gate",
@@ -1634,6 +1663,44 @@ def load_deepseek_v4_cache(
         if device is not None:
             tensor = tensor.to(device)
         _restore_cache_tensor(cache, key, tensor)
+    tiered_layers = manifest.get("tiered_layers", {})
+    if not isinstance(tiered_layers, dict):
+        raise ValueError("Cache manifest tiered_layers must be an object.")
+    if tiered_layers:
+        from .tiered_memory import TieredBlockStore
+
+        for raw_layer_idx, raw_settings in tiered_layers.items():
+            if not isinstance(raw_layer_idx, str) or not raw_layer_idx.isdigit():
+                raise ValueError("Cache manifest contains an invalid tiered layer index.")
+            layer_idx = int(raw_layer_idx)
+            if not 0 <= layer_idx < len(cache.layers) or not isinstance(raw_settings, dict):
+                raise ValueError("Cache manifest contains invalid tiered layer settings.")
+            layer = cache.layers[layer_idx]
+            values = layer.compressed_kv.pop("compressor", None)
+            positions = layer.compressed_positions.pop("compressor", None)
+            if values is None or positions is None:
+                raise ValueError("Tiered cache payload is missing compressor tensors.")
+            budget = raw_settings.get("hot_budget_blocks")
+            protected = raw_settings.get("protected_blocks", [])
+            async_transfer = raw_settings.get("async_transfer", True)
+            if isinstance(budget, bool) or not isinstance(budget, int) or budget <= 0:
+                raise ValueError("Tiered cache hot_budget_blocks is invalid.")
+            if not isinstance(protected, list) or not all(
+                isinstance(index, int) and not isinstance(index, bool) for index in protected
+            ):
+                raise ValueError("Tiered cache protected_blocks is invalid.")
+            if not isinstance(async_transfer, bool):
+                raise ValueError("Tiered cache async_transfer is invalid.")
+            target_device = values.device if device is not None else torch.device("cpu")
+            layer.tiered_compressor = TieredBlockStore.from_device_tensors(
+                values,
+                positions,
+                hot_budget_blocks=budget,
+                device=target_device,
+                protected_blocks=protected,
+                async_transfer=async_transfer,
+                initial_hot_blocks=protected,
+            )
     _validate_cache_structure(cache)
     return cache
 

@@ -20,7 +20,7 @@ resident on the accelerator.
 
 ## Current status
 
-Status: **M3 learned-controller negative result complete; M4 uses M2**
+Status: **M4 reference runtime complete; strict speedup gate failed**
 
 No performance or systems claim has been made. M1 adds deterministic baselines,
 an exhaustive Tier-T oracle, differentiable CSA training probes, and two
@@ -96,5 +96,17 @@ The learned risk controller used disjoint train/calibration/test examples,
 asymmetric budget loss, calibrated dense fallback, and feature/loss/size
 ablations. At both scales it improved some predictive metrics but required
 57–63% fallback and failed to improve the M2 quality/block Pareto. The checked
-negative-result report freezes that outcome; M4 therefore uses M2 rather than
-the learned controller.
+negative-result report freezes that outcome; M2 remains the controller
+candidate rather than the learned controller.
+
+## M4 implementation and evidence
+
+`nano_deepseek_v4/tiered_memory.py` implements pinned-CPU cold storage, bounded
+GPU hot residency, asynchronous CUDA prefetch, protected blocks, late-miss
+recovery, and transfer accounting for CSA compressor values. Cache
+clone/crop/select/stack and persistence preserve tier state. S55 and S151 CUDA
+measurements show equal quality and about 91% physical reduction for the tiered
+value component, but only about 1.9% of total measured cache allocation because
+index and rollback state remain resident. Batch-1 throughput retained 94–95%;
+no speedup was observed. See the checked M4 report and summary for the bounded
+claim and negative strict-gate decision.

@@ -241,6 +241,8 @@ def measure_cache_memory(cache: Any) -> CacheMemoryAccounting:
     hca_bytes = 0
     csa_bytes = 0
     index_bytes = 0
+    tiered_logical_bytes = 0
+    tiered_hot_bytes = 0
     dictionary_attributes = (
         "buffer_kv",
         "buffer_gate",
@@ -269,15 +271,23 @@ def measure_cache_memory(cache: Any) -> CacheMemoryAccounting:
                 hca_bytes += compressor_bytes
             elif layer_type == "compressed_sparse_attention":
                 csa_bytes += compressor_bytes
+        tiered = getattr(layer, "tiered_compressor", None)
+        if tiered is not None:
+            stats = tiered.stats()
+            csa_bytes += stats.logical_bytes
+            tiered_logical_bytes += stats.logical_bytes
+            tiered_hot_bytes += stats.hot_bytes
 
     logical = state_bytes + hca_bytes + csa_bytes + index_bytes
+    cold = tiered_logical_bytes - tiered_hot_bytes
     return CacheMemoryAccounting(
         state_bytes=state_bytes,
         hca_bytes=hca_bytes,
         csa_bytes=csa_bytes,
         index_bytes=index_bytes,
         logical_cache_bytes=logical,
-        hot_resident_bytes=logical,
+        hot_resident_bytes=logical - cold,
+        cold_resident_bytes=cold,
     )
 
 
@@ -291,6 +301,9 @@ def measure_csa_block_bytes(layer_cache: Any, logical_block_count: int) -> int:
     for attribute in ("compressed_kv", "compressed_positions"):
         values = getattr(layer_cache, attribute)
         tensors.extend(values.get(name) for name in ("compressor", "indexer"))
+    tiered = getattr(layer_cache, "tiered_compressor", None)
+    if tiered is not None:
+        tensors.extend((tiered.host_values, tiered.host_positions))
     present = [tensor for tensor in tensors if tensor is not None]
     if not present:
         return 0
@@ -318,6 +331,8 @@ class AdaptiveMemoryTraceCollector:
         self.config = config
         self._events: list[MemoryTraceEvent] = []
         self._lock = threading.Lock()
+        self._last_host_to_device_bytes = 0
+        self._last_device_to_host_bytes = 0
 
     @property
     def events(self) -> tuple[MemoryTraceEvent, ...]:
@@ -417,6 +432,22 @@ class AdaptiveMemoryTraceCollector:
     def record_cache_advance(self, cache: Any, tokens_added: int, seen_tokens_before: int) -> None:
         started = perf_counter_ns()
         accounting = measure_cache_memory(cache)
+        host_to_device_total = 0
+        device_to_host_total = 0
+        for layer in cache.layers:
+            tiered = getattr(layer, "tiered_compressor", None)
+            if tiered is not None:
+                stats = tiered.stats()
+                host_to_device_total += stats.h2d_bytes
+                device_to_host_total += stats.d2h_bytes
+        host_to_device_bytes = max(
+            host_to_device_total - self._last_host_to_device_bytes, 0
+        )
+        device_to_host_bytes = max(
+            device_to_host_total - self._last_device_to_host_bytes, 0
+        )
+        self._last_host_to_device_bytes = host_to_device_total
+        self._last_device_to_host_bytes = device_to_host_total
         observer_wall_time_ns = perf_counter_ns() - started
         self._append(
             CacheAdvanceEvent(
@@ -430,8 +461,8 @@ class AdaptiveMemoryTraceCollector:
                 seen_tokens_before=seen_tokens_before,
                 seen_tokens_after=cache.seen_tokens,
                 accounting=accounting,
-                host_to_device_bytes=0,
-                device_to_host_bytes=0,
+                host_to_device_bytes=host_to_device_bytes,
+                device_to_host_bytes=device_to_host_bytes,
                 observer_wall_time_ns=observer_wall_time_ns,
             )
         )
