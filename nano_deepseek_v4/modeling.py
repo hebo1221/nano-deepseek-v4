@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from time import perf_counter_ns
 
 import torch
 import torch.nn.functional as F
 from torch import nn
 
 from .config import DeepSeekV4Config
+from .memory_trace import AdaptiveMemoryTraceCollector
 
 
 @dataclass
@@ -455,22 +457,31 @@ class DeepSeekV4LayerCache:
 class DeepSeekV4Cache:
     """Minimal dynamic cache for DeepSeek-V4 full prefill/decode equivalence tests."""
 
-    def __init__(self, config: DeepSeekV4Config) -> None:
+    def __init__(
+        self,
+        config: DeepSeekV4Config,
+        memory_trace: AdaptiveMemoryTraceCollector | None = None,
+    ) -> None:
         self.config = config
         self.layers = [DeepSeekV4LayerCache() for _ in range(config.num_hidden_layers)]
         self.seen_tokens = 0
+        self.memory_trace = memory_trace
 
     def get_seq_length(self) -> int:
         return self.seen_tokens
 
     def advance(self, tokens: int) -> None:
+        seen_tokens_before = self.seen_tokens
         self.seen_tokens += tokens
+        if self.memory_trace is not None:
+            self.memory_trace.record_cache_advance(self, tokens, seen_tokens_before)
 
     def clone(self) -> DeepSeekV4Cache:
         other = object.__new__(DeepSeekV4Cache)
         other.config = self.config
         other.layers = [layer.clone() for layer in self.layers]
         other.seen_tokens = self.seen_tokens
+        other.memory_trace = self.memory_trace
         return other
 
     def select_batch(self, index: int) -> DeepSeekV4Cache:
@@ -478,6 +489,7 @@ class DeepSeekV4Cache:
         other.config = self.config
         other.layers = [layer.select_batch(index) for layer in self.layers]
         other.seen_tokens = self.seen_tokens
+        other.memory_trace = self.memory_trace
         return other
 
     @classmethod
@@ -500,6 +512,10 @@ class DeepSeekV4Cache:
         ]
         other.config = config
         other.seen_tokens = seen_tokens
+        collectors = {id(cache.memory_trace): cache.memory_trace for cache in caches}
+        if len(collectors) > 1:
+            raise ValueError("Cannot stack caches with different memory trace collectors.")
+        other.memory_trace = next(iter(collectors.values()))
         return other
 
     def crop(self, max_length: int, config: DeepSeekV4Config) -> None:
@@ -644,9 +660,22 @@ class CSAIndexer(nn.Module):
         q_residual: torch.Tensor,
         position_ids: torch.Tensor,
         cache: DeepSeekV4LayerCache | None = None,
+        memory_trace: AdaptiveMemoryTraceCollector | None = None,
+        layer_index: int = 0,
+        seen_tokens: int = 0,
     ) -> tuple[torch.Tensor | None, torch.Tensor]:
+        indexer_started = perf_counter_ns() if memory_trace is not None else 0
         compressed, end_positions = self._compress(hidden_states, position_ids, cache)
         if compressed.shape[1] == 0:
+            if memory_trace is not None:
+                memory_trace.record_csa_selection(
+                    layer_index=layer_index,
+                    seen_tokens=seen_tokens,
+                    query_positions=position_ids,
+                    block_end_positions=end_positions,
+                    sparse_mask=None,
+                    indexer_wall_time_ns=perf_counter_ns() - indexer_started,
+                )
             return None, end_positions
 
         batch, seq_len, _ = hidden_states.shape
@@ -665,6 +694,15 @@ class CSAIndexer(nn.Module):
         valid = torch.isfinite(topk_values)
         sparse_mask = torch.zeros_like(scores, dtype=torch.bool)
         sparse_mask.scatter_(-1, topk_indices, valid)
+        if memory_trace is not None:
+            memory_trace.record_csa_selection(
+                layer_index=layer_index,
+                seen_tokens=seen_tokens,
+                query_positions=position_ids,
+                block_end_positions=end_positions,
+                sparse_mask=sparse_mask,
+                indexer_wall_time_ns=perf_counter_ns() - indexer_started,
+            )
         return sparse_mask, end_positions
 
 
@@ -687,6 +725,9 @@ class CSACompressor(nn.Module):
         q_residual: torch.Tensor,
         position_ids: torch.Tensor,
         cache: DeepSeekV4LayerCache | None = None,
+        memory_trace: AdaptiveMemoryTraceCollector | None = None,
+        layer_index: int = 0,
+        seen_tokens: int = 0,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor | None]:
         batch, seq_len, _ = hidden_states.shape
         kv = self.kv_proj(hidden_states)
@@ -701,7 +742,15 @@ class CSACompressor(nn.Module):
         if chunk_kv.shape[1] == 0:
             if cache is not None:
                 compressed, end_positions = cache.get_compressed("compressor", hidden_states, self.head_dim)
-                sparse_mask, _ = self.indexer(hidden_states, q_residual, position_ids, cache)
+                sparse_mask, _ = self.indexer(
+                    hidden_states,
+                    q_residual,
+                    position_ids,
+                    cache,
+                    memory_trace,
+                    layer_index,
+                    seen_tokens,
+                )
                 return compressed.unsqueeze(1), end_positions, sparse_mask
             empty = hidden_states.new_zeros(batch, 1, 0, self.head_dim)
             return empty, position_ids.new_zeros(batch, 0), None
@@ -739,7 +788,15 @@ class CSACompressor(nn.Module):
         if cache is not None:
             compressed, end_positions = cache.update_compressed("compressor", compressed, end_positions)
             kv = compressed.unsqueeze(1)
-        sparse_mask, _ = self.indexer(hidden_states, q_residual, position_ids, cache)
+        sparse_mask, _ = self.indexer(
+            hidden_states,
+            q_residual,
+            position_ids,
+            cache,
+            memory_trace,
+            layer_index,
+            seen_tokens,
+        )
         return kv, end_positions, sparse_mask
 
 
@@ -801,6 +858,9 @@ class DeepSeekV4Attention(nn.Module):
         position_ids: torch.Tensor,
         attention_mask: torch.Tensor | None = None,
         cache: DeepSeekV4LayerCache | None = None,
+        memory_trace: AdaptiveMemoryTraceCollector | None = None,
+        layer_index: int = 0,
+        seen_tokens: int = 0,
     ) -> torch.Tensor:
         batch, seq_len, _ = hidden_states.shape
         q_mid = self.q_a_norm(self.q_a_proj(hidden_states))
@@ -825,7 +885,15 @@ class DeepSeekV4Attention(nn.Module):
                 kv_entries.append(comp_kv.expand(batch, self.num_heads, -1, -1))
                 masks.append(comp_end.unsqueeze(1) <= position_ids.unsqueeze(-1))
         elif self.layer_type == "compressed_sparse_attention" and self.csa is not None:
-            comp_kv, comp_end, sparse_mask = self.csa(hidden_states, q_mid, position_ids, cache)
+            comp_kv, comp_end, sparse_mask = self.csa(
+                hidden_states,
+                q_mid,
+                position_ids,
+                cache,
+                memory_trace,
+                layer_index,
+                seen_tokens,
+            )
             if comp_kv.shape[2] > 0:
                 kv_entries.append(comp_kv.expand(batch, self.num_heads, -1, -1))
                 comp_mask = comp_end.unsqueeze(1) <= position_ids.unsqueeze(-1)
@@ -961,9 +1029,20 @@ class DeepSeekV4DecoderLayer(nn.Module):
         position_ids: torch.Tensor,
         attention_mask: torch.Tensor | None,
         cache: DeepSeekV4LayerCache | None = None,
+        memory_trace: AdaptiveMemoryTraceCollector | None = None,
+        layer_index: int = 0,
+        seen_tokens: int = 0,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         post, comb, collapsed = self.attn_hc(streams)
-        attn_output = self.self_attn(self.attn_norm(collapsed), position_ids, attention_mask, cache)
+        attn_output = self.self_attn(
+            self.attn_norm(collapsed),
+            position_ids,
+            attention_mask,
+            cache,
+            memory_trace,
+            layer_index,
+            seen_tokens,
+        )
         streams = post.unsqueeze(-1) * attn_output.unsqueeze(-2) + torch.matmul(comb, streams)
         router_logits: torch.Tensor | None = None
 
@@ -1035,6 +1114,7 @@ class DeepSeekV4Model(nn.Module):
         output_router_logits: bool = False,
         past_key_values: DeepSeekV4Cache | None = None,
         use_cache: bool = False,
+        memory_trace: AdaptiveMemoryTraceCollector | None = None,
     ) -> tuple[torch.Tensor, list[torch.Tensor] | None, DeepSeekV4Cache | None]:
         if input_ids.ndim != 2 or input_ids.shape[0] == 0 or input_ids.shape[1] == 0:
             raise ValueError("input_ids must be a non-empty [batch, seq] tensor.")
@@ -1048,9 +1128,16 @@ class DeepSeekV4Model(nn.Module):
             raise ValueError("past_key_values layer count does not match the model configuration.")
         if past_key_values is not None and past_key_values.config != self.config:
             raise ValueError("past_key_values was created for a different model configuration.")
+        if memory_trace is not None and not use_cache:
+            raise ValueError("memory_trace requires use_cache=True.")
         active_cache = past_key_values
         if use_cache and active_cache is None:
-            active_cache = DeepSeekV4Cache(self.config)
+            active_cache = DeepSeekV4Cache(self.config, memory_trace=memory_trace)
+        elif memory_trace is not None and active_cache is not None:
+            if active_cache.memory_trace is None and active_cache.seen_tokens == 0:
+                active_cache.memory_trace = memory_trace
+            elif active_cache.memory_trace is not memory_trace:
+                raise ValueError("memory_trace does not match the cache's trace collector.")
         past_seen = active_cache.get_seq_length() if active_cache is not None else 0
         if attention_mask is not None:
             expected_mask_length = past_seen + input_ids.shape[1]
@@ -1068,7 +1155,16 @@ class DeepSeekV4Model(nn.Module):
         router_logits: list[torch.Tensor] = []
         for layer_idx, layer in enumerate(self.layers):
             layer_cache = active_cache.layers[layer_idx] if active_cache is not None else None
-            streams, router = layer(streams, input_ids, position_ids, attention_mask, layer_cache)
+            streams, router = layer(
+                streams,
+                input_ids,
+                position_ids,
+                attention_mask,
+                layer_cache,
+                active_cache.memory_trace if active_cache is not None else None,
+                layer_idx,
+                past_seen,
+            )
             if output_router_logits:
                 router_logits.append(router)
 
@@ -1153,6 +1249,7 @@ class DeepSeekV4ForCausalLM(nn.Module):
         output_router_logits: bool = False,
         past_key_values: DeepSeekV4Cache | None = None,
         use_cache: bool = False,
+        memory_trace: AdaptiveMemoryTraceCollector | None = None,
     ) -> CausalLMOutput:
         hidden_states, router_logits, next_cache = self.model(
             input_ids=input_ids,
@@ -1161,6 +1258,7 @@ class DeepSeekV4ForCausalLM(nn.Module):
             output_router_logits=output_router_logits,
             past_key_values=past_key_values,
             use_cache=use_cache,
+            memory_trace=memory_trace,
         )
         logits = self.lm_head(hidden_states)
         loss = None
@@ -1197,13 +1295,14 @@ class DeepSeekV4ForCausalLM(nn.Module):
         input_ids: torch.Tensor,
         max_new_tokens: int,
         eos_token_id: int | None = None,
+        memory_trace: AdaptiveMemoryTraceCollector | None = None,
     ) -> torch.Tensor:
         if max_new_tokens < 0:
             raise ValueError("max_new_tokens must be non-negative.")
         if max_new_tokens == 0:
             return input_ids
         eos = self.config.eos_token_id if eos_token_id is None else eos_token_id
-        output = self(input_ids, use_cache=True)
+        output = self(input_ids, use_cache=True, memory_trace=memory_trace)
         cache = output.past_key_values
         next_token = output.logits[:, -1].argmax(dim=-1, keepdim=True)
         generated = [input_ids, next_token]
@@ -1228,6 +1327,7 @@ class DeepSeekV4ForCausalLM(nn.Module):
         num_beams: int = 4,
         eos_token_id: int | None = None,
         length_penalty: float = 1.0,
+        memory_trace: AdaptiveMemoryTraceCollector | None = None,
     ) -> torch.Tensor:
         if input_ids.shape[0] != 1:
             raise ValueError("This compact beam_search currently supports batch size 1.")
@@ -1239,7 +1339,7 @@ class DeepSeekV4ForCausalLM(nn.Module):
             return input_ids
 
         eos = self.config.eos_token_id if eos_token_id is None else eos_token_id
-        output = self(input_ids, use_cache=True)
+        output = self(input_ids, use_cache=True, memory_trace=memory_trace)
         if output.past_key_values is None:
             raise RuntimeError("model did not return a cache.")
 

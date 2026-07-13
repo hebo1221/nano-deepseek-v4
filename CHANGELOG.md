@@ -18,6 +18,8 @@ All notable changes to this project are documented here. The format follows
   checkpoint and an explicit production-readiness support boundary.
 - Adaptive V4 Memory research proposal, related-work matrix, falsification
   criteria, and preregistered experimental protocol.
+- Adaptive V4 Memory M0 passive tracing for native CSA selections, cache-memory
+  accounting, observer timing, checksummed JSONL export, and deterministic replay.
 - Security and contribution policies.
 
 ### Changed

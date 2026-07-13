@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Protocol version | 0.1 |
-| Status | Pre-implementation |
+| Status | M0 Tier T instrumentation implemented |
 | Last updated | 2026-07-14 |
 
 This protocol is the preregistered evaluation contract for Adaptive V4 Memory.

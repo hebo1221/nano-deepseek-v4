@@ -20,12 +20,11 @@ resident on the accelerator.
 
 ## Current status
 
-Status: **protocol design**
+Status: **M0 Tier T instrumentation implemented**
 
-No performance or quality claim has been made. The immediate implementation
-target is a read-only trace collector for native CSA indexer behavior. Controller
-work begins only after the native baseline and trace schema pass the M0 gates in
-the experimental protocol.
+No performance or quality claim has been made. The read-only collector records
+native CSA selections and cache accounting. Controller work begins only after
+the native trace has been exercised beyond deterministic Tier T tests.
 
 ## Working research question
 
@@ -48,12 +47,18 @@ while preserving native V4 quality in dense-memory and multi-turn workloads?
 - optimizing only Needle-in-a-Haystack or only average benchmark accuracy;
 - treating the tiny reference model as evidence for frontier-scale serving.
 
-## First implementation slice
+## M0 implementation
 
-The first code change must be instrumentation only:
+The first code change is implemented as instrumentation only:
 
-- capture native CSA indexer score summaries and selected compressed blocks;
-- assign stable request, turn, token, layer, and block identifiers;
+- capture native CSA selected compressed blocks;
+- assign stable request, query-position, layer, and block identifiers;
 - record logical-cache, hot-residency, transfer, and latency counters separately;
 - write a versioned trace without changing logits or cache contents;
 - prove trace-on and trace-off numerical equivalence in tests.
+
+The implementation lives in `nano_deepseek_v4/memory_trace.py`, with the
+machine-readable contracts in [`schemas/`](schemas/). At M0 all logical cache
+bytes are hot, cold residency and transfers are zero, and no controller or
+eviction action exists. Indexer score summaries remain an M1 extension; M0
+records the native selected sets needed to establish replay correctness first.

@@ -41,6 +41,21 @@ from .evaluation import (
     evaluate_multiple_choice,
     score_choice_loglikelihood,
 )
+from .memory_trace import (
+    MEMORY_TRACE_SCHEMA_VERSION,
+    AdaptiveMemoryTraceCollector,
+    CacheAdvanceEvent,
+    CacheMemoryAccounting,
+    CSASelectionEvent,
+    MemoryTraceConfig,
+    MemoryTraceManifest,
+    MemoryTraceResult,
+    NativeSelection,
+    NativeSelectionReplay,
+    load_memory_trace,
+    measure_cache_memory,
+    replay_native_selected_sets,
+)
 from .modeling import (
     CausalLMOutput,
     DeepSeekV4Cache,
@@ -75,6 +90,20 @@ __all__ = [
     "DeepSeekV4ForCausalLM",
     "DeepSeekV4Model",
     "CausalLMOutput",
+    # Adaptive V4 Memory M0 trace
+    "MEMORY_TRACE_SCHEMA_VERSION",
+    "AdaptiveMemoryTraceCollector",
+    "MemoryTraceConfig",
+    "MemoryTraceManifest",
+    "MemoryTraceResult",
+    "CacheMemoryAccounting",
+    "CSASelectionEvent",
+    "CacheAdvanceEvent",
+    "NativeSelection",
+    "NativeSelectionReplay",
+    "measure_cache_memory",
+    "load_memory_trace",
+    "replay_native_selected_sets",
     # optimizer
     "Muon",
     "deepseek_v4_optimizer_groups",

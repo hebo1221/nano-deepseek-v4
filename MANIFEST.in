@@ -5,3 +5,4 @@ include PRODUCTION_READINESS.md
 include SECURITY.md
 recursive-include references *.json
 recursive-include research *.md
+recursive-include research *.json

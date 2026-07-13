@@ -117,6 +117,21 @@ The proposal, related-work matrix, and preregistered experimental protocol make
 no performance claim; instrumentation must pass the protocol's M0 gate before
 any controller or pruning behavior is introduced.
 
+M0 tracing is an observer-only API. It records native CSA block selections and
+cache byte accounting without logging token IDs or changing cache residency:
+
+```python
+from nano_deepseek_v4 import AdaptiveMemoryTraceCollector, MemoryTraceConfig
+
+trace = AdaptiveMemoryTraceCollector(MemoryTraceConfig(trace_id="experiment-001"))
+output = model(ids, use_cache=True, memory_trace=trace)
+trace.write("./artifacts/experiment-001")
+```
+
+The output directory contains append-ordered `events.jsonl` and an atomic
+`manifest.json` with the payload SHA-256. `load_memory_trace` validates the
+schema version, identity, sequence, count, and digest before replay.
+
 ## What's inside
 
 ```
@@ -129,6 +144,7 @@ nano_deepseek_v4/
 ├── data.py           # CLM packing, SFT batch builder with label masking
 ├── training.py       # single-step training loop, GRPO loss, distillation loss
 ├── evaluation.py     # next-token perplexity, multiple-choice scoring
+├── memory_trace.py   # M0 passive CSA/cache trace, digest, and replay
 └── demo.py           # 20-line forward demo
 ```
 
