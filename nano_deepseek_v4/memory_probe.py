@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import math
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
 
 import torch
 import torch.nn.functional as F
 from torch import nn
+
+from .memory_replay import ReplayQuery
+from .memory_trace import RankedBlock
 
 
 @dataclass(frozen=True)
@@ -234,3 +238,56 @@ class CSAProbeObjective(nn.Module):
             layers=len(records),
             examples=targets.numel() * len(records),
         )
+
+
+def build_probe_replay_queries(
+    probe: CSASelectionProbe,
+    *,
+    trace_id: str,
+    request_id: str,
+    native_topk: int,
+    block_bytes: int,
+) -> tuple[ReplayQuery, ...]:
+    """Convert a full-sequence differentiable probe into replayable queries."""
+
+    if not trace_id or not request_id:
+        raise ValueError("trace_id and request_id must be non-empty.")
+    for name, value in (("native_topk", native_topk), ("block_bytes", block_bytes)):
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise ValueError(f"{name} must be a non-negative integer.")
+    queries: list[ReplayQuery] = []
+    for record in probe.records:
+        score_rows = record.scores.detach().float().cpu()
+        query_rows = record.query_positions.detach().long().cpu()
+        end_rows = record.block_end_positions.detach().long().cpu()
+        for batch_index in range(score_rows.shape[0]):
+            for query_index in range(score_rows.shape[1]):
+                candidates = []
+                for block_index in range(score_rows.shape[2]):
+                    score = float(score_rows[batch_index, query_index, block_index])
+                    if not math.isfinite(score):
+                        continue
+                    end_position = int(end_rows[batch_index, block_index])
+                    candidates.append(
+                        RankedBlock(
+                            block_id=f"l{record.layer_index}:b{batch_index}:e{end_position}",
+                            score=score,
+                        )
+                    )
+                candidates.sort(key=lambda block: (-block.score, block.block_id))
+                native_ids = tuple(block.block_id for block in candidates[:native_topk])
+                queries.append(
+                    ReplayQuery(
+                        trace_id=trace_id,
+                        request_id=request_id,
+                        layer_index=record.layer_index,
+                        batch_index=batch_index,
+                        query_position=int(query_rows[batch_index, query_index]),
+                        phase="prefill",
+                        logical_block_count=score_rows.shape[2],
+                        block_bytes=block_bytes,
+                        native_block_ids=native_ids,
+                        ranked_blocks=tuple(candidates),
+                    )
+                )
+    return tuple(queries)

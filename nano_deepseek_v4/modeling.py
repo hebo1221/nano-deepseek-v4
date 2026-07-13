@@ -8,6 +8,7 @@ import torch.nn.functional as F
 from torch import nn
 
 from .config import DeepSeekV4Config
+from .memory_controller import CSASelectionPlan
 from .memory_probe import CSASelectionProbe
 from .memory_trace import AdaptiveMemoryTraceCollector, measure_csa_block_bytes
 
@@ -703,6 +704,7 @@ class CSAIndexer(nn.Module):
         memory_trace: AdaptiveMemoryTraceCollector | None = None,
         layer_index: int = 0,
         seen_tokens: int = 0,
+        selection_plan: CSASelectionPlan | None = None,
     ) -> tuple[torch.Tensor | None, torch.Tensor, torch.Tensor | None]:
         indexer_started = perf_counter_ns() if memory_trace is not None else 0
         compressed, end_positions = self._compress(hidden_states, position_ids, cache)
@@ -740,6 +742,13 @@ class CSAIndexer(nn.Module):
         valid = torch.isfinite(topk_values)
         sparse_mask = torch.zeros_like(scores, dtype=torch.bool)
         sparse_mask.scatter_(-1, topk_indices, valid)
+        if selection_plan is not None:
+            sparse_mask = selection_plan.build_mask(
+                layer_index=layer_index,
+                query_positions=position_ids,
+                block_end_positions=end_positions,
+                native_mask=sparse_mask,
+            )
         if memory_trace is not None:
             memory_trace.record_csa_selection(
                 layer_index=layer_index,
@@ -781,6 +790,7 @@ class CSACompressor(nn.Module):
         layer_index: int = 0,
         seen_tokens: int = 0,
         csa_probe: CSASelectionProbe | None = None,
+        selection_plan: CSASelectionPlan | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor | None]:
         batch, seq_len, _ = hidden_states.shape
         kv = self.kv_proj(hidden_states)
@@ -809,6 +819,7 @@ class CSACompressor(nn.Module):
                     memory_trace,
                     layer_index,
                     seen_tokens,
+                    selection_plan,
                 )
                 return compressed.unsqueeze(1), end_positions, sparse_mask
             empty = hidden_states.new_zeros(batch, 1, 0, self.head_dim)
@@ -857,6 +868,7 @@ class CSACompressor(nn.Module):
             memory_trace,
             layer_index,
             seen_tokens,
+            selection_plan,
         )
         if csa_probe is not None:
             if scores is None:
@@ -936,6 +948,7 @@ class DeepSeekV4Attention(nn.Module):
         layer_index: int = 0,
         seen_tokens: int = 0,
         csa_probe: CSASelectionProbe | None = None,
+        selection_plan: CSASelectionPlan | None = None,
     ) -> torch.Tensor:
         batch, seq_len, _ = hidden_states.shape
         q_mid = self.q_a_norm(self.q_a_proj(hidden_states))
@@ -971,6 +984,7 @@ class DeepSeekV4Attention(nn.Module):
                 layer_index,
                 seen_tokens,
                 csa_probe,
+                selection_plan,
             )
             if csa_probe is not None and comp_kv.shape[2] > 0:
                 read_scores = torch.matmul(q.float(), comp_kv.transpose(-1, -2).float())
@@ -1138,6 +1152,7 @@ class DeepSeekV4DecoderLayer(nn.Module):
         layer_index: int = 0,
         seen_tokens: int = 0,
         csa_probe: CSASelectionProbe | None = None,
+        selection_plan: CSASelectionPlan | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         post, comb, collapsed = self.attn_hc(streams)
         attn_output = self.self_attn(
@@ -1149,6 +1164,7 @@ class DeepSeekV4DecoderLayer(nn.Module):
             layer_index,
             seen_tokens,
             csa_probe,
+            selection_plan,
         )
         streams = post.unsqueeze(-1) * attn_output.unsqueeze(-2) + torch.matmul(comb, streams)
         router_logits: torch.Tensor | None = None
@@ -1227,6 +1243,7 @@ class DeepSeekV4Model(nn.Module):
         use_cache: bool = False,
         memory_trace: AdaptiveMemoryTraceCollector | None = None,
         csa_probe: CSASelectionProbe | None = None,
+        selection_plan: CSASelectionPlan | None = None,
     ) -> tuple[torch.Tensor, list[torch.Tensor] | None, DeepSeekV4Cache | None]:
         if input_ids.ndim != 2 or input_ids.shape[0] == 0 or input_ids.shape[1] == 0:
             raise ValueError("input_ids must be a non-empty [batch, seq] tensor.")
@@ -1244,6 +1261,8 @@ class DeepSeekV4Model(nn.Module):
             raise ValueError("memory_trace requires use_cache=True.")
         if csa_probe is not None and use_cache:
             raise ValueError("csa_probe supports full-sequence forwards without a cache.")
+        if selection_plan is not None and use_cache:
+            raise ValueError("selection_plan supports full-sequence forwards without a cache.")
         active_cache = past_key_values
         if use_cache and active_cache is None:
             active_cache = DeepSeekV4Cache(self.config, memory_trace=memory_trace)
@@ -1281,6 +1300,7 @@ class DeepSeekV4Model(nn.Module):
                 layer_idx,
                 past_seen,
                 csa_probe,
+                selection_plan,
             )
             if output_router_logits:
                 router_logits.append(router)
@@ -1379,6 +1399,7 @@ class DeepSeekV4ForCausalLM(nn.Module):
         use_cache: bool = False,
         memory_trace: AdaptiveMemoryTraceCollector | None = None,
         csa_probe: CSASelectionProbe | None = None,
+        selection_plan: CSASelectionPlan | None = None,
     ) -> CausalLMOutput:
         hidden_states, router_logits, next_cache = self.model(
             input_ids=input_ids,
@@ -1389,6 +1410,7 @@ class DeepSeekV4ForCausalLM(nn.Module):
             use_cache=use_cache,
             memory_trace=memory_trace,
             csa_probe=csa_probe,
+            selection_plan=selection_plan,
         )
         logits = self.lm_head(hidden_states)
         loss = None

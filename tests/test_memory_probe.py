@@ -8,7 +8,11 @@ from nano_deepseek_v4 import (
     CSASelectionProbe,
     DeepSeekV4Config,
     DeepSeekV4ForCausalLM,
+    TrainingFreeControllerConfig,
+    build_csa_selection_plan,
+    build_probe_replay_queries,
     evidence_block_indices,
+    run_training_free_controller,
 )
 
 
@@ -113,3 +117,41 @@ def test_probe_rejects_cached_forward():
 
     with pytest.raises(ValueError, match="without a cache"):
         model(input_ids, use_cache=True, csa_probe=CSASelectionProbe())
+
+
+def test_probe_queries_drive_counterfactual_selection_plan():
+    torch.manual_seed(19)
+    model = _probe_model().eval()
+    input_ids = torch.randint(0, model.config.vocab_size, (2, 24))
+    probe = CSASelectionProbe()
+    native, _, _ = model.model(input_ids, csa_probe=probe)
+    queries = build_probe_replay_queries(
+        probe,
+        trace_id="probe-plan",
+        request_id="batch",
+        native_topk=model.config.index_topk,
+        block_bytes=40,
+    )
+    control_queries = tuple(query for query in queries if query.query_position == 23)
+    controller = run_training_free_controller(
+        control_queries,
+        TrainingFreeControllerConfig(
+            global_block_budget=2,
+            dense_fallback_block_budget=4,
+            top_p=0.8,
+            uncertainty_threshold=1.0,
+            dense_cardinality_threshold=1.0,
+        ),
+    )
+    plan = build_csa_selection_plan(controller)
+
+    counterfactual, _, _ = model.model(input_ids, selection_plan=plan)
+
+    assert len(queries) == 2 * 2 * 24
+    assert len(control_queries) == 2 * 2
+    assert counterfactual.shape == native.shape
+    assert torch.isfinite(counterfactual).all()
+    assert not torch.equal(counterfactual, native)
+    assert controller.peak_selected_blocks <= 4
+    with pytest.raises(ValueError, match="without a cache"):
+        model(input_ids, use_cache=True, selection_plan=plan)

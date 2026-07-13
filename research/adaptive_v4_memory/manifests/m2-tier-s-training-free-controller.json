@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "experiment_id": "m2-tier-s-training-free-controller-v1",
+  "date": "2026-07-14",
+  "purpose": "Calibrate and test the offline replay training-free controller",
+  "checkpoints": "M1 S55 and S151 checkpoints by checked SHA-256",
+  "task": "generated associative recall; no raw token persistence",
+  "sequence_lengths": [48, 64, 80],
+  "calibration": {
+    "seed": 30360714,
+    "batches_per_length": 4,
+    "batch_size": 32
+  },
+  "test": {
+    "seed": 40460714,
+    "batches_per_length": 8,
+    "batch_size": 32
+  },
+  "fixed_baselines": [1, 2, 4, 8],
+  "controller_grid": {
+    "normal_blocks_per_csa_layer": [1, 2],
+    "top_p": [0.5, 0.8],
+    "uncertainty_threshold": [0.65, 0.8],
+    "dense_fallback_budget": "all CSA blocks at length 80",
+    "dense_cardinality_threshold": 0.9,
+    "min_blocks_per_layer": 1,
+    "max_extra_blocks_per_layer": 2,
+    "stable_reuse_threshold": 0.8,
+    "refresh_interval_range": [1, 4]
+  },
+  "calibration_selection": "among configurations within 0.02 accuracy and 1.05x selected blocks of fixed-top-k-2, maximize accuracy minus 0.002 times mean blocks; otherwise use the same score without constraints",
+  "test_gates": {
+    "memory_matched_accuracy_regression_max": 0.02,
+    "worst_length_accuracy_regression_max": 0.05,
+    "movement_to_selection_bytes_max": 2.0,
+    "controller_cpu_us_per_example_max": 1000.0,
+    "fallback_stress": "force uncertainty threshold to zero; dense fallback must run and not reduce accuracy versus fallback disabled",
+    "pareto_rule": "strictly fewer blocks within 0.02 accuracy, or at least 0.005 better accuracy with no more blocks"
+  },
+  "interpretation": "offline two-pass replay evidence only; not an online serving or systems claim"
+}

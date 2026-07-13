@@ -115,8 +115,8 @@ prefetch while retaining the complete compressed history for later turns.
 Start with the [`Adaptive V4 Memory` research index](research/adaptive_v4_memory/README.md).
 The proposal, related-work matrix, and preregistered experimental protocol make
 no performance claim. M0 instrumentation and the M1 replay/predictive-signal
-gate are complete; M2 training-free controller work is now permitted by the
-protocol.
+gate and M2 offline training-free controller gate are complete. M3 learned-risk
+controller work is now permitted by the protocol.
 
 M0 tracing is an observer-only API. It records native CSA block selections and
 cache byte accounting without logging token IDs or changing cache residency:
@@ -140,6 +140,12 @@ native features improving sufficient-budget MAE by 11.9% and 16.3% at two model
 scales, while explicitly withholding a research claim because only one seed and
 one synthetic task were evaluated.
 
+The M2 controller combines score concentration and overlap signals under a
+global block budget, supports protected pinning and uncertainty fallback, and
+emits digest-replayable actions. At memory-matched operating points it improved
+associative-recall accuracy over fixed top-k at both tested scales. This remains
+offline logical-selection evidence: physical GPU residency does not change.
+
 ## What's inside
 
 ```
@@ -155,6 +161,7 @@ nano_deepseek_v4/
 ├── memory_trace.py   # M0/M1 passive CSA/cache trace and digest validation
 ├── memory_replay.py  # deterministic replay policies, oracle, and signal analysis
 ├── memory_probe.py   # opt-in differentiable CSA research objectives
+├── memory_controller.py # M2 global-budget rules, fallback, plans, and replay
 └── demo.py           # 20-line forward demo
 ```
 

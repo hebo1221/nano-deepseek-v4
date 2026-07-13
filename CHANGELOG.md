@@ -24,6 +24,10 @@ All notable changes to this project are documented here. The format follows
   CLI, exhaustive oracle, grouped signal analysis, differentiable CSA probe,
   associative-recall training/evaluation scripts, and checked Tier-T/Tier-S
   evidence.
+- Adaptive V4 Memory M2 training-free global-budget controller, adaptive refresh,
+  protected block pinning, uncertainty fallback, movement accounting,
+  digest-exact action replay, counterfactual model plans, and two-scale checked
+  Pareto evidence.
 - Security and contribution policies.
 
 ### Changed

@@ -48,11 +48,23 @@ from .evaluation import (
     evaluate_multiple_choice,
     score_choice_loglikelihood,
 )
+from .memory_controller import (
+    ControllerAction,
+    ControllerLayerAction,
+    ControllerLayerSignal,
+    CSASelectionPlan,
+    TrainingFreeControllerConfig,
+    TrainingFreeControllerResult,
+    build_csa_selection_plan,
+    run_training_free_controller,
+    validate_controller_replay,
+)
 from .memory_probe import (
     CSAProbeLoss,
     CSAProbeObjective,
     CSAProbeRecord,
     CSASelectionProbe,
+    build_probe_replay_queries,
     evidence_block_indices,
 )
 from .memory_replay import (
@@ -167,6 +179,17 @@ __all__ = [
     "CSAProbeLoss",
     "CSAProbeObjective",
     "evidence_block_indices",
+    "build_probe_replay_queries",
+    # Adaptive V4 Memory M2 training-free controller
+    "TrainingFreeControllerConfig",
+    "ControllerLayerSignal",
+    "ControllerLayerAction",
+    "ControllerAction",
+    "TrainingFreeControllerResult",
+    "CSASelectionPlan",
+    "build_csa_selection_plan",
+    "run_training_free_controller",
+    "validate_controller_replay",
     # optimizer
     "Muon",
     "deepseek_v4_optimizer_groups",

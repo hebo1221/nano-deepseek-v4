@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "experiment_id": "m2-tier-s-training-free-controller-v1",
+  "date": "2026-07-14",
+  "hardware": "NVIDIA GB10",
+  "protocol": {
+    "task": "synthetic associative recall",
+    "sequence_lengths": [48, 64, 80],
+    "calibration_examples_per_scale": 384,
+    "test_examples_per_scale": 768,
+    "calibration_seed": 30360714,
+    "test_seed": 40460714,
+    "selection": "calibration only",
+    "interpretation": "offline answer-control-point replay; logical selection bytes, not physical GPU allocation"
+  },
+  "scales": {
+    "s55": {
+      "raw_summary_sha256": "f68c3339bf62c0e37513fa7cdafe7e1eb0326fee3ae3ec2a7a886f36f229e854",
+      "checkpoint_sha256": "5156747b2af10ca0b67a227ae037bdb9d18c1caf8eced7e067c90825300c7847",
+      "selected_controller": "b2-p0.8-u0.80",
+      "controller": {
+        "accuracy": 0.6744791666666666,
+        "mean_final_selected_blocks": 6.0,
+        "mean_final_selected_bytes": 1632.0,
+        "controller_cpu_us_per_example": 98.36925520833333,
+        "forward_ms_per_batch": 37.12042804166666,
+        "movement_to_selection_bytes": 1.0,
+        "natural_fallback_rate": 0.0
+      },
+      "memory_matched_fixed_topk": {
+        "topk": 2,
+        "accuracy": 0.6432291666666666,
+        "mean_final_selected_blocks": 6.0,
+        "forward_ms_per_batch": 34.552127166666665
+      },
+      "native": {
+        "accuracy": 0.7330729166666666,
+        "mean_final_selected_blocks": 24.0
+      },
+      "forced_fallback": {
+        "fallback_rate": 1.0,
+        "accuracy": 0.7330729166666666,
+        "accuracy_recovery": 0.05859375,
+        "mean_final_selected_blocks": 48.0
+      },
+      "passes_m2_gate": true
+    },
+    "s151": {
+      "raw_summary_sha256": "2e6571a2e3a06766b67842b9129f69a8ef2cab3fb429a2a412bb4d324eda84e0",
+      "checkpoint_sha256": "628c1a65cf464a6ae4f9c31b626465abcc374a15b75f7d33b861342f5848f4b3",
+      "selected_controller": "b1-p0.8-u0.80",
+      "controller": {
+        "accuracy": 0.7421875,
+        "mean_final_selected_blocks": 5.0,
+        "mean_final_selected_bytes": 1360.0,
+        "controller_cpu_us_per_example": 189.06675390625,
+        "forward_ms_per_batch": 64.16247308333334,
+        "movement_to_selection_bytes": 1.0,
+        "natural_fallback_rate": 0.0
+      },
+      "memory_matched_fixed_topk": {
+        "topk": 1,
+        "accuracy": 0.6783854166666666,
+        "mean_final_selected_blocks": 5.0,
+        "forward_ms_per_batch": 62.5213955
+      },
+      "native": {
+        "accuracy": 0.7552083333333334,
+        "mean_final_selected_blocks": 40.0
+      },
+      "forced_fallback": {
+        "fallback_rate": 1.0,
+        "accuracy": 0.7565104166666666,
+        "accuracy_recovery": 0.01432291666666663,
+        "mean_final_selected_blocks": 80.0
+      },
+      "passes_m2_gate": true
+    }
+  },
+  "m2_gate": "passed_on_both_scales",
+  "claim_eligible": false,
+  "limitations": [
+    "offline two-pass replay rather than an online controller",
+    "logical selected bytes do not reduce allocated GPU memory",
+    "one synthetic task and one trained seed per scale",
+    "natural held-out fallback rate was zero; recovery was measured with a forced uncertainty stress arm",
+    "movement ratio is a cold-start single-control-point measurement"
+  ]
+}

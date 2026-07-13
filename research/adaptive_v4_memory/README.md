@@ -20,7 +20,7 @@ resident on the accelerator.
 
 ## Current status
 
-Status: **M1 replay and predictive-signal gate complete; M2 in progress**
+Status: **M2 training-free offline replay gate complete; M3 in progress**
 
 No performance or systems claim has been made. M1 adds deterministic baselines,
 an exhaustive Tier-T oracle, differentiable CSA training probes, and two
@@ -28,6 +28,12 @@ trained Tier-S scales. Native score features reduced sufficient-budget MAE by
 11.9% and 16.3% over the preregistered context+layer baseline, so the M2
 training-free controller track may proceed. The evidence is one-seed synthetic
 diagnostics only, and both scales missed the separate 85% training target.
+
+M2 adds a deterministic training-free controller with global budgets,
+stability-based refresh, protected-block pinning, movement accounting, and
+uncertainty fallback. On held-out Tier-S associative recall it improved over a
+memory-matched fixed top-k at both scales. These are logical selection results:
+all blocks remain GPU-resident, so there is no physical memory claim.
 
 ## Working research question
 
@@ -74,3 +80,12 @@ opt-in differentiable research probe without changing normal model outputs.
 See the checked Tier-T and Tier-S reports in [`reports/`](reports/) and their
 small machine-readable summaries in [`results/`](results/). Checkpoints and raw
 training summaries remain ignored artifacts referenced by SHA-256.
+
+## M2 implementation and evidence
+
+`nano_deepseek_v4/memory_controller.py` implements the training-free rule,
+action records, replay digest validation, protected pinning, dense fallback,
+movement accounting, and immutable counterfactual selection plans. The M2
+report records calibration/test isolation, memory-matched fixed baselines, a
+forced fallback stress arm, and the first overhead-gate failure. M3 learned-risk
+work may proceed, but actual hot/cold allocation remains an M4 requirement.
