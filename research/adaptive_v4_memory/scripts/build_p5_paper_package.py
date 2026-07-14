@@ -37,6 +37,20 @@ FINAL_RELEASE_COMMANDS = [
     ".venv/bin/python -m build",
     ".venv/bin/twine check dist/*",
 ]
+CONTROLLER_CONTRACT_TESTS = {
+    "deterministic_replay": (
+        "tests/test_causal_memory_controller.py::"
+        "test_same_token_controller_is_causal_bounded_and_deterministic"
+    ),
+    "cache_lifecycle_and_physical_tier_budget": (
+        "tests/test_causal_memory_controller.py::"
+        "test_same_token_cache_persistence_and_lifecycle"
+    ),
+    "dense_recovery": (
+        "tests/test_causal_memory_controller.py::"
+        "test_same_token_controller_dense_fallback_and_incomplete_group_guard"
+    ),
+}
 REPRODUCTION_REQUIRED_MARKERS = [
     "run_p2_core_parallel.py --scale s55 --workers 3",
     "run_p2_core_parallel.py --scale s151 --workers 3",
@@ -1466,6 +1480,32 @@ def _traceability_rows(
         and release.get("timing") == "after-final-paper-package-generation",
         "Final local release-gate contract drifted.",
     )
+    raw_controller = contracts.get("p1-controller-contract-tests")
+    _require(isinstance(raw_controller, dict), "Missing P1 controller-contract tests.")
+    controller = cast(dict[str, Any], raw_controller)
+    _require(
+        controller.get("timing") == "within-final-local-release-gate"
+        and controller.get("covered_by") == ".venv/bin/pytest -q"
+        and controller.get("tests") == CONTROLLER_CONTRACT_TESTS
+        and controller.get("covered_by") in release.get("commands", []),
+        "P1 controller-contract verification drifted.",
+    )
+    for contract_name, node_id in CONTROLLER_CONTRACT_TESTS.items():
+        path_text, separator, function_name = node_id.partition("::")
+        path = Path(path_text)
+        _require(
+            separator == "::" and path.is_file(),
+            f"Missing P1 {contract_name} test source: {path}",
+        )
+        tree = ast.parse(path.read_text(), filename=str(path))
+        _require(
+            any(
+                isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and node.name == function_name
+                for node in tree.body
+            ),
+            f"Missing P1 {contract_name} test node: {node_id}",
+        )
     raw_requirements = payload.get("requirements")
     _require(isinstance(raw_requirements, list), "Missing traceability requirements.")
     requirements = cast(list[Any], raw_requirements)

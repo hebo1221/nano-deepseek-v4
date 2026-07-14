@@ -959,6 +959,19 @@ def test_p5_traceability_covers_every_requirement_and_fails_closed() -> None:
     assert (root / final_gate["runner"]).is_file()
     assert final_gate["github_actions_passed"] is False
     assert final_gate["github_actions_required_for_completion"] is False
+    controller_contract = traceability["verification_contracts"][
+        "p1-controller-contract-tests"
+    ]
+    assert controller_contract["tests"] == package.CONTROLLER_CONTRACT_TESTS
+    assert controller_contract["covered_by"] in final_gate["commands"]
+    controller_rows = [row for row in rows if row["requirement_id"] == "P1.5"]
+    assert {
+        (row["source_kind"], row["source_name"]) for row in controller_rows
+    } == {
+        ("evidence", "p2_causal"),
+        ("execution-audit", "p2_causal_parallel_equivalence"),
+        ("verification-contract", "p1-controller-contract-tests"),
+    }
 
     incomplete = json.loads(json.dumps(traceability))
     incomplete["requirements"].pop()

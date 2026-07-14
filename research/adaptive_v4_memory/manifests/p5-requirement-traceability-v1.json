@@ -20,6 +20,16 @@
       "github_actions_passed": false,
       "github_actions_required_for_completion": false,
       "interpretation": "The five digest-bound local release checks on the final clean source are mandatory. GitHub Actions remains disabled by user request, is outside the completion gate, and is never classified as passed."
+    },
+    "p1-controller-contract-tests": {
+      "timing": "within-final-local-release-gate",
+      "covered_by": ".venv/bin/pytest -q",
+      "tests": {
+        "deterministic_replay": "tests/test_causal_memory_controller.py::test_same_token_controller_is_causal_bounded_and_deterministic",
+        "cache_lifecycle_and_physical_tier_budget": "tests/test_causal_memory_controller.py::test_same_token_cache_persistence_and_lifecycle",
+        "dense_recovery": "tests/test_causal_memory_controller.py::test_same_token_controller_dense_fallback_and_incomplete_group_guard"
+      },
+      "interpretation": "The final full pytest run must collect and pass the exact same-token controller tests for serialized deterministic replay, cache save/load/crop/batch lifecycle with physical tier bounds, and dense fallback recovery."
     }
   },
   "requirements": [
@@ -92,9 +102,8 @@
       "requirement": "Verify deterministic replay, cache lifecycle, physical tier budget, and dense recovery contracts.",
       "sources": [
         {"kind": "evidence", "name": "p2_causal"},
-        {"kind": "execution-audit", "name": "p2_core_parallel_equivalence"},
         {"kind": "execution-audit", "name": "p2_causal_parallel_equivalence"},
-        {"kind": "verification-contract", "name": "final-local-release-gate"}
+        {"kind": "verification-contract", "name": "p1-controller-contract-tests"}
       ]
     },
     {
