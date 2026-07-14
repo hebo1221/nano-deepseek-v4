@@ -1,7 +1,15 @@
 {
   "schema_version": 1,
   "experiment_id": "p3-qwen3-4b-safety-stress-v1",
-  "status": "frozen_before_execution",
+  "status": "amended_and_frozen_before_execution",
+  "amendments": [
+    {
+      "date": "2026-07-15",
+      "timing": "before any synthetic-safety prompt generation, model prediction, or result cell existed",
+      "change": "require the terminal nine-seed confirmatory causal audit in addition to the five-seed primary P2 gate",
+      "reason": "prevent direct safety-runner invocation from bypassing the frozen confirmatory-first P3 execution order"
+    }
+  ],
   "evidence_tier": "supplemental-synthetic-safety-transfer-on-compatible-model",
   "model": {
     "repo_id": "Qwen/Qwen3-4B-Instruct-2507",

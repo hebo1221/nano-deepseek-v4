@@ -17,6 +17,11 @@
       "date": "2026-07-14",
       "change": "freeze the generation seed at 9171402 and IFEval paired bootstrap seed at 9171403, and require raw-artifact plus derived-statistic revalidation in the suite audit",
       "reason": "close a preregistration and evidence-chain omission before any natural-safety dataset acquisition, scoring, or generation had run"
+    },
+    {
+      "date": "2026-07-15",
+      "change": "require the terminal nine-seed confirmatory causal audit before natural-safety asset acquisition, scoring setup, or generation",
+      "reason": "align the executable gate with the frozen confirmatory-first watcher before any natural-safety dataset or outcome existed"
     }
   ],
   "evidence_tier": "official-and-derived-natural-safety-transfer-on-compatible-model",

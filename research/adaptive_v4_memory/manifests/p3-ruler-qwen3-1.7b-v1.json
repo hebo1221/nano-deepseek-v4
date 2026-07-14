@@ -26,6 +26,12 @@
       "timing": "before any RULER model prediction or baseline outcome inspection",
       "change": "require both evaluator and press modules to import from the pinned KVPress checkout and record their resolved paths and SHA-256 digests",
       "reason": "a pre-execution import audit found that the evaluator resolved from the checkout while the press package resolved from site-packages; zero result cells existed"
+    },
+    {
+      "date": "2026-07-15",
+      "timing": "before any complete RULER dataset manifest, baseline selection, model prediction, or result cell existed",
+      "change": "require the terminal nine-seed confirmatory causal audit in the common P3 execution gate",
+      "reason": "the watcher already imposed this order; executable enforcement prevents direct-runner bypass without changing any RULER task, arm, sample, or statistic"
     }
   ],
   "sequence_gate": {

@@ -33,6 +33,11 @@
       "date": "2026-07-14",
       "change": "require every natural and safety runner to import evaluator and press modules from the pinned KVPress checkout and record the resolved module and registry SHA-256 digests",
       "reason": "a pre-execution import audit found a site-packages press import despite the pinned checkout; no P3 prediction or baseline outcome existed"
+    },
+    {
+      "date": "2026-07-15",
+      "change": "require the terminal nine-seed confirmatory causal audit before benchmark payload acquisition, baseline selection, dataset generation, or prediction",
+      "reason": "the common executable gate previously accepted the five-seed primary cohort alone even though the frozen watcher placed the natural suite after confirmatory P2; no natural benchmark outcome existed"
     }
   ],
   "protocol": "research/adaptive_v4_memory/paper_grade_protocol.md",

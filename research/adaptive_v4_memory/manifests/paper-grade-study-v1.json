@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "experiment_id": "adaptive-v4-memory-paper-grade-v1",
-  "protocol_version": "2.1",
+  "protocol_version": "2.2",
   "frozen_date": "2026-07-14",
   "amendments": [
     {
@@ -27,6 +27,12 @@
       "timing": "before any primary or extension causal-factorial held-out shard or causal outcome existed; P2 core execution was in progress and only liveness, shard-count, and provenance metadata had been inspected",
       "change": "disable outcome-dependent controller early stopping and require complete five-seed primary plus four-seed extension execution on both S55 and S151",
       "reason": "the old first-scale shortcut contradicted the preregistered central requirement that calibrated+pins versus fixed+pins reproduce across five seeds and two scales; full completion increases computation and prevents outcome-selected scale or arm coverage"
+    },
+    {
+      "date": "2026-07-15",
+      "timing": "before any P3 benchmark dataset acquisition beyond the explicitly permitted immutable prefetch, before any P3 model prediction or result cell, and while P2 core execution was still in progress",
+      "change": "require the terminal nine-seed confirmatory causal audit, in addition to the frozen five-seed primary core and causal audits, before every P3 dataset-generation, baseline-selection, natural-language, or safety execution path",
+      "reason": "the watcher already sequenced P3 after the confirmatory extension, but the common P3 gate accepted only the primary cohort; binding the confirmatory audit in the executable gate prevents manual early execution and outcome-dependent evidence ordering"
     }
   ],
   "protocol": "research/adaptive_v4_memory/paper_grade_protocol.md",

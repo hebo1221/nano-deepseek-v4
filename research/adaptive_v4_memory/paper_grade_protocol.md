@@ -1,6 +1,6 @@
 # Paper-grade expansion protocol
 
-Protocol version: 2.1
+Protocol version: 2.2
 Frozen: 2026-07-14  
 Amended: 2026-07-15, before any causal-factorial held-out shard
 Status: active; P2 synthetic core runs first, followed by causal ablations,
@@ -90,6 +90,16 @@ computation, resolves the conflict between the old first-scale shortcut and the
 central two-scale criterion, and does not change arms, examples, thresholds, or
 success criteria. At amendment time, P2 core execution was still in progress and
 only liveness, shard-count, and provenance metadata had been inspected.
+
+Version 2.2 closes a pre-execution sequence-gate gap without changing any P2
+arm, sample, threshold, or outcome. Every P3 dataset-generation,
+baseline-selection, natural-language, and safety path now requires both the
+terminal five-seed primary causal audit and the terminal nine-seed confirmatory
+causal audit. Immutable model and public-code prefetch remains the only allowed
+pre-gate action. The watcher already used this order, but the common executable
+gate previously accepted the primary cohort alone. No P3 model prediction,
+result cell, or benchmark dataset acquisition beyond the recorded immutable
+prefetch existed when this amendment was frozen.
 
 ## 1. Primary questions
 

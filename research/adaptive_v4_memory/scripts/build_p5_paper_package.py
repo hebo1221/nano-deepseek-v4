@@ -927,8 +927,9 @@ def _validate_boundary_manifest(name: str, path: Path) -> dict[str, Any]:
         early_stop = payload.get("controller_early_stop", {})
         gate = payload.get("primary_causal_gate", {})
         extension = payload.get("confirmatory_seed_extension", {})
+        amendments = payload.get("amendments", [])
         _require(
-            payload.get("protocol_version") == "2.1"
+            payload.get("protocol_version") == "2.2"
             and payload.get("scales") == ["s55", "s151"]
             and payload.get("training_seeds")
             == [6071401, 6071402, 6071403, 6071404, 6071405]
@@ -940,6 +941,19 @@ def _validate_boundary_manifest(name: str, path: Path) -> dict[str, Any]:
             and payload.get("context_lengths") == [80, 128, 256, 512, 1024]
             and payload.get("minimum_examples_per_seed_scale_family") == 1_000,
             "Paper-grade primary matrix boundary drifted.",
+        )
+        _require(
+            isinstance(amendments, list)
+            and any(
+                isinstance(amendment, dict)
+                and amendment.get("date") == "2026-07-15"
+                and "terminal nine-seed confirmatory causal audit"
+                in amendment.get("change", "")
+                and "before any P3 model prediction"
+                in amendment.get("timing", "")
+                for amendment in amendments
+            ),
+            "Paper-grade P3 sequence-gate amendment drifted.",
         )
         _require(
             payload.get("required_ablations")
@@ -1164,12 +1178,20 @@ def _validate_boundary_manifest(name: str, path: Path) -> dict[str, Any]:
             "P3 cross-family matrix or claim boundary drifted.",
         )
     elif name == "safety_stress":
+        amendments = payload.get("amendments", [])
         model = payload.get("model", {})
         sequence = payload.get("sequence_gate", {})
         prefix = payload.get("protected_prefix_contract", {})
         scoring = payload.get("scoring", {})
         _require(
-            payload.get("status") == "frozen_before_execution"
+            payload.get("status") == "amended_and_frozen_before_execution"
+            and isinstance(amendments, list)
+            and len(amendments) == 1
+            and amendments[0].get("date") == "2026-07-15"
+            and "before any synthetic-safety prompt generation"
+            in amendments[0].get("timing", "")
+            and "terminal nine-seed confirmatory causal audit"
+            in amendments[0].get("change", "")
             and model.get("repo_id") == "Qwen/Qwen3-4B-Instruct-2507"
             and model.get("revision") == "cdbee75f17c01a7cc42f958dc650907174af0554"
             and payload.get("context_targets_tokens") == [8192, 32768, 131072]
@@ -1245,7 +1267,12 @@ def _validate_boundary_manifest(name: str, path: Path) -> dict[str, Any]:
         _require(
             payload.get("status") == "amended_and_frozen_before_execution"
             and isinstance(amendments, list)
-            and len(amendments) == 4,
+            and len(amendments) == 5
+            and amendments[-1].get("date") == "2026-07-15"
+            and "before any complete RULER dataset manifest"
+            in amendments[-1].get("timing", "")
+            and "terminal nine-seed confirmatory causal audit"
+            in amendments[-1].get("change", ""),
             "P3 RULER pre-execution amendment record drifted.",
         )
         _require(
