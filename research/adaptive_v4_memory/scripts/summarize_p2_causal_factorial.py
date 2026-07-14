@@ -81,6 +81,22 @@ REQUIRED_ABLATION_FACTORS = [
 ]
 
 
+def verify_completion_contract(design_manifest: dict[str, Any]) -> None:
+    completion = design_manifest.get("completion_contract", {})
+    _require(
+        completion.get("outcome_dependent_early_stopping") is False
+        and completion.get("required_scales") == ["s55", "s151"]
+        and completion.get("required_primary_training_seeds_per_scale")
+        == len(shard.TRAINING_SEEDS)
+        and completion.get("required_primary_shards") == EXPECTED_SHARDS
+        and completion.get("required_extension_training_seeds_per_scale") == 4
+        and completion.get("required_extension_shards") == 7_200
+        and completion.get("all_registered_arms_complete_every_cell") is True
+        and completion.get("failed_arms_remain_reportable") is True,
+        "Outcome-independent causal completion contract drifted.",
+    )
+
+
 def sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -822,6 +838,7 @@ def main() -> None:
         matrix.get("prerequisites", {}).get("design"), "causal design manifest"
     )
     design_manifest = json.loads(design_manifest_path.read_text())
+    verify_completion_contract(design_manifest)
     registered_component_contrasts = design_manifest.get("component_contrasts", {})
     _require(
         {

@@ -5,6 +5,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 SCRIPTS = Path(__file__).resolve().parents[1] / "research/adaptive_v4_memory/scripts"
 sys.path.insert(0, str(SCRIPTS))
 
@@ -81,6 +83,11 @@ def test_manifest_matches_implemented_arms_and_strict_budget_scale_gate() -> Non
     assert completion["required_extension_shards"] == 7_200
     assert completion["all_registered_arms_complete_every_cell"] is True
     assert completion["failed_arms_remain_reportable"] is True
+    summary.verify_completion_contract(manifest)
+
+    completion["outcome_dependent_early_stopping"] = True
+    with pytest.raises(ValueError, match="completion contract drifted"):
+        summary.verify_completion_contract(manifest)
 
 
 def test_arm_builder_holds_pins_and_total_quota_constant_for_central_contrast() -> None:
