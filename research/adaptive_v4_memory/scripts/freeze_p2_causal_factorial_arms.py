@@ -4,7 +4,7 @@ import argparse
 import hashlib
 import json
 import subprocess
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Any, Literal
 
@@ -150,6 +150,12 @@ def build_arm_configs(
         raise ValueError("The calibrated total cannot preserve one fixed block per layer.")
     uniform_low = tuple((layer, uniform_low_value) for layer, _ in calibrated)
     uniform_high = tuple((layer, uniform_low_value + 1) for layer, _ in calibrated)
+    uniform_high_total = sum(value for _, value in uniform_high)
+    fixed_signal = replace(
+        signal,
+        global_block_budget=max(signal.global_block_budget, uniform_high_total),
+        dense_fallback_block_budget=max(signal.dense_fallback_block_budget, uniform_high_total),
+    )
     digest = str(quota["calibration_digest"])
     shuffled, shuffle_offset, structurally_identical = shuffled_layer_budgets(calibrated, digest)
     quota_sources = {
@@ -158,10 +164,13 @@ def build_arm_configs(
     }
 
     def make_config(
-        arm: CausalArmSpec, layer_budgets: tuple[tuple[int, int], ...]
+        arm: CausalArmSpec,
+        layer_budgets: tuple[tuple[int, int], ...],
+        *,
+        signal_config: TrainingFreeControllerConfig = signal,
     ) -> SameTokenControllerConfig:
         return SameTokenControllerConfig(
-            signal=signal,
+            signal=signal_config,
             layer_budgets=layer_budgets,
             dense_layer_budgets=layer_budgets,
             enable_score_concentration=arm.score_concentration,
@@ -175,11 +184,14 @@ def build_arm_configs(
     configs: dict[str, BuiltCausalArm] = {}
     for arm in (*PRIMARY_ARMS, *COMPONENT_ARMS):
         if arm.quota_source == "uniform":
-            low = make_config(arm, uniform_low)
+            low = make_config(arm, uniform_low, signal_config=fixed_signal)
             if fixed_high_numerator:
                 configs[arm.name] = BuiltCausalArm(
                     spec=arm,
-                    configs=(low, make_config(arm, uniform_high)),
+                    configs=(
+                        low,
+                        make_config(arm, uniform_high, signal_config=fixed_signal),
+                    ),
                     mixture_high_numerator=fixed_high_numerator,
                     mixture_denominator=len(calibrated),
                 )
@@ -198,6 +210,10 @@ def build_arm_configs(
         "fixed_uniform_high_layer_budgets": (uniform_high if fixed_high_numerator else uniform_low),
         "fixed_mixture_high_numerator": fixed_high_numerator,
         "fixed_mixture_denominator": len(calibrated),
+        "fixed_controller_validation_ceiling": fixed_signal.global_block_budget,
+        "fixed_controller_validation_ceiling_adjusted": (
+            fixed_signal.global_block_budget != signal.global_block_budget
+        ),
         "calibrated_layer_budgets": calibrated,
         "shuffled_layer_budgets": shuffled,
         "shuffle_offset": shuffle_offset,
