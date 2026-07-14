@@ -1,0 +1,175 @@
+{
+  "schema_version": 1,
+  "experiment_id": "p2-causal-factorial-v1",
+  "status": "frozen_before_execution",
+  "frozen_at": "2026-07-14T15:41:48+09:00",
+  "execution_prerequisite": "p2-core-quality-matrix has exactly 4500 validated shards",
+  "scales": ["s55", "s151"],
+  "training_seeds": [6071401, 6071402, 6071403, 6071404, 6071405],
+  "evaluation_seeds": [8071401, 8071402, 8071403, 8071404, 8071405],
+  "calibration_seeds": [7071401, 7071402, 7071403, 7071404, 7071405],
+  "families": [
+    "single-remote-retrieval",
+    "multiple-independent-needles",
+    "associative-recall",
+    "multi-turn-query-shift",
+    "dense-global-aggregation",
+    "irrelevant-context-local-only",
+    "instruction-persistence",
+    "adversarial-lexical-distractors",
+    "long-generation-changing-evidence"
+  ],
+  "contexts": [80, 128, 256, 512, 1024],
+  "examples_per_seed_scale_family": 1000,
+  "examples_per_context_seed_scale_family": 200,
+  "primary_budget_points": ["2x", "4x"],
+  "one_x_action": "run identity/equivalence audit only because calibrated quotas are preregistered uniform at 1x",
+  "paired_unit": "complete conversation",
+  "primary_arms": {
+    "fixed": {
+      "quota_source": "calibration-frozen-uniform-low-high-mixture",
+      "score_concentration": false,
+      "temporal_reuse": false,
+      "cross_layer_signal": false,
+      "refresh_reuse": false,
+      "protected_pins": false,
+      "dense_fallback": false
+    },
+    "fixed+pins": {
+      "quota_source": "calibration-frozen-uniform-low-high-mixture",
+      "score_concentration": false,
+      "temporal_reuse": false,
+      "cross_layer_signal": false,
+      "refresh_reuse": false,
+      "protected_pins": true,
+      "dense_fallback": false
+    },
+    "calibrated-no-pins": {
+      "quota_source": "calibrated",
+      "score_concentration": false,
+      "temporal_reuse": false,
+      "cross_layer_signal": false,
+      "refresh_reuse": false,
+      "protected_pins": false,
+      "dense_fallback": false
+    },
+    "calibrated+pins": {
+      "quota_source": "calibrated",
+      "score_concentration": false,
+      "temporal_reuse": false,
+      "cross_layer_signal": false,
+      "refresh_reuse": false,
+      "protected_pins": true,
+      "dense_fallback": false
+    },
+    "shuffled-quota": {
+      "quota_source": "calibration-digest-derived-cyclic-layer-shuffle",
+      "score_concentration": false,
+      "temporal_reuse": false,
+      "cross_layer_signal": false,
+      "refresh_reuse": false,
+      "protected_pins": false,
+      "dense_fallback": false
+    },
+    "shuffled-quota+pins": {
+      "quota_source": "calibration-digest-derived-cyclic-layer-shuffle",
+      "score_concentration": false,
+      "temporal_reuse": false,
+      "cross_layer_signal": false,
+      "refresh_reuse": false,
+      "protected_pins": true,
+      "dense_fallback": false
+    },
+    "local-no-pins": {
+      "quota_source": "calibrated",
+      "score_concentration": true,
+      "temporal_reuse": true,
+      "cross_layer_signal": false,
+      "refresh_reuse": true,
+      "protected_pins": false,
+      "dense_fallback": false
+    },
+    "local+pins": {
+      "quota_source": "calibrated",
+      "score_concentration": true,
+      "temporal_reuse": true,
+      "cross_layer_signal": false,
+      "refresh_reuse": true,
+      "protected_pins": true,
+      "dense_fallback": false
+    },
+    "hierarchical-no-pins": {
+      "quota_source": "calibrated",
+      "score_concentration": true,
+      "temporal_reuse": true,
+      "cross_layer_signal": true,
+      "refresh_reuse": true,
+      "protected_pins": false,
+      "dense_fallback": false
+    },
+    "hierarchical+pins": {
+      "quota_source": "calibrated",
+      "score_concentration": true,
+      "temporal_reuse": true,
+      "cross_layer_signal": true,
+      "refresh_reuse": true,
+      "protected_pins": true,
+      "dense_fallback": false
+    }
+  },
+  "component_contrasts": {
+    "score_concentration": ["hierarchical+pins", "hierarchical+pins-no-score"],
+    "temporal_reuse": ["hierarchical+pins", "hierarchical+pins-no-temporal"],
+    "cross_layer_prior": ["hierarchical+pins", "local+pins"],
+    "refresh_reuse": ["hierarchical+pins", "hierarchical+pins-no-refresh"],
+    "protected_pins": ["hierarchical+pins", "hierarchical-no-pins"],
+    "dense_fallback": ["hierarchical+pins+fallback", "hierarchical+pins"]
+  },
+  "shuffle_rule": {
+    "algorithm": "cyclically rotate calibrated quota values over sorted eligible layer ids",
+    "initial_offset": "1 + int(calibration_digest[0:8], 16) mod (layer_count - 1)",
+    "collision_action": "scan remaining non-zero offsets for the first changed mapping",
+    "uniform_quota_action": "retain the identical mapping and label the cell structurally-identical; do not count it as layer-identity evidence"
+  },
+  "memory_matching": {
+    "primary_candidate": "calibrated+pins",
+    "primary_comparator": "fixed+pins",
+    "metric": "mean measured hot_resident_bytes on the sequential physical-tier path",
+    "maximum_relative_difference": 0.01,
+    "retuning_data": "707-series calibration conversations only",
+    "fixed_initial_match": "mix uniform floor-k and ceil-k batches with a Bresenham schedule so mean configured blocks equal the calibrated quota total",
+    "fixed_mixture_unit": "paired evaluation batch; fixed and fixed+pins use the identical schedule",
+    "held_out_verification": "repeat physical measurement on all evaluated conversations",
+    "posthoc_accuracy_interpolation": false,
+    "failure_action": "retune the fixed low/high mixture on calibration physical traces; if held-out bytes still miss 1 percent, withhold the central causal claim for that budget/scale cell"
+  },
+  "execution": {
+    "workload_seed_formula": "evaluation_seed + family_index*10000000 + context*1000 + replicate",
+    "examples_per_shard": 20,
+    "replicates_per_context": 10,
+    "batch_size": 4,
+    "quality_chunk_size_by_scale": {"s55": 2, "s151": 1},
+    "quality_path_requirement": "each factorial arm must pass exact sequential physical-tier prediction equivalence before chunked quality execution",
+    "physical_path_arms": ["fixed+pins", "calibrated+pins"],
+    "execution_order": "deterministic rotation of all arms within every paired batch",
+    "arm_builder": "research/adaptive_v4_memory/scripts/freeze_p2_causal_factorial_arms.py",
+    "raw_output_root": "artifacts/adaptive_v4_memory/paper_grade/p2_causal_factorial"
+  },
+  "statistics": {
+    "bootstrap_resamples": 10000,
+    "confidence_level": 0.95,
+    "paired_randomization_resamples": 10000,
+    "family_correction": "Holm-Bonferroni separately within each scale and budget",
+    "required_slices": ["scale", "budget", "training-seed", "family", "context"]
+  },
+  "central_gate": {
+    "contrast": "calibrated+pins - fixed+pins",
+    "required_budget_points": ["2x", "4x"],
+    "pooled_effect": "strictly positive at every required budget and both scales",
+    "corrected_cluster_bootstrap_lower_bound": "strictly positive at every required budget and both scales",
+    "seed_effects": "all five strictly positive at each required budget and scale",
+    "memory_match": "within 1 percent at every required budget and scale",
+    "failure_interpretation": "failed-or-bounded causal claim"
+  },
+  "claim_boundary": "This factorial separates protected retention, calibrated layer allocation, local adaptation, and causal cross-layer coordination on Tier-S synthetic workloads only."
+}
