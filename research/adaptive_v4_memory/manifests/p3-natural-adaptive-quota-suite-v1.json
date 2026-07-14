@@ -1,0 +1,112 @@
+{
+  "schema_version": 1,
+  "experiment_id": "p3-natural-adaptive-quota-suite-v1",
+  "status": "frozen_before_any_adaptive_suite_summary",
+  "frozen_date": "2026-07-15",
+  "role": "cross-benchmark replication audit for the Qwen3-4B initial causal layer-quota contrast",
+  "prerequisites": [
+    "terminal digest-bound adaptive-quota RULER audit",
+    "terminal digest-bound adaptive-quota SCBench audit",
+    "terminal digest-bound adaptive-quota LongBench-v2 audit",
+    "terminal digest-bound adaptive-quota MRCR audit"
+  ],
+  "model": {
+    "repo_id": "Qwen/Qwen3-4B-Instruct-2507",
+    "revision": "cdbee75f17c01a7cc42f958dc650907174af0554",
+    "snapshot_digest_set_sha256": "c01e398afbd27d139b203e4b4b13d34dedec6d0a2db521083f55c50522c76e35"
+  },
+  "arms": [
+    "fixed+pins",
+    "natural-adaptive-quota+pins"
+  ],
+  "components": {
+    "RULER": {
+      "manifest": "research/adaptive_v4_memory/manifests/p3-natural-adaptive-quota-ruler-v1.json",
+      "manifest_sha256": "0b2684aa8960d5c89f7c50980fee5431351d1eabeb353e7b0cb1792049db7dc3",
+      "summary": "artifacts/adaptive_v4_memory/paper_grade/p3/natural-adaptive-quota/ruler-qwen3-4b.summary.json",
+      "summary_experiment_id": "p3-natural-adaptive-quota-ruler-audit-v1",
+      "predictions_per_arm": 32500,
+      "paired_predictions_total": 65000,
+      "required_gate_checks": [
+        "failure_rate_increase",
+        "all_successful_prefills_quota_audited",
+        "global_kept_token_relative_error",
+        "hot_resident_byte_relative_difference"
+      ]
+    },
+    "SCBench": {
+      "manifest": "research/adaptive_v4_memory/manifests/p3-natural-adaptive-quota-scbench-v1.json",
+      "manifest_sha256": "48615667298306d7619792bc5b739c906f7c703bf1be364cb96b742c5c8f2cbf",
+      "summary": "artifacts/adaptive_v4_memory/paper_grade/p3/natural-adaptive-quota/scbench-qwen3-4b.summary.json",
+      "summary_experiment_id": "p3-natural-adaptive-quota-scbench-audit-v1",
+      "predictions_per_arm": 10286,
+      "paired_predictions_total": 20572,
+      "required_gate_checks": [
+        "failure_rate_increase",
+        "initial_global_kept_token_relative_error",
+        "initial_hot_resident_byte_relative_difference",
+        "at_least_one_jointly_successful_prefill"
+      ]
+    },
+    "LongBench-v2": {
+      "manifest": "research/adaptive_v4_memory/manifests/p3-natural-adaptive-quota-longbench-v2-v1.json",
+      "manifest_sha256": "2915f286a29d57b986881ba0850afec54b2f7181d03645ebbed28a92190699a7",
+      "summary": "artifacts/adaptive_v4_memory/paper_grade/p3/natural-adaptive-quota/longbench-v2-qwen3-4b.summary.json",
+      "summary_experiment_id": "p3-natural-adaptive-quota-longbench-v2-audit-v1",
+      "predictions_per_arm": 503,
+      "paired_predictions_total": 1006,
+      "required_gate_checks": [
+        "failure_rate_increase",
+        "initial_global_kept_token_relative_error",
+        "initial_hot_resident_byte_relative_difference",
+        "at_least_one_jointly_successful_prefill"
+      ]
+    },
+    "MRCR": {
+      "manifest": "research/adaptive_v4_memory/manifests/p3-natural-adaptive-quota-mrcr-v1.json",
+      "manifest_sha256": "3b138d236f0c7243963cdc4a90fa44a3d567f35996bf09cf1a3d0b15bac0dd07",
+      "summary": "artifacts/adaptive_v4_memory/paper_grade/p3/natural-adaptive-quota/mrcr-qwen3-4b.summary.json",
+      "summary_experiment_id": "p3-natural-adaptive-quota-mrcr-audit-v1",
+      "predictions_per_arm": 1500,
+      "paired_predictions_total": 3000,
+      "required_gate_checks": [
+        "failure_rate_increase",
+        "initial_global_kept_token_relative_error",
+        "initial_hot_resident_byte_relative_difference",
+        "at_least_one_jointly_successful_prefill"
+      ]
+    }
+  },
+  "coverage": {
+    "benchmarks": 4,
+    "predictions_per_arm": 44789,
+    "paired_predictions_total": 89578,
+    "context_range_tokens": [8192, 131072],
+    "excluded_from_adaptive_suite": {
+      "LongMemEval": "official GPT-4o judge unavailable; never replace the official metric with an auxiliary proxy"
+    }
+  },
+  "statistics": {
+    "primary_unit": "benchmark-level preregistered confirmation decision and signed overall paired effect",
+    "no_cross_benchmark_score_pooling": true,
+    "no_cross_benchmark_p_value_pooling": true,
+    "component_confidence_intervals_preserved": true,
+    "component_multiplicity_corrections_preserved": true,
+    "suite_gate_uses_component_p_values": false,
+    "outcome_dependent_benchmark_selection": false
+  },
+  "confirmation_gate": {
+    "all_required": true,
+    "required_terminal_components": 4,
+    "minimum_component_confirmation_gates_passed": 3,
+    "minimum_nonnegative_overall_effects": 4,
+    "all_required_physical_and_failure_checks_must_pass": true,
+    "all_components_same_model_revision": true,
+    "all_components_same_arm_pair": true,
+    "all_components_same_initial_global_token_budget": true
+  },
+  "outputs": {
+    "summary": "artifacts/adaptive_v4_memory/paper_grade/p3/natural-adaptive-quota/suite.summary.json"
+  },
+  "claim_boundary": "A passing suite gate supports broad but bounded replication of one initial-prefill causal layer-quota heuristic across four frozen Qwen3-4B natural-language cohorts. It does not pool incomparable benchmark scores, replace the unavailable official LongMemEval judge, establish continuous adaptive reallocation, prove cross-model transfer, cover dynamic serving, or provide official DeepSeek-V4 evidence."
+}
