@@ -18,6 +18,7 @@ from p3_natural_metrics import (  # noqa: E402
     score_longbench_v2,
     score_mrcr,
 )
+from summarize_p3_natural_benchmark import audit_arm  # noqa: E402
 from summarize_p3_natural_suite import BENCHMARK_IDS, summarize  # noqa: E402
 from validate_p3_natural_suite_manifest import validate_manifest  # noqa: E402
 
@@ -235,6 +236,101 @@ def test_natural_suite_audit_rejects_unaccounted_failure(tmp_path: Path) -> None
 
     with pytest.raises(ValueError, match="do not close"):
         summarize(manifest, paths)
+
+
+def _raw_arm_cell(tmp_path: Path) -> tuple[Path, Path, Path]:
+    causal = tmp_path / "causal.json"
+    inventory = tmp_path / "inventory.json"
+    causal.write_text("{}")
+    inventory.write_text("{}")
+    raw = tmp_path / "records.jsonl"
+    records = [
+        {
+            "example_id": "example-0",
+            "benchmark": "LongBench-v2",
+            "arm": "native-dense",
+            "status": "scored",
+            "exact_input_tokens": 8192,
+            "generation_reserve_tokens": 128,
+            "raw_prompt_sha256": "2" * 64,
+            "latency_ms": 10.0,
+            "peak_hbm_bytes": 100,
+            "score": 1.0,
+            "failure_type": None,
+        },
+        {
+            "example_id": "example-1",
+            "benchmark": "LongBench-v2",
+            "arm": "native-dense",
+            "status": "failure",
+            "exact_input_tokens": 300000,
+            "generation_reserve_tokens": 128,
+            "raw_prompt_sha256": "3" * 64,
+            "latency_ms": 0.0,
+            "peak_hbm_bytes": 0,
+            "score": None,
+            "failure_type": "unsupported-context",
+        },
+    ]
+    raw.write_text("".join(json.dumps(row) + "\n" for row in records))
+    cell = tmp_path / "cell.json"
+    cell.write_text(
+        json.dumps(
+            {
+                "experiment_id": "p3-natural-benchmark-arm-cell-v1",
+                "benchmark": "LongBench-v2",
+                "arm": "native-dense",
+                "status": "terminal",
+                "source": {"dirty": False},
+                "experiment_manifest": {"sha256": "4" * 64},
+                "raw_records": {"path": str(raw), "sha256": _digest(raw)},
+                "causal_gate": {"path": str(causal), "sha256": _digest(causal)},
+                "dataset_inventory": {
+                    "path": str(inventory),
+                    "sha256": _digest(inventory),
+                },
+                "model_snapshot_digest_set_sha256": "5" * 64,
+            }
+        )
+    )
+    return cell, raw, causal
+
+
+def test_natural_arm_audit_closes_scored_and_failed_records(tmp_path: Path) -> None:
+    cell, _raw, _causal = _raw_arm_cell(tmp_path)
+
+    result, _dependencies = audit_arm(
+        benchmark="LongBench-v2",
+        arm="native-dense",
+        artifact_path=cell,
+        expected_examples=2,
+        manifest_digest="4" * 64,
+        allowed_failures={"unsupported-context"},
+    )
+
+    assert result["scored_examples"] == 1
+    assert result["failures_by_type"] == {"unsupported-context": 1}
+    assert result["mean_score_over_scored"] == 1.0
+
+
+def test_natural_arm_audit_rejects_duplicate_examples(tmp_path: Path) -> None:
+    cell, raw, _causal = _raw_arm_cell(tmp_path)
+    records = [json.loads(line) for line in raw.read_text().splitlines()]
+    records[1]["example_id"] = records[0]["example_id"]
+    raw.write_text("".join(json.dumps(row) + "\n" for row in records))
+    payload = json.loads(cell.read_text())
+    payload["raw_records"]["sha256"] = _digest(raw)
+    cell.write_text(json.dumps(payload))
+
+    with pytest.raises(ValueError, match="Duplicate natural example id"):
+        audit_arm(
+            benchmark="LongBench-v2",
+            arm="native-dense",
+            artifact_path=cell,
+            expected_examples=2,
+            manifest_digest="4" * 64,
+            allowed_failures={"unsupported-context"},
+        )
 
 
 def test_natural_suite_audit_rejects_wrong_model_snapshot(tmp_path: Path) -> None:
