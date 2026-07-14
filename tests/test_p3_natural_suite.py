@@ -100,6 +100,25 @@ def test_natural_suite_rejects_task_subselection_and_silent_truncation() -> None
         validate_manifest(missing_fixed)
 
 
+def test_natural_suite_rejects_frozen_license_and_ruler_digest_drift() -> None:
+    manifest = _manifest()
+
+    wrong_ruler_digest = deepcopy(manifest)
+    wrong_ruler_digest["benchmarks"]["RULER"]["scorer"]["sha256"] = "0" * 64
+    with pytest.raises(ValueError, match="RULER revision, license, or scorer"):
+        validate_manifest(wrong_ruler_digest)
+
+    wrong_dataset_license = deepcopy(manifest)
+    wrong_dataset_license["benchmarks"]["LongBench-v2"]["dataset"]["license"] = "unknown"
+    with pytest.raises(ValueError, match="LongBench-v2 dataset license drifted"):
+        validate_manifest(wrong_dataset_license)
+
+    wrong_model_license = deepcopy(manifest)
+    wrong_model_license["model"]["license"] = "unknown"
+    with pytest.raises(ValueError, match="model license drifted"):
+        validate_manifest(wrong_model_license)
+
+
 def test_external_dsa_baselines_cannot_be_claimed_on_qwen() -> None:
     baselines = _manifest()["external_baselines"]
 

@@ -24,6 +24,7 @@ EXPECTED_SCBENCH_TASKS = (
 )
 EXPECTED_REVISIONS = {
     "model": "cdbee75f17c01a7cc42f958dc650907174af0554",
+    "RULER-code": "38da79d79519ef87aa46ae804f838e1eab7f86d7",
     "SCBench-data": "283310bb8c5ba6909dd9a6b1be087d2937f76f6d",
     "SCBench-code": "a4eb395f949ea39e871f9bc586d683390692c6be",
     "LongBench-v2-data": "2b48e494f2c7a2f0af81aae178e05c7e1dde0fe9",
@@ -33,6 +34,18 @@ EXPECTED_REVISIONS = {
     "MRCR-data": "f4c69fae7cf81f7ca26b9fee34b392a50f6b8a1d",
 }
 EXPECTED_MODEL_SNAPSHOT_SET = "67330e21c7b222ff647feee4fc4e037385d1d14f9d9d9ebbdf9343e87f5fa58f"
+EXPECTED_RULER_SCORER = "1df51402a394b1348f14d96e1fe87b1a4aff10f619f81f80f8840d8e0118fc9b"
+EXPECTED_LICENSES = {
+    "model": "apache-2.0",
+    "RULER-code": "apache-2.0",
+    "SCBench-data": "mit",
+    "SCBench-code": "mit",
+    "LongBench-v2-data": "apache-2.0",
+    "LongBench-v2-code": "mit",
+    "LongMemEval-data": "mit",
+    "LongMemEval-code": "mit",
+    "MRCR-data": "mit",
+}
 
 
 def _require_sha256(value: Any, label: str) -> None:
@@ -57,6 +70,8 @@ def validate_manifest(payload: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("Natural benchmark order drifted from the preregistration.")
     if payload["model"]["revision"] != EXPECTED_REVISIONS["model"]:
         raise ValueError("The 128K-compatible model revision drifted.")
+    if payload["model"].get("license") != EXPECTED_LICENSES["model"]:
+        raise ValueError("The 128K-compatible model license drifted.")
     snapshot_bytes = json.dumps(
         payload["model"]["snapshot_files_sha256"],
         sort_keys=True,
@@ -108,6 +123,12 @@ def validate_manifest(payload: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("Natural paired statistics or physical reporting contract drifted.")
 
     ruler = _benchmark(payload, "RULER")
+    if (
+        ruler.get("upstream_revision") != EXPECTED_REVISIONS["RULER-code"]
+        or ruler.get("license") != EXPECTED_LICENSES["RULER-code"]
+        or ruler.get("scorer", {}).get("sha256") != EXPECTED_RULER_SCORER
+    ):
+        raise ValueError("RULER revision, license, or scorer digest drifted.")
     if tuple(ruler["lengths_tokens"]) != EXPECTED_RULER_LENGTHS:
         raise ValueError("RULER must retain every preregistered 8K-128K length.")
     if ruler["samples_per_task"] != 500 or ruler["task_count"] != 13:
@@ -231,8 +252,26 @@ def validate_manifest(payload: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("MRCR execution or exact-token contract drifted.")
 
     all_data_files: list[dict[str, Any]] = []
-    for benchmark in (scbench, longbench, longmem, mrcr):
+    benchmark_contracts = {
+        "SCBench": scbench,
+        "LongBench-v2": longbench,
+        "LongMemEval": longmem,
+        "MRCR": mrcr,
+    }
+    for benchmark_name, benchmark in benchmark_contracts.items():
+        if benchmark["dataset"].get("license") != EXPECTED_LICENSES[
+            f"{benchmark_name}-data"
+        ]:
+            raise ValueError(f"{benchmark_name} dataset license drifted.")
+        _require_sha256(benchmark["dataset"]["card_sha256"], f"{benchmark_name} card")
         all_data_files.extend(benchmark["dataset"]["files"])
+        if "upstream_code" in benchmark:
+            upstream = benchmark["upstream_code"]
+            if upstream.get("license") != EXPECTED_LICENSES[f"{benchmark_name}-code"]:
+                raise ValueError(f"{benchmark_name} upstream code license drifted.")
+            _require_sha256(upstream["license_sha256"], f"{benchmark_name} license")
+            for path, digest in upstream["files_sha256"].items():
+                _require_sha256(digest, f"{benchmark_name} upstream file {path}")
     for entry in all_data_files:
         _require_sha256(entry["sha256"], entry["path"])
         if entry["bytes"] <= 0 or entry["rows"] <= 0:
