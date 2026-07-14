@@ -567,8 +567,6 @@ def test_natural_suite_audit_requires_all_examples_and_baselines(tmp_path: Path)
         _natural_safety_summary(tmp_path, manifest),
         dataset_inventory,
         source_inventory,
-        tmp_path / "inventory.json",
-        tmp_path / "source-inventory.json",
     )
 
     assert payload["audit"]["benchmarks_terminal"] == 5
@@ -610,8 +608,6 @@ def test_natural_suite_audit_rejects_unaccounted_failure(tmp_path: Path) -> None
             _natural_safety_summary(tmp_path, manifest),
             dataset_inventory,
             source_inventory,
-            tmp_path / "inventory.json",
-            tmp_path / "source-inventory.json",
         )
 
 
@@ -1028,8 +1024,6 @@ def test_natural_suite_audit_rejects_wrong_model_snapshot(tmp_path: Path) -> Non
             _natural_safety_summary(tmp_path, manifest),
             dataset_inventory,
             source_inventory,
-            tmp_path / "inventory.json",
-            tmp_path / "source-inventory.json",
         )
 
 
@@ -1065,8 +1059,6 @@ def test_natural_suite_audit_rejects_mixed_fixed_baseline_selection(
             _natural_safety_summary(tmp_path, manifest),
             dataset_inventory,
             source_inventory,
-            tmp_path / "inventory.json",
-            tmp_path / "source-inventory.json",
         )
 
 
@@ -1088,6 +1080,4 @@ def test_natural_suite_audit_rejects_incomplete_safety_pairing(tmp_path: Path) -
             _natural_safety_summary(tmp_path, manifest),
             dataset_inventory,
             source_inventory,
-            tmp_path / "inventory.json",
-            tmp_path / "source-inventory.json",
         )

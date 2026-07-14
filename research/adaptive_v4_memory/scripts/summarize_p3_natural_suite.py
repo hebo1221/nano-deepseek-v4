@@ -395,11 +395,107 @@ def audit_natural_safety(
     }
 
 
+def audit_provenance_inventories(
+    *,
+    manifest: dict[str, Any],
+    manifest_digest: str,
+    dataset_inventory_path: Path,
+    source_inventory_path: Path,
+) -> dict[str, Any]:
+    dataset_inventory = json.loads(dataset_inventory_path.read_text())
+    source_inventory = json.loads(source_inventory_path.read_text())
+    _require(
+        dataset_inventory.get("experiment_id") == "p3-natural-dataset-inventory-v1"
+        and dataset_inventory.get("source", {}).get("dirty") is False
+        and dataset_inventory.get("manifest", {}).get("sha256") == manifest_digest,
+        "Natural dataset provenance inventory is invalid.",
+    )
+    _require(
+        source_inventory.get("experiment_id") == "p3-natural-source-inventory-v1"
+        and source_inventory.get("status") == "verified"
+        and source_inventory.get("source", {}).get("dirty") is False
+        and source_inventory.get("manifest", {}).get("sha256") == manifest_digest,
+        "Natural upstream-source provenance inventory is invalid.",
+    )
+    expected_datasets = {"SCBench", "LongBench-v2", "LongMemEval", "MRCR"}
+    expected_sources = {"SCBench", "LongBench-v2", "LongMemEval"}
+    observed_datasets = dataset_inventory.get("benchmarks", {})
+    observed_sources = source_inventory.get("benchmarks", {})
+    _require(set(observed_datasets) == expected_datasets, "Dataset inventory coverage drifted.")
+    _require(set(observed_sources) == expected_sources, "Source inventory coverage drifted.")
+    for benchmark in sorted(expected_datasets):
+        expected = manifest["benchmarks"][benchmark]["dataset"]
+        observed = observed_datasets[benchmark]
+        _require(
+            observed.get("repo_id") == expected["repo_id"]
+            and observed.get("revision") == expected["revision"]
+            and observed.get("license") == expected["license"],
+            f"{benchmark} dataset license or revision drifted.",
+        )
+        observed_files = observed.get("files", [])
+        _require(
+            len(observed_files) == len(expected["files"]),
+            f"{benchmark} dataset file coverage drifted.",
+        )
+        for registered in expected["files"]:
+            matches = [
+                row
+                for row in observed_files
+                if Path(row.get("path", "")).as_posix().endswith(registered["path"])
+            ]
+            _require(
+                len(matches) == 1
+                and matches[0].get("bytes") == registered["bytes"]
+                and matches[0].get("sha256") == registered["sha256"]
+                and matches[0].get("rows") == registered["rows"],
+                f"{benchmark} dataset file provenance drifted: {registered['path']}",
+            )
+    for benchmark in sorted(expected_sources):
+        expected = manifest["benchmarks"][benchmark]["upstream_code"]
+        observed = observed_sources[benchmark]
+        _require(
+            observed.get("repository") == expected["repository"]
+            and observed.get("revision") == expected["revision"]
+            and observed.get("license") == expected["license"]
+            and observed.get("license_sha256") == expected["license_sha256"],
+            f"{benchmark} upstream source license or revision drifted.",
+        )
+        observed_files = {row.get("path"): row.get("sha256") for row in observed["files"]}
+        _require(
+            observed_files == expected["files_sha256"],
+            f"{benchmark} upstream source file provenance drifted.",
+        )
+    model = manifest["model"]
+    _require(
+        isinstance(model.get("revision"), str)
+        and len(model["revision"]) == 40
+        and model.get("license") == "apache-2.0"
+        and isinstance(model.get("snapshot_digest_set_sha256"), str),
+        "Natural model license or revision contract drifted.",
+    )
+    return {
+        "dataset_inventory": {
+            "path": str(dataset_inventory_path),
+            "sha256": sha256(dataset_inventory_path),
+            "benchmarks_verified": len(expected_datasets),
+        },
+        "source_inventory": {
+            "path": str(source_inventory_path),
+            "sha256": sha256(source_inventory_path),
+            "benchmarks_verified": len(expected_sources),
+        },
+        "model_license": model["license"],
+        "model_revision": model["revision"],
+    }
+
+
 def summarize(
     manifest_path: Path,
     summary_paths: dict[str, Path],
     safety_summary_path: Path,
     natural_safety_summary_path: Path,
+    dataset_inventory_path: Path,
+    source_inventory_path: Path,
 ) -> dict[str, Any]:
     manifest = json.loads(manifest_path.read_text())
     _require(
@@ -444,6 +540,16 @@ def summarize(
     )
     _require(len(model_digests) == 1, "Natural benchmarks used different model snapshots.")
     _require(len(ruler_dataset_digests) == 1, "RULER dataset manifest set is missing.")
+    provenance = audit_provenance_inventories(
+        manifest=manifest,
+        manifest_digest=manifest_digest,
+        dataset_inventory_path=dataset_inventory_path,
+        source_inventory_path=source_inventory_path,
+    )
+    _require(
+        provenance["dataset_inventory"]["sha256"] == next(iter(inventory_digests)),
+        "Natural benchmark cells do not bind the verified dataset inventory.",
+    )
     safety = audit_safety_stress(
         path=safety_summary_path,
         manifest=manifest,
@@ -486,6 +592,9 @@ def summarize(
             "all_failure_accounting_complete": True,
             "all_source_implementations_verified": True,
             "all_paired_quality_contrasts_verified": True,
+            "dataset_license_revision_inventory_verified": True,
+            "upstream_code_license_revision_inventory_verified": True,
+            "model_license_revision_manifest_verified": True,
             "safety_stress_terminal": True,
             "natural_safety_terminal": True,
             "benchmarks_terminal": len(benchmarks),
@@ -499,6 +608,7 @@ def summarize(
             "ruler_dataset_manifest_digest_set_sha256": next(iter(ruler_dataset_digests)),
         },
         "benchmarks": benchmarks,
+        "provenance": provenance,
         "supplemental_safety": safety,
         "supplemental_natural_safety": natural_safety,
         "claim_boundary": (
@@ -531,11 +641,15 @@ def main() -> None:
     natural_safety_summary_path = Path(
         manifest["suite_audit"]["natural_safety"]["summary"]
     )
+    dataset_inventory_path = Path(manifest["suite_audit"]["dataset_inventory"])
+    source_inventory_path = Path(manifest["suite_audit"]["source_inventory"])
     payload = summarize(
         args.manifest,
         summary_paths,
         safety_summary_path,
         natural_safety_summary_path,
+        dataset_inventory_path,
+        source_inventory_path,
     )
     commit = subprocess.run(
         ["git", "rev-parse", "HEAD"], check=True, capture_output=True, text=True
