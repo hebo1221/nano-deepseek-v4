@@ -1,0 +1,140 @@
+{
+  "schema_version": 1,
+  "experiment_id": "p3-cross-family-adaptive-quota-longbench-v2-v1",
+  "status": "frozen_before_any_phi_longbench_v2_prediction",
+  "frozen_date": "2026-07-15",
+  "role": "held-out model-family natural reasoning replication of the adaptive layer-quota contrast",
+  "prerequisites": [
+    "terminal digest-bound nine-seed P2 causal audit",
+    "terminal Phi-4-mini adaptive-quota RULER audit regardless of outcome",
+    "terminal Qwen3-4B adaptive-quota LongBench-v2 audit regardless of outcome",
+    "verified frozen LongBench-v2 dataset, prompt, scorer, Phi model, and Qwen-selected fixed baseline"
+  ],
+  "execution_policy": "run all 503 frozen examples under both arms; prerequisite outcomes never select, cancel, truncate, or reorder categories or examples",
+  "relationship_to_other_cohorts": {
+    "design": "Qwen3/Phi-4 by RULER/LongBench-v2 transfer grid",
+    "primary_natural_model_family": "Qwen3",
+    "transfer_model_family": "Phi-4",
+    "pooled_with_qwen_longbench_v2": false,
+    "pooled_with_phi_ruler": false,
+    "phi_specific_tuning_or_reselection_allowed": false
+  },
+  "model": {
+    "repo_id": "microsoft/Phi-4-mini-instruct",
+    "revision": "cfbefacb99257ffa30c83adab238a50856ac3083",
+    "license": "mit",
+    "architecture": "Phi3ForCausalLM",
+    "dtype": "bfloat16",
+    "num_hidden_layers": 32,
+    "maximum_supported_context_tokens": 131072,
+    "snapshot_digest_set_sha256": "102f70c901015c02c6157e947ffbe2e1aa5667c8b28a0b3df17f4bc269e9889c"
+  },
+  "benchmark": {
+    "name": "LongBench-v2",
+    "base_manifest": "research/adaptive_v4_memory/manifests/p3-natural-suite-v1.json",
+    "dataset_revision": "2b48e494f2c7a2f0af81aae178e05c7e1dde0fe9",
+    "dataset_sha256": "15d61c22d92c96900b3c4948b6aeea218d3214b676a65df48e7b8555604c7fe2",
+    "code_revision": "2e00731f8d0bff23dc4325161044d0ed8af94c1e",
+    "prompt_sha256": "68a162252bc9ff71d5d7abca3d69bb31aac3c35f832d657a2866f2018b8a6950",
+    "answer_parser": "research/adaptive_v4_memory/scripts/p3_natural_metrics.py",
+    "categories": [
+      "single-document-qa",
+      "multi-document-qa",
+      "long-in-context-learning",
+      "long-dialogue-history-understanding",
+      "code-repository-understanding",
+      "long-structured-data-understanding"
+    ],
+    "predictions_per_arm": 503,
+    "paired_predictions_total": 1006,
+    "generation_seed": 42,
+    "generation_reserve_tokens": 128,
+    "primary_metric": "official exact multiple-choice accuracy",
+    "paired_unit": "the same frozen example with identical Phi-rendered prompt and exact context/question token ids",
+    "overflow_policy": "retain every input beyond the Phi 131072-token context as an intention-to-evaluate unsupported-context failure scored zero; never truncate",
+    "secondary_slice_fields": ["sub_domain", "difficulty", "length_stratum"],
+    "secondary_slice_policy": "report observed frozen metadata levels with n >= 10 descriptively; no secondary slice is a confirmation gate",
+    "reporting": "report all six capability categories; sub-domain, difficulty, and length slices remain descriptive"
+  },
+  "scorer_selection": {
+    "source": "artifacts/adaptive_v4_memory/paper_grade/p3/fixed-baseline-selection.json",
+    "eligible_arms": [
+      "streaming_llm",
+      "snapkv",
+      "critical_expected_attention"
+    ],
+    "rule": "reuse the frozen score-compatible Qwen selection without Phi RULER or LongBench-v2 outcome inspection",
+    "phi_outcome_inspection_allowed": false,
+    "phi_specific_reselection_allowed": false
+  },
+  "arms": {
+    "fixed+pins": {
+      "compression_ratio": 0.5,
+      "context_prefill_quota": "floor(context_tokens * 0.5) at every layer",
+      "protected_prefix_token_span": {"start": 0, "end": 4}
+    },
+    "cross-family-adaptive-quota+pins": {
+      "compression_ratio": 0.5,
+      "context_prefill_global_quota": "32 * floor(context_tokens * 0.5), exactly equal to fixed+pins",
+      "layer_signal": "normalized entropy concentration of z-scored current-layer scorer values",
+      "causal_prior": "running mean of earlier-layer concentrations only",
+      "maximum_layer_adjustment_fraction": 0.25,
+      "protected_prefix_token_span": {"start": 0, "end": 4}
+    }
+  },
+  "cache_lifecycle_contract": {
+    "adaptive_allocation_scope": "initial context prefill only",
+    "same_initial_global_kept_tokens": true,
+    "same_scorer": true,
+    "same_protected_prefix": true,
+    "question_tokens": "append identically after context compression without adaptive reallocation",
+    "generation_tokens": "decode identically under the arm-specific post-prefill cache",
+    "continuous_refresh_claim_available": false,
+    "per_successful_example_audit": [
+      "all 32 initial layer allocations in causal order",
+      "configured and observed initial total kept tokens",
+      "score concentration and controller time per layer",
+      "initial hot-resident bytes, peak HBM, and end-to-end latency"
+    ]
+  },
+  "statistics": {
+    "primary_unit": "paired example",
+    "paired_bootstrap_resamples": 10000,
+    "paired_bootstrap_seed": 9671507,
+    "confidence": 0.95,
+    "report_by_category": true,
+    "report_by_sub_domain": true,
+    "report_by_difficulty": true,
+    "report_by_length_stratum": true,
+    "holm_family_size": 6,
+    "secondary_slices_are_descriptive": true,
+    "outcome_dependent_model_or_slice_selection": false,
+    "failure_policy": "intention-to-evaluate; every allowed operational or unsupported-context failure scores zero and is never dropped or silently retried"
+  },
+  "failure_reporting": {
+    "allowed_failure_types": [
+      "unsupported-context",
+      "empty-generation",
+      "oom",
+      "runtime-error"
+    ],
+    "unknown_or_missing_failure_type_policy": "reject the artifact during audit",
+    "successful_record_policy": "failure_type must be null",
+    "paired_scoring_policy": "the paired analysis retains every frozen example and scores every allowed failure zero"
+  },
+  "confirmation_gate": {
+    "all_required": true,
+    "overall_accuracy_difference_minimum": 0.0,
+    "paired_bootstrap_lower_bound_minimum": -0.02,
+    "nonnegative_category_count_minimum": 4,
+    "worst_category_regression_minimum": -0.08,
+    "maximum_failure_rate_increase": 0.02,
+    "maximum_initial_global_kept_token_relative_error": 0.0,
+    "maximum_initial_hot_resident_byte_relative_difference": 0.01
+  },
+  "outputs": {
+    "result_root": "artifacts/adaptive_v4_memory/paper_grade/p3/cross-family/phi4-mini-adaptive-quota-longbench-v2",
+    "summary": "artifacts/adaptive_v4_memory/paper_grade/p3/cross-family/phi4-mini-adaptive-quota-longbench-v2.summary.json"
+  },
+  "claim_boundary": "A passing result supports bounded transfer of the initial score-concentration layer-quota heuristic to frozen LongBench-v2 reasoning on one held-out Phi-4-mini checkpoint at equal initial logical KV budget. It does not establish continuous adaptive reallocation, a second full natural-language suite, Phi-specific optimization, contexts beyond 128K, broad model-population generalization, or official DeepSeek-V4 behavior."
+}
