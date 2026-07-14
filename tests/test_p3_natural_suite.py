@@ -201,6 +201,7 @@ def _natural_benchmark_summaries(tmp_path: Path, manifest_path: Path) -> dict[st
     manifest = json.loads(manifest_path.read_text())
     causal = tmp_path / "causal.json"
     inventory = tmp_path / "inventory.json"
+    source_inventory = tmp_path / "source-inventory.json"
     selection = tmp_path / "selection.json"
     causal.write_text(
         json.dumps(
@@ -215,6 +216,43 @@ def _natural_benchmark_summaries(tmp_path: Path, manifest_path: Path) -> dict[st
             {
                 "experiment_id": "p3-natural-dataset-inventory-v1",
                 "source": {"dirty": False},
+                "manifest": {"sha256": _digest(manifest_path)},
+                "benchmarks": {
+                    name: {
+                        "repo_id": contract["dataset"]["repo_id"],
+                        "revision": contract["dataset"]["revision"],
+                        "license": contract["dataset"]["license"],
+                        "files": [dict(row) for row in contract["dataset"]["files"]],
+                    }
+                    for name, contract in manifest["benchmarks"].items()
+                    if name in {"SCBench", "LongBench-v2", "LongMemEval", "MRCR"}
+                },
+            }
+        )
+    )
+    source_inventory.write_text(
+        json.dumps(
+            {
+                "experiment_id": "p3-natural-source-inventory-v1",
+                "status": "verified",
+                "source": {"dirty": False},
+                "manifest": {"sha256": _digest(manifest_path)},
+                "benchmarks": {
+                    name: {
+                        "repository": contract["upstream_code"]["repository"],
+                        "revision": contract["upstream_code"]["revision"],
+                        "license": contract["upstream_code"]["license"],
+                        "license_sha256": contract["upstream_code"]["license_sha256"],
+                        "files": [
+                            {"path": path, "sha256": digest}
+                            for path, digest in contract["upstream_code"][
+                                "files_sha256"
+                            ].items()
+                        ],
+                    }
+                    for name, contract in manifest["benchmarks"].items()
+                    if name in {"SCBench", "LongBench-v2", "LongMemEval"}
+                },
             }
         )
     )
@@ -348,6 +386,71 @@ def _natural_benchmark_summaries(tmp_path: Path, manifest_path: Path) -> dict[st
     return paths
 
 
+def _provenance_inventories(
+    tmp_path: Path, manifest_path: Path, summaries: dict[str, Path]
+) -> tuple[Path, Path]:
+    manifest = json.loads(manifest_path.read_text())
+    first = json.loads(next(iter(summaries.values())).read_text())
+    dataset_path = Path(first["dataset_inventory"]["path"])
+    datasets = {}
+    for benchmark in ("SCBench", "LongBench-v2", "LongMemEval", "MRCR"):
+        contract = manifest["benchmarks"][benchmark]["dataset"]
+        datasets[benchmark] = {
+            "repo_id": contract["repo_id"],
+            "revision": contract["revision"],
+            "license": contract["license"],
+            "files": [
+                {
+                    "path": str(tmp_path / "frozen" / entry["path"]),
+                    "bytes": entry["bytes"],
+                    "sha256": entry["sha256"],
+                    "rows": entry["rows"],
+                }
+                for entry in contract["files"]
+            ],
+        }
+    dataset_path.write_text(
+        json.dumps(
+            {
+                "experiment_id": "p3-natural-dataset-inventory-v1",
+                "source": {"dirty": False},
+                "manifest": {"sha256": _digest(manifest_path)},
+                "benchmarks": datasets,
+            }
+        )
+    )
+    for summary_path in summaries.values():
+        payload = json.loads(summary_path.read_text())
+        payload["dataset_inventory"]["sha256"] = _digest(dataset_path)
+        summary_path.write_text(json.dumps(payload))
+    source_path = tmp_path / "source-inventory.json"
+    sources = {}
+    for benchmark in ("SCBench", "LongBench-v2", "LongMemEval"):
+        contract = manifest["benchmarks"][benchmark]["upstream_code"]
+        sources[benchmark] = {
+            "repository": contract["repository"],
+            "revision": contract["revision"],
+            "license": contract["license"],
+            "license_sha256": contract["license_sha256"],
+            "files": [
+                {"path": path, "sha256": digest}
+                for path, digest in contract["files_sha256"].items()
+            ],
+        }
+    source_path.write_text(
+        json.dumps(
+            {
+                "experiment_id": "p3-natural-source-inventory-v1",
+                "status": "verified",
+                "source": {"dirty": False},
+                "manifest": {"sha256": _digest(manifest_path)},
+                "benchmarks": sources,
+            }
+        )
+    )
+    return dataset_path, source_path
+
+
 def _safety_summary(tmp_path: Path, manifest_path: Path) -> Path:
     manifest = json.loads(manifest_path.read_text())
     contract = manifest["suite_audit"]["safety_stress"]
@@ -455,12 +558,17 @@ def test_natural_suite_audit_requires_all_examples_and_baselines(tmp_path: Path)
     root = Path(__file__).resolve().parents[1]
     manifest = root / "research/adaptive_v4_memory/manifests/p3-natural-suite-v1.json"
     paths = _natural_benchmark_summaries(tmp_path, manifest)
+    dataset_inventory, source_inventory = _provenance_inventories(tmp_path, manifest, paths)
 
     payload = summarize(
         manifest,
         paths,
         _safety_summary(tmp_path, manifest),
         _natural_safety_summary(tmp_path, manifest),
+        dataset_inventory,
+        source_inventory,
+        tmp_path / "inventory.json",
+        tmp_path / "source-inventory.json",
     )
 
     assert payload["audit"]["benchmarks_terminal"] == 5
@@ -489,6 +597,7 @@ def test_natural_suite_audit_rejects_unaccounted_failure(tmp_path: Path) -> None
     root = Path(__file__).resolve().parents[1]
     manifest = root / "research/adaptive_v4_memory/manifests/p3-natural-suite-v1.json"
     paths = _natural_benchmark_summaries(tmp_path, manifest)
+    dataset_inventory, source_inventory = _provenance_inventories(tmp_path, manifest, paths)
     payload = json.loads(paths["MRCR"].read_text())
     payload["arms"]["native-dense"]["failures_by_type"] = {}
     paths["MRCR"].write_text(json.dumps(payload))
@@ -499,6 +608,10 @@ def test_natural_suite_audit_rejects_unaccounted_failure(tmp_path: Path) -> None
             paths,
             _safety_summary(tmp_path, manifest),
             _natural_safety_summary(tmp_path, manifest),
+            dataset_inventory,
+            source_inventory,
+            tmp_path / "inventory.json",
+            tmp_path / "source-inventory.json",
         )
 
 
@@ -902,6 +1015,7 @@ def test_natural_suite_audit_rejects_wrong_model_snapshot(tmp_path: Path) -> Non
     root = Path(__file__).resolve().parents[1]
     manifest = root / "research/adaptive_v4_memory/manifests/p3-natural-suite-v1.json"
     paths = _natural_benchmark_summaries(tmp_path, manifest)
+    dataset_inventory, source_inventory = _provenance_inventories(tmp_path, manifest, paths)
     payload = json.loads(paths["SCBench"].read_text())
     payload["model_snapshot_digest_set_sha256"] = "1" * 64
     paths["SCBench"].write_text(json.dumps(payload))
@@ -912,6 +1026,10 @@ def test_natural_suite_audit_rejects_wrong_model_snapshot(tmp_path: Path) -> Non
             paths,
             _safety_summary(tmp_path, manifest),
             _natural_safety_summary(tmp_path, manifest),
+            dataset_inventory,
+            source_inventory,
+            tmp_path / "inventory.json",
+            tmp_path / "source-inventory.json",
         )
 
 
@@ -921,6 +1039,7 @@ def test_natural_suite_audit_rejects_mixed_fixed_baseline_selection(
     root = Path(__file__).resolve().parents[1]
     manifest = root / "research/adaptive_v4_memory/manifests/p3-natural-suite-v1.json"
     paths = _natural_benchmark_summaries(tmp_path, manifest)
+    dataset_inventory, source_inventory = _provenance_inventories(tmp_path, manifest, paths)
     alternate = tmp_path / "alternate-selection.json"
     alternate.write_text(
         json.dumps(
@@ -944,6 +1063,10 @@ def test_natural_suite_audit_rejects_mixed_fixed_baseline_selection(
             paths,
             _safety_summary(tmp_path, manifest),
             _natural_safety_summary(tmp_path, manifest),
+            dataset_inventory,
+            source_inventory,
+            tmp_path / "inventory.json",
+            tmp_path / "source-inventory.json",
         )
 
 
@@ -951,6 +1074,7 @@ def test_natural_suite_audit_rejects_incomplete_safety_pairing(tmp_path: Path) -
     root = Path(__file__).resolve().parents[1]
     manifest = root / "research/adaptive_v4_memory/manifests/p3-natural-suite-v1.json"
     paths = _natural_benchmark_summaries(tmp_path, manifest)
+    dataset_inventory, source_inventory = _provenance_inventories(tmp_path, manifest, paths)
     safety = _safety_summary(tmp_path, manifest)
     payload = json.loads(safety.read_text())
     payload["audit"]["input_pairing_verified"] = False
@@ -962,4 +1086,8 @@ def test_natural_suite_audit_rejects_incomplete_safety_pairing(tmp_path: Path) -
             paths,
             safety,
             _natural_safety_summary(tmp_path, manifest),
+            dataset_inventory,
+            source_inventory,
+            tmp_path / "inventory.json",
+            tmp_path / "source-inventory.json",
         )
