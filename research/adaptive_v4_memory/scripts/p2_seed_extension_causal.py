@@ -46,6 +46,7 @@ IMPLEMENTATION_PATHS = tuple(
             "research/adaptive_v4_memory/scripts/summarize_p2_seed_extension.py",
             "research/adaptive_v4_memory/scripts/run_p2_seed_extension_causal_prerequisites.py",
             "research/adaptive_v4_memory/scripts/run_p2_seed_extension_causal.py",
+            "research/adaptive_v4_memory/scripts/summarize_p2_seed_extension_causal.py",
         )
     )
 )
@@ -283,6 +284,7 @@ def memory_match(
 def equivalence(path: Path, *, scale: str, training_seed: int) -> dict[str, Any]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     raw_path = _dependency(payload.get("raw_artifact", {}), "extension causal equivalence raw")
+    _dependency(payload.get("memory_match_artifact", {}), "extension memory match")
     validation = payload.get("validation", {})
     _require(
         payload.get("experiment_id") == EQUIVALENCE_AUDIT_EXPERIMENT_ID
@@ -302,6 +304,10 @@ def equivalence(path: Path, *, scale: str, training_seed: int) -> dict[str, Any]
         "Extension causal sequential/chunked equivalence drifted.",
     )
     raw = json.loads(raw_path.read_text(encoding="utf-8"))
+    records = raw.get("records")
+    _dependency(raw.get("checkpoint", {}), "extension equivalence checkpoint")
+    _dependency(raw.get("calibration_artifact", {}), "extension equivalence calibration")
+    _dependency(raw.get("memory_match_artifact", {}), "extension equivalence memory match")
     _require(
         raw.get("experiment_id") == EQUIVALENCE_RAW_EXPERIMENT_ID
         and raw.get("scale") == scale
@@ -309,7 +315,9 @@ def equivalence(path: Path, *, scale: str, training_seed: int) -> dict[str, Any]
         and raw.get("source", {}).get("dirty") is False
         and raw.get("source", {}).get("implementation_digest") == implementation_digest()
         and raw.get("validation") == validation
-        and raw.get("records_digest") == causal.records_digest(raw.get("records", [])),
+        and isinstance(records, list)
+        and len(records) == causal.EXPECTED_EQUIVALENCE_RECORDS
+        and raw.get("records_digest") == causal.records_digest(records),
         "Extension causal equivalence raw audit failed.",
     )
     return cast(dict[str, Any], payload)
