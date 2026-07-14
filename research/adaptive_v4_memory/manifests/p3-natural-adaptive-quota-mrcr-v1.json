@@ -1,0 +1,120 @@
+{
+  "schema_version": 1,
+  "experiment_id": "p3-natural-adaptive-quota-mrcr-v1",
+  "status": "frozen_before_any_adaptive_mrcr_prediction",
+  "frozen_date": "2026-07-15",
+  "role": "natural multi-needle long-context replication of the adaptive layer-quota contrast",
+  "prerequisites": [
+    "terminal digest-bound nine-seed P2 causal audit",
+    "terminal Qwen3-4B adaptive-quota RULER audit regardless of outcome",
+    "terminal baseline Qwen3-4B MRCR audit regardless of outcome",
+    "verified frozen MRCR dataset, scorer, model, and fixed-baseline selection"
+  ],
+  "execution_policy": "run all 1500 frozen examples under both arms; prerequisite outcomes never select, cancel, truncate, or reorder needle counts, token bins, or examples",
+  "model": {
+    "repo_id": "Qwen/Qwen3-4B-Instruct-2507",
+    "revision": "cdbee75f17c01a7cc42f958dc650907174af0554",
+    "dtype": "bfloat16",
+    "num_hidden_layers": 36,
+    "maximum_supported_context_tokens": 262144,
+    "snapshot_digest_set_sha256": "c01e398afbd27d139b203e4b4b13d34dedec6d0a2db521083f55c50522c76e35"
+  },
+  "benchmark": {
+    "name": "MRCR",
+    "base_manifest": "research/adaptive_v4_memory/manifests/p3-natural-suite-v1.json",
+    "dataset_revision": "f4c69fae7cf81f7ca26b9fee34b392a50f6b8a1d",
+    "dataset_file_sha256": [
+      "1c297b254bf64a31856b74918cd7db889a214503e0b67daa834e84f20df6aa93",
+      "a5a1dc9ccc945623253d04d33c03d89aee2d676c88955ce368da2ab16a0ce94d",
+      "4d4fa3d11ce064749de3cd039eef1a621e30a81c2c9b3e64f1df37f8afeaf312",
+      "8dfdb94a208cf3eee73c4e7ac6ee8a5ccb7236c6934c13c6c5f67c0a9928cdf3",
+      "65df601a2e0ae4a3cfb56920a6ef99f26c0de37c6b1018695e8aed684e6a94c1",
+      "c80b19573bff1d38e1c157d6a0bdf9cfd1a8ab6372296174c9a7015e164189e3"
+    ],
+    "scorer_sha256": "9d933913f1a30f8435be09c8fa657163d10f63b5776b84d255bff1a15d6ef658",
+    "needle_counts": [2, 4, 8],
+    "primary_token_bins": 5,
+    "samples_per_needle_bin_arm": 100,
+    "predictions_per_arm": 1500,
+    "paired_predictions_total": 3000,
+    "generation_seed": 42,
+    "generation_reserve_rule": "ground-truth answer token count plus 32 tokens",
+    "primary_metric": "official prefix-gated SequenceMatcher score",
+    "paired_unit": "the same frozen example with identical rendered prompt and exact context/question token ids",
+    "overflow_policy": "retain unsupported-context as an intention-to-evaluate failure scored zero; never truncate",
+    "reporting": "report all 15 frozen needle-count by token-bin cells; no pooled shorter-bin result may hide 64K-128K failure"
+  },
+  "arms": {
+    "fixed+pins": {
+      "compression_ratio": 0.5,
+      "context_prefill_quota": "floor(context_tokens * 0.5) at every layer",
+      "protected_prefix_token_span": {"start": 0, "end": 4}
+    },
+    "natural-adaptive-quota+pins": {
+      "compression_ratio": 0.5,
+      "context_prefill_global_quota": "36 * floor(context_tokens * 0.5), exactly equal to fixed+pins",
+      "layer_signal": "normalized entropy concentration of z-scored current-layer scorer values",
+      "causal_prior": "running mean of earlier-layer concentrations only",
+      "maximum_layer_adjustment_fraction": 0.25,
+      "protected_prefix_token_span": {"start": 0, "end": 4}
+    }
+  },
+  "scorer_selection": {
+    "source": "artifacts/adaptive_v4_memory/paper_grade/p3/fixed-baseline-selection.json",
+    "eligible_arms": ["streaming_llm", "snapkv", "critical_expected_attention"],
+    "rule": "reuse the frozen score-compatible Qwen selection without MRCR outcome inspection",
+    "mrcr_outcome_inspection_allowed": false
+  },
+  "cache_lifecycle_contract": {
+    "adaptive_allocation_scope": "initial context prefill only",
+    "same_initial_global_kept_tokens": true,
+    "same_scorer": true,
+    "same_protected_prefix": true,
+    "final_query_tokens": "append identically after context compression without adaptive reallocation",
+    "generation_tokens": "decode identically under the arm-specific post-prefill cache",
+    "continuous_refresh_claim_available": false,
+    "per_successful_example_audit": [
+      "all 36 initial layer allocations in causal order",
+      "configured and observed initial total kept tokens",
+      "score concentration and controller time per layer",
+      "initial hot-resident bytes, peak HBM, and end-to-end latency"
+    ]
+  },
+  "statistics": {
+    "primary_unit": "paired example",
+    "paired_bootstrap_resamples": 10000,
+    "paired_bootstrap_seed": 9571506,
+    "confidence": 0.95,
+    "report_by_needle_count": true,
+    "report_by_token_bin": true,
+    "holm_family_size": 15,
+    "outcome_dependent_model_or_cell_selection": false,
+    "failure_policy": "intention-to-evaluate; every allowed operational or unsupported-context failure scores zero and is never dropped or silently retried"
+  },
+  "failure_reporting": {
+    "allowed_failure_types": [
+      "unsupported-context",
+      "empty-generation",
+      "oom",
+      "runtime-error"
+    ],
+    "unknown_or_missing_failure_type_policy": "reject the artifact during audit",
+    "successful_record_policy": "failure_type must be null",
+    "paired_scoring_policy": "retain every frozen example and score allowed failures zero"
+  },
+  "confirmation_gate": {
+    "all_required": true,
+    "overall_score_difference_minimum": 0.0,
+    "paired_bootstrap_lower_bound_minimum": -0.02,
+    "nonnegative_needle_bin_count_minimum": 10,
+    "worst_needle_bin_regression_minimum": -0.08,
+    "maximum_failure_rate_increase": 0.02,
+    "maximum_initial_global_kept_token_relative_error": 0.0,
+    "maximum_initial_hot_resident_byte_relative_difference": 0.01
+  },
+  "outputs": {
+    "result_root": "artifacts/adaptive_v4_memory/paper_grade/p3/natural-adaptive-quota/mrcr-qwen3-4b",
+    "summary": "artifacts/adaptive_v4_memory/paper_grade/p3/natural-adaptive-quota/mrcr-qwen3-4b.summary.json"
+  },
+  "claim_boundary": "A passing result supports bounded transfer of the initial causal layer-quota heuristic to frozen 2/4/8-needle MRCR retrieval through 128K on one Qwen3-4B checkpoint. It does not establish continuous adaptive reallocation, arbitrary open-ended reasoning quality, cross-model transfer, contexts beyond 128K, or official DeepSeek-V4 behavior."
+}
