@@ -294,7 +294,7 @@
       "requirement": "Regenerate every table and figure from digest-bound raw artifacts.",
       "sources": [
         {"kind": "generated-output", "name": "artifact-index.json"},
-        {"kind": "generated-output", "name": "table-p3-natural-adaptive-suite.csv"}
+        {"kind": "generator", "name": "paper_package_generator"}
       ]
     },
     {

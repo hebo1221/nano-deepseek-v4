@@ -1113,6 +1113,14 @@ def test_p5_traceability_covers_every_requirement_and_fails_closed() -> None:
         ("execution-audit", "p2_causal_parallel_equivalence"),
         ("verification-contract", "p1-controller-contract-tests"),
     }
+    regeneration_rows = [row for row in rows if row["requirement_id"] == "P5.1"]
+    assert {
+        (row["source_kind"], row["source_name"], row["binding_status"])
+        for row in regeneration_rows
+    } == {
+        ("generated-output", "artifact-index.json", "declared-digest-bound-output"),
+        ("generator", "paper_package_generator", "digest-bound-generator"),
+    }
 
     incomplete = json.loads(json.dumps(traceability))
     incomplete["requirements"].pop()

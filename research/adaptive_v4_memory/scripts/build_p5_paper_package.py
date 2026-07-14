@@ -28,6 +28,7 @@ TRACEABILITY_SOURCE_KINDS = {
     "execution-audit",
     "boundary-manifest",
     "generated-output",
+    "generator",
     "verification-contract",
 }
 FINAL_RELEASE_COMMANDS = [
@@ -1568,6 +1569,7 @@ def _traceability_rows(
         "execution-audit": execution_names,
         "boundary-manifest": boundary_names,
         "generated-output": generated_names,
+        "generator": {"paper_package_generator"},
         "verification-contract": contract_names,
     }
     rows: list[dict[str, Any]] = []
@@ -1625,6 +1627,10 @@ def _traceability_rows(
                 scientific_classification = classifications.get(name, "not-applicable")
             elif kind == "generated-output":
                 binding_status = "declared-digest-bound-output"
+                scientific_classification = "not-applicable"
+            elif kind == "generator":
+                _paper_package_generator_input()
+                binding_status = "digest-bound-generator"
                 scientific_classification = "not-applicable"
             else:
                 binding_status = "scheduled-final-verification"
