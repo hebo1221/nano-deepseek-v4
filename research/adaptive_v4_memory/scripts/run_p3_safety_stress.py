@@ -48,6 +48,16 @@ def token_digest(*tensors: torch.Tensor) -> str:
     return digest.hexdigest()
 
 
+def failure_safety_fields(example: Any, response: str | None) -> dict[str, bool]:
+    if response:
+        scores = score_response(example, response)
+        return {
+            "exact_required_response": bool(scores["exact_required_response"]),
+            "leakage_event": bool(scores["leakage_event"]),
+        }
+    return {"exact_required_response": False, "leakage_event": False}
+
+
 def coordinates(manifest: dict[str, Any]) -> list[tuple[str, int, int]]:
     rows = [
         (family, context, index)
@@ -388,13 +398,16 @@ def main() -> None:
                     peak = torch.cuda.max_memory_allocated()
                     generated = len(tokenizer.encode(response, add_special_tokens=False))
                     if not response.strip():
-                        record = failure_record(
-                            base,
-                            failure_type="empty-generation",
-                            latency_ms=elapsed,
-                            peak_hbm_bytes=peak,
-                            hot_resident_bytes=resident,
-                        )
+                        record = {
+                            **failure_record(
+                                base,
+                                failure_type="empty-generation",
+                                latency_ms=elapsed,
+                                peak_hbm_bytes=peak,
+                                hot_resident_bytes=resident,
+                            ),
+                            **failure_safety_fields(example, response),
+                        }
                     else:
                         scores = score_response(example, response)
                         record = {
@@ -418,25 +431,31 @@ def main() -> None:
                             "error": None,
                         }
                 except torch.cuda.OutOfMemoryError as error:
-                    record = failure_record(
-                        base,
-                        failure_type="oom",
-                        latency_ms=(time.perf_counter_ns() - started) / 1_000_000.0,
-                        peak_hbm_bytes=torch.cuda.max_memory_allocated(),
-                        error=error,
-                    )
+                    record = {
+                        **failure_record(
+                            base,
+                            failure_type="oom",
+                            latency_ms=(time.perf_counter_ns() - started) / 1_000_000.0,
+                            peak_hbm_bytes=torch.cuda.max_memory_allocated(),
+                            error=error,
+                        ),
+                        **failure_safety_fields(example, response),
+                    }
                     torch.cuda.empty_cache()
                 except Exception as error:
-                    record = failure_record(
-                        base,
-                        failure_type="runtime-error",
-                        latency_ms=(time.perf_counter_ns() - started) / 1_000_000.0,
-                        peak_hbm_bytes=torch.cuda.max_memory_allocated(),
-                        hot_resident_bytes=resident,
-                        raw_response=response or "",
-                        parsed_response=response,
-                        error=error,
-                    )
+                    record = {
+                        **failure_record(
+                            base,
+                            failure_type="runtime-error",
+                            latency_ms=(time.perf_counter_ns() - started) / 1_000_000.0,
+                            peak_hbm_bytes=torch.cuda.max_memory_allocated(),
+                            hot_resident_bytes=resident,
+                            raw_response=response or "",
+                            parsed_response=response,
+                            error=error,
+                        ),
+                        **failure_safety_fields(example, response),
+                    }
                 atomic_json(parts / f"{position:06d}.json", record)
                 print(
                     json.dumps({"arm": arm, "completed_examples": position + 1, "total": expected}),

@@ -13,6 +13,7 @@ SCRIPTS = Path(__file__).resolve().parents[1] / "research/adaptive_v4_memory/scr
 sys.path.insert(0, str(SCRIPTS))
 
 from p3_safety_workloads import FAMILIES  # noqa: E402
+from run_p3_safety_stress import failure_safety_fields  # noqa: E402
 from summarize_p3_safety_stress import (  # noqa: E402
     RUNNER_PATH,
     WORKLOAD_PATH,
@@ -49,6 +50,7 @@ def _source() -> tuple[dict[str, object], dict[str, object]]:
 def _fixture(tmp_path: Path) -> tuple[Path, dict[str, Path]]:
     manifest = {
         "experiment_id": "p3-qwen3-4b-safety-stress-v1",
+        "model": {"revision": "test-model-revision"},
         "context_targets_tokens": [100],
         "examples_per_family_context": 1,
         "expected_examples_per_arm": len(FAMILIES),
@@ -73,18 +75,29 @@ def _fixture(tmp_path: Path) -> tuple[Path, dict[str, Path]]:
         "strongest-memory-matched-fixed",
         "strongest-memory-matched-fixed+protected-prefix",
     ):
+        arm_config = {"arm": arm}
         root = tmp_path / arm
         root.mkdir()
         records: list[dict[str, Any]] = []
         for index, family in enumerate(FAMILIES):
+            coordinate_index = 0
+            identity = hashlib.sha256(
+                f"17:{family}:100:{coordinate_index}".encode()
+            ).hexdigest()
             records.append(
                 {
-                    "example_id": f"{family}:100:0",
+                    "example_id": f"{family}:100:{coordinate_index}:{identity}",
                     "benchmark": "SafetyStress",
                     "arm": arm,
+                    "coordinates": {
+                        "family": family,
+                        "context_target": 100,
+                        "index": coordinate_index,
+                    },
                     "family": family,
                     "context_target": 100,
                     "exact_input_tokens": 97,
+                    "generation_reserve_tokens": 2,
                     "protected_prefix_token_span": {
                         "start": 0,
                         "end": 2,
@@ -94,12 +107,29 @@ def _fixture(tmp_path: Path) -> tuple[Path, dict[str, Path]]:
                     "raw_prompt_sha256": f"{index + 1:x}" * 64,
                     "input_token_ids_sha256": f"{index + 5:x}" * 64,
                     "expected_response_sha256": f"{index + 9:x}" * 64,
+                    "canary_sha256": (
+                        "d" * 64
+                        if family in {"refusal-retention", "prompt-injection-leakage"}
+                        else None
+                    ),
+                    "arm_config": arm_config,
+                    "revisions": {
+                        "model_revision": "test-model-revision",
+                        "workload_sha256": source["workload_sha256"],
+                        "scorer_sha256": source["workload_sha256"],
+                    },
                     "status": "scored",
+                    "raw_response": "OK",
+                    "parsed_response": "OK",
                     "failure_type": None,
                     "score": 1.0,
                     "leakage_event": False,
                     "exact_required_response": True,
                     "hot_resident_bytes": 80,
+                    "latency_ms": 1.0,
+                    "peak_hbm_bytes": 100,
+                    "stop_reason": "eos-or-special-token",
+                    "generated_tokens_observed": 1,
                     "protected_prefix_physical_audit": (
                         {
                             "same_budget_verified": True,
@@ -132,7 +162,16 @@ def _fixture(tmp_path: Path) -> tuple[Path, dict[str, Path]]:
             "arm": arm,
             "status": "terminal",
             "source": source,
-            "run_identity": run_identity,
+            "run_identity": {
+                **run_identity,
+                "manifest_sha256": _digest(manifest_path),
+                "natural_manifest_sha256": dependencies["natural_manifest"]["sha256"],
+                "fixed_selection_sha256": dependencies["fixed_selection"]["sha256"],
+                "causal_gate_sha256": dependencies["causal_gate"]["sha256"],
+                "model_snapshot_digest_set_sha256": "a" * 64,
+                "arm_config": arm_config,
+                "seed": 17,
+            },
             "manifest": {"sha256": _digest(manifest_path)},
             "raw_records": {"path": str(records_path), "sha256": _digest(records_path)},
             "causal_gate": dependencies["causal_gate"],
@@ -212,3 +251,43 @@ def test_exact_paired_test_is_stable_at_frozen_sample_size() -> None:
     assert _exact_paired_pvalue(600, 600) == pytest.approx(1.0)
     assert _exact_paired_pvalue(1_200, 0) < 1e-100
     assert 0.0 <= _exact_paired_pvalue(1_100, 100) <= 1.0
+
+
+def test_failure_safety_fields_preserve_partial_response_leakage() -> None:
+    class Example:
+        canary = "PRIVATE-CANARY"
+        expected = "SAFE"
+
+    assert failure_safety_fields(Example(), "PRIVATE-CANARY") == {
+        "exact_required_response": False,
+        "leakage_event": True,
+    }
+    assert failure_safety_fields(Example(), None) == {
+        "exact_required_response": False,
+        "leakage_event": False,
+    }
+
+
+@pytest.mark.parametrize(
+    ("field", "invalid", "message"),
+    [
+        ("score", True, "Invalid scored safety record"),
+        ("latency_ms", float("inf"), "Invalid safety terminal measurements"),
+        ("peak_hbm_bytes", True, "Invalid safety terminal measurements"),
+        ("hot_resident_bytes", -1, "Invalid safety terminal measurements"),
+    ],
+)
+def test_safety_summary_rejects_invalid_terminal_measurements(
+    tmp_path: Path, field: str, invalid: object, message: str
+) -> None:
+    manifest, arms = _fixture(tmp_path)
+    cell = json.loads(arms["native-dense"].read_text())
+    records_path = Path(cell["raw_records"]["path"])
+    records = [json.loads(line) for line in records_path.read_text().splitlines()]
+    records[0][field] = invalid
+    records_path.write_text("".join(json.dumps(row) + "\n" for row in records))
+    cell["raw_records"]["sha256"] = _digest(records_path)
+    arms["native-dense"].write_text(json.dumps(cell))
+
+    with pytest.raises(ValueError, match=message):
+        summarize(manifest, arms)

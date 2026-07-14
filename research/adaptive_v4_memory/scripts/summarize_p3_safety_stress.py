@@ -29,6 +29,27 @@ def _require(condition: bool, message: str) -> None:
         raise ValueError(message)
 
 
+def _nonnegative_integer(value: Any) -> bool:
+    return type(value) is int and value >= 0
+
+
+def _positive_integer(value: Any) -> bool:
+    return type(value) is int and value > 0
+
+
+def _finite_nonnegative_number(value: Any) -> bool:
+    return (
+        type(value) in (int, float)
+        and (type(value) is int or math.isfinite(value))
+        and value >= 0
+    )
+
+
+def _sha256_value(value: Any, label: str) -> None:
+    _require(isinstance(value, str) and len(value) == 64, f"Safety {label} drifted.")
+    int(value, 16)
+
+
 def _records(path: Path) -> list[dict[str, Any]]:
     return [json.loads(line) for line in path.read_text().splitlines() if line]
 
@@ -71,12 +92,20 @@ def _audit_protected_record(record: dict[str, Any], identifier: str) -> None:
     _require(
         isinstance(span, dict)
         and span.get("start") == 0
-        and isinstance(span.get("end"), int)
-        and span.get("end", 0) > 0
+        and _positive_integer(span.get("end"))
         and span.get("tokens") == span.get("end"),
         f"Protected token span drifted: {identifier}.",
     )
     assert isinstance(span, dict)
+    _require(
+        _nonnegative_integer(span.get("stable_boundary_retreat")),
+        f"Protected token boundary drifted: {identifier}.",
+    )
+    if record.get("arm") != PROTECTED_ARM:
+        _require(
+            record.get("protected_prefix_physical_audit") is None,
+            f"Unexpected protected physical audit: {identifier}.",
+        )
     if record.get("arm") != PROTECTED_ARM or record.get("status") != "scored":
         return
     audit = record.get("protected_prefix_physical_audit")
@@ -98,13 +127,21 @@ def _audit_protected_record(record: dict[str, Any], identifier: str) -> None:
             and layer.get("protected_start") == span["start"]
             and layer.get("protected_end") == span["end"]
             and layer.get("protected_tokens") == span["tokens"]
-            and isinstance(layer.get("input_tokens"), int)
-            and isinstance(layer.get("kept_tokens"), int)
-            and isinstance(layer.get("compression_ratio"), (int, float))
+            and _nonnegative_integer(layer.get("layer_index"))
+            and _positive_integer(layer.get("input_tokens"))
+            and _nonnegative_integer(layer.get("kept_tokens"))
+            and layer["kept_tokens"] <= layer["input_tokens"]
+            and span["tokens"] <= layer["kept_tokens"]
+            and _finite_nonnegative_number(layer.get("compression_ratio"))
+            and layer["compression_ratio"] < 1.0
             and layer["kept_tokens"]
             == int(layer["input_tokens"] * (1.0 - layer["compression_ratio"])),
             f"Protected layer budget drifted: {identifier}.",
         )
+    _require(
+        len({layer["layer_index"] for layer in audit["layers"]}) == audit["layer_count"],
+        f"Protected layer identities drifted: {identifier}.",
+    )
 
 
 def _record_map(cell_path: Path) -> dict[str, dict[str, Any]]:
@@ -205,42 +242,110 @@ def audit_arm(
     records = _records(records_path)
     expected = manifest["expected_examples_per_arm"]
     _require(len(records) == expected, f"Safety record count drifted: {arm}.")
+    identity = cell.get("run_identity", {})
+    arm_config = identity.get("arm_config")
+    _require(
+        isinstance(identity, dict)
+        and isinstance(arm_config, dict)
+        and identity.get("manifest_sha256") == manifest_digest
+        and identity.get("seed") == manifest["seed"],
+        f"Safety run identity drifted: {arm}.",
+    )
+    model_snapshot_digest = cell.get("model_snapshot_digest_set_sha256")
+    _sha256_value(model_snapshot_digest, "model snapshot")
+    _require(
+        identity.get("model_snapshot_digest_set_sha256") == model_snapshot_digest,
+        f"Safety model snapshot identity drifted: {arm}.",
+    )
     identities: set[str] = set()
+    coordinates_seen: set[tuple[str, int, int]] = set()
     prompt_pairs: list[str] = []
     groups: dict[tuple[str, int], list[dict[str, Any]]] = defaultdict(list)
     failures: dict[str, int] = defaultdict(int)
     for record in records:
-        identifier = record.get("example_id")
-        _require(
-            isinstance(identifier, str) and identifier not in identities,
-            "Safety example identity is missing or duplicated.",
-        )
-        assert isinstance(identifier, str)
-        identities.add(identifier)
-        _require(
-            record.get("benchmark") == "SafetyStress" and record.get("arm") == arm,
-            "Safety record drifted.",
-        )
         family_value, context_value = record.get("family"), record.get("context_target")
+        coordinate = record.get("coordinates", {})
+        index = coordinate.get("index") if isinstance(coordinate, dict) else None
         _require(
             isinstance(family_value, str)
             and family_value in FAMILIES
-            and isinstance(context_value, int)
+            and type(context_value) is int
             and context_value in manifest["context_targets_tokens"]
-            and isinstance(record.get("exact_input_tokens"), int)
+            and _nonnegative_integer(index)
+            and index < manifest["examples_per_family_context"]
+            and coordinate
+            == {"family": family_value, "context_target": context_value, "index": index}
+            and _nonnegative_integer(record.get("exact_input_tokens"))
             and int(context_value * manifest["target_fill_tolerance"]["minimum_fraction"])
             <= record["exact_input_tokens"]
             <= context_value - manifest["generation_reserve_tokens"],
-            f"Safety slice or token accounting drifted: {identifier}.",
+            "Safety slice, coordinate, or token accounting drifted.",
         )
         assert isinstance(family_value, str) and isinstance(context_value, int)
+        assert isinstance(index, int)
         family, context = family_value, context_value
+        coordinate_key = (family, context, index)
+        expected_identifier = (
+            f"{family}:{context}:{index}:"
+            + hashlib.sha256(
+                f"{manifest['seed']}:{family}:{context}:{index}".encode()
+            ).hexdigest()
+        )
+        identifier = record.get("example_id")
+        _require(
+            identifier == expected_identifier
+            and identifier not in identities
+            and coordinate_key not in coordinates_seen,
+            "Safety example identity or coordinate is missing or duplicated.",
+        )
+        assert isinstance(identifier, str)
+        identities.add(identifier)
+        coordinates_seen.add(coordinate_key)
+        _require(
+            record.get("benchmark") == "SafetyStress"
+            and record.get("arm") == arm
+            and record.get("generation_reserve_tokens")
+            == manifest["generation_reserve_tokens"]
+            and record.get("arm_config") == arm_config,
+            "Safety record or arm configuration drifted.",
+        )
         _audit_protected_record(record, identifier)
         for key in ("raw_prompt_sha256", "input_token_ids_sha256", "expected_response_sha256"):
             value = record.get(key)
-            _require(isinstance(value, str) and len(value) == 64, f"Safety {key} drifted.")
-            assert isinstance(value, str)
-            int(value, 16)
+            _sha256_value(value, key)
+        canary = record.get("canary_sha256")
+        if family in {"refusal-retention", "prompt-injection-leakage"}:
+            _sha256_value(canary, "canary")
+        else:
+            _require(canary is None, f"Unexpected safety canary: {identifier}.")
+        _require(
+            record.get("revisions")
+            == {
+                "model_revision": manifest["model"]["revision"],
+                "workload_sha256": source_implementation["workload_sha256"],
+                "scorer_sha256": source_implementation["workload_sha256"],
+            },
+            f"Safety record revisions drifted: {identifier}.",
+        )
+        _require(
+            isinstance(record.get("raw_response"), str)
+            and (
+                record.get("parsed_response") is None
+                or isinstance(record.get("parsed_response"), str)
+            )
+            and isinstance(record.get("stop_reason"), str)
+            and bool(record["stop_reason"])
+            and _finite_nonnegative_number(record.get("latency_ms"))
+            and _nonnegative_integer(record.get("peak_hbm_bytes"))
+            and _nonnegative_integer(record.get("hot_resident_bytes"))
+            and isinstance(record.get("leakage_event"), bool)
+            and isinstance(record.get("exact_required_response"), bool)
+            and (
+                "generated_tokens_observed" not in record
+                or _nonnegative_integer(record.get("generated_tokens_observed"))
+            ),
+            f"Invalid safety terminal measurements: {identifier}.",
+        )
         prompt_pairs.append(
             f"{identifier}:{record['raw_prompt_sha256']}:{record['input_token_ids_sha256']}"
         )
@@ -248,9 +353,10 @@ def audit_arm(
         if status == "scored":
             _require(
                 record.get("failure_type") is None
-                and record.get("score") in {0.0, 1.0}
-                and isinstance(record.get("leakage_event"), bool)
-                and isinstance(record.get("exact_required_response"), bool),
+                and type(record.get("score")) in (int, float)
+                and record["score"] in {0.0, 1.0}
+                and record.get("parsed_response") is not None
+                and _nonnegative_integer(record.get("generated_tokens_observed")),
                 f"Invalid scored safety record: {identifier}.",
             )
         else:
@@ -258,12 +364,23 @@ def audit_arm(
             _require(
                 status == "failure"
                 and isinstance(failure, str)
-                and failure in manifest["failure_accounting"],
+                and failure in manifest["failure_accounting"]
+                and record.get("score") is None,
                 f"Unregistered safety failure: {identifier}.",
             )
             assert isinstance(failure, str)
             failures[failure] += 1
         groups[(family, context)].append(record)
+    _require(
+        coordinates_seen
+        == {
+            (family, context, index)
+            for family in FAMILIES
+            for context in manifest["context_targets_tokens"]
+            for index in range(manifest["examples_per_family_context"])
+        },
+        f"Safety coordinate grid drifted: {arm}.",
+    )
     slices: list[dict[str, Any]] = []
     for (family, context), rows in sorted(groups.items()):
         score_sum = sum(float(row.get("score") or 0.0) for row in rows)
@@ -295,6 +412,12 @@ def audit_arm(
         "natural_manifest": _dependency(cell.get("natural_manifest"), "natural manifest"),
         "model_snapshot": cell["model_snapshot_digest_set_sha256"],
     }
+    _require(
+        identity.get("causal_gate_sha256") == dependencies["causal_gate"]
+        and identity.get("fixed_selection_sha256") == dependencies["fixed_selection"]
+        and identity.get("natural_manifest_sha256") == dependencies["natural_manifest"],
+        f"Safety dependency identity drifted: {arm}.",
+    )
     return (
         {
             "terminal": True,
