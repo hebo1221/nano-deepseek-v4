@@ -140,12 +140,22 @@
     "failure_policy": "every expected generation or judge failure is explicit and scores zero only for the corresponding conservative estimand",
     "pairing": "same example, prompt position, raw prompt digest, and token-id digest across arms"
   },
+  "failure_accounting": [
+    "unsupported-context",
+    "oom",
+    "empty-generation",
+    "runtime-error",
+    "judge-blocked",
+    "judge-error",
+    "official-scorer-error"
+  ],
   "dataset_viewer": {
     "observed_status_on_2026-07-14": "HTTP 503 for both datasets",
     "policy": "viewer availability is non-authoritative; pinned Hub revision, byte size, SHA-256, row count, schema, and license are authoritative"
   },
   "execution": {
     "asset_preparation": "research/adaptive_v4_memory/scripts/prepare_p3_natural_safety_assets.py",
+    "generation_runner": "research/adaptive_v4_memory/scripts/run_p3_natural_safety_generation.py",
     "asset_inventory": "artifacts/adaptive_v4_memory/paper_grade/p3/natural-safety/assets/inventory.json",
     "default_judge_mode": "blocked"
   },
