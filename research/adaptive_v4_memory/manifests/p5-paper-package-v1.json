@@ -87,7 +87,8 @@
       "required_audit": {
         "benchmarks_terminal": 5,
         "minimum_protocol_examples_accounted_per_arm": 45289,
-        "all_source_implementations_verified": true
+        "all_source_implementations_verified": true,
+        "all_paired_quality_contrasts_verified": true
       }
     },
     "p3_safety": {
@@ -200,12 +201,15 @@
     "table-p2-causal-gate.csv",
     "table-p3-ruler-cells.csv",
     "table-p3-safety-slices.csv",
+    "table-p3-natural-benchmark-arms.csv",
+    "table-p3-natural-paired-contrasts.csv",
     "table-p4-500k-context.csv",
     "table-p4-reference-system-cells.csv",
     "table-p4-reference-system-metrics.csv",
     "table-p4-production-system-cells.csv",
     "table-p4-production-system-metrics.csv",
     "figure-p2-causal-effect.svg",
+    "figure-p3-natural-quality.svg",
     "figure-p4-production-tradeoffs.svg",
     "paper-report.md",
     "artifact-index.json"

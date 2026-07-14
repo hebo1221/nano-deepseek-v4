@@ -265,6 +265,7 @@ def classify_evidence(
         and natural_audit.get("all_required_baseline_cells_terminal") is True
         and natural_audit.get("all_failure_accounting_complete") is True
         and natural_audit.get("all_source_implementations_verified") is True
+        and natural_audit.get("all_paired_quality_contrasts_verified") is True
         and natural_audit.get("safety_stress_terminal") is True
         and natural_audit.get("natural_safety_terminal") is True
         and natural_audit.get("benchmarks_terminal") == 5
@@ -652,6 +653,150 @@ def _p3_safety_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
     ]
 
 
+def _p3_natural_arm_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for benchmark, benchmark_payload in payload["benchmarks"].items():
+        for arm, arm_payload in benchmark_payload["required_arms"].items():
+            scored = arm_payload["measurements"]["scored_only"]
+            rows.append(
+                {
+                    "benchmark": benchmark,
+                    "arm": arm,
+                    "status": "complete",
+                    "expected_examples": arm_payload["expected_examples"],
+                    "scored_examples": arm_payload["scored_examples"],
+                    "failed_examples": arm_payload["failed_examples"],
+                    "failure_rate": arm_payload["failure_rate"],
+                    "failures_by_type": json.dumps(
+                        arm_payload["failures_by_type"], sort_keys=True, separators=(",", ":")
+                    ),
+                    "mean_score_over_scored": arm_payload["mean_score_over_scored"],
+                    "mean_score_over_all_expected_failures_zero": arm_payload[
+                        "mean_score_over_all_expected_failures_zero"
+                    ],
+                    "scored_latency_ms_mean": (
+                        scored["latency_ms"]["mean"] if scored["latency_ms"] else ""
+                    ),
+                    "scored_latency_ms_p95": (
+                        scored["latency_ms"]["p95"] if scored["latency_ms"] else ""
+                    ),
+                    "scored_latency_ms_p99": (
+                        scored["latency_ms"]["p99"] if scored["latency_ms"] else ""
+                    ),
+                    "scored_peak_hbm_bytes_mean": (
+                        scored["peak_hbm_bytes"]["mean"] if scored["peak_hbm_bytes"] else ""
+                    ),
+                    "scored_peak_hbm_bytes_p95": (
+                        scored["peak_hbm_bytes"]["p95"] if scored["peak_hbm_bytes"] else ""
+                    ),
+                    "scored_hot_resident_bytes_mean": (
+                        scored["hot_resident_bytes"]["mean"]
+                        if scored["hot_resident_bytes"]
+                        else ""
+                    ),
+                    "scored_hot_resident_bytes_p95": (
+                        scored["hot_resident_bytes"]["p95"]
+                        if scored["hot_resident_bytes"]
+                        else ""
+                    ),
+                }
+            )
+        for arm, disposition in benchmark_payload["conditional_arms"].items():
+            rows.append(
+                {
+                    "benchmark": benchmark,
+                    "arm": arm,
+                    "status": disposition["status"],
+                }
+            )
+    return rows
+
+
+def _p3_natural_contrast_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    rows = []
+    for benchmark, benchmark_payload in payload["benchmarks"].items():
+        quality = benchmark_payload["paired_quality_contrast"]
+        measurements = benchmark_payload["paired_measurement_contrasts"]
+        rows.append(
+            {
+                "benchmark": benchmark,
+                **{
+                    key: quality[key]
+                    for key in (
+                        "candidate",
+                        "comparator",
+                        "paired_examples",
+                        "jointly_scored_examples",
+                        "mean_difference",
+                        "mean_difference_percentage_points",
+                        "two_sided_bootstrap_p",
+                        "cohens_dz",
+                        "bootstrap_resamples",
+                        "confidence_level",
+                        "bootstrap_seed",
+                    )
+                },
+                "paired_bootstrap_95_ci": json.dumps(
+                    quality["paired_bootstrap_95_ci"], separators=(",", ":")
+                ),
+                "paired_bootstrap_95_ci_percentage_points": json.dumps(
+                    quality["paired_bootstrap_95_ci_percentage_points"],
+                    separators=(",", ":"),
+                ),
+                "failure_pairing": json.dumps(
+                    quality["failure_pairing"], sort_keys=True, separators=(",", ":")
+                ),
+                "latency_mean_paired_difference": measurements["latency_ms"][
+                    "mean_paired_difference"
+                ],
+                "latency_ratio_of_means": measurements["latency_ms"]["ratio_of_means"],
+                "peak_hbm_mean_paired_difference": measurements["peak_hbm_bytes"][
+                    "mean_paired_difference"
+                ],
+                "peak_hbm_ratio_of_means": measurements["peak_hbm_bytes"][
+                    "ratio_of_means"
+                ],
+                "hot_resident_mean_paired_difference": measurements[
+                    "hot_resident_bytes"
+                ]["mean_paired_difference"],
+                "hot_resident_ratio_of_means": measurements["hot_resident_bytes"][
+                    "ratio_of_means"
+                ],
+            }
+        )
+    return rows
+
+
+def _write_p3_natural_figure(path: Path, payload: dict[str, Any]) -> None:
+    rows = []
+    summaries: dict[str, str] = {}
+    for benchmark, benchmark_payload in payload["benchmarks"].items():
+        quality = benchmark_payload["paired_quality_contrast"]
+        interval = quality["paired_bootstrap_95_ci_percentage_points"]
+        rows.append(
+            {
+                "label": benchmark,
+                "value": quality["mean_difference_percentage_points"],
+                "lower": interval[0],
+                "upper": interval[1],
+                "color": "#16734a" if interval[0] > 0.0 else "#a84b37",
+            }
+        )
+        summaries[benchmark] = benchmark_payload["summary"]["sha256"]
+    _write_interval_svg(
+        path,
+        title="Natural long-context quality against the strongest fixed baseline",
+        subtitle="strongest-memory-matched-fixed minus native-dense; failures score zero",
+        x_label="paired benchmark score difference (percentage points)",
+        rows=rows,
+        source={
+            "experiment_id": payload["experiment_id"],
+            "experiment_manifest_sha256": payload["experiment_manifest"]["sha256"],
+            "benchmark_summary_sha256": summaries,
+        },
+    )
+
+
 def _metric_mean(cell: dict[str, Any], metric: str, policy: str) -> Any:
     value = cell.get("metrics", {}).get(metric, {}).get(policy)
     return "" if value is None else value["mean"]
@@ -866,6 +1011,12 @@ The causal figure reports the four preregistered scale-budget cells without pool
 into a single favorable average. Its interval and point data are embedded in the SVG
 metadata and bound to the audited causal matrix.
 
+![Natural benchmark paired quality](figure-p3-natural-quality.svg)
+
+The natural-language figure reports every benchmark separately, scores all operational
+failures as zero, and uses paired bootstrap intervals over the frozen example set. The
+adjacent CSV tables retain arm-level failure, latency, peak-HBM, and hot-memory summaries.
+
 ![Production latency, throughput, and memory trade-offs](figure-p4-production-tradeoffs.svg)
 
 The production figure reports mean and full observed cell range for each context-metric
@@ -956,6 +1107,18 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         p3_safety,
         list(p3_safety[0]),
     )
+    p3_natural_arms = _p3_natural_arm_rows(loaded["p3_natural"])
+    _write_csv(
+        output_root / "table-p3-natural-benchmark-arms.csv",
+        p3_natural_arms,
+        list(p3_natural_arms[0]),
+    )
+    p3_natural_contrasts = _p3_natural_contrast_rows(loaded["p3_natural"])
+    _write_csv(
+        output_root / "table-p3-natural-paired-contrasts.csv",
+        p3_natural_contrasts,
+        list(p3_natural_contrasts[0]),
+    )
     p4_500k = _p4_500k_rows(loaded["p4_500k_context"])
     _write_csv(
         output_root / "table-p4-500k-context.csv",
@@ -1027,6 +1190,9 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
     )
     _write_p2_causal_figure(
         output_root / "figure-p2-causal-effect.svg", loaded["p2_causal"]
+    )
+    _write_p3_natural_figure(
+        output_root / "figure-p3-natural-quality.svg", loaded["p3_natural"]
     )
     _write_p4_tradeoff_figure(
         output_root / "figure-p4-production-tradeoffs.svg",

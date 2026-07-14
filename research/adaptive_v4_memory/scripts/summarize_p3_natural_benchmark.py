@@ -7,6 +7,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 from p3_source_provenance import verify_git_implementation
 from summarize_p3_natural_suite import BENCHMARK_IDS, sha256
 
@@ -18,6 +19,8 @@ RUNNER_PATHS = {
     "LongMemEval": "research/adaptive_v4_memory/scripts/run_p3_longmemeval.py",
     "MRCR": "research/adaptive_v4_memory/scripts/run_p3_mrcr.py",
 }
+BOOTSTRAP_RESAMPLES = 10_000
+CONFIDENCE_LEVEL = 0.95
 
 
 def _require(condition: bool, message: str) -> None:
@@ -48,6 +51,145 @@ def _records(path: Path) -> list[dict[str, Any]]:
             _require(isinstance(row, dict), f"Raw record {line_number} is not an object.")
             records.append(row)
     return records
+
+
+def _distribution(values: list[float | int]) -> dict[str, Any] | None:
+    if not values:
+        return None
+    array = np.asarray(values, dtype=np.float64)
+    return {
+        "observations": len(array),
+        "mean": float(array.mean()),
+        "sample_standard_deviation": float(array.std(ddof=1)) if len(array) > 1 else 0.0,
+        "p50": float(np.quantile(array, 0.50)),
+        "p95": float(np.quantile(array, 0.95)),
+        "p99": float(np.quantile(array, 0.99)),
+        "minimum": float(array.min()),
+        "maximum": float(array.max()),
+    }
+
+
+def _stable_seed(label: str) -> int:
+    return int.from_bytes(hashlib.sha256(label.encode()).digest()[:8], "big")
+
+
+def _paired_bootstrap(values: list[float], *, label: str) -> dict[str, Any]:
+    array = np.asarray(values, dtype=np.float64)
+    _require(len(array) > 0, "Paired natural contrast is empty.")
+    unique, counts = np.unique(array, return_counts=True)
+    probabilities = counts / len(array)
+    rng = np.random.default_rng(_stable_seed(label))
+    means = np.empty(BOOTSTRAP_RESAMPLES, dtype=np.float64)
+    batch_size = 128
+    for start in range(0, BOOTSTRAP_RESAMPLES, batch_size):
+        stop = min(start + batch_size, BOOTSTRAP_RESAMPLES)
+        sampled = rng.multinomial(len(array), probabilities, size=stop - start)
+        means[start:stop] = sampled @ unique / len(array)
+    alpha = 1.0 - CONFIDENCE_LEVEL
+    lower, upper = np.quantile(means, (alpha / 2.0, 1.0 - alpha / 2.0))
+    lower_tail = (np.count_nonzero(means <= 0.0) + 1) / (BOOTSTRAP_RESAMPLES + 1)
+    upper_tail = (np.count_nonzero(means >= 0.0) + 1) / (BOOTSTRAP_RESAMPLES + 1)
+    standard_deviation = float(array.std(ddof=1)) if len(array) > 1 else 0.0
+    mean = float(array.mean())
+    return {
+        "paired_examples": len(array),
+        "mean_difference": mean,
+        "mean_difference_percentage_points": mean * 100.0,
+        "paired_bootstrap_95_ci": [float(lower), float(upper)],
+        "paired_bootstrap_95_ci_percentage_points": [
+            float(lower) * 100.0,
+            float(upper) * 100.0,
+        ],
+        "two_sided_bootstrap_p": min(1.0, 2.0 * min(lower_tail, upper_tail)),
+        "cohens_dz": mean / standard_deviation if standard_deviation > 0.0 else None,
+        "sample_standard_deviation": standard_deviation,
+        "bootstrap_resamples": BOOTSTRAP_RESAMPLES,
+        "confidence_level": CONFIDENCE_LEVEL,
+        "bootstrap_seed": _stable_seed(label),
+    }
+
+
+def _arm_records(artifact_path: Path) -> list[dict[str, Any]]:
+    artifact = json.loads(artifact_path.read_text())
+    return _records(Path(artifact["raw_records"]["path"]))
+
+
+def _paired_contrasts(
+    *, benchmark: str, arm_artifacts: dict[str, Path], required_arms: tuple[str, ...]
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    _require(len(required_arms) == 2, "Natural paired contrast requires two baseline arms.")
+    comparator, candidate = required_arms
+    records = {
+        arm: {row["example_id"]: row for row in _arm_records(arm_artifacts[arm])}
+        for arm in required_arms
+    }
+    _require(
+        set(records[comparator]) == set(records[candidate]),
+        "Natural paired contrast example identities drifted.",
+    )
+    quality_differences: list[float] = []
+    measurement_values: dict[str, dict[str, list[float]]] = {
+        metric: {comparator: [], candidate: []}
+        for metric in ("latency_ms", "peak_hbm_bytes", "hot_resident_bytes")
+    }
+    jointly_scored = 0
+    failure_pairing = {
+        "both_scored": 0,
+        "candidate_only_failed": 0,
+        "comparator_only_failed": 0,
+        "both_failed": 0,
+    }
+    for identifier in sorted(records[comparator]):
+        reference = records[comparator][identifier]
+        treatment = records[candidate][identifier]
+        _require(
+            reference["raw_prompt_sha256"] == treatment["raw_prompt_sha256"],
+            f"Natural paired prompt drifted: {identifier}",
+        )
+        reference_scored = reference["status"] == "scored"
+        treatment_scored = treatment["status"] == "scored"
+        if reference_scored and treatment_scored:
+            failure_pairing["both_scored"] += 1
+            jointly_scored += 1
+        elif reference_scored:
+            failure_pairing["candidate_only_failed"] += 1
+        elif treatment_scored:
+            failure_pairing["comparator_only_failed"] += 1
+        else:
+            failure_pairing["both_failed"] += 1
+        reference_score = float(reference["score"]) if reference_scored else 0.0
+        treatment_score = float(treatment["score"]) if treatment_scored else 0.0
+        quality_differences.append(treatment_score - reference_score)
+        for metric in measurement_values:
+            measurement_values[metric][comparator].append(float(reference[metric]))
+            measurement_values[metric][candidate].append(float(treatment[metric]))
+    quality = {
+        "candidate": candidate,
+        "comparator": comparator,
+        "failure_as_zero": True,
+        "jointly_scored_examples": jointly_scored,
+        "failure_pairing": failure_pairing,
+        **_paired_bootstrap(quality_differences, label=f"p3-natural:{benchmark}:quality"),
+    }
+    measurements: dict[str, Any] = {}
+    for metric, by_arm in measurement_values.items():
+        comparator_values = np.asarray(by_arm[comparator], dtype=np.float64)
+        candidate_values = np.asarray(by_arm[candidate], dtype=np.float64)
+        comparator_mean = float(comparator_values.mean())
+        candidate_mean = float(candidate_values.mean())
+        measurements[metric] = {
+            "paired_examples": len(candidate_values),
+            "candidate": candidate,
+            "comparator": comparator,
+            "candidate_mean": candidate_mean,
+            "comparator_mean": comparator_mean,
+            "mean_paired_difference": float((candidate_values - comparator_values).mean()),
+            "ratio_of_means": (
+                candidate_mean / comparator_mean if comparator_mean > 0.0 else None
+            ),
+            "includes_terminal_failures": True,
+        }
+    return quality, measurements
 
 
 def _verify_source_implementation(artifact: dict[str, Any], benchmark: str) -> dict[str, str]:
@@ -104,6 +246,15 @@ def audit_arm(
     failures: dict[str, int] = {}
     scored = 0
     score_sum = 0.0
+    measurement_values: dict[str, list[float | int]] = {
+        "exact_input_tokens": [],
+        "latency_ms": [],
+        "peak_hbm_bytes": [],
+        "hot_resident_bytes": [],
+    }
+    scored_measurement_values: dict[str, list[float | int]] = {
+        key: [] for key in measurement_values
+    }
     record_digests: list[str] = []
     paired_input_digests: list[str] = []
     for row in records:
@@ -160,6 +311,8 @@ def audit_arm(
         )
         assert isinstance(revisions, dict)
         _require(isinstance(row.get("arm_config"), dict), f"Missing arm config: {identifier}")
+        for metric in measurement_values:
+            measurement_values[metric].append(row[metric])
         if benchmark in {"RULER", "SCBench", "LongBench-v2", "LongMemEval", "MRCR"}:
             _require(
                 isinstance(row.get("token_boundary_retreat"), int)
@@ -229,6 +382,8 @@ def audit_arm(
             _require(row.get("failure_type") is None, f"Scored record has failure: {identifier}")
             scored += 1
             score_sum += float(score)
+            for metric in scored_measurement_values:
+                scored_measurement_values[metric].append(row[metric])
         else:
             failure = row.get("failure_type")
             if not isinstance(failure, str) or failure not in allowed_failures:
@@ -260,6 +415,16 @@ def audit_arm(
             "failures_by_type": failures,
             "mean_score_over_scored": (score_sum / scored if scored else None),
             "mean_score_over_all_expected_failures_zero": score_sum / expected_examples,
+            "failure_rate": sum(failures.values()) / expected_examples,
+            "measurements": {
+                "all_terminal_attempts": {
+                    key: _distribution(values) for key, values in measurement_values.items()
+                },
+                "scored_only": {
+                    key: _distribution(values)
+                    for key, values in scored_measurement_values.items()
+                },
+            },
             "paired_example_prompt_digest_set_sha256": hashlib.sha256(
                 "\n".join(sorted(paired_input_digests)).encode()
             ).hexdigest(),
@@ -327,6 +492,11 @@ def summarize_benchmark(
         len(source_implementations) == 1,
         "Natural arms used different source implementations.",
     )
+    paired_quality, paired_measurements = _paired_contrasts(
+        benchmark=benchmark,
+        arm_artifacts=arm_artifacts,
+        required_arms=required,
+    )
     allowed_conditional = {"complete", "incompatible", "withheld-by-causal-gate"}
     _require(
         set(conditional_arms) == set(manifest["common_protocol"]["conditional_arms"])
@@ -350,6 +520,8 @@ def summarize_benchmark(
             ).hexdigest(),
         },
         "arms": arms,
+        "paired_quality_contrast": paired_quality,
+        "paired_measurement_contrasts": paired_measurements,
         "conditional_arms": {name: {"status": status} for name, status in conditional_arms.items()},
         "causal_gate": dependencies[0]["causal_gate"],
         "dataset_inventory": dependencies[0]["dataset_inventory"],

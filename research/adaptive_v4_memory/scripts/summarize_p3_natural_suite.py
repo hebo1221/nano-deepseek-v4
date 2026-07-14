@@ -39,6 +39,25 @@ def _sha256_value(value: Any, label: str) -> None:
     int(value, 16)
 
 
+def _validate_distribution(value: Any, *, observations: int, label: str) -> None:
+    _require(isinstance(value, dict), f"Missing {label} distribution.")
+    _require(value.get("observations") == observations, f"{label} observations drifted.")
+    for field in (
+        "mean",
+        "sample_standard_deviation",
+        "p50",
+        "p95",
+        "p99",
+        "minimum",
+        "maximum",
+    ):
+        item = value.get(field)
+        _require(
+            isinstance(item, (int, float)) and not isinstance(item, bool) and item >= 0,
+            f"{label} {field} drifted.",
+        )
+
+
 def audit_benchmark(
     *,
     name: str,
@@ -105,6 +124,36 @@ def audit_benchmark(
             isinstance(conservative_mean, (int, float)) and 0.0 <= conservative_mean <= 1.0,
             f"{name}/{arm} conservative quality is missing.",
         )
+        failure_rate = row.get("failure_rate")
+        _require(
+            isinstance(failure_rate, (int, float))
+            and not isinstance(failure_rate, bool)
+            and failure_rate == sum(failures.values()) / expected_examples,
+            f"{name}/{arm} failure rate drifted.",
+        )
+        measurements = row.get("measurements", {})
+        for metric in (
+            "exact_input_tokens",
+            "latency_ms",
+            "peak_hbm_bytes",
+            "hot_resident_bytes",
+        ):
+            _validate_distribution(
+                measurements.get("all_terminal_attempts", {}).get(metric),
+                observations=expected_examples,
+                label=f"{name}/{arm} all-terminal {metric}",
+            )
+            if scored > 0:
+                _validate_distribution(
+                    measurements.get("scored_only", {}).get(metric),
+                    observations=scored,
+                    label=f"{name}/{arm} scored-only {metric}",
+                )
+            else:
+                _require(
+                    measurements.get("scored_only", {}).get(metric) is None,
+                    f"{name}/{arm} empty scored-only {metric} drifted.",
+                )
         arm_rows[arm] = {
             "terminal": True,
             "expected_examples": expected_examples,
@@ -113,7 +162,35 @@ def audit_benchmark(
             "failures_by_type": failures,
             "mean_score_over_scored": row.get("mean_score_over_scored"),
             "mean_score_over_all_expected_failures_zero": conservative_mean,
+            "failure_rate": failure_rate,
+            "measurements": measurements,
         }
+    contrast = payload.get("paired_quality_contrast", {})
+    _require(
+        contrast.get("paired_examples") == expected_examples
+        and contrast.get("candidate") == required_arms[1]
+        and contrast.get("comparator") == required_arms[0]
+        and contrast.get("failure_as_zero") is True
+        and contrast.get("bootstrap_resamples") == 10_000
+        and contrast.get("confidence_level") == 0.95
+        and isinstance(contrast.get("paired_bootstrap_95_ci"), list)
+        and len(contrast["paired_bootstrap_95_ci"]) == 2
+        and sum(contrast.get("failure_pairing", {}).values()) == expected_examples,
+        f"{name} paired quality contrast is incomplete.",
+    )
+    measurement_contrasts = payload.get("paired_measurement_contrasts", {})
+    _require(
+        set(measurement_contrasts)
+        == {"latency_ms", "peak_hbm_bytes", "hot_resident_bytes"}
+        and all(
+            row.get("paired_examples") == expected_examples
+            and row.get("candidate") == required_arms[1]
+            and row.get("comparator") == required_arms[0]
+            and row.get("includes_terminal_failures") is True
+            for row in measurement_contrasts.values()
+        ),
+        f"{name} paired measurement contrasts are incomplete.",
+    )
     conditional = payload.get("conditional_arms", {})
     _require(
         all(
@@ -127,6 +204,8 @@ def audit_benchmark(
         "native_and_fixed_terminal": all(arm_rows[arm]["terminal"] for arm in required_arms),
         "expected_examples_per_required_arm": expected_examples,
         "required_arms": arm_rows,
+        "paired_quality_contrast": contrast,
+        "paired_measurement_contrasts": measurement_contrasts,
         "conditional_arms": conditional,
         "summary": {"path": str(path), "sha256": sha256(path)},
     }
@@ -402,6 +481,7 @@ def summarize(
             "all_required_baseline_cells_terminal": True,
             "all_failure_accounting_complete": True,
             "all_source_implementations_verified": True,
+            "all_paired_quality_contrasts_verified": True,
             "safety_stress_terminal": True,
             "natural_safety_terminal": True,
             "benchmarks_terminal": len(benchmarks),

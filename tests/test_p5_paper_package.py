@@ -211,6 +211,12 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
         ]
         is True
     )
+    assert (
+        manifest["evidence"]["p3_natural"]["required_audit"][
+            "all_paired_quality_contrasts_verified"
+        ]
+        is True
+    )
     assert manifest["boundary_manifests"]["production_runtime_blocker"].endswith(
         "p4-production-resource-blocker-v1.json"
     )
@@ -220,7 +226,10 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
     assert set(manifest["boundary_manifests"]) == set(package.BOUNDARY_EXPERIMENT_IDS)
     assert {
         "figure-p2-causal-effect.svg",
+        "figure-p3-natural-quality.svg",
         "figure-p4-production-tradeoffs.svg",
+        "table-p3-natural-benchmark-arms.csv",
+        "table-p3-natural-paired-contrasts.csv",
     }.issubset(manifest["generated_files"])
 
 
@@ -272,6 +281,7 @@ def test_p5_classification_preserves_claim_boundaries() -> None:
                 "all_required_baseline_cells_terminal": True,
                 "all_failure_accounting_complete": True,
                 "all_source_implementations_verified": True,
+                "all_paired_quality_contrasts_verified": True,
                 "safety_stress_terminal": True,
                 "natural_safety_terminal": True,
                 "benchmarks_terminal": 5,
@@ -339,6 +349,7 @@ def test_p5_success_requires_full_system_coverage() -> None:
                 "all_required_baseline_cells_terminal": True,
                 "all_failure_accounting_complete": True,
                 "all_source_implementations_verified": True,
+                "all_paired_quality_contrasts_verified": True,
                 "safety_stress_terminal": True,
                 "natural_safety_terminal": True,
                 "benchmarks_terminal": 5,
@@ -395,6 +406,7 @@ def test_p5_marks_all_failed_production_coverage_unverified() -> None:
                 "all_required_baseline_cells_terminal": True,
                 "all_failure_accounting_complete": True,
                 "all_source_implementations_verified": True,
+                "all_paired_quality_contrasts_verified": True,
                 "safety_stress_terminal": True,
                 "natural_safety_terminal": True,
                 "benchmarks_terminal": 5,
@@ -664,4 +676,101 @@ def test_p5_production_figure_retains_terminal_counts_and_measured_ranges(
     assert "terminal cells: 216, complete: 214, partial: 1, failed: 1" in rendered
     assert "8K · TTFT p95 (n=2)" in rendered
     assert "8K · HBM peak (n=2)" in rendered
+    assert "rows_sha256" in rendered
+
+
+def test_p5_natural_tables_and_figure_retain_quality_failures_and_memory(
+    tmp_path: Path,
+) -> None:
+    distribution = {
+        "observations": 9,
+        "mean": 20.0,
+        "sample_standard_deviation": 2.0,
+        "p50": 20.0,
+        "p95": 23.0,
+        "p99": 24.0,
+        "minimum": 15.0,
+        "maximum": 25.0,
+    }
+    quality = {
+        "candidate": "strongest-memory-matched-fixed",
+        "comparator": "native-dense",
+        "paired_examples": 10,
+        "jointly_scored_examples": 9,
+        "mean_difference": 0.02,
+        "mean_difference_percentage_points": 2.0,
+        "paired_bootstrap_95_ci": [0.005, 0.035],
+        "paired_bootstrap_95_ci_percentage_points": [0.5, 3.5],
+        "two_sided_bootstrap_p": 0.02,
+        "cohens_dz": 0.4,
+        "bootstrap_resamples": 10_000,
+        "confidence_level": 0.95,
+        "bootstrap_seed": 42,
+        "failure_pairing": {
+            "both_scored": 9,
+            "candidate_only_failed": 1,
+            "comparator_only_failed": 0,
+            "both_failed": 0,
+        },
+    }
+    measurement_contrasts = {
+        metric: {
+            "mean_paired_difference": difference,
+            "ratio_of_means": ratio,
+        }
+        for metric, difference, ratio in (
+            ("latency_ms", 2.0, 1.1),
+            ("peak_hbm_bytes", -100.0, 0.8),
+            ("hot_resident_bytes", -200.0, 0.6),
+        )
+    }
+    arm = {
+        "expected_examples": 10,
+        "scored_examples": 9,
+        "failed_examples": 1,
+        "failure_rate": 0.1,
+        "failures_by_type": {"unsupported-context": 1},
+        "mean_score_over_scored": 0.8,
+        "mean_score_over_all_expected_failures_zero": 0.72,
+        "measurements": {
+            "scored_only": {
+                "latency_ms": distribution,
+                "peak_hbm_bytes": distribution,
+                "hot_resident_bytes": distribution,
+            }
+        },
+    }
+    payload = {
+        "experiment_id": "p3-natural-language-suite-audit-v1",
+        "experiment_manifest": {"sha256": "c" * 64},
+        "benchmarks": {
+            "RULER": {
+                "required_arms": {
+                    "native-dense": arm,
+                    "strongest-memory-matched-fixed": arm,
+                },
+                "conditional_arms": {
+                    "fixed+pins": {"status": "incompatible"},
+                },
+                "paired_quality_contrast": quality,
+                "paired_measurement_contrasts": measurement_contrasts,
+                "summary": {"sha256": "d" * 64},
+            }
+        },
+    }
+
+    arm_rows = package._p3_natural_arm_rows(payload)
+    contrast_rows = package._p3_natural_contrast_rows(payload)
+    target = tmp_path / "natural.svg"
+    package._write_p3_natural_figure(target, payload)
+
+    assert len(arm_rows) == 3
+    assert arm_rows[0]["failure_rate"] == 0.1
+    assert arm_rows[0]["scored_hot_resident_bytes_p95"] == 23.0
+    assert arm_rows[2]["status"] == "incompatible"
+    assert contrast_rows[0]["mean_difference_percentage_points"] == 2.0
+    assert contrast_rows[0]["hot_resident_ratio_of_means"] == 0.6
+    rendered = target.read_text()
+    assert "failures score zero" in rendered
+    assert "RULER" in rendered
     assert "rows_sha256" in rendered

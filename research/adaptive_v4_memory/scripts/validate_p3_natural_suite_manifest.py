@@ -90,6 +90,20 @@ def validate_manifest(payload: dict[str, Any]) -> dict[str, Any]:
         or "incompatible" not in conditional_rule
     ):
         raise ValueError("Conditional adaptive arms must retain the architecture boundary.")
+    statistics = payload.get("statistics", {})
+    measurement_reporting = statistics.get("measurement_reporting", {})
+    if (
+        statistics.get("primary_pair")
+        != "strongest-memory-matched-fixed minus native-dense"
+        or statistics.get("operational_failure_score") != 0.0
+        or statistics.get("bootstrap_resamples") != 10_000
+        or statistics.get("confidence_level") != 0.95
+        or "do not replace" not in statistics.get("multiplicity", "")
+        or tuple(measurement_reporting.get("paired_physical_contrasts", ()))
+        != ("latency_ms", "peak_hbm_bytes", "hot_resident_bytes")
+        or "never impute" not in measurement_reporting.get("failure_policy", "")
+    ):
+        raise ValueError("Natural paired statistics or physical reporting contract drifted.")
 
     ruler = _benchmark(payload, "RULER")
     if tuple(ruler["lengths_tokens"]) != EXPECTED_RULER_LENGTHS:

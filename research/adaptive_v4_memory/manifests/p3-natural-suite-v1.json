@@ -89,10 +89,30 @@
       "raw-response",
       "parsed-response",
       "per-example-score",
-      "latency-and-peak-hbm",
+      "latency-peak-hbm-and-hot-resident-bytes",
       "failure-or-stop-reason",
       "model-dataset-code-and-scorer-revisions"
     ]
+  },
+  "statistics": {
+    "primary_pair": "strongest-memory-matched-fixed minus native-dense",
+    "paired_unit": "the frozen benchmark example or shared-context conversation",
+    "operational_failure_score": 0.0,
+    "bootstrap_resamples": 10000,
+    "confidence_level": 0.95,
+    "bootstrap_seed": "first 64 bits of SHA-256('p3-natural:<benchmark>:quality')",
+    "interval": "percentile paired bootstrap of the conservative per-example score difference",
+    "two_sided_p": "twice the smaller bootstrap tail probability with plus-one correction",
+    "multiplicity": "report all five benchmark-specific intervals and p-values; do not replace them with one pooled significance claim",
+    "measurement_reporting": {
+      "arm_distributions": "mean, sample standard deviation, p50, p95, p99, minimum, and maximum over scored examples; retain all-terminal distributions separately",
+      "paired_physical_contrasts": [
+        "latency_ms",
+        "peak_hbm_bytes",
+        "hot_resident_bytes"
+      ],
+      "failure_policy": "retain failed attempts in failure rates and all-terminal physical contrasts; never impute them into scored-only latency or memory distributions"
+    }
   },
   "benchmarks": {
     "RULER": {

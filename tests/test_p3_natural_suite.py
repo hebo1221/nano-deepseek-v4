@@ -19,7 +19,11 @@ from p3_natural_metrics import (  # noqa: E402
     score_mrcr,
 )
 from select_p3_fixed_baseline import ELIGIBLE_ARMS, ELIGIBLE_LENGTHS, select_fixed  # noqa: E402
-from summarize_p3_natural_benchmark import RUNNER_PATHS, audit_arm  # noqa: E402
+from summarize_p3_natural_benchmark import (  # noqa: E402
+    RUNNER_PATHS,
+    audit_arm,
+    summarize_benchmark,
+)
 from summarize_p3_natural_suite import BENCHMARK_IDS, summarize  # noqa: E402
 from validate_p3_natural_suite_manifest import validate_manifest  # noqa: E402
 
@@ -53,6 +57,10 @@ def test_natural_suite_freezes_full_scale_and_sample_contract() -> None:
     assert result["longmemeval_examples"] == 500
     assert result["mrcr_examples_through_128k"] == 1500
     assert manifest["execution_totals"]["minimum_predictions_per_arm"] == 45289
+    assert manifest["statistics"]["bootstrap_resamples"] == 10_000
+    assert manifest["statistics"]["measurement_reporting"][
+        "paired_physical_contrasts"
+    ] == ["latency_ms", "peak_hbm_bytes", "hot_resident_bytes"]
     ruler_execution = manifest["benchmarks"]["RULER"]["execution"]
     assert ruler_execution["dataset_generator"].endswith("prepare_p3_natural_ruler_dataset.py")
     assert ruler_execution["runner"].endswith("run_p3_natural_ruler.py")
@@ -221,6 +229,19 @@ def _natural_benchmark_summaries(tmp_path: Path, manifest_path: Path) -> dict[st
     expected = manifest["suite_audit"]["per_arm_minimum_accounted_examples"]
     paths: dict[str, Path] = {}
     for name, experiment_id in BENCHMARK_IDS.items():
+        def distribution(observations: int) -> dict[str, float | int]:
+            return {
+                "observations": observations,
+                "mean": 1.0,
+                "sample_standard_deviation": 0.0,
+                "p50": 1.0,
+                "p95": 1.0,
+                "p99": 1.0,
+                "minimum": 1.0,
+                "maximum": 1.0,
+            }
+
+        required_arms = manifest["common_protocol"]["p4_gate_baseline_arms"]
         payload = {
             "experiment_id": experiment_id,
             "benchmark": name,
@@ -242,8 +263,63 @@ def _natural_benchmark_summaries(tmp_path: Path, manifest_path: Path) -> dict[st
                     "failures_by_type": {"unsupported-context": 1},
                     "mean_score_over_scored": 0.5,
                     "mean_score_over_all_expected_failures_zero": 0.5,
+                    "failure_rate": 1 / expected[name],
+                    "measurements": {
+                        "all_terminal_attempts": {
+                            metric: distribution(expected[name])
+                            for metric in (
+                                "exact_input_tokens",
+                                "latency_ms",
+                                "peak_hbm_bytes",
+                                "hot_resident_bytes",
+                            )
+                        },
+                        "scored_only": {
+                            metric: distribution(expected[name] - 1)
+                            for metric in (
+                                "exact_input_tokens",
+                                "latency_ms",
+                                "peak_hbm_bytes",
+                                "hot_resident_bytes",
+                            )
+                        },
+                    },
                 }
-                for arm in manifest["common_protocol"]["p4_gate_baseline_arms"]
+                for arm in required_arms
+            },
+            "paired_quality_contrast": {
+                "candidate": required_arms[1],
+                "comparator": required_arms[0],
+                "failure_as_zero": True,
+                "jointly_scored_examples": expected[name] - 1,
+                "failure_pairing": {
+                    "both_scored": expected[name] - 1,
+                    "candidate_only_failed": 0,
+                    "comparator_only_failed": 0,
+                    "both_failed": 1,
+                },
+                "paired_examples": expected[name],
+                "mean_difference": 0.0,
+                "mean_difference_percentage_points": 0.0,
+                "paired_bootstrap_95_ci": [0.0, 0.0],
+                "paired_bootstrap_95_ci_percentage_points": [0.0, 0.0],
+                "two_sided_bootstrap_p": 1.0,
+                "bootstrap_resamples": 10_000,
+                "confidence_level": 0.95,
+                "bootstrap_seed": 1,
+            },
+            "paired_measurement_contrasts": {
+                metric: {
+                    "paired_examples": expected[name],
+                    "candidate": required_arms[1],
+                    "comparator": required_arms[0],
+                    "candidate_mean": 1.0,
+                    "comparator_mean": 1.0,
+                    "mean_paired_difference": 0.0,
+                    "ratio_of_means": 1.0,
+                    "includes_terminal_failures": True,
+                }
+                for metric in ("latency_ms", "peak_hbm_bytes", "hot_resident_bytes")
             },
             "conditional_arms": {
                 "fixed+pins": {"status": "incompatible"},
@@ -386,6 +462,7 @@ def test_natural_suite_audit_requires_all_examples_and_baselines(tmp_path: Path)
     assert payload["audit"]["benchmarks_terminal"] == 5
     assert payload["audit"]["safety_stress_terminal"] is True
     assert payload["audit"]["natural_safety_terminal"] is True
+    assert payload["audit"]["all_paired_quality_contrasts_verified"] is True
     assert payload["supplemental_safety"]["examples_per_required_arm"] == 1200
     assert payload["audit"]["minimum_protocol_examples_accounted_per_arm"] == 45_289
     assert payload["audit"]["accounted_examples_by_required_arm"] == {
@@ -397,6 +474,11 @@ def test_natural_suite_audit_requires_all_examples_and_baselines(tmp_path: Path)
         "strongest-memory-matched-fixed": 0.5,
     }
     assert all(row["native_and_fixed_terminal"] for row in payload["benchmarks"].values())
+    assert all(
+        row["paired_quality_contrast"]["paired_examples"]
+        == row["expected_examples_per_required_arm"]
+        for row in payload["benchmarks"].values()
+    )
 
 
 def test_natural_suite_audit_rejects_unaccounted_failure(tmp_path: Path) -> None:
@@ -520,6 +602,67 @@ def test_natural_arm_audit_closes_scored_and_failed_records(tmp_path: Path) -> N
     assert result["failures_by_type"] == {"unsupported-context": 1}
     assert result["mean_score_over_scored"] == 1.0
     assert result["mean_score_over_all_expected_failures_zero"] == 0.5
+    assert result["failure_rate"] == 0.5
+    assert result["measurements"]["all_terminal_attempts"]["latency_ms"][
+        "observations"
+    ] == 2
+    assert result["measurements"]["scored_only"]["latency_ms"]["observations"] == 1
+
+
+def test_natural_benchmark_summary_reports_paired_quality_and_physical_contrasts(
+    tmp_path: Path,
+) -> None:
+    root = Path(__file__).resolve().parents[1]
+    source_manifest = root / "research/adaptive_v4_memory/manifests/p3-natural-suite-v1.json"
+    manifest = json.loads(source_manifest.read_text())
+    manifest["suite_audit"]["per_arm_minimum_accounted_examples"]["LongBench-v2"] = 2
+    manifest_path = tmp_path / "natural-manifest.json"
+    manifest_path.write_text(json.dumps(manifest))
+    native_cell, native_raw, _causal = _raw_arm_cell(tmp_path)
+    native_payload = json.loads(native_cell.read_text())
+    native_payload["experiment_manifest"]["sha256"] = _digest(manifest_path)
+    native_payload["model_snapshot_digest_set_sha256"] = manifest["model"][
+        "snapshot_digest_set_sha256"
+    ]
+    native_cell.write_text(json.dumps(native_payload))
+
+    fixed_raw = tmp_path / "fixed-records.jsonl"
+    fixed_records = [json.loads(line) for line in native_raw.read_text().splitlines()]
+    for row in fixed_records:
+        row["arm"] = "strongest-memory-matched-fixed"
+        row["arm_config"] = {"method": "fixed"}
+    fixed_records[0]["score"] = 0.5
+    fixed_raw.write_text("".join(json.dumps(row) + "\n" for row in fixed_records))
+    fixed_cell = tmp_path / "fixed-cell.json"
+    fixed_payload = deepcopy(native_payload)
+    fixed_payload["arm"] = "strongest-memory-matched-fixed"
+    fixed_payload["raw_records"] = {
+        "path": str(fixed_raw),
+        "sha256": _digest(fixed_raw),
+    }
+    fixed_cell.write_text(json.dumps(fixed_payload))
+
+    result = summarize_benchmark(
+        benchmark="LongBench-v2",
+        manifest_path=manifest_path,
+        arm_artifacts={
+            "native-dense": native_cell,
+            "strongest-memory-matched-fixed": fixed_cell,
+        },
+        conditional_arms={
+            "fixed+pins": "incompatible",
+            "synthetic-qualified-calibrated+pins": "withheld-by-causal-gate",
+        },
+    )
+
+    contrast = result["paired_quality_contrast"]
+    assert contrast["paired_examples"] == 2
+    assert contrast["mean_difference"] == -0.25
+    assert contrast["failure_as_zero"] is True
+    assert contrast["bootstrap_resamples"] == 10_000
+    assert result["paired_measurement_contrasts"]["hot_resident_bytes"][
+        "paired_examples"
+    ] == 2
 
 
 def test_natural_arm_audit_rejects_runner_digest_not_bound_to_commit(
