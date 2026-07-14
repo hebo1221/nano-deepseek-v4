@@ -111,12 +111,17 @@ def expected_record_revisions(
             if benchmark == "LongBench-v2"
             else f"dataset-readme@{dataset_revision}"
         )
-    return {
+    revisions = {
         "model_revision": model_revision,
         "dataset_revision": dataset_revision,
         "code_revision": code_revision,
         "scorer_sha256": scorer_digest,
     }
+    if benchmark == "LongBench-v2":
+        revisions["prompt_sha256"] = contract["upstream_code"]["files_sha256"][
+            "prompts/0shot.txt"
+        ]
+    return revisions
 
 
 def _dependency(metadata: Any, label: str) -> dict[str, str]:
