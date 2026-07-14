@@ -257,6 +257,8 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
         "table-p2-core-seed-effects.csv",
         "table-p2-core-worst-slices.csv",
         "table-p2-causal-contrasts.csv",
+        "table-p2-causal-family-effects.csv",
+        "table-p2-causal-seed-effects.csv",
         "table-p2-causal-worst-slices.csv",
         "table-p2-causal-physical-memory.csv",
         "table-p2-causal-offline-oracle.csv",
@@ -896,9 +898,10 @@ def test_p5_p2_detailed_tables_retain_seed_family_worst_slice_and_memory() -> No
     }
     core = {"paired_statistics": {"calibrated_minus_fixed": statistics}}
 
-    assert package._p2_core_effect_rows(core)[0][
-        "seed_cluster_inference.seed_cluster_bootstrap_ci"
-    ] == "[0.01,0.05]"
+    assert (
+        package._p2_core_effect_rows(core)[0]["seed_cluster_inference.seed_cluster_bootstrap_ci"]
+        == "[0.01,0.05]"
+    )
     assert package._p2_core_family_rows(core)[0]["holm_adjusted_p"] == 0.02
     assert package._p2_core_seed_rows(core)[0]["training_seed"] == 6071401
     assert {row["scope"] for row in package._p2_core_worst_slice_rows(core)} == {
@@ -915,6 +918,23 @@ def test_p5_p2_detailed_tables_retain_seed_family_worst_slice_and_memory() -> No
                 "budget": "2x",
                 "mean_difference": 0.03,
                 "seed_cluster_inference": {"seed_means": [0.01, 0.02]},
+            }
+        ],
+        "by_family_with_holm_bonferroni": [
+            {
+                "scale": "s55",
+                "budget": "2x",
+                "family": "single-remote-retrieval",
+                "mean_difference": 0.04,
+                "holm_adjusted_p": 0.02,
+            }
+        ],
+        "by_seed": [
+            {
+                "scale": "s55",
+                "budget": "2x",
+                "training_seed": 6071401,
+                "mean_difference": 0.02,
             }
         ],
         "worst_slice": {
@@ -936,9 +956,7 @@ def test_p5_p2_detailed_tables_retain_seed_family_worst_slice_and_memory() -> No
                     "relative_difference": 0.005,
                 }
             ],
-            "aggregate": [
-                {"scale": "s55", "budget": "2x", "relative_difference": 0.004}
-            ],
+            "aggregate": [{"scale": "s55", "budget": "2x", "relative_difference": 0.004}],
             "all_physical_arms_by_seed": [
                 {
                     "scale": "s55",
@@ -957,9 +975,9 @@ def test_p5_p2_detailed_tables_retain_seed_family_worst_slice_and_memory() -> No
         },
     }
 
-    assert package._causal_contrast_rows(causal)[0]["contrast"] == (
-        "adaptive_quota_with_pins"
-    )
+    assert package._causal_contrast_rows(causal)[0]["contrast"] == ("adaptive_quota_with_pins")
+    assert package._causal_family_rows(causal)[0]["holm_adjusted_p"] == 0.02
+    assert package._causal_seed_rows(causal)[0]["training_seed"] == 6071401
     assert package._causal_worst_slice_rows(causal)[0]["context"] == 1024
     assert {row["scope"] for row in package._causal_physical_memory_rows(causal)} == {
         "seed-match",

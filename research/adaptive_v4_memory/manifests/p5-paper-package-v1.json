@@ -255,6 +255,8 @@
     "table-p1-online-learned-lookahead-gate.csv",
     "table-p2-causal-gate.csv",
     "table-p2-causal-contrasts.csv",
+    "table-p2-causal-family-effects.csv",
+    "table-p2-causal-seed-effects.csv",
     "table-p2-causal-worst-slices.csv",
     "table-p2-causal-physical-memory.csv",
     "table-p2-causal-offline-oracle.csv",

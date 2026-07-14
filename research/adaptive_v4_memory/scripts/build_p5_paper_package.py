@@ -740,6 +740,36 @@ def _causal_contrast_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
     ]
 
 
+def _causal_family_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        _flatten_json_row(
+            {
+                "contrast": contrast,
+                "candidate": statistics["candidate"],
+                "comparator": statistics["comparator"],
+                **row,
+            }
+        )
+        for contrast, statistics in payload["paired_statistics"].items()
+        for row in statistics["by_family_with_holm_bonferroni"]
+    ]
+
+
+def _causal_seed_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        _flatten_json_row(
+            {
+                "contrast": contrast,
+                "candidate": statistics["candidate"],
+                "comparator": statistics["comparator"],
+                **row,
+            }
+        )
+        for contrast, statistics in payload["paired_statistics"].items()
+        for row in statistics["by_seed"]
+    ]
+
+
 def _causal_worst_slice_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return [
         _flatten_json_row(
@@ -1196,8 +1226,9 @@ They validate execution semantics and do not receive a scientific conclusion cla
 The causal figure reports the four preregistered scale-budget cells without pooling them
 into a single favorable average. Its interval and point data are embedded in the SVG
 metadata and bound to the audited causal matrix. The accompanying P2 tables expose both
-core comparisons, every seed, every scale-family effect, worst slices, all preregistered
-causal contrasts, measured physical-memory matching, and the target-aware oracle separately.
+core comparisons and preregistered causal contrasts at pooled, seed, and scale-family levels,
+including Holm-corrected family inference, worst slices, measured physical-memory matching,
+and the target-aware oracle separately.
 
 ![Natural benchmark paired quality](figure-p3-natural-quality.svg)
 
@@ -1313,6 +1344,8 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
     _write_csv(output_root / "table-p2-causal-gate.csv", causal, list(causal[0]))
     p2_causal_tables = {
         "table-p2-causal-contrasts.csv": _causal_contrast_rows(loaded["p2_causal"]),
+        "table-p2-causal-family-effects.csv": _causal_family_rows(loaded["p2_causal"]),
+        "table-p2-causal-seed-effects.csv": _causal_seed_rows(loaded["p2_causal"]),
         "table-p2-causal-worst-slices.csv": _causal_worst_slice_rows(loaded["p2_causal"]),
         "table-p2-causal-physical-memory.csv": _causal_physical_memory_rows(loaded["p2_causal"]),
         "table-p2-causal-offline-oracle.csv": _causal_oracle_rows(loaded["p2_causal"]),
