@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -260,6 +261,56 @@ def test_all_preregistered_component_contrasts_are_reported() -> None:
         "hierarchical-no-pins",
     )
     assert len(causal.CONTRASTS) == 15
+
+
+def test_multiplicity_contract_requires_every_family_contrast_and_primary_cell() -> None:
+    cells: list[dict[str, Any]] = [
+        {
+            "scale": scale,
+            "budget": budget,
+            "holm_adjusted_p_across_contrasts": 1.0,
+            "holm_across_contrasts_source_p": (
+                "seed_cluster_exact_paired_randomization_two_sided_p"
+            ),
+        }
+        for scale in ("s55", "s151")
+        for budget in causal.shard.BUDGET_LABELS
+    ]
+    families: list[dict[str, Any]] = [
+        {
+            "scale": scale,
+            "budget": budget,
+            "family": family,
+            "holm_adjusted_p": 1.0,
+            "holm_source_p": "seed_cluster_exact_paired_randomization_two_sided_p",
+        }
+        for scale in ("s55", "s151")
+        for budget in causal.shard.BUDGET_LABELS
+        for family in causal.PAPER_GRADE_WORKLOAD_FAMILIES
+    ]
+    contrasts: dict[str, dict[str, Any]] = {
+        name: {
+            "cells": copy.deepcopy(cells),
+            "by_family_with_holm_bonferroni": copy.deepcopy(families),
+        }
+        for name in causal.CONTRASTS
+    }
+    for cell in contrasts["adaptive_quota_with_pins"]["cells"]:
+        cell["four_cell_corrected_bootstrap"] = {
+            "confidence_level": causal.PRIMARY_CELL_CONFIDENCE,
+            "independent_seed_clusters": len(causal.shard.TRAINING_SEEDS),
+            "bootstrap_resamples": causal.BOOTSTRAP_RESAMPLES,
+            "confidence_interval": [0.01, 0.02],
+        }
+
+    audit = causal.validate_multiplicity_contract(contrasts)
+
+    assert audit["families_per_holm_cell"] == 9
+    assert audit["contrasts_per_holm_cell"] == 15
+    assert audit["primary_four_cell_confidence_level"] == pytest.approx(0.9875)
+    contrasts["protected_pins"]["by_family_with_holm_bonferroni"].pop()
+    with pytest.raises(ValueError, match="family Holm coverage drifted"):
+        causal.validate_multiplicity_contract(contrasts)
 
 
 def test_seed_cluster_statistics_are_deterministic_and_seed_level() -> None:

@@ -14,6 +14,7 @@ from typing import Any, cast
 import evaluate_p2_causal_factorial_shard as shard
 import numpy as np
 from summarize_p2_core_matrix import (
+    BOOTSTRAP_RESAMPLES,
     CORE_ANALYSIS_PATH,
     analysis_implementation,
     bootstrap_paired_mean,
@@ -598,6 +599,74 @@ def contrast_statistics(
     }
 
 
+def validate_multiplicity_contract(
+    contrasts: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    """Fail closed unless every preregistered multiplicity family is complete."""
+
+    expected_cells = {
+        (scale, budget)
+        for scale in ("s55", "s151")
+        for budget in shard.BUDGET_LABELS
+    }
+    expected_family_cells = {
+        (scale, budget, family)
+        for scale, budget in expected_cells
+        for family in PAPER_GRADE_WORKLOAD_FAMILIES
+    }
+    _require(set(contrasts) == set(CONTRASTS), "Causal contrast Holm family drifted.")
+    for name, statistics in contrasts.items():
+        cells = statistics["cells"]
+        families = statistics["by_family_with_holm_bonferroni"]
+        _require(
+            {(row["scale"], row["budget"]) for row in cells} == expected_cells
+            and all(
+                "holm_adjusted_p_across_contrasts" in row
+                and row.get("holm_across_contrasts_source_p")
+                == "seed_cluster_exact_paired_randomization_two_sided_p"
+                for row in cells
+            ),
+            f"Causal contrast Holm coverage drifted: {name}.",
+        )
+        _require(
+            {
+                (row["scale"], row["budget"], row["family"])
+                for row in families
+            }
+            == expected_family_cells
+            and all(
+                "holm_adjusted_p" in row
+                and row.get("holm_source_p")
+                == "seed_cluster_exact_paired_randomization_two_sided_p"
+                for row in families
+            ),
+            f"Causal family Holm coverage drifted: {name}.",
+        )
+    primary = contrasts["adaptive_quota_with_pins"]
+    _require(
+        all(
+            cell.get("four_cell_corrected_bootstrap", {}).get("confidence_level")
+            == PRIMARY_CELL_CONFIDENCE
+            and cell["four_cell_corrected_bootstrap"].get("independent_seed_clusters")
+            == len(shard.TRAINING_SEEDS)
+            and cell["four_cell_corrected_bootstrap"].get("bootstrap_resamples")
+            == BOOTSTRAP_RESAMPLES
+            and len(cell["four_cell_corrected_bootstrap"].get("confidence_interval", ()))
+            == 2
+            for cell in primary["cells"]
+        ),
+        "Primary four-cell Bonferroni coverage drifted.",
+    )
+    return {
+        "family_holm_bonferroni_verified": True,
+        "families_per_holm_cell": len(PAPER_GRADE_WORKLOAD_FAMILIES),
+        "contrast_holm_bonferroni_verified": True,
+        "contrasts_per_holm_cell": len(CONTRASTS),
+        "primary_four_cell_bonferroni_verified": True,
+        "primary_four_cell_confidence_level": PRIMARY_CELL_CONFIDENCE,
+    }
+
+
 def physical_memory_statistics(
     values: dict[tuple[str, str, int, str], list[int]],
 ) -> dict[str, Any]:
@@ -1087,6 +1156,7 @@ def main() -> None:
             "bootstrap_resamples": corrected["bootstrap_resamples"],
             "bootstrap_seed": corrected["inference_seed"],
         }
+    multiplicity_audit = validate_multiplicity_contract(contrast_payload)
     memory = physical_memory_statistics(physical)
     gate = primary_causal_gate(primary, memory)
     source_commit = subprocess.run(
@@ -1135,6 +1205,7 @@ def main() -> None:
             "registered_causal_arms": len(shard.ALL_ARM_NAMES),
             "registered_paired_contrasts": len(CONTRASTS),
             "preregistered_component_contrasts_verified": True,
+            **multiplicity_audit,
             "required_ablation_factors_verified": REQUIRED_ABLATION_FACTORS,
             "supplemental_fixed_top_p_arms_verified": True,
             "offline_oracle_excluded_from_primary_gate": True,

@@ -591,6 +591,15 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
         is True
     )
     assert manifest["evidence"]["p2_causal"]["required_audit"]["registered_causal_arms"] == 16
+    assert manifest["evidence"]["p2_causal"]["required_audit"][
+        "families_per_holm_cell"
+    ] == 9
+    assert manifest["evidence"]["p2_causal"]["required_audit"][
+        "contrasts_per_holm_cell"
+    ] == 15
+    assert manifest["evidence"]["p2_causal"]["required_audit"][
+        "primary_four_cell_confidence_level"
+    ] == pytest.approx(0.9875)
     assert manifest["evidence"]["p2_causal"]["required_audit"]["registered_paired_contrasts"] == 15
     assert (
         manifest["evidence"]["p2_causal"]["required_audit"]["exact_seed_randomization_verified"]
