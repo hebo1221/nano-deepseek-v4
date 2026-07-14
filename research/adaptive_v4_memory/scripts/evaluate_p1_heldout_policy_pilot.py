@@ -40,6 +40,7 @@ class PolicySpec:
     multiplier: int | None = None
     cross_layer: bool = False
     dense_fallback: bool = False
+    protected_pins: bool = True
 
 
 def _sha256(path: Path) -> str:
@@ -128,6 +129,7 @@ def _controller_config(
         layer_budgets=tuple(tuple(pair) for pair in quota["layer_budgets"]),
         dense_layer_budgets=tuple(tuple(pair) for pair in quota["dense_layer_budgets"]),
         enable_cross_layer_signal=policy.cross_layer,
+        enable_protected_pins=policy.protected_pins,
         enable_dense_fallback=policy.dense_fallback,
     )
 
