@@ -211,6 +211,74 @@ def _run_policy_full_forward(
 
 
 @torch.inference_mode()
+def _run_policy_chunked_quality(
+    model: DeepSeekV4ForCausalLM,
+    workload: AdaptiveMemoryWorkloadBatch,
+    *,
+    policy: PolicySpec,
+    calibration: dict[str, Any],
+    fixed_topk: int,
+    chunk_size: int,
+) -> dict[str, Any]:
+    """Run cache-faithful quality evaluation with chunked causal decode."""
+
+    if chunk_size <= 0:
+        raise ValueError("chunk_size must be positive.")
+    columns = _query_columns(workload)
+    prefix_length = min(columns) - 1
+    if prefix_length <= 0:
+        raise ValueError("Workload must leave a non-empty prefill prefix.")
+    controller_config: SameTokenControllerConfig | None = None
+    cache = DeepSeekV4Cache(model.config)
+    if policy.kind == "native":
+        pilot._set_topk(model, model.config.index_topk)
+    elif policy.kind == "fixed":
+        if policy.multiplier is None:
+            raise ValueError("Fixed policy requires a multiplier.")
+        pilot._set_topk(model, fixed_topk * policy.multiplier)
+    else:
+        pilot._set_topk(model, model.config.index_topk)
+        controller_config = _controller_config(calibration, policy)
+        cache.enable_same_token_memory_controller(
+            controller_config,
+            protected_end_positions=workload.protected_end_positions,
+            trace_id=f"heldout-chunked:{workload.family}:{policy.name}",
+            request_id=workload.conversation_ids[0],
+        )
+
+    torch.cuda.synchronize()
+    started = time.perf_counter_ns()
+    output = model(
+        workload.input_ids[:, :prefix_length], past_key_values=cache, use_cache=True
+    )
+    if output.past_key_values is not cache:
+        raise RuntimeError("Chunked prefill replaced the configured cache.")
+    predictions = torch.full_like(workload.targets, -1)
+    for start in range(prefix_length, workload.input_ids.shape[1], chunk_size):
+        stop = min(start + chunk_size, workload.input_ids.shape[1])
+        output = model(
+            workload.input_ids[:, start:stop], past_key_values=cache, use_cache=True
+        )
+        for position, column in columns.items():
+            if start <= position < stop:
+                predictions[:, column] = output.logits[:, position - start].argmax(dim=-1)
+    torch.cuda.synchronize()
+    wall_ms = (time.perf_counter_ns() - started) / 1_000_000.0
+    if bool((predictions < 0).any()):
+        raise RuntimeError("Chunked evaluation missed a query position.")
+    correct = predictions.eq(workload.targets)
+    controller = cache.same_token_controller_stats()
+    return {
+        "predictions": predictions.cpu().tolist(),
+        "correct": correct.cpu().tolist(),
+        "wall_ms": wall_ms,
+        "controller": asdict(controller) if controller is not None else None,
+        "controller_config": asdict(controller_config) if controller_config is not None else None,
+        "budget_violations": 0,
+    }
+
+
+@torch.inference_mode()
 def _run_policy(
     model: DeepSeekV4ForCausalLM,
     workload: AdaptiveMemoryWorkloadBatch,
