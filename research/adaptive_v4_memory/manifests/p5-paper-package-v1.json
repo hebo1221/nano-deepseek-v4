@@ -20,6 +20,20 @@
         "pilot_negative_result_verified": true
       }
     },
+    "m3_learned_lookahead": {
+      "path": "artifacts/adaptive_v4_memory/paper_grade/p1/m3-learned-baseline.summary.json",
+      "experiment_id": "m3-learned-lookahead-baseline-audit-v1",
+      "required_audit": {
+        "raw_summaries_verified": true,
+        "scales_verified": 2,
+        "independent_splits_verified": true,
+        "train_examples_per_scale": 768,
+        "calibration_examples_per_scale": 384,
+        "test_examples_per_scale": 768,
+        "ablation_variants_verified": 4,
+        "pareto_failure_verified": true
+      }
+    },
     "p2_causal": {
       "path": "artifacts/adaptive_v4_memory/paper_grade/p2-causal-ablation.summary.json",
       "experiment_id": "p2-causal-ablation-audit-v1",

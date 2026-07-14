@@ -61,6 +61,7 @@ def _validate_evidence(name: str, path: Path, contract: dict[str, Any]) -> dict[
 def classify_evidence(
     p2_core: dict[str, Any],
     m5_one_token_pilot: dict[str, Any],
+    m3_learned_lookahead: dict[str, Any],
     p2_causal: dict[str, Any],
     p3_ruler: dict[str, Any],
     p3_natural: dict[str, Any],
@@ -82,6 +83,17 @@ def classify_evidence(
         and m5_audit.get("required_arms_verified") == 4
         and m5_audit.get("one_token_semantics_verified") is True
         and m5_audit.get("pilot_negative_result_verified") is True
+    )
+    m3_audit = m3_learned_lookahead["audit"]
+    m3_complete = (
+        m3_audit.get("raw_summaries_verified") is True
+        and m3_audit.get("scales_verified") == 2
+        and m3_audit.get("independent_splits_verified") is True
+        and m3_audit.get("train_examples_per_scale") == 768
+        and m3_audit.get("calibration_examples_per_scale") == 384
+        and m3_audit.get("test_examples_per_scale") == 768
+        and m3_audit.get("ablation_variants_verified") == 4
+        and m3_audit.get("pareto_failure_verified") is True
     )
     causal_passed = p2_causal["primary_causal_gate"].get("passed") is True
     p3_complete = p3_ruler.get("benchmark_complete") is True
@@ -159,6 +171,7 @@ def classify_evidence(
     result = {
         "p2_core": "success" if core_passed else "negative-result",
         "m5_one_token_pilot": "negative-result" if m5_complete else "unverified",
+        "m3_learned_lookahead": "negative-result" if m3_complete else "unverified",
         "p2_causal": "success" if causal_passed else "bounded-result",
         "p3_ruler": "bounded-result" if p3_complete else "unverified",
         "p3_natural": "bounded-result" if natural_complete else "unverified",
@@ -281,6 +294,7 @@ def _report(
     classifications: dict[str, str],
     p2_core: dict[str, Any],
     m5_one_token_pilot: dict[str, Any],
+    m3_learned_lookahead: dict[str, Any],
     p2_causal: dict[str, Any],
     p3_ruler: dict[str, Any],
     p3_natural: dict[str, Any],
@@ -318,6 +332,10 @@ mechanical and deliberately narrower than the motivating hypothesis.
 - M5 one-token baseline: {m5_one_token_pilot["audit"]["scales_verified"]} scales,
   {m5_one_token_pilot["audit"]["workloads_per_scale"]} synthetic workloads per scale,
   classified only as a pilot negative result for the tested interface.
+- M3 learned lookahead: {m3_learned_lookahead["audit"]["scales_verified"]} scales with
+  disjoint train/calibration/test splits and
+  {m3_learned_lookahead["audit"]["ablation_variants_verified"]} ablations; classified
+  as a bounded negative Pareto result rather than merged with hierarchical control.
 - P2 causal: {p2_causal["audit"]["unique_shards"]:,} verified factorial shards;
   {p2_causal["audit"]["quality_execution_counts"]["executed"]:,} quality forwards were
   executed and {p2_causal["audit"]["quality_execution_counts"]["reused_exact_config"]:,}
@@ -388,6 +406,7 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
     classes = classify_evidence(
         loaded["p2_core"],
         loaded["m5_one_token_pilot"],
+        loaded["m3_learned_lookahead"],
         loaded["p2_causal"],
         loaded["p3_ruler"],
         loaded["p3_natural"],
@@ -453,6 +472,7 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         classifications=classes,
         p2_core=loaded["p2_core"],
         m5_one_token_pilot=loaded["m5_one_token_pilot"],
+        m3_learned_lookahead=loaded["m3_learned_lookahead"],
         p2_causal=loaded["p2_causal"],
         p3_ruler=loaded["p3_ruler"],
         p3_natural=loaded["p3_natural"],

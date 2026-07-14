@@ -37,6 +37,21 @@ def _m5_pilot_evidence() -> dict[str, object]:
     }
 
 
+def _m3_learned_evidence() -> dict[str, object]:
+    return {
+        "audit": {
+            "raw_summaries_verified": True,
+            "scales_verified": 2,
+            "independent_splits_verified": True,
+            "train_examples_per_scale": 768,
+            "calibration_examples_per_scale": 384,
+            "test_examples_per_scale": 768,
+            "ablation_variants_verified": 4,
+            "pareto_failure_verified": True,
+        }
+    }
+
+
 def _ifeval_evidence() -> dict[str, object]:
     return {
         "audit": {
@@ -87,6 +102,7 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
     assert set(manifest["evidence"]) == {
         "p2_core",
         "m5_one_token_pilot",
+        "m3_learned_lookahead",
         "p2_causal",
         "p3_ruler",
         "p3_natural",
@@ -141,6 +157,7 @@ def test_p5_classification_preserves_claim_boundaries() -> None:
     classifications = package.classify_evidence(
         {"quality_gate": [{"passes_fixed_baseline_component": False}]},
         _m5_pilot_evidence(),
+        _m3_learned_evidence(),
         {"primary_causal_gate": {"passed": False}},
         {"benchmark_complete": True},
         {
@@ -183,6 +200,7 @@ def test_p5_classification_preserves_claim_boundaries() -> None:
     assert classifications == {
         "p2_core": "negative-result",
         "m5_one_token_pilot": "negative-result",
+        "m3_learned_lookahead": "negative-result",
         "p2_causal": "bounded-result",
         "p3_ruler": "bounded-result",
         "p3_natural": "bounded-result",
@@ -201,6 +219,7 @@ def test_p5_success_requires_full_system_coverage() -> None:
     classifications = package.classify_evidence(
         {"quality_gate": [{"passes_fixed_baseline_component": True}]},
         _m5_pilot_evidence(),
+        _m3_learned_evidence(),
         {"primary_causal_gate": {"passed": True}},
         {"benchmark_complete": True},
         {
@@ -250,6 +269,7 @@ def test_p5_marks_all_failed_production_coverage_unverified() -> None:
     classifications = package.classify_evidence(
         {"quality_gate": [{"passes_fixed_baseline_component": True}]},
         _m5_pilot_evidence(),
+        _m3_learned_evidence(),
         {"primary_causal_gate": {"passed": True}},
         {"benchmark_complete": True},
         {
