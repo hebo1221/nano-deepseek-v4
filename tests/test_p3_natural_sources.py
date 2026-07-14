@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import subprocess
 import sys
 from copy import deepcopy
@@ -11,7 +12,12 @@ import pytest
 SCRIPTS = Path(__file__).resolve().parents[1] / "research/adaptive_v4_memory/scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-from prepare_p3_natural_sources import verify_source  # noqa: E402
+from prepare_p3_natural_sources import (  # noqa: E402
+    PREFETCH_SCOPE,
+    acquire_or_verify_source,
+    require_prefetch_authorization,
+    verify_source,
+)
 
 
 def _run(source: Path, *args: str) -> str:
@@ -65,7 +71,12 @@ def test_source_verifier_rejects_revision_and_tracked_drift(tmp_path: Path) -> N
         verify_source(source, wrong_revision)
 
     (source / "evaluation" / "score.py").write_text("changed\n")
-    with pytest.raises(ValueError, match="tracked modifications"):
+    with pytest.raises(ValueError, match="tracked or untracked modifications"):
+        verify_source(source, contract)
+
+    _run(source, "checkout", "--", "evaluation/score.py")
+    (source / "untracked.py").write_text("raise RuntimeError('shadowed')\n")
+    with pytest.raises(ValueError, match="tracked or untracked modifications"):
         verify_source(source, contract)
 
 
@@ -80,3 +91,41 @@ def test_source_verifier_rejects_registered_hash_and_license_drift(tmp_path: Pat
     wrong_license["license_sha256"] = "f" * 64
     with pytest.raises(ValueError, match="LICENSE SHA-256 drifted"):
         verify_source(source, wrong_license)
+
+
+def test_source_prefetch_reuses_only_an_exact_verified_checkout(tmp_path: Path) -> None:
+    source, contract = _source(tmp_path)
+
+    result = acquire_or_verify_source(source, contract)
+
+    assert result["revision"] == contract["revision"]
+    assert result["clean_tracked_tree"] is True
+    (source / "evaluation" / "score.py").write_text("drifted\n")
+    with pytest.raises(ValueError, match="tracked or untracked modifications"):
+        acquire_or_verify_source(source, contract)
+
+
+def test_source_prefetch_scope_cannot_authorize_data_or_inference() -> None:
+    assert PREFETCH_SCOPE == {
+        "immutable_public_code_only": True,
+        "benchmark_dataset_payload_acquired": False,
+        "baseline_selected": False,
+        "dataset_generated": False,
+        "model_inference_performed": False,
+    }
+
+
+def test_source_prefetch_requires_the_exact_preregistered_amendment() -> None:
+    manifest_path = (
+        Path(__file__).resolve().parents[1]
+        / "research/adaptive_v4_memory/manifests/p3-natural-suite-v1.json"
+    )
+    manifest = json.loads(manifest_path.read_text())
+
+    authorization = require_prefetch_authorization(manifest)
+
+    assert authorization["date"] == "2026-07-14"
+    assert len(authorization["sha256"]) == 64
+    manifest["amendments"] = []
+    with pytest.raises(ValueError, match="prefetch amendment"):
+        require_prefetch_authorization(manifest)
