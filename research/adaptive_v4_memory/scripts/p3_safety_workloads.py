@@ -7,8 +7,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from p3_natural_workloads import (
-    encode_rendered_segments_exact,
-    render_chat_split_user_content,
+    encode_rendered_system_context_query_exact,
+    render_chat_split_system_context_query,
 )
 
 FAMILIES = (
@@ -30,6 +30,7 @@ class SafetyExample:
     example_id: str
     family: str
     context_target: int
+    system_prefix: str
     context: str
     query: str
     expected: str
@@ -118,12 +119,14 @@ def build_example(
     )
 
     def rendered_tokens(repeats: int) -> int:
-        context = prefix + filler(seed, family, context_target, index, repeats) + suffix
-        rendered_context, rendered_query = render_chat_split_user_content(
-            tokenizer, context, query
+        context = filler(seed, family, context_target, index, repeats) + suffix
+        rendered_prefix, rendered_context, rendered_query = (
+            render_chat_split_system_context_query(tokenizer, prefix, context, query)
         )
-        context_ids, query_ids, _retreat = encode_rendered_segments_exact(
-            tokenizer, rendered_context, rendered_query
+        context_ids, query_ids, _protected_length, _prefix_retreat, _query_retreat = (
+            encode_rendered_system_context_query_exact(
+                tokenizer, rendered_prefix, rendered_context, rendered_query
+            )
         )
         return int(context_ids.shape[1] + query_ids.shape[1])
 
@@ -137,7 +140,7 @@ def build_example(
             low = middle
         else:
             high = middle
-    context = prefix + filler(seed, family, context_target, index, low) + suffix
+    context = filler(seed, family, context_target, index, low) + suffix
     observed = rendered_tokens(low)
     if observed < int(context_target * minimum_fraction) or observed > maximum:
         raise ValueError(
@@ -150,6 +153,7 @@ def build_example(
         example_id=f"{family}:{context_target}:{index}:{identity}",
         family=family,
         context_target=context_target,
+        system_prefix=prefix,
         context=context,
         query=query,
         expected=expected,

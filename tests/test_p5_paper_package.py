@@ -10,6 +10,20 @@ sys.path.insert(0, str(SCRIPTS))
 import build_p5_paper_package as package  # noqa: E402
 
 
+def _safety_evidence() -> dict[str, object]:
+    return {
+        "audit": {
+            "required_arms_terminal": True,
+            "failure_accounting_complete": True,
+            "input_pairing_verified": True,
+            "protected_prefix_physical_budget_verified": True,
+            "examples_accounted_per_arm": 1_200,
+            "families_terminal": 4,
+            "contexts_terminal": 3,
+        }
+    }
+
+
 def test_p5_manifest_requires_every_digest_bound_stage() -> None:
     root = Path(__file__).resolve().parents[1]
     manifest = json.loads(
@@ -21,12 +35,14 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
         "p2_causal",
         "p3_ruler",
         "p3_natural",
+        "p3_safety",
         "p4_reference_systems",
         "p4_production_systems",
     }
     assert manifest["evidence"]["p2_core"]["required_audit"]["unique_shards"] == 4500
     assert manifest["evidence"]["p2_causal"]["required_audit"]["unique_shards"] == 9000
     assert manifest["evidence"]["p3_ruler"]["required_audit"]["total_predictions"] == 253500
+    assert manifest["evidence"]["p3_safety"]["required_audit"]["examples_accounted_per_arm"] == 1200
     assert manifest["evidence"]["p4_reference_systems"]["required_audit"]["terminal_cells"] == 108
     assert (
         manifest["evidence"]["p4_reference_systems"]["required_audit"][
@@ -58,10 +74,12 @@ def test_p5_classification_preserves_claim_boundaries() -> None:
                 "all_required_artifacts_verified": True,
                 "all_required_baseline_cells_terminal": True,
                 "all_failure_accounting_complete": True,
+                "safety_stress_terminal": True,
                 "benchmarks_terminal": 5,
                 "minimum_protocol_examples_accounted_per_arm": 45_289,
             }
         },
+        _safety_evidence(),
         {
             "audit": {
                 "terminal_cells": 108,
@@ -89,6 +107,7 @@ def test_p5_classification_preserves_claim_boundaries() -> None:
         "p2_causal": "bounded-result",
         "p3_ruler": "bounded-result",
         "p3_natural": "bounded-result",
+        "p3_safety": "bounded-result",
         "p4_reference_systems": "bounded-result",
         "p4_production_systems": "bounded-result",
         "production_runtime_blocker": "unverified",
@@ -106,10 +125,12 @@ def test_p5_success_requires_full_system_coverage() -> None:
                 "all_required_artifacts_verified": True,
                 "all_required_baseline_cells_terminal": True,
                 "all_failure_accounting_complete": True,
+                "safety_stress_terminal": True,
                 "benchmarks_terminal": 5,
                 "minimum_protocol_examples_accounted_per_arm": 45_289,
             }
         },
+        _safety_evidence(),
         {
             "audit": {
                 "terminal_cells": 108,
@@ -148,10 +169,12 @@ def test_p5_marks_all_failed_production_coverage_unverified() -> None:
                 "all_required_artifacts_verified": True,
                 "all_required_baseline_cells_terminal": True,
                 "all_failure_accounting_complete": True,
+                "safety_stress_terminal": True,
                 "benchmarks_terminal": 5,
                 "minimum_protocol_examples_accounted_per_arm": 45_289,
             }
         },
+        _safety_evidence(),
         {"audit": {"terminal_cells": 108}},
         {
             "audit": {

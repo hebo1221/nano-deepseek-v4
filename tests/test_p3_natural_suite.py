@@ -248,14 +248,70 @@ def _natural_benchmark_summaries(tmp_path: Path, manifest_path: Path) -> dict[st
     return paths
 
 
+def _safety_summary(tmp_path: Path, manifest_path: Path) -> Path:
+    manifest = json.loads(manifest_path.read_text())
+    contract = manifest["suite_audit"]["safety_stress"]
+    safety_manifest = Path(contract["manifest"])
+    expected = contract["examples_per_required_arm"]
+    slices = [
+        {"family": family, "context_target": context}
+        for family in range(contract["families"])
+        for context in range(contract["contexts"])
+    ]
+    path = tmp_path / "safety-summary.json"
+    path.write_text(
+        json.dumps(
+            {
+                "experiment_id": "p3-safety-stress-audit-v1",
+                "source": {"dirty": False},
+                "manifest": {
+                    "path": str(safety_manifest),
+                    "sha256": _digest(safety_manifest),
+                },
+                "audit": {
+                    "required_arms_terminal": True,
+                    "failure_accounting_complete": True,
+                    "input_pairing_verified": True,
+                    "protected_prefix_physical_budget_verified": True,
+                    "examples_accounted_per_arm": expected,
+                    "families_terminal": contract["families"],
+                    "contexts_terminal": contract["contexts"],
+                },
+                "dependencies": {
+                    "natural_manifest": _digest(manifest_path),
+                    "model_snapshot": manifest["model"]["snapshot_digest_set_sha256"],
+                },
+                "arms": {
+                    arm: {
+                        "terminal": True,
+                        "expected_examples": expected,
+                        "scored_examples": expected - 1,
+                        "failures_by_type": {"runtime-error": 1},
+                        "slices": slices,
+                    }
+                    for arm in contract["required_arms"]
+                },
+                "protected_prefix_causal_contrast": {
+                    "paired_examples": expected,
+                    "resident_bytes_equal_for_comparable_pairs": True,
+                },
+                "claim_boundary": "synthetic safety retention only",
+            }
+        )
+    )
+    return path
+
+
 def test_natural_suite_audit_requires_all_examples_and_baselines(tmp_path: Path) -> None:
     root = Path(__file__).resolve().parents[1]
     manifest = root / "research/adaptive_v4_memory/manifests/p3-natural-suite-v1.json"
     paths = _natural_benchmark_summaries(tmp_path, manifest)
 
-    payload = summarize(manifest, paths)
+    payload = summarize(manifest, paths, _safety_summary(tmp_path, manifest))
 
     assert payload["audit"]["benchmarks_terminal"] == 5
+    assert payload["audit"]["safety_stress_terminal"] is True
+    assert payload["supplemental_safety"]["examples_per_required_arm"] == 1200
     assert payload["audit"]["minimum_protocol_examples_accounted_per_arm"] == 45_289
     assert payload["audit"]["accounted_examples_by_required_arm"] == {
         "native-dense": 45_289,
@@ -277,7 +333,7 @@ def test_natural_suite_audit_rejects_unaccounted_failure(tmp_path: Path) -> None
     paths["MRCR"].write_text(json.dumps(payload))
 
     with pytest.raises(ValueError, match="do not close"):
-        summarize(manifest, paths)
+        summarize(manifest, paths, _safety_summary(tmp_path, manifest))
 
 
 def _raw_arm_cell(tmp_path: Path) -> tuple[Path, Path, Path]:
@@ -600,7 +656,7 @@ def test_natural_suite_audit_rejects_wrong_model_snapshot(tmp_path: Path) -> Non
     paths["SCBench"].write_text(json.dumps(payload))
 
     with pytest.raises(ValueError, match="does not match the frozen manifest"):
-        summarize(manifest, paths)
+        summarize(manifest, paths, _safety_summary(tmp_path, manifest))
 
 
 def test_natural_suite_audit_rejects_mixed_fixed_baseline_selection(
@@ -627,4 +683,17 @@ def test_natural_suite_audit_rejects_mixed_fixed_baseline_selection(
     paths["MRCR"].write_text(json.dumps(payload))
 
     with pytest.raises(ValueError, match="different fixed baseline selections"):
-        summarize(manifest, paths)
+        summarize(manifest, paths, _safety_summary(tmp_path, manifest))
+
+
+def test_natural_suite_audit_rejects_incomplete_safety_pairing(tmp_path: Path) -> None:
+    root = Path(__file__).resolve().parents[1]
+    manifest = root / "research/adaptive_v4_memory/manifests/p3-natural-suite-v1.json"
+    paths = _natural_benchmark_summaries(tmp_path, manifest)
+    safety = _safety_summary(tmp_path, manifest)
+    payload = json.loads(safety.read_text())
+    payload["audit"]["input_pairing_verified"] = False
+    safety.write_text(json.dumps(payload))
+
+    with pytest.raises(ValueError, match="coverage, pairing, or failure accounting"):
+        summarize(manifest, paths, safety)

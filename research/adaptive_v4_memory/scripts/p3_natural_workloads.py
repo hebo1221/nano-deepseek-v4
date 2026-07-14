@@ -94,6 +94,108 @@ def render_chat_split_user_content(
     return parts[0], parts[1]
 
 
+def render_chat_split_system_context_query(
+    tokenizer: Any,
+    system_prefix: str,
+    context: str,
+    query: str,
+    *,
+    enable_thinking: bool | None = None,
+) -> tuple[str, str, str]:
+    """Render one system message and split the exact user context/query text.
+
+    The first returned segment contains the complete rendered system message and
+    the user-message header.  It is therefore the causal protected-prefix span,
+    rather than merely a string embedded in an untrusted user document.
+    """
+    if not system_prefix or not context or not query:
+        raise ValueError("System prefix, context, and query must all be non-empty.")
+    digest = hashlib.sha256(
+        (system_prefix + "\0" + context + "\0" + query).encode()
+    ).hexdigest()
+    context_separator = f"<adaptive-v4-memory-context-{digest}>"
+    query_separator = f"<adaptive-v4-memory-query-{digest}>"
+    if any(
+        separator in value
+        for separator in (context_separator, query_separator)
+        for value in (system_prefix, context, query)
+    ):
+        raise ValueError("System safety separator collides with prompt text.")
+    template_kwargs: dict[str, Any] = {
+        "add_generation_prompt": True,
+        "tokenize": False,
+    }
+    if enable_thinking is not None:
+        template_kwargs["enable_thinking"] = enable_thinking
+    rendered = tokenizer.apply_chat_template(
+        [
+            {"role": "system", "content": system_prefix},
+            {
+                "role": "user",
+                "content": context_separator + context + query_separator + query,
+            },
+        ],
+        **template_kwargs,
+    )
+    if not isinstance(rendered, str) or not rendered:
+        raise ValueError("Tokenizer returned an empty or non-text chat prompt.")
+    prefix_parts = rendered.split(context_separator)
+    if len(prefix_parts) != 2 or not prefix_parts[0] or not prefix_parts[1]:
+        raise ValueError("Chat template did not preserve the context separator exactly once.")
+    query_parts = prefix_parts[1].split(query_separator)
+    if len(query_parts) != 2 or not query_parts[0] or not query_parts[1]:
+        raise ValueError("Chat template did not preserve the query separator exactly once.")
+    return prefix_parts[0], query_parts[0], query_parts[1]
+
+
+def encode_rendered_system_context_query_exact(
+    tokenizer: Any,
+    rendered_system_prefix: str,
+    rendered_context: str,
+    rendered_query: str,
+) -> tuple[Any, Any, int, int, int]:
+    """Tokenize once and return context/query plus an exact protected boundary.
+
+    Both string boundaries can cross a BPE merge.  The returned protected length
+    and context/query retreat are based only on stable prefixes of the one full
+    tokenization, so every protected position indexes the cache actually used.
+    """
+    rendered_prefix_and_context = rendered_system_prefix + rendered_context
+    context_ids, query_ids, query_retreat = encode_rendered_segments_exact(
+        tokenizer, rendered_prefix_and_context, rendered_query
+    )
+    full_ids = tokenizer.encode(
+        rendered_prefix_and_context + rendered_query,
+        return_tensors="pt",
+        add_special_tokens=False,
+    )
+    prefix_only_ids = tokenizer.encode(
+        rendered_system_prefix,
+        return_tensors="pt",
+        add_special_tokens=False,
+    )
+    if getattr(prefix_only_ids, "ndim", None) != 2 or prefix_only_ids.shape[0] != 1:
+        raise ValueError("Tokenizer must return a rank-two system-prefix tensor.")
+    protected_length = 0
+    maximum = min(int(full_ids.shape[1]), int(prefix_only_ids.shape[1]))
+    while (
+        protected_length < maximum
+        and int(full_ids[0, protected_length])
+        == int(prefix_only_ids[0, protected_length])
+    ):
+        protected_length += 1
+    if protected_length <= 0 or protected_length > int(context_ids.shape[1]):
+        raise ValueError("Could not form a non-empty protected system-prefix token span.")
+    protected_retreat = int(prefix_only_ids.shape[1]) - protected_length
+    return (
+        context_ids,
+        query_ids,
+        protected_length,
+        protected_retreat,
+        query_retreat,
+    )
+
+
 def encode_rendered_segments_exact(
     tokenizer: Any, rendered_context: str, rendered_query: str
 ) -> tuple[Any, Any, int]:

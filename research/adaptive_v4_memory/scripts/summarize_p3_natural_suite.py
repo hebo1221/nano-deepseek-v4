@@ -168,7 +168,87 @@ def audit_benchmark(
     return result, dependencies
 
 
-def summarize(manifest_path: Path, summary_paths: dict[str, Path]) -> dict[str, Any]:
+def audit_safety_stress(
+    *,
+    path: Path,
+    manifest: dict[str, Any],
+    natural_manifest_digest: str,
+    model_snapshot_digest: str,
+) -> dict[str, Any]:
+    _require(path.is_file(), f"Missing safety stress summary: {path}")
+    payload = json.loads(path.read_text())
+    _require(
+        payload.get("experiment_id") == "p3-safety-stress-audit-v1"
+        and payload.get("source", {}).get("dirty") is False,
+        "Safety stress audit is missing, dirty, or has the wrong id.",
+    )
+    contract = manifest["suite_audit"]["safety_stress"]
+    safety_manifest_path = Path(contract["manifest"])
+    _require(safety_manifest_path.is_file(), "Missing frozen safety stress manifest.")
+    _require(
+        payload.get("manifest", {}).get("path") == str(safety_manifest_path)
+        and payload.get("manifest", {}).get("sha256") == sha256(safety_manifest_path),
+        "Safety stress manifest dependency drifted.",
+    )
+    audit = payload.get("audit", {})
+    expected_audit = {
+        "required_arms_terminal": True,
+        "failure_accounting_complete": True,
+        "input_pairing_verified": True,
+        "protected_prefix_physical_budget_verified": True,
+        "examples_accounted_per_arm": contract["examples_per_required_arm"],
+        "families_terminal": contract["families"],
+        "contexts_terminal": contract["contexts"],
+    }
+    _require(
+        all(audit.get(key) == value for key, value in expected_audit.items()),
+        "Safety stress coverage, pairing, or failure accounting is incomplete.",
+    )
+    dependencies = payload.get("dependencies", {})
+    _require(
+        dependencies.get("natural_manifest") == natural_manifest_digest
+        and dependencies.get("model_snapshot") == model_snapshot_digest,
+        "Safety stress natural-manifest or model dependency drifted.",
+    )
+    arms = payload.get("arms", {})
+    safety_arms = tuple(contract["required_arms"])
+    _require(set(arms) == set(safety_arms), "Safety stress arm set drifted.")
+    contrast = payload.get("protected_prefix_causal_contrast", {})
+    _require(
+        contrast.get("paired_examples") == contract["examples_per_required_arm"]
+        and contrast.get("resident_bytes_equal_for_comparable_pairs") is True,
+        "Safety protected-prefix causal contrast is incomplete or not memory matched.",
+    )
+    for arm in safety_arms:
+        row = arms[arm]
+        _require(
+            row.get("terminal") is True
+            and row.get("expected_examples") == contract["examples_per_required_arm"]
+            and row.get("scored_examples", 0)
+            + sum(row.get("failures_by_type", {}).values())
+            == contract["examples_per_required_arm"]
+            and len(row.get("slices", [])) == contract["families"] * contract["contexts"],
+            f"Safety stress arm is incomplete: {arm}.",
+        )
+    return {
+        "terminal": True,
+        "examples_per_required_arm": contract["examples_per_required_arm"],
+        "families": contract["families"],
+        "contexts": contract["contexts"],
+        "required_arms": list(safety_arms),
+        "protected_prefix_physical_budget_verified": True,
+        "protected_prefix_causal_contrast": contrast,
+        "summary": {"path": str(path), "sha256": sha256(path)},
+        "arms": arms,
+        "claim_boundary": payload.get("claim_boundary"),
+    }
+
+
+def summarize(
+    manifest_path: Path,
+    summary_paths: dict[str, Path],
+    safety_summary_path: Path,
+) -> dict[str, Any]:
     manifest = json.loads(manifest_path.read_text())
     _require(
         manifest.get("experiment_id") == "p3-natural-language-suite-v1",
@@ -212,6 +292,12 @@ def summarize(manifest_path: Path, summary_paths: dict[str, Path]) -> dict[str, 
     )
     _require(len(model_digests) == 1, "Natural benchmarks used different model snapshots.")
     _require(len(ruler_dataset_digests) == 1, "RULER dataset manifest set is missing.")
+    safety = audit_safety_stress(
+        path=safety_summary_path,
+        manifest=manifest,
+        natural_manifest_digest=manifest_digest,
+        model_snapshot_digest=model_snapshot_digest,
+    )
     totals = {
         arm: sum(
             benchmarks[name]["required_arms"][arm]["expected_examples"]
@@ -241,6 +327,7 @@ def summarize(manifest_path: Path, summary_paths: dict[str, Path]) -> dict[str, 
             "all_required_artifacts_verified": True,
             "all_required_baseline_cells_terminal": True,
             "all_failure_accounting_complete": True,
+            "safety_stress_terminal": True,
             "benchmarks_terminal": len(benchmarks),
             "minimum_protocol_examples_accounted_per_arm": minimum,
             "accounted_examples_by_required_arm": totals,
@@ -252,8 +339,10 @@ def summarize(manifest_path: Path, summary_paths: dict[str, Path]) -> dict[str, 
             "ruler_dataset_manifest_digest_set_sha256": next(iter(ruler_dataset_digests)),
         },
         "benchmarks": benchmarks,
+        "supplemental_safety": safety,
         "claim_boundary": (
-            "Five-benchmark evidence on one pinned compatible Qwen3 model. The primary "
+            "Five-benchmark and synthetic safety-retention evidence on one pinned compatible "
+            "Qwen3 model. The primary "
             "conservative quality aggregate scores every operational failure as zero; this "
             "is not official DeepSeek-V4 evidence."
         ),
@@ -277,7 +366,8 @@ def main() -> None:
     summary_paths = {
         name: Path(path) for name, path in manifest["suite_audit"]["benchmark_summaries"].items()
     }
-    payload = summarize(args.manifest, summary_paths)
+    safety_summary_path = Path(manifest["suite_audit"]["safety_stress"]["summary"])
+    payload = summarize(args.manifest, summary_paths, safety_summary_path)
     commit = subprocess.run(
         ["git", "rev-parse", "HEAD"], check=True, capture_output=True, text=True
     ).stdout.strip()

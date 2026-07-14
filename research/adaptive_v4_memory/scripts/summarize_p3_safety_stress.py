@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import subprocess
 from collections import defaultdict
 from pathlib import Path
@@ -12,7 +13,13 @@ import numpy as np
 from p3_safety_workloads import FAMILIES
 from verify_p3_natural_model import sha256
 
-ARMS = ("native-dense", "strongest-memory-matched-fixed")
+ARMS = (
+    "native-dense",
+    "strongest-memory-matched-fixed",
+    "strongest-memory-matched-fixed+protected-prefix",
+)
+FIXED_ARM = "strongest-memory-matched-fixed"
+PROTECTED_ARM = "strongest-memory-matched-fixed+protected-prefix"
 
 
 def _require(condition: bool, message: str) -> None:
@@ -29,6 +36,116 @@ def _dependency(metadata: Any, label: str) -> str:
     path = Path(metadata.get("path", ""))
     _require(path.is_file() and metadata.get("sha256") == sha256(path), f"Safety {label} drifted.")
     return metadata["sha256"]
+
+
+def _audit_protected_record(record: dict[str, Any], identifier: str) -> None:
+    span = record.get("protected_prefix_token_span")
+    _require(
+        isinstance(span, dict)
+        and span.get("start") == 0
+        and isinstance(span.get("end"), int)
+        and span.get("end", 0) > 0
+        and span.get("tokens") == span.get("end"),
+        f"Protected token span drifted: {identifier}.",
+    )
+    assert isinstance(span, dict)
+    if record.get("arm") != PROTECTED_ARM or record.get("status") != "scored":
+        return
+    audit = record.get("protected_prefix_physical_audit")
+    _require(
+        isinstance(audit, dict)
+        and audit.get("same_budget_verified") is True
+        and audit.get("protected_start") == span["start"]
+        and audit.get("protected_end") == span["end"]
+        and audit.get("protected_tokens") == span["tokens"]
+        and isinstance(audit.get("layers"), list)
+        and audit.get("layer_count") == len(audit["layers"])
+        and audit.get("layer_count", 0) > 0,
+        f"Protected physical audit drifted: {identifier}.",
+    )
+    assert isinstance(audit, dict) and isinstance(audit.get("layers"), list)
+    for layer in audit["layers"]:
+        _require(
+            isinstance(layer, dict)
+            and layer.get("protected_start") == span["start"]
+            and layer.get("protected_end") == span["end"]
+            and layer.get("protected_tokens") == span["tokens"]
+            and isinstance(layer.get("input_tokens"), int)
+            and isinstance(layer.get("kept_tokens"), int)
+            and isinstance(layer.get("compression_ratio"), (int, float))
+            and layer["kept_tokens"]
+            == int(layer["input_tokens"] * (1.0 - layer["compression_ratio"])),
+            f"Protected layer budget drifted: {identifier}.",
+        )
+
+
+def _record_map(cell_path: Path) -> dict[str, dict[str, Any]]:
+    cell = json.loads(cell_path.read_text())
+    records = _records(Path(cell["raw_records"]["path"]))
+    return {str(record["example_id"]): record for record in records}
+
+
+def _exact_paired_pvalue(wins: int, losses: int) -> float:
+    discordant = wins + losses
+    if discordant == 0:
+        return 1.0
+    tail = sum(math.comb(discordant, index) for index in range(min(wins, losses) + 1))
+    return min(1.0, 2.0 * tail / (2**discordant))
+
+
+def paired_protected_effect(
+    fixed: dict[str, dict[str, Any]],
+    protected: dict[str, dict[str, Any]],
+    *,
+    seed: int,
+    bootstrap_replicates: int = 10_000,
+) -> dict[str, Any]:
+    _require(set(fixed) == set(protected), "Protected contrast example identities diverged.")
+    identifiers = sorted(fixed)
+    differences = np.array(
+        [
+            float(protected[key].get("score") or 0.0)
+            - float(fixed[key].get("score") or 0.0)
+            for key in identifiers
+        ],
+        dtype=np.float64,
+    )
+    wins = int(np.sum(differences > 0))
+    losses = int(np.sum(differences < 0))
+    rng = np.random.default_rng(seed)
+    bootstrap = np.empty(bootstrap_replicates, dtype=np.float64)
+    for index in range(bootstrap_replicates):
+        bootstrap[index] = float(
+            np.mean(differences[rng.integers(0, len(differences), len(differences))])
+        )
+    comparable = [
+        key
+        for key in identifiers
+        if fixed[key].get("status") == protected[key].get("status") == "scored"
+    ]
+    resident_equal = all(
+        fixed[key].get("hot_resident_bytes")
+        == protected[key].get("hot_resident_bytes")
+        for key in comparable
+    )
+    _require(resident_equal, "Protected contrast physical resident bytes diverged.")
+    return {
+        "estimand": f"{PROTECTED_ARM} minus {FIXED_ARM}; operational failures score zero",
+        "paired_examples": len(identifiers),
+        "mean_success_rate_difference": float(np.mean(differences)),
+        "paired_bootstrap_95_ci": [
+            float(np.quantile(bootstrap, 0.025)),
+            float(np.quantile(bootstrap, 0.975)),
+        ],
+        "wins": wins,
+        "ties": int(np.sum(differences == 0)),
+        "losses": losses,
+        "exact_two_sided_paired_pvalue": _exact_paired_pvalue(wins, losses),
+        "physically_comparable_scored_pairs": len(comparable),
+        "resident_bytes_equal_for_comparable_pairs": resident_equal,
+        "bootstrap_seed": seed,
+        "bootstrap_replicates": bootstrap_replicates,
+    }
 
 
 def audit_arm(
@@ -82,6 +199,7 @@ def audit_arm(
         )
         assert isinstance(family_value, str) and isinstance(context_value, int)
         family, context = family_value, context_value
+        _audit_protected_record(record, identifier)
         for key in ("raw_prompt_sha256", "input_token_ids_sha256", "expected_response_sha256"):
             value = record.get(key)
             _require(isinstance(value, str) and len(value) == 64, f"Safety {key} drifted.")
@@ -186,6 +304,11 @@ def summarize(
         len({row["paired_prompt_digest_set_sha256"] for row in arms.values()}) == 1,
         "Safety arms are not prompt/token paired.",
     )
+    contrast = paired_protected_effect(
+        _record_map(arm_paths[FIXED_ARM]),
+        _record_map(arm_paths[PROTECTED_ARM]),
+        seed=int(manifest["seed"]),
+    )
     return {
         "schema_version": 1,
         "experiment_id": "p3-safety-stress-audit-v1",
@@ -194,12 +317,14 @@ def summarize(
             "required_arms_terminal": True,
             "failure_accounting_complete": True,
             "input_pairing_verified": True,
+            "protected_prefix_physical_budget_verified": True,
             "examples_accounted_per_arm": manifest["expected_examples_per_arm"],
             "families_terminal": len(FAMILIES),
             "contexts_terminal": len(manifest["context_targets_tokens"]),
         },
         "dependencies": dependencies[0],
         "arms": arms,
+        "protected_prefix_causal_contrast": contrast,
         "claim_boundary": manifest["claim_boundary"],
     }
 

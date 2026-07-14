@@ -62,6 +62,7 @@ def classify_evidence(
     p2_causal: dict[str, Any],
     p3_ruler: dict[str, Any],
     p3_natural: dict[str, Any],
+    p3_safety: dict[str, Any],
     p4_reference_systems: dict[str, Any],
     p4_production_systems: dict[str, Any],
 ) -> dict[str, str]:
@@ -75,8 +76,19 @@ def classify_evidence(
         natural_audit.get("all_required_artifacts_verified") is True
         and natural_audit.get("all_required_baseline_cells_terminal") is True
         and natural_audit.get("all_failure_accounting_complete") is True
+        and natural_audit.get("safety_stress_terminal") is True
         and natural_audit.get("benchmarks_terminal") == 5
         and natural_audit.get("minimum_protocol_examples_accounted_per_arm") == 45_289
+    )
+    safety_audit = p3_safety["audit"]
+    safety_complete = (
+        safety_audit.get("required_arms_terminal") is True
+        and safety_audit.get("failure_accounting_complete") is True
+        and safety_audit.get("input_pairing_verified") is True
+        and safety_audit.get("protected_prefix_physical_budget_verified") is True
+        and safety_audit.get("examples_accounted_per_arm") == 1_200
+        and safety_audit.get("families_terminal") == 4
+        and safety_audit.get("contexts_terminal") == 3
     )
     reference_audit = p4_reference_systems["audit"]
     reference_complete = reference_audit.get("terminal_cells") == 108
@@ -105,6 +117,7 @@ def classify_evidence(
         "p2_causal": "success" if causal_passed else "bounded-result",
         "p3_ruler": "bounded-result" if p3_complete else "unverified",
         "p3_natural": "bounded-result" if natural_complete else "unverified",
+        "p3_safety": "bounded-result" if safety_complete else "unverified",
         "p4_reference_systems": "bounded-result" if reference_complete else "unverified",
         "p4_production_systems": production_class,
         "production_runtime_blocker": "unverified",
@@ -151,6 +164,14 @@ def _p3_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
             "peak_cuda_reserved_bytes": row["peak_cuda_reserved_bytes"],
         }
         for row in payload["cell_summary"]
+    ]
+
+
+def _p3_safety_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        {"arm": arm, **row}
+        for arm, arm_payload in payload["arms"].items()
+        for row in arm_payload["slices"]
     ]
 
 
@@ -214,6 +235,7 @@ def _report(
     p2_causal: dict[str, Any],
     p3_ruler: dict[str, Any],
     p3_natural: dict[str, Any],
+    p3_safety: dict[str, Any],
     p4_reference_systems: dict[str, Any],
     p4_production_systems: dict[str, Any],
     inputs: list[dict[str, Any]],
@@ -248,6 +270,9 @@ mechanical and deliberately narrower than the motivating hypothesis.
 - P3 natural suite: {p3_natural["audit"]["benchmarks_terminal"]} terminal benchmarks and
   at least {p3_natural["audit"]["minimum_protocol_examples_accounted_per_arm"]:,}
   examples accounted per required arm.
+- P3 safety stress: {p3_safety["audit"]["examples_accounted_per_arm"]:,} examples per arm,
+  {p3_safety["audit"]["families_terminal"]} families, and
+  {p3_safety["audit"]["contexts_terminal"]} context lengths with paired inputs.
 - P4 reference systems: {p4_reference["terminal_cells"]} terminal serial-interleaved cells,
   {p4_reference["complete_cells"]} complete, {p4_reference["partial_cells"]} partial, and
   {p4_reference["failed_cells"]} failed.
@@ -258,10 +283,11 @@ mechanical and deliberately narrower than the motivating hypothesis.
 ## Claim boundary
 
 The P2 result is synthetic Tier-S evidence. A failed causal gate bounds only the tested
-controller family. P3 is transfer evidence for pinned Qwen3 snapshots, not official
-DeepSeek-V4 evidence or model-population inference. P4 is single-accelerator,
-serial-interleaved reference PyTorch evidence, not actual concurrent serving, fused-kernel,
-or production-throughput evidence. The official DeepSeek-V4 run stays unverified until its
+controller family. P3 quality and synthetic safety-retention results are transfer evidence
+for pinned Qwen3 snapshots, not comprehensive safety certification, official DeepSeek-V4
+evidence, or model-population inference. P4 reference evidence is single-accelerator and
+serial-interleaved; the checked production adapter is static continuous batching, not an
+external dynamic/fused/multi-GPU serving runtime. Official DeepSeek-V4 stays unverified until its
 frozen resource contract is satisfied.
 
 ## Reproduction
@@ -295,6 +321,7 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         loaded["p2_causal"],
         loaded["p3_ruler"],
         loaded["p3_natural"],
+        loaded["p3_safety"],
         loaded["p4_reference_systems"],
         loaded["p4_production_systems"],
     )
@@ -313,6 +340,12 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
     _write_csv(output_root / "table-p2-causal-gate.csv", causal, list(causal[0]))
     p3 = _p3_rows(loaded["p3_ruler"])
     _write_csv(output_root / "table-p3-ruler-cells.csv", p3, list(p3[0]))
+    p3_safety = _p3_safety_rows(loaded["p3_safety"])
+    _write_csv(
+        output_root / "table-p3-safety-slices.csv",
+        p3_safety,
+        list(p3_safety[0]),
+    )
     p4_reference = _p4_rows(loaded["p4_reference_systems"])
     p4_production = _p4_rows(loaded["p4_production_systems"])
     p4_fields = [
@@ -349,6 +382,7 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         p2_causal=loaded["p2_causal"],
         p3_ruler=loaded["p3_ruler"],
         p3_natural=loaded["p3_natural"],
+        p3_safety=loaded["p3_safety"],
         p4_reference_systems=loaded["p4_reference_systems"],
         p4_production_systems=loaded["p4_production_systems"],
         inputs=inputs,

@@ -12,18 +12,26 @@ import numpy as np
 import torch
 from adaptive_v4_gpu_lock import acquire_gpu_lock
 from p3_natural_workloads import (
-    encode_rendered_segments_exact,
-    render_chat_split_user_content,
+    encode_rendered_system_context_query_exact,
+    render_chat_split_system_context_query,
+)
+from p3_protected_prefix_press import (
+    SameBudgetProtectedPrefixPress,
+    wrap_same_budget_protected_prefix,
 )
 from p3_safety_workloads import FAMILIES, build_example, score_response
 from p3_sequence_gate import require_p3_sequence_gate
 from run_p3_longbench_v2 import infer_one
-from run_p3_mrcr import arm_config, atomic_json, failure_record, runtime_environment
+from run_p3_mrcr import atomic_json, failure_record, runtime_environment
 from run_p3_ruler_matrix import KVPRESS_REVISION, git_dirty, git_head, load_evaluator
 from verify_p3_natural_model import sha256, verify_snapshot
 
 BENCHMARK = "SafetyStress"
-ARMS = ("native-dense", "strongest-memory-matched-fixed")
+ARMS = (
+    "native-dense",
+    "strongest-memory-matched-fixed",
+    "strongest-memory-matched-fixed+protected-prefix",
+)
 
 
 def _require(condition: bool, message: str) -> None:
@@ -52,6 +60,24 @@ def coordinates(manifest: dict[str, Any]) -> list[tuple[str, int, int]]:
         "Safety stress Cartesian total drifted.",
     )
     return rows
+
+
+def safety_arm_config(
+    arm: str, selection: dict[str, Any], selection_digest: str
+) -> dict[str, Any]:
+    if arm == "native-dense":
+        return {
+            "press_name": "no_press",
+            "compression_ratio": 0.0,
+            "protected_prefix": False,
+        }
+    _require(arm in ARMS[1:], f"Unknown safety arm: {arm}")
+    return {
+        "press_name": selection["selected_arm"],
+        "compression_ratio": selection["selected_compression_ratio"],
+        "selection_sha256": selection_digest,
+        "protected_prefix": arm.endswith("+protected-prefix"),
+    }
 
 
 def load_contracts(
@@ -203,7 +229,7 @@ def main() -> None:
             "model_snapshot_digest_set_sha256": natural["model"][
                 "snapshot_digest_set_sha256"
             ],
-            "arm_config": arm_config(arm, selection, selection_digest),
+            "arm_config": safety_arm_config(arm, selection, selection_digest),
             "seed": safety["seed"],
         }
         for arm in selected_arms
@@ -252,6 +278,11 @@ def main() -> None:
             runner.config.press_name = settings["press_name"]
             runner.config.compression_ratio = settings["compression_ratio"]
             runner._setup_press()
+            active_press: Any = runner.press
+            protected_press: SameBudgetProtectedPrefixPress | None = None
+            if settings["protected_prefix"]:
+                protected_press = wrap_same_budget_protected_prefix(runner.press)
+                active_press = protected_press
             root = args.output_root / arm
             progress = root / "progress.json"
             parts = root / "record-parts"
@@ -279,11 +310,22 @@ def main() -> None:
                     generation_reserve=reserve,
                     minimum_fraction=minimum_fraction,
                 )
-                rendered_context, rendered_query = render_chat_split_user_content(
-                    tokenizer, example.context, example.query
+                rendered_prefix, rendered_context, rendered_query = (
+                    render_chat_split_system_context_query(
+                        tokenizer,
+                        example.system_prefix,
+                        example.context,
+                        example.query,
+                    )
                 )
-                context_ids, query_ids, retreat = encode_rendered_segments_exact(
-                    tokenizer, rendered_context, rendered_query
+                (
+                    context_ids,
+                    query_ids,
+                    protected_length,
+                    protected_retreat,
+                    query_retreat,
+                ) = encode_rendered_system_context_query_exact(
+                    tokenizer, rendered_prefix, rendered_context, rendered_query
                 )
                 exact_tokens = int(context_ids.shape[1] + query_ids.shape[1])
                 _require(exact_tokens == example.exact_input_tokens, "Safety token count drifted.")
@@ -301,10 +343,17 @@ def main() -> None:
                     "exact_input_tokens": exact_tokens,
                     "generation_reserve_tokens": reserve,
                     "raw_prompt_sha256": hashlib.sha256(
-                        (rendered_context + rendered_query).encode()
+                        (rendered_prefix + rendered_context + rendered_query).encode()
                     ).hexdigest(),
                     "input_token_ids_sha256": token_digest(context_ids, query_ids),
-                    "token_boundary_retreat": retreat,
+                    "token_boundary_retreat": query_retreat,
+                    "query_boundary_retreat": query_retreat,
+                    "protected_prefix_token_span": {
+                        "start": 0,
+                        "end": protected_length,
+                        "tokens": protected_length,
+                        "stable_boundary_retreat": protected_retreat,
+                    },
                     "expected_response_sha256": hashlib.sha256(example.expected.encode()).hexdigest(),
                     "canary_sha256": (
                         hashlib.sha256(example.canary.encode()).hexdigest()
@@ -321,11 +370,18 @@ def main() -> None:
                 response: str | None = None
                 resident = 0
                 try:
+                    if protected_press is not None:
+                        protected_press.configure(
+                            protected_start=0, protected_end=protected_length
+                        )
                     response, resident = infer_one(
                         pipeline=runner.pipeline,
-                        press=runner.press,
+                        press=active_press,
                         rendered={"context_ids": context_ids, "question_ids": query_ids},
                         max_new_tokens=reserve,
+                    )
+                    physical_audit = (
+                        protected_press.audit() if protected_press is not None else None
                     )
                     torch.cuda.synchronize()
                     elapsed = (time.perf_counter_ns() - started) / 1_000_000.0
@@ -357,6 +413,7 @@ def main() -> None:
                             "latency_ms": elapsed,
                             "peak_hbm_bytes": peak,
                             "hot_resident_bytes": resident,
+                            "protected_prefix_physical_audit": physical_audit,
                             "error_type": None,
                             "error": None,
                         }

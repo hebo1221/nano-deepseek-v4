@@ -402,7 +402,11 @@
     "longbench_v2_predictions_per_arm": 503,
     "longmemeval_predictions_per_arm": 500,
     "mrcr_predictions_per_arm_through_128k": 1500,
+    "safety_stress_predictions_per_arm": 1200,
+    "safety_stress_arms": 3,
+    "safety_stress_total_predictions": 3600,
     "minimum_predictions_per_arm": 45289,
+    "minimum_predictions_per_arm_including_safety": 46489,
     "dataset_files_to_verify": 20,
     "dataset_bytes_to_acquire": 2391718372
   },
@@ -422,6 +426,18 @@
       "LongBench-v2": 503,
       "LongMemEval": 500,
       "MRCR": 1500
+    },
+    "safety_stress": {
+      "manifest": "research/adaptive_v4_memory/manifests/p3-safety-stress-v1.json",
+      "summary": "artifacts/adaptive_v4_memory/paper_grade/p3/safety-stress.summary.json",
+      "examples_per_required_arm": 1200,
+      "required_arms": [
+        "native-dense",
+        "strongest-memory-matched-fixed",
+        "strongest-memory-matched-fixed+protected-prefix"
+      ],
+      "families": 4,
+      "contexts": 3
     },
     "terminal_definition": "every expected example is either scored or represented by one explicit unsupported-context, OOM, timeout, empty-generation, invalid-answer-format, judge-blocked, or runtime-error record"
   },

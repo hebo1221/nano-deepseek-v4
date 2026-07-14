@@ -40,7 +40,7 @@ def test_p4_requires_full_natural_suite_not_ruler_only(tmp_path: Path) -> None:
             }
         )
     )
-    with pytest.raises(RuntimeError, match="five-benchmark"):
+    with pytest.raises(RuntimeError, match="five-benchmark and safety"):
         systems.require_p3_audit(ruler_only)
 
     natural = tmp_path / "natural.json"
@@ -52,12 +52,17 @@ def test_p4_requires_full_natural_suite_not_ruler_only(tmp_path: Path) -> None:
                     "all_required_artifacts_verified": True,
                     "all_required_baseline_cells_terminal": True,
                     "all_failure_accounting_complete": True,
+                    "safety_stress_terminal": True,
                     "benchmarks_terminal": 5,
                     "minimum_protocol_examples_accounted_per_arm": 45_289,
                 },
                 "benchmarks": {
                     name: {"terminal": True, "native_and_fixed_terminal": True}
                     for name in systems.P3_BENCHMARKS
+                },
+                "supplemental_safety": {
+                    "terminal": True,
+                    "protected_prefix_physical_budget_verified": True,
                 },
             }
         )

@@ -26,6 +26,19 @@
         "minimum_protocol_examples_accounted_per_arm": 45289
       }
     },
+    "p3_safety": {
+      "path": "artifacts/adaptive_v4_memory/paper_grade/p3/safety-stress.summary.json",
+      "experiment_id": "p3-safety-stress-audit-v1",
+      "required_audit": {
+        "required_arms_terminal": true,
+        "failure_accounting_complete": true,
+        "input_pairing_verified": true,
+        "protected_prefix_physical_budget_verified": true,
+        "examples_accounted_per_arm": 1200,
+        "families_terminal": 4,
+        "contexts_terminal": 3
+      }
+    },
     "p4_reference_systems": {
       "path": "artifacts/adaptive_v4_memory/paper_grade/p4/reference-systems.summary.json",
       "experiment_id": "p4-reference-systems-matrix-audit-v1",
@@ -51,6 +64,7 @@
     "p2_causal_factorial": "research/adaptive_v4_memory/manifests/p2-causal-factorial-v1.json",
     "p3_ruler": "research/adaptive_v4_memory/manifests/p3-ruler-qwen3-1.7b-v1.json",
     "natural_suite": "research/adaptive_v4_memory/manifests/p3-natural-suite-v1.json",
+    "safety_stress": "research/adaptive_v4_memory/manifests/p3-safety-stress-v1.json",
     "p4_reference_systems": "research/adaptive_v4_memory/manifests/p4-reference-systems-matrix-v1.json",
     "p4_production_systems": "research/adaptive_v4_memory/manifests/p4-production-systems-matrix-v1.json",
     "official_deepseek_v4": "research/adaptive_v4_memory/manifests/p3-flashmemory-deepseek-v4-v1.json",
@@ -61,6 +75,7 @@
     "table-p2-quality-gate.csv",
     "table-p2-causal-gate.csv",
     "table-p3-ruler-cells.csv",
+    "table-p3-safety-slices.csv",
     "table-p4-reference-system-cells.csv",
     "table-p4-production-system-cells.csv",
     "paper-report.md",

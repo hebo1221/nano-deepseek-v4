@@ -26,6 +26,7 @@ def _fixture(tmp_path: Path) -> tuple[Path, dict[str, Path]]:
         "examples_per_family_context": 1,
         "expected_examples_per_arm": len(FAMILIES),
         "generation_reserve_tokens": 2,
+        "seed": 17,
         "target_fill_tolerance": {"minimum_fraction": 0.95},
         "failure_accounting": ["runtime-error"],
         "claim_boundary": "synthetic safety retention only",
@@ -39,7 +40,11 @@ def _fixture(tmp_path: Path) -> tuple[Path, dict[str, Path]]:
         dependencies[name] = {"path": str(path), "sha256": _digest(path)}
 
     arm_paths: dict[str, Path] = {}
-    for arm in ("native-dense", "strongest-memory-matched-fixed"):
+    for arm in (
+        "native-dense",
+        "strongest-memory-matched-fixed",
+        "strongest-memory-matched-fixed+protected-prefix",
+    ):
         root = tmp_path / arm
         root.mkdir()
         records: list[dict[str, Any]] = []
@@ -52,6 +57,12 @@ def _fixture(tmp_path: Path) -> tuple[Path, dict[str, Path]]:
                     "family": family,
                     "context_target": 100,
                     "exact_input_tokens": 97,
+                    "protected_prefix_token_span": {
+                        "start": 0,
+                        "end": 2,
+                        "tokens": 2,
+                        "stable_boundary_retreat": 0,
+                    },
                     "raw_prompt_sha256": f"{index + 1:x}" * 64,
                     "input_token_ids_sha256": f"{index + 5:x}" * 64,
                     "expected_response_sha256": f"{index + 9:x}" * 64,
@@ -60,6 +71,29 @@ def _fixture(tmp_path: Path) -> tuple[Path, dict[str, Path]]:
                     "score": 1.0,
                     "leakage_event": False,
                     "exact_required_response": True,
+                    "hot_resident_bytes": 80,
+                    "protected_prefix_physical_audit": (
+                        {
+                            "same_budget_verified": True,
+                            "layers": [
+                                {
+                                    "layer_index": 0,
+                                    "input_tokens": 10,
+                                    "kept_tokens": 5,
+                                    "protected_start": 0,
+                                    "protected_end": 2,
+                                    "protected_tokens": 2,
+                                    "compression_ratio": 0.5,
+                                }
+                            ],
+                            "layer_count": 1,
+                            "protected_start": 0,
+                            "protected_end": 2,
+                            "protected_tokens": 2,
+                        }
+                        if arm.endswith("+protected-prefix")
+                        else None
+                    ),
                 }
             )
         records_path = root / "records.jsonl"
@@ -92,12 +126,17 @@ def test_safety_summary_audits_all_slices_and_pairs_inputs(tmp_path: Path) -> No
         "required_arms_terminal": True,
         "failure_accounting_complete": True,
         "input_pairing_verified": True,
+        "protected_prefix_physical_budget_verified": True,
         "examples_accounted_per_arm": 4,
         "families_terminal": 4,
         "contexts_terminal": 1,
     }
     assert all(len(row["slices"]) == 4 for row in result["arms"].values())
     assert all(row["macro_success_rate_failures_zero"] == 1.0 for row in result["arms"].values())
+    assert result["protected_prefix_causal_contrast"]["mean_success_rate_difference"] == 0.0
+    assert result["protected_prefix_causal_contrast"][
+        "resident_bytes_equal_for_comparable_pairs"
+    ] is True
 
 
 def test_safety_summary_rejects_cross_arm_prompt_drift(tmp_path: Path) -> None:
