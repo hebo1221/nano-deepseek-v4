@@ -45,6 +45,7 @@ IMPLEMENTATION_PATHS = tuple(
             "research/adaptive_v4_memory/scripts/run_p2_seed_extension_core.py",
             "research/adaptive_v4_memory/scripts/summarize_p2_seed_extension.py",
             "research/adaptive_v4_memory/scripts/run_p2_seed_extension_causal_prerequisites.py",
+            "research/adaptive_v4_memory/scripts/run_p2_seed_extension_causal.py",
         )
     )
 )

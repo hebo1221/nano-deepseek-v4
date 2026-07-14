@@ -8,6 +8,7 @@ sys.path.insert(0, str(SCRIPTS))
 
 import p2_seed_extension as extension  # noqa: E402
 import p2_seed_extension_causal as causal_extension  # noqa: E402
+import run_p2_seed_extension_causal as causal_runner  # noqa: E402
 
 
 def test_causal_extension_grid_is_exactly_7200_unique_shards() -> None:
@@ -42,12 +43,24 @@ def test_causal_extension_registry_is_scoped_and_index_aligned() -> None:
     ) == original
 
 
+def test_causal_extension_seed_partition_is_complete_and_disjoint() -> None:
+    partitions = causal_runner.partition_seeds(
+        extension.EXTENSION_TRAINING_SEEDS, workers=3
+    )
+    flattened = [seed for partition in partitions for seed in partition]
+
+    assert len(partitions) == 3
+    assert len(flattened) == len(set(flattened)) == 4
+    assert set(flattened) == set(extension.EXTENSION_TRAINING_SEEDS)
+
+
 def test_causal_prerequisite_digest_contract_contains_only_present_paths() -> None:
     root = Path(__file__).resolve().parents[1]
     extension_paths = {
         "research/adaptive_v4_memory/scripts/p2_seed_extension_causal.py",
         "research/adaptive_v4_memory/scripts/"
         "run_p2_seed_extension_causal_prerequisites.py",
+        "research/adaptive_v4_memory/scripts/run_p2_seed_extension_causal.py",
     }
 
     assert extension_paths.issubset(causal_extension.IMPLEMENTATION_PATHS)
