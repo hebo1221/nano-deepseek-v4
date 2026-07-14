@@ -202,3 +202,16 @@ def test_final_source_inventory_verifies_gate_before_reusing_prefetch(
     payload = written["payload"]
     assert isinstance(payload, dict)
     assert payload["prefetch_reuse"]["verified_again_after_sequence_gate"] is True
+
+
+def test_reproduction_guide_separates_prefetch_from_gated_natural_execution() -> None:
+    guide = (
+        Path(__file__).resolve().parents[1]
+        / "research/adaptive_v4_memory/reproduction.md"
+    ).read_text()
+
+    assert "prepare_p3_natural_sources.py" in guide
+    assert "--prefetch-only" in guide
+    assert "acquired no\nbenchmark dataset" in guide
+    assert "Do not run the default source-inventory mode" in guide
+    assert "until the primary P2 matrix and causal audit pass" in guide

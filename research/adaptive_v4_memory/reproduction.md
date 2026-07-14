@@ -70,6 +70,23 @@ Acquire only the revisions pinned in the P3 manifests, prepare their source/data
 inventories, and verify the snapshot before inference. The natural runner commands
 share the same two frozen roots:
 
+Before the P2 sequence gate, the preregistered exception permits only immutable
+model and public-code prefetch plus cryptographic verification. The following
+command clones and verifies the pinned SCBench, LongBench v2, and LongMemEval code,
+writes `p3-natural-source-prefetch-v1`, and explicitly records that it acquired no
+benchmark dataset, selected no baseline, generated no dataset, and ran no inference:
+
+```bash
+.venv/bin/python research/adaptive_v4_memory/scripts/prepare_p3_natural_sources.py \
+  --prefetch-only
+```
+
+Do not run the default source-inventory mode, any dataset preparation, baseline
+selection, or prediction command until the primary P2 matrix and causal audit pass
+the frozen sequence gate. After that gate, the default source command re-verifies
+every prefetched checkout and binds the prefetch inventory digest into the final
+source inventory.
+
 ```bash
 export KVPRESS_ROOT=artifacts/adaptive_v4_memory/paper_grade/p3/assets/sources/kvpress
 export RULER_ROOT=artifacts/adaptive_v4_memory/paper_grade/p3/assets/sources/RULER
