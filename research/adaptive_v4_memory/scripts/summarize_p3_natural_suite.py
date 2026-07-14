@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -39,9 +40,37 @@ def _sha256_value(value: Any, label: str) -> None:
     int(value, 16)
 
 
+def _nonnegative_integer(value: Any) -> bool:
+    return type(value) is int and value >= 0
+
+
+def _finite_number(value: Any) -> bool:
+    return type(value) in (int, float) and (
+        type(value) is int or math.isfinite(value)
+    )
+
+
+def _finite_nonnegative_number(value: Any) -> bool:
+    return _finite_number(value) and value >= 0
+
+
+def _unit_interval_number(value: Any) -> bool:
+    return _finite_number(value) and 0.0 <= value <= 1.0
+
+
+def _close(left: Any, right: Any) -> bool:
+    return _finite_number(left) and _finite_number(right) and math.isclose(
+        float(left), float(right), rel_tol=1e-12, abs_tol=1e-12
+    )
+
+
 def _validate_distribution(value: Any, *, observations: int, label: str) -> None:
     _require(isinstance(value, dict), f"Missing {label} distribution.")
-    _require(value.get("observations") == observations, f"{label} observations drifted.")
+    _require(
+        type(value.get("observations")) is int
+        and value["observations"] == observations,
+        f"{label} observations drifted.",
+    )
     for field in (
         "mean",
         "sample_standard_deviation",
@@ -53,9 +82,18 @@ def _validate_distribution(value: Any, *, observations: int, label: str) -> None
     ):
         item = value.get(field)
         _require(
-            isinstance(item, (int, float)) and not isinstance(item, bool) and item >= 0,
+            _finite_nonnegative_number(item),
             f"{label} {field} drifted.",
         )
+    _require(
+        value["minimum"]
+        <= value["p50"]
+        <= value["p95"]
+        <= value["p99"]
+        <= value["maximum"]
+        and value["minimum"] <= value["mean"] <= value["maximum"],
+        f"{label} order statistics drifted.",
+    )
 
 
 def audit_benchmark(
@@ -84,6 +122,10 @@ def audit_benchmark(
         f"{name} source implementation audit failed.",
     )
     _require(
+        audit.get("all_record_revisions_verified") is True,
+        f"{name} record revision audit failed.",
+    )
+    _require(
         audit.get("all_failure_accounting_complete") is True,
         f"{name} failure accounting is incomplete.",
     )
@@ -98,17 +140,19 @@ def audit_benchmark(
     for arm in required_arms:
         row = arms[arm]
         failures = row.get("failures_by_type", {})
+        _require(isinstance(failures, dict), f"{name}/{arm} failure map invalid.")
         _require(
             set(failures).issubset(allowed_failures),
             f"{name}/{arm} contains an unregistered failure type.",
         )
         _require(
-            all(isinstance(count, int) and count >= 0 for count in failures.values()),
+            all(_nonnegative_integer(count) for count in failures.values()),
             f"{name}/{arm} has an invalid failure count.",
         )
         scored = row.get("scored_examples")
         accounted = row.get("accounted_examples")
-        _require(isinstance(scored, int) and scored >= 0, f"{name}/{arm} score count invalid.")
+        _require(_nonnegative_integer(scored), f"{name}/{arm} score count invalid.")
+        _require(_nonnegative_integer(accounted), f"{name}/{arm} accounted count invalid.")
         _require(
             accounted == scored + sum(failures.values()),
             f"{name}/{arm} score and failure counts do not close.",
@@ -121,14 +165,18 @@ def audit_benchmark(
         )
         conservative_mean = row.get("mean_score_over_all_expected_failures_zero")
         _require(
-            isinstance(conservative_mean, (int, float)) and 0.0 <= conservative_mean <= 1.0,
+            _unit_interval_number(conservative_mean),
             f"{name}/{arm} conservative quality is missing.",
+        )
+        scored_mean = row.get("mean_score_over_scored")
+        _require(
+            _unit_interval_number(scored_mean) if scored > 0 else scored_mean is None,
+            f"{name}/{arm} scored-only quality drifted.",
         )
         failure_rate = row.get("failure_rate")
         _require(
-            isinstance(failure_rate, (int, float))
-            and not isinstance(failure_rate, bool)
-            and failure_rate == sum(failures.values()) / expected_examples,
+            _unit_interval_number(failure_rate)
+            and _close(failure_rate, sum(failures.values()) / expected_examples),
             f"{name}/{arm} failure rate drifted.",
         )
         measurements = row.get("measurements", {})
@@ -160,16 +208,25 @@ def audit_benchmark(
             "scored_examples": scored,
             "failed_examples": sum(failures.values()),
             "failures_by_type": failures,
-            "mean_score_over_scored": row.get("mean_score_over_scored"),
+            "mean_score_over_scored": scored_mean,
             "mean_score_over_all_expected_failures_zero": conservative_mean,
             "failure_rate": failure_rate,
             "measurements": measurements,
         }
     contrast = payload.get("paired_quality_contrast", {})
     expected_clusters = 1_844 if name == "SCBench" else expected_examples
+    failure_pairing = contrast.get("failure_pairing", {})
+    expected_failure_pairing = {
+        "both_scored",
+        "candidate_only_failed",
+        "comparator_only_failed",
+        "both_failed",
+    }
     _require(
-        contrast.get("paired_examples") == expected_examples
-        and contrast.get("paired_clusters") == expected_clusters
+        type(contrast.get("paired_examples")) is int
+        and contrast["paired_examples"] == expected_examples
+        and type(contrast.get("paired_clusters")) is int
+        and contrast["paired_clusters"] == expected_clusters
         and contrast.get("cluster_unit")
         == ("shared-context-row" if name == "SCBench" else "example")
         and contrast.get("candidate") == required_arms[1]
@@ -177,14 +234,55 @@ def audit_benchmark(
         and contrast.get("failure_as_zero") is True
         and contrast.get("bootstrap_resamples") == 10_000
         and contrast.get("confidence_level") == 0.95
-        and isinstance(contrast.get("paired_bootstrap_95_ci"), list)
-        and len(contrast["paired_bootstrap_95_ci"]) == 2
-        and sum(contrast.get("failure_pairing", {}).values()) == expected_examples,
+        and contrast.get("bootstrap_seed")
+        == int.from_bytes(
+            hashlib.sha256(f"p3-natural:{name}:quality".encode()).digest()[:8],
+            "big",
+        ),
         f"{name} paired quality contrast is incomplete.",
+    )
+    _require(
+        isinstance(failure_pairing, dict)
+        and set(failure_pairing) == expected_failure_pairing
+        and all(_nonnegative_integer(value) for value in failure_pairing.values())
+        and _nonnegative_integer(contrast.get("jointly_scored_examples"))
+        and contrast["jointly_scored_examples"] == failure_pairing["both_scored"]
+        and sum(failure_pairing.values()) == expected_examples,
+        f"{name} paired failure accounting drifted.",
+    )
+    mean_difference = contrast.get("mean_difference")
+    mean_percentage_points = contrast.get("mean_difference_percentage_points")
+    confidence_interval = contrast.get("paired_bootstrap_95_ci")
+    confidence_interval_pp = contrast.get(
+        "paired_bootstrap_95_ci_percentage_points"
+    )
+    _require(
+        _finite_number(mean_difference)
+        and -1.0 <= mean_difference <= 1.0
+        and _close(mean_percentage_points, mean_difference * 100.0)
+        and isinstance(confidence_interval, list)
+        and len(confidence_interval) == 2
+        and all(
+            _finite_number(value) and -1.0 <= value <= 1.0
+            for value in confidence_interval
+        )
+        and confidence_interval[0] <= confidence_interval[1]
+        and isinstance(confidence_interval_pp, list)
+        and len(confidence_interval_pp) == 2
+        and all(
+            _close(value, confidence_interval[index] * 100.0)
+            for index, value in enumerate(confidence_interval_pp)
+        )
+        and _unit_interval_number(contrast.get("two_sided_bootstrap_p"))
+        and _finite_nonnegative_number(
+            contrast.get("cluster_mean_sample_standard_deviation")
+        ),
+        f"{name} paired quality statistics drifted.",
     )
     measurement_contrasts = payload.get("paired_measurement_contrasts", {})
     _require(
-        set(measurement_contrasts)
+        isinstance(measurement_contrasts, dict)
+        and set(measurement_contrasts)
         == {"latency_ms", "peak_hbm_bytes", "hot_resident_bytes"}
         and all(
             row.get("paired_examples") == expected_examples
@@ -195,6 +293,23 @@ def audit_benchmark(
         ),
         f"{name} paired measurement contrasts are incomplete.",
     )
+    for metric, row in measurement_contrasts.items():
+        candidate_mean = row.get("candidate_mean")
+        comparator_mean = row.get("comparator_mean")
+        mean_difference = row.get("mean_paired_difference")
+        ratio = row.get("ratio_of_means")
+        _require(
+            _finite_nonnegative_number(candidate_mean)
+            and _finite_nonnegative_number(comparator_mean)
+            and _finite_number(mean_difference)
+            and _close(mean_difference, candidate_mean - comparator_mean)
+            and (
+                _close(ratio, candidate_mean / comparator_mean)
+                if comparator_mean > 0.0
+                else ratio is None
+            ),
+            f"{name} paired {metric} statistics drifted.",
+        )
     conditional = payload.get("conditional_arms", {})
     _require(
         all(
@@ -610,6 +725,7 @@ def summarize(
             "all_required_baseline_cells_terminal": True,
             "all_failure_accounting_complete": True,
             "all_source_implementations_verified": True,
+            "all_record_revisions_verified": True,
             "all_paired_quality_contrasts_verified": True,
             "dataset_license_revision_inventory_verified": True,
             "upstream_code_license_revision_inventory_verified": True,

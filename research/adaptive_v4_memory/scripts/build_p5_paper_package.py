@@ -942,6 +942,7 @@ def classify_evidence(
         and natural_audit.get("all_required_baseline_cells_terminal") is True
         and natural_audit.get("all_failure_accounting_complete") is True
         and natural_audit.get("all_source_implementations_verified") is True
+        and natural_audit.get("all_record_revisions_verified") is True
         and natural_audit.get("all_paired_quality_contrasts_verified") is True
         and natural_audit.get("dataset_license_revision_inventory_verified") is True
         and natural_audit.get("upstream_code_license_revision_inventory_verified") is True

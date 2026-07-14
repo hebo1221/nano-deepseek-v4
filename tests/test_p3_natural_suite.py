@@ -323,6 +323,7 @@ def _natural_benchmark_summaries(tmp_path: Path, manifest_path: Path) -> dict[st
                 "all_failure_accounting_complete": True,
                 "all_required_arms_input_paired": True,
                 "all_source_implementations_verified": True,
+                "all_record_revisions_verified": True,
                 "raw_record_digest_set_sha256": "0" * 64,
             },
             "arms": {
@@ -379,9 +380,13 @@ def _natural_benchmark_summaries(tmp_path: Path, manifest_path: Path) -> dict[st
                 "paired_bootstrap_95_ci": [0.0, 0.0],
                 "paired_bootstrap_95_ci_percentage_points": [0.0, 0.0],
                 "two_sided_bootstrap_p": 1.0,
+                "cluster_mean_sample_standard_deviation": 0.0,
                 "bootstrap_resamples": 10_000,
                 "confidence_level": 0.95,
-                "bootstrap_seed": 1,
+                "bootstrap_seed": int.from_bytes(
+                    hashlib.sha256(f"p3-natural:{name}:quality".encode()).digest()[:8],
+                    "big",
+                ),
             },
             "paired_measurement_contrasts": {
                 metric: {
@@ -606,6 +611,7 @@ def test_natural_suite_audit_requires_all_examples_and_baselines(tmp_path: Path)
     assert payload["audit"]["safety_stress_terminal"] is True
     assert payload["audit"]["natural_safety_terminal"] is True
     assert payload["audit"]["all_paired_quality_contrasts_verified"] is True
+    assert payload["audit"]["all_record_revisions_verified"] is True
     assert payload["audit"]["dataset_license_revision_inventory_verified"] is True
     assert payload["audit"]["upstream_code_license_revision_inventory_verified"] is True
     assert payload["audit"]["ruler_license_revision_manifest_verified"] is True
@@ -732,6 +738,56 @@ def test_natural_suite_audit_rejects_unaccounted_failure(tmp_path: Path) -> None
     paths["MRCR"].write_text(json.dumps(payload))
 
     with pytest.raises(ValueError, match="do not close"):
+        summarize(
+            manifest,
+            paths,
+            _safety_summary(tmp_path, manifest),
+            _natural_safety_summary(tmp_path, manifest),
+            dataset_inventory,
+            source_inventory,
+        )
+
+
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    [
+        ("record-revision-audit-false", "record revision audit failed"),
+        ("infinite-distribution", "all-terminal latency_ms mean drifted"),
+        ("boolean-failure-count", "invalid failure count"),
+        ("infinite-bootstrap-ci", "paired quality statistics drifted"),
+        ("boolean-failure-pairing", "paired failure accounting drifted"),
+        ("inconsistent-measurement-ratio", "paired latency_ms statistics drifted"),
+    ],
+)
+def test_natural_suite_rejects_invalid_derived_statistics(
+    tmp_path: Path, mutation: str, message: str
+) -> None:
+    root = Path(__file__).resolve().parents[1]
+    manifest = root / "research/adaptive_v4_memory/manifests/p3-natural-suite-v1.json"
+    paths = _natural_benchmark_summaries(tmp_path, manifest)
+    dataset_inventory, source_inventory = _provenance_inventories(tmp_path, manifest, paths)
+    payload = json.loads(paths["MRCR"].read_text())
+    if mutation == "record-revision-audit-false":
+        payload["audit"]["all_record_revisions_verified"] = False
+    elif mutation == "infinite-distribution":
+        payload["arms"]["native-dense"]["measurements"]["all_terminal_attempts"][
+            "latency_ms"
+        ]["mean"] = float("inf")
+    elif mutation == "boolean-failure-count":
+        payload["arms"]["native-dense"]["failures_by_type"][
+            "unsupported-context"
+        ] = True
+    elif mutation == "infinite-bootstrap-ci":
+        payload["paired_quality_contrast"]["paired_bootstrap_95_ci"][1] = float(
+            "inf"
+        )
+    elif mutation == "boolean-failure-pairing":
+        payload["paired_quality_contrast"]["failure_pairing"]["both_failed"] = True
+    else:
+        payload["paired_measurement_contrasts"]["latency_ms"]["ratio_of_means"] = 2.0
+    paths["MRCR"].write_text(json.dumps(payload))
+
+    with pytest.raises(ValueError, match=message):
         summarize(
             manifest,
             paths,

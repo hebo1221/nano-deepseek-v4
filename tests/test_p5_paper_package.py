@@ -357,6 +357,12 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
         ]
         is True
     )
+    assert (
+        manifest["evidence"]["p3_natural"]["required_audit"][
+            "all_record_revisions_verified"
+        ]
+        is True
+    )
     assert manifest["boundary_manifests"]["production_runtime_blocker"].endswith(
         "p4-production-resource-blocker-v1.json"
     )
@@ -616,6 +622,7 @@ def test_p5_classification_preserves_claim_boundaries() -> None:
                 "all_required_baseline_cells_terminal": True,
                 "all_failure_accounting_complete": True,
                 "all_source_implementations_verified": True,
+                "all_record_revisions_verified": True,
                 "all_paired_quality_contrasts_verified": True,
                 "dataset_license_revision_inventory_verified": True,
                 "upstream_code_license_revision_inventory_verified": True,
@@ -697,6 +704,7 @@ def test_p5_success_requires_full_system_coverage() -> None:
                 "all_required_baseline_cells_terminal": True,
                 "all_failure_accounting_complete": True,
                 "all_source_implementations_verified": True,
+                "all_record_revisions_verified": True,
                 "all_paired_quality_contrasts_verified": True,
                 "dataset_license_revision_inventory_verified": True,
                 "upstream_code_license_revision_inventory_verified": True,
@@ -767,6 +775,7 @@ def test_p5_marks_all_failed_production_coverage_unverified() -> None:
                 "all_required_baseline_cells_terminal": True,
                 "all_failure_accounting_complete": True,
                 "all_source_implementations_verified": True,
+                "all_record_revisions_verified": True,
                 "all_paired_quality_contrasts_verified": True,
                 "dataset_license_revision_inventory_verified": True,
                 "upstream_code_license_revision_inventory_verified": True,
