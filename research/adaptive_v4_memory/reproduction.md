@@ -131,6 +131,17 @@ the document-context prefill; the question is appended identically under both ar
 .venv/bin/python research/adaptive_v4_memory/scripts/summarize_p3_natural_adaptive_quota_longbench_v2.py
 ```
 
+After the adaptive RULER audit and baseline MRCR audit are terminal, run the
+separately frozen multi-needle replication. Adaptive allocation applies only to
+the long context prefill; the final query is appended identically under both arms.
+
+```bash
+.venv/bin/python research/adaptive_v4_memory/scripts/validate_p3_natural_adaptive_quota_mrcr_manifest.py
+.venv/bin/python research/adaptive_v4_memory/scripts/run_p3_mrcr.py --cohort adaptive-quota \
+  --kvpress-root "$KVPRESS_ROOT" --model-snapshot "$MODEL_SNAPSHOT"
+.venv/bin/python research/adaptive_v4_memory/scripts/summarize_p3_natural_adaptive_quota_mrcr.py
+```
+
 Run the separately reported Phi-4-mini cross-family transfer only after the
 nine-seed P2 causal audit and Qwen fixed-baseline selection are terminal:
 

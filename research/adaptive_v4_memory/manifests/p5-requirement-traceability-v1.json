@@ -160,12 +160,14 @@
         {"kind": "evidence", "name": "p3_natural_adaptive_quota"},
         {"kind": "evidence", "name": "p3_natural_adaptive_quota_scbench"},
         {"kind": "evidence", "name": "p3_natural_adaptive_quota_longbench_v2"},
+        {"kind": "evidence", "name": "p3_natural_adaptive_quota_mrcr"},
         {"kind": "evidence", "name": "p3_natural"},
         {"kind": "boundary-manifest", "name": "cross_family"},
         {"kind": "boundary-manifest", "name": "cross_family_adaptive_quota"},
         {"kind": "boundary-manifest", "name": "natural_adaptive_quota"},
         {"kind": "boundary-manifest", "name": "natural_adaptive_quota_scbench"},
         {"kind": "boundary-manifest", "name": "natural_adaptive_quota_longbench_v2"},
+        {"kind": "boundary-manifest", "name": "natural_adaptive_quota_mrcr"},
         {"kind": "boundary-manifest", "name": "natural_suite"}
       ]
     },
@@ -180,11 +182,13 @@
         {"kind": "evidence", "name": "p3_natural_adaptive_quota"},
         {"kind": "evidence", "name": "p3_natural_adaptive_quota_scbench"},
         {"kind": "evidence", "name": "p3_natural_adaptive_quota_longbench_v2"},
+        {"kind": "evidence", "name": "p3_natural_adaptive_quota_mrcr"},
         {"kind": "boundary-manifest", "name": "cross_family"},
         {"kind": "boundary-manifest", "name": "cross_family_adaptive_quota"},
         {"kind": "boundary-manifest", "name": "natural_adaptive_quota"},
         {"kind": "boundary-manifest", "name": "natural_adaptive_quota_scbench"},
-        {"kind": "boundary-manifest", "name": "natural_adaptive_quota_longbench_v2"}
+        {"kind": "boundary-manifest", "name": "natural_adaptive_quota_longbench_v2"},
+        {"kind": "boundary-manifest", "name": "natural_adaptive_quota_mrcr"}
       ]
     },
     {
@@ -311,7 +315,8 @@
         {"kind": "evidence", "name": "p3_natural"},
         {"kind": "evidence", "name": "p3_natural_adaptive_quota"},
         {"kind": "evidence", "name": "p3_natural_adaptive_quota_scbench"},
-        {"kind": "evidence", "name": "p3_natural_adaptive_quota_longbench_v2"}
+        {"kind": "evidence", "name": "p3_natural_adaptive_quota_longbench_v2"},
+        {"kind": "evidence", "name": "p3_natural_adaptive_quota_mrcr"}
       ]
     },
     {
