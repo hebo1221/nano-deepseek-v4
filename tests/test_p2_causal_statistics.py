@@ -11,6 +11,100 @@ sys.path.insert(0, str(SCRIPTS))
 import summarize_p2_causal_factorial as causal  # noqa: E402
 
 
+def _raw_metadata() -> tuple[dict, dict]:
+    scale = "s55"
+    training_seed = causal.shard.TRAINING_SEEDS[0]
+    family = causal.PAPER_GRADE_WORKLOAD_FAMILIES[0]
+    context = causal.shard.CONTEXTS[0]
+    replicate = causal.shard.REPLICATES[0]
+    evaluation_seed = causal.shard.core._evaluation_seed(training_seed)
+    raw = {
+        "schema_version": 1,
+        "experiment_id": "p2-causal-factorial-shard-v1",
+        "source": {"dirty": False, "implementation_digest": "implementation"},
+        "scale": scale,
+        "training_seed": training_seed,
+        "budget": causal.shard.BUDGET_LABELS[0],
+        "family": family,
+        "context": context,
+        "replicate": replicate,
+        "evaluation_seed_namespace": "held_out_evaluation",
+        "evaluation_seed": evaluation_seed,
+        "generation_seed": causal.shard.core._generation_seed(
+            evaluation_seed, family, context, replicate
+        ),
+        "examples": causal.shard.EXAMPLES_PER_SHARD,
+        "batch_size": causal.shard.BATCH_SIZE,
+        "chunk_size": causal.shard.CHUNK_SIZE_BY_SCALE[scale],
+        "primary_arms": causal.shard.PRIMARY_ARM_NAMES,
+        "supplemental_baseline_arms": causal.shard.SUPPLEMENTAL_BASELINE_ARM_NAMES,
+        "component_arms": causal.shard.COMPONENT_ARM_NAMES,
+        "physical_arms": causal.shard.PHYSICAL_ARM_NAMES,
+        "leakage_guard": {
+            "calibration_seed_used_for_evaluation": False,
+            "evaluation_targets_used_for_policy_selection": False,
+            "paired_examples_shared_across_arms": True,
+            "fixed_mixture_fitted_on_held_out_quality": False,
+        },
+    }
+    run = {
+        key: raw[key]
+        for key in ("scale", "training_seed", "budget", "family", "context", "replicate")
+    }
+    return raw, run
+
+
+def test_causal_raw_metadata_binds_seeds_arms_and_leakage_guard() -> None:
+    raw, run = _raw_metadata()
+
+    causal.verify_raw_metadata(raw, run, "implementation")
+
+    raw["generation_seed"] += 1
+    with pytest.raises(ValueError, match="generation seed drifted"):
+        causal.verify_raw_metadata(raw, run, "implementation")
+    raw, run = _raw_metadata()
+    raw["physical_arms"] = raw["physical_arms"][:-1]
+    with pytest.raises(ValueError, match="arm contract drifted"):
+        causal.verify_raw_metadata(raw, run, "implementation")
+    raw, run = _raw_metadata()
+    raw["leakage_guard"]["fixed_mixture_fitted_on_held_out_quality"] = True
+    with pytest.raises(ValueError, match="leakage guard drifted"):
+        causal.verify_raw_metadata(raw, run, "implementation")
+
+
+def test_causal_execution_accounting_binds_schedule_and_order() -> None:
+    arms = ("arm-a", "arm-b", "arm-c")
+    rows = [
+        {
+            "schedule_batch_index": batch,
+            "arm": arm,
+            "execution_index": index,
+            "config_sha256": f"{batch * len(arms) + index:064x}",
+            "execution_mode": "executed",
+            "reused_from_arm": None,
+            "wall_ms": 1.0,
+        }
+        for batch in (10, 11)
+        for index, arm in enumerate(arms)
+    ]
+
+    counts = causal.validate_exact_config_reuse(
+        rows, expected_arms=arms, expected_schedule_batches={10, 11}
+    )
+    assert counts == {"executed": 6, "reused_exact_config": 0}
+
+    rows[0]["execution_index"] = 1
+    with pytest.raises(ValueError, match="arm/order coverage drifted"):
+        causal.validate_exact_config_reuse(
+            rows, expected_arms=arms, expected_schedule_batches={10, 11}
+        )
+    rows[0]["execution_index"] = 0
+    with pytest.raises(ValueError, match="schedule coverage drifted"):
+        causal.validate_exact_config_reuse(
+            rows, expected_arms=arms, expected_schedule_batches={10, 12}
+        )
+
+
 def test_all_preregistered_component_contrasts_are_reported() -> None:
     assert set(causal.PREREGISTERED_COMPONENT_CONTRASTS).issubset(causal.CONTRASTS)
     assert causal.CONTRASTS["cross_layer_prior"] == (

@@ -87,19 +87,33 @@ def _require(condition: bool, message: str) -> None:
 
 
 def validate_exact_config_reuse(
-    rows: list[dict[str, Any]], *, expected_arms: tuple[str, ...]
+    rows: list[dict[str, Any]],
+    *,
+    expected_arms: tuple[str, ...],
+    expected_schedule_batches: set[int] | None = None,
 ) -> dict[str, int]:
     """Audit executed/reused rows without treating reuse as a new forward."""
 
     by_batch_arm = {(row.get("schedule_batch_index"), row.get("arm")): row for row in rows}
     _require(len(by_batch_arm) == len(rows), "Duplicate causal execution-accounting row.")
     batches = {key[0] for key in by_batch_arm}
+    if expected_schedule_batches is not None:
+        _require(
+            batches == expected_schedule_batches,
+            "Causal execution-accounting schedule coverage drifted.",
+        )
     _require(
         all(
             {arm for batch, arm in by_batch_arm if batch == batch_index} == set(expected_arms)
+            and {
+                row.get("execution_index")
+                for (batch, _arm), row in by_batch_arm.items()
+                if batch == batch_index
+            }
+            == set(range(len(expected_arms)))
             for batch_index in batches
         ),
-        "Causal execution-accounting arm coverage drifted.",
+        "Causal execution-accounting arm/order coverage drifted.",
     )
     counts = {"executed": 0, "reused_exact_config": 0}
     for (batch_index, arm), row in by_batch_arm.items():
@@ -146,6 +160,60 @@ def validate_exact_config_reuse(
         )
         counts["reused_exact_config"] += 1
     return counts
+
+
+def verify_raw_metadata(
+    raw: dict[str, Any], run: dict[str, Any], implementation_digest: str
+) -> None:
+    """Bind every preregistered shard coordinate and leakage boundary."""
+
+    _require(raw.get("schema_version") == 1, "Wrong causal shard schema version.")
+    _require(raw.get("experiment_id") == "p2-causal-factorial-shard-v1", "Wrong shard id.")
+    _require(raw.get("source", {}).get("dirty") is False, "Dirty causal shard source.")
+    _require(
+        raw.get("source", {}).get("implementation_digest") == implementation_digest,
+        "Causal implementation digest drifted.",
+    )
+    for key in ("scale", "training_seed", "budget", "family", "context", "replicate"):
+        _require(raw.get(key) == run.get(key), f"Causal run metadata drifted: {key}")
+    training_seed = raw["training_seed"]
+    evaluation_seed = shard.core._evaluation_seed(training_seed)
+    _require(
+        raw.get("evaluation_seed_namespace") == "held_out_evaluation"
+        and raw.get("evaluation_seed") == evaluation_seed,
+        "Causal held-out evaluation seed drifted.",
+    )
+    _require(
+        raw.get("generation_seed")
+        == shard.core._generation_seed(
+            evaluation_seed, raw["family"], raw["context"], raw["replicate"]
+        ),
+        "Causal generation seed drifted.",
+    )
+    _require(raw.get("examples") == shard.EXAMPLES_PER_SHARD, "Causal shard size drifted.")
+    _require(raw.get("batch_size") == shard.BATCH_SIZE, "Causal batch size drifted.")
+    _require(
+        raw.get("chunk_size") == shard.CHUNK_SIZE_BY_SCALE.get(raw["scale"]),
+        "Causal chunk size drifted.",
+    )
+    _require(
+        tuple(raw.get("primary_arms", ())) == shard.PRIMARY_ARM_NAMES
+        and tuple(raw.get("supplemental_baseline_arms", ()))
+        == shard.SUPPLEMENTAL_BASELINE_ARM_NAMES
+        and tuple(raw.get("component_arms", ())) == shard.COMPONENT_ARM_NAMES
+        and tuple(raw.get("physical_arms", ())) == shard.PHYSICAL_ARM_NAMES,
+        "Causal raw arm contract drifted.",
+    )
+    _require(
+        raw.get("leakage_guard")
+        == {
+            "calibration_seed_used_for_evaluation": False,
+            "evaluation_targets_used_for_policy_selection": False,
+            "paired_examples_shared_across_arms": True,
+            "fixed_mixture_fitted_on_held_out_quality": False,
+        },
+        "Causal leakage guard drifted.",
+    )
 
 
 def registered_arm_oracle_scores(
@@ -581,21 +649,7 @@ def main() -> None:
         raw_path = _verify_dependency(run["raw_artifact"], "causal shard")
         raw_digests.append(run["raw_artifact"]["sha256"])
         raw = json.loads(raw_path.read_text())
-        _require(raw.get("experiment_id") == "p2-causal-factorial-shard-v1", "Wrong shard id.")
-        _require(raw.get("source", {}).get("dirty") is False, "Dirty causal shard source.")
-        _require(
-            raw.get("source", {}).get("implementation_digest") == implementation_digest,
-            "Causal implementation digest drifted.",
-        )
-        for key in ("scale", "training_seed", "budget", "family", "context", "replicate"):
-            _require(raw.get(key) == run.get(key), f"Causal run metadata drifted: {key}")
-        _require(
-            tuple(raw.get("primary_arms", ())) == shard.PRIMARY_ARM_NAMES
-            and tuple(raw.get("supplemental_baseline_arms", ()))
-            == shard.SUPPLEMENTAL_BASELINE_ARM_NAMES
-            and tuple(raw.get("component_arms", ())) == shard.COMPONENT_ARM_NAMES,
-            "Causal raw arm contract drifted.",
-        )
+        verify_raw_metadata(raw, run, implementation_digest)
         records_raw = raw.get("records")
         _require(isinstance(records_raw, list), "Causal records are not a list.")
         records = cast(list[dict[str, Any]], records_raw)
@@ -640,8 +694,19 @@ def main() -> None:
             all(metric.get("budget_violations") == 0 for metric in batch_metrics),
             "Causal shard contains a budget violation.",
         )
+        expected_schedule_batches = {
+            shard.schedule_batch_index(
+                family=raw["family"],
+                context=raw["context"],
+                replicate=raw["replicate"],
+                local_batch_index=batch_index,
+            )
+            for batch_index in range(shard.BATCHES_PER_SHARD)
+        }
         shard_quality_counts = validate_exact_config_reuse(
-            batch_metrics, expected_arms=shard.ALL_ARM_NAMES
+            batch_metrics,
+            expected_arms=shard.ALL_ARM_NAMES,
+            expected_schedule_batches=expected_schedule_batches,
         )
         for key, value in shard_quality_counts.items():
             quality_execution_counts[key] += value
@@ -718,7 +783,9 @@ def main() -> None:
             "Physical measurement count drifted.",
         )
         shard_physical_counts = validate_exact_config_reuse(
-            measurements, expected_arms=shard.PHYSICAL_ARM_NAMES
+            measurements,
+            expected_arms=shard.PHYSICAL_ARM_NAMES,
+            expected_schedule_batches=expected_schedule_batches,
         )
         for key, value in shard_physical_counts.items():
             physical_execution_counts[key] += value
