@@ -149,6 +149,15 @@ pins the Qwen3-4B 262K transfer model, all five natural benchmark revisions,
 minimum, and the sequence-gated acquisition path. Oversized examples are
 reported as unsupported and are never head-tail truncated.
 
+The supplemental safety-retention study adds 3,600 actual-model predictions:
+four frozen families at 8K/32K/128K, 100 examples per slice, and three paired
+arms. Its causal contrast compares the strongest fixed baseline with and
+without an exact system-role protected prefix at the same KV budget. The audit
+requires paired bootstrap uncertainty, an exact paired test, literal canary
+leakage rates, worst-slice reporting, and layer-level proof that pinning neither
+adds kept tokens nor increases resident KV bytes. This remains synthetic
+transfer evidence, not a comprehensive safety certification.
+
 The suite RULER evidence is regenerated separately with the pinned Qwen3-4B
 tokenizer at 8K/16K/32K/64K/128K, then executed as 32,500 paired records per
 required arm. The earlier Qwen3-1.7B RULER matrix remains the leakage-safe
@@ -210,8 +219,9 @@ After all audits finish, the strict P5 package can be regenerated with:
 
 The command requires a clean tree and complete 4,500-shard P2 core,
 9,000-shard causal, 253,500-prediction small-model RULER, five-benchmark natural,
-108-cell reference-system, and separate 108-cell actual-concurrency production
-audits. It writes digest-indexed CSV tables and a paper-style report under
+3,600-prediction safety-retention, 108-cell reference-system, and separate
+108-cell actual-concurrency production audits. It writes digest-indexed CSV
+tables and a paper-style report under
 `artifacts/adaptive_v4_memory/paper_grade/p5/`; missing evidence is never
 imputed.
 
