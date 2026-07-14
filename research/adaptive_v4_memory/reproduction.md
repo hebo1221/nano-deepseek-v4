@@ -98,6 +98,25 @@ git -C "$KVPRESS_ROOT" checkout --detach FETCH_HEAD
 .venv/bin/python research/adaptive_v4_memory/scripts/run_p3_mrcr.py --kvpress-root "$KVPRESS_ROOT" --model-snapshot "$MODEL_SNAPSHOT"
 ```
 
+Run the separately reported Phi-4-mini cross-family transfer only after the
+nine-seed P2 causal audit and Qwen fixed-baseline selection are terminal:
+
+```bash
+export PHI_SNAPSHOT=artifacts/adaptive_v4_memory/paper_grade/p3/assets/models/cfbefacb99257ffa30c83adab238a50856ac3083
+.venv/bin/hf download microsoft/Phi-4-mini-instruct \
+  --revision cfbefacb99257ffa30c83adab238a50856ac3083 \
+  --local-dir "$PHI_SNAPSHOT"
+.venv/bin/python research/adaptive_v4_memory/scripts/verify_p3_natural_model.py \
+  --manifest research/adaptive_v4_memory/manifests/p3-cross-family-ruler-transfer-v1.json \
+  --model-snapshot "$PHI_SNAPSHOT" \
+  --experiment-id p3-cross-family-model-snapshot-verification-v1
+.venv/bin/python research/adaptive_v4_memory/scripts/prepare_p3_cross_family_ruler_dataset.py \
+  --ruler-root "$RULER_ROOT" --tokenizer-snapshot "$PHI_SNAPSHOT"
+.venv/bin/python research/adaptive_v4_memory/scripts/run_p3_cross_family_ruler.py \
+  --kvpress-root "$KVPRESS_ROOT" --model-snapshot "$PHI_SNAPSHOT"
+.venv/bin/python research/adaptive_v4_memory/scripts/summarize_p3_cross_family_ruler.py
+```
+
 Summarize each benchmark with `summarize_p3_natural_benchmark.py`, binding the
 `native-dense` and `strongest-memory-matched-fixed` cell artifacts, then run:
 

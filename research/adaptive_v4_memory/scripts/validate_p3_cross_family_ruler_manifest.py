@@ -42,8 +42,9 @@ def validate_manifest(payload: dict[str, Any]) -> dict[str, Any]:
     amendments = payload.get("amendments")
     _require(
         isinstance(amendments, list)
-        and len(amendments) == 1
-        and "before any P3 model prediction" in amendments[0].get("timing", ""),
+        and len(amendments) == 2
+        and "before any P3 model prediction" in amendments[0].get("timing", "")
+        and "before any cross-family dataset row" in amendments[1].get("timing", ""),
         "Cross-family pre-outcome amendment record drifted.",
     )
 
@@ -62,9 +63,7 @@ def validate_manifest(payload: dict[str, Any]) -> dict[str, Any]:
         sequence.get("required_nine_seed_causal_summary", "").endswith(
             "p2-nine-seed-causal.summary.json"
         )
-        and sequence.get("required_fixed_selection", "").endswith(
-            "fixed-baseline-selection.json"
-        )
+        and sequence.get("required_fixed_selection", "").endswith("fixed-baseline-selection.json")
         and "every model prediction require terminal nine-seed P2 evidence"
         in sequence.get("policy", ""),
         "Cross-family sequence gate drifted.",
@@ -87,9 +86,7 @@ def validate_manifest(payload: dict[str, Any]) -> dict[str, Any]:
         and isinstance(files, dict)
         and len(files) == 21
         and all(
-            isinstance(name, str)
-            and isinstance(digest, str)
-            and len(digest) == 64
+            isinstance(name, str) and isinstance(digest, str) and len(digest) == 64
             for name, digest in files.items()
         )
         and canonical_digest_set(files) == model.get("snapshot_digest_set_sha256"),
@@ -114,16 +111,14 @@ def validate_manifest(payload: dict[str, Any]) -> dict[str, Any]:
         and benchmark.get("tasks_per_length") == len(EXPECTED_TASKS)
         and benchmark.get("predictions_per_arm") == predictions_per_arm
         and benchmark.get("paired_predictions_total") == 2 * predictions_per_arm
-        and "reject rather than silently truncate"
-        in benchmark.get("exact_token_rule", ""),
+        and "reject rather than silently truncate" in benchmark.get("exact_token_rule", ""),
         "Cross-family RULER coverage drifted.",
     )
 
     arms = payload.get("arms", {})
     _require(
         set(arms) == {"native-dense", "qwen-selected-memory-matched"}
-        and arms["native-dense"]
-        == {"press_name": "no_press", "compression_ratio": 0.0}
+        and arms["native-dense"] == {"press_name": "no_press", "compression_ratio": 0.0}
         and arms["qwen-selected-memory-matched"].get("compression_ratio") == 0.5
         and "without Phi-specific reselection"
         in arms["qwen-selected-memory-matched"].get("selection_rule", ""),
@@ -134,6 +129,7 @@ def validate_manifest(payload: dict[str, Any]) -> dict[str, Any]:
     _require(
         statistics.get("paired_bootstrap_resamples") == 10_000
         and statistics.get("paired_bootstrap_confidence") == 0.95
+        and statistics.get("paired_bootstrap_seed") == 9_171_501
         and statistics.get("exact_task_sign_flip_assignments_per_length") == 8192
         and statistics.get("length_holm_family_size") == len(EXPECTED_LENGTHS),
         "Cross-family statistical contract drifted.",
@@ -145,7 +141,8 @@ def validate_manifest(payload: dict[str, Any]) -> dict[str, Any]:
         and gate.get("overall_paired_bootstrap_lower_bound_minimum") == -0.02
         and gate.get("worst_task_length_regression_minimum") == -0.05
         and gate.get("maximum_failure_rate_increase") == 0.01
-        and gate.get("maximum_realized_kv_fraction") == 0.51,
+        and gate.get("maximum_realized_kv_fraction") == 0.51
+        and "maximum cell ratio" in gate.get("realized_kv_fraction_aggregation", ""),
         "Cross-family transfer gate drifted.",
     )
 

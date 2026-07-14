@@ -336,6 +336,10 @@ tokens and whose 21 top-level files are hash-bound. It adds 3 lengths × 13
 tasks × 100 examples × 2 paired arms = 7,800 predictions. The selected 50%-KV
 method is inherited unchanged from the Qwen3-1.7B screen; a failed transfer is
 reported as negative evidence rather than triggering a Phi-specific search.
+Its example-paired bootstrap uses seed `9171501`. Memory compliance gates the
+maximum of 39 task-by-length ratios, each computed as summed selected-arm hot
+resident bytes divided by summed native bytes over pairs with positive
+measurements in both arms; a cell without a measurable pair does not pass.
 
 Official DeepSeek-V4 Flash evaluation is a separate evidence tier. If the
 pinned checkpoint and supported runtime cannot be provisioned, the report must

@@ -8,6 +8,11 @@
       "timing": "after immutable public model prefetch but before any P3 model prediction, generated RULER dataset, fixed-baseline selection, or natural benchmark outcome existed",
       "change": "add a preregistered second-family RULER transfer cohort on Phi-4-mini-instruct",
       "reason": "the paper-scale audit identified model-family breadth, rather than within-model sample density, as the largest remaining empirical weakness"
+    },
+    {
+      "timing": "after runner implementation but before any cross-family dataset row, model prediction, or outcome existed",
+      "change": "freeze the paired-bootstrap RNG seed and task-by-length realized-KV aggregation used by the transfer gate",
+      "reason": "close deterministic analysis and memory-gate ambiguity before execution"
     }
   ],
   "relationship_to_primary": {
@@ -115,6 +120,7 @@
     "paired_unit": "same generated RULER example under both arms",
     "paired_bootstrap_resamples": 10000,
     "paired_bootstrap_confidence": 0.95,
+    "paired_bootstrap_seed": 9171501,
     "task_cluster_unit": "mean paired difference within one of 13 tasks at a fixed length",
     "exact_task_sign_flip_assignments_per_length": 8192,
     "length_holm_family_size": 3,
@@ -134,6 +140,7 @@
     "worst_task_length_regression_minimum": -0.05,
     "maximum_failure_rate_increase": 0.01,
     "maximum_realized_kv_fraction": 0.51,
+    "realized_kv_fraction_aggregation": "within each task-by-length cell, sum qwen-selected hot_resident_bytes divided by sum native hot_resident_bytes over pairs where both arms measured positive bytes; gate the maximum cell ratio and fail the gate if any cell has no measurable pair",
     "interpretation": "passing supports bounded cross-family transfer of the selected compression operating point; failure is retained as a negative transfer result and cannot trigger Phi-specific method selection"
   },
   "outputs": {

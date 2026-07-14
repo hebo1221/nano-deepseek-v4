@@ -38,7 +38,15 @@ compression ratio, prompt, task subset, or stopping rule.
 The report includes the overall paired bootstrap interval, per-length exact
 sign-flip tests over 13 task means, Holm adjustment across three lengths,
 every task-by-length effect, worst regression, operational failures, and
-realized KV bytes. Passing supports only bounded transfer of the selected
+realized KV bytes. Bootstrap seed `9171501` is frozen. The 51% memory gate is
+applied to the maximum task-by-length ratio of summed fixed bytes to summed
+native bytes over pairs where both arms measured positive resident bytes; a
+cell with no measurable pair fails that component. Passing supports only
+bounded transfer of the selected
 operating point across Qwen3 and Phi-4. Failure is retained as a negative
 transfer result. This cohort is not pooled with Qwen rows, is not a second full
 natural suite, and provides no evidence about official DeepSeek-V4.
+
+The deterministic seed and memory aggregation were added as a second recorded
+amendment after runner implementation but before any cross-family dataset row
+or model outcome existed.
