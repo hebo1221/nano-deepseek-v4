@@ -25,6 +25,10 @@ from p3_natural_workloads import (
     render_chat_split_user_content,
 )
 from p3_sequence_gate import require_p3_sequence_gate
+from run_p3_cross_family_ruler import (
+    ADAPTIVE_QUOTA_ARMS as CROSS_FAMILY_ADAPTIVE_QUOTA_ARMS,
+)
+from run_p3_cross_family_ruler import adaptive_quota_arm_config
 from run_p3_natural_ruler import compatibility_arm_config
 from run_p3_ruler_matrix import (
     KVPRESS_REVISION,
@@ -35,6 +39,9 @@ from run_p3_ruler_matrix import (
 )
 from summarize_p3_natural_suite import sha256
 from transformers import DynamicCache
+from validate_p3_cross_family_adaptive_quota_longbench_v2_manifest import (
+    validate_manifest as validate_cross_family_adaptive_longbench_manifest,
+)
 from validate_p3_natural_adaptive_quota_longbench_v2_manifest import (
     validate_manifest as validate_adaptive_longbench_manifest,
 )
@@ -49,6 +56,10 @@ DEFAULT_OUTPUT_ROOT = Path(
 ADAPTIVE_QUOTA_OUTPUT_ROOT = Path(
     "artifacts/adaptive_v4_memory/paper_grade/p3/natural-adaptive-quota/"
     "longbench-v2-qwen3-4b"
+)
+CROSS_FAMILY_ADAPTIVE_QUOTA_OUTPUT_ROOT = Path(
+    "artifacts/adaptive_v4_memory/paper_grade/p3/cross-family/"
+    "phi4-mini-adaptive-quota-longbench-v2"
 )
 GENERATION_RESERVE = 128
 EXPECTED_EXAMPLES = 503
@@ -95,6 +106,36 @@ def load_adaptive_prerequisite(
             )
             == predictions,
             "Baseline LongBench v2 prerequisite is not a complete audited result.",
+        )
+    elif experiment_id == "p3-cross-family-adaptive-quota-ruler-audit-v1":
+        _require(
+            payload.get("status") == "terminal"
+            and audit.get("total_predictions") == predictions
+            and audit.get("paired_examples") == predictions // 2
+            and audit.get("all_raw_records_verified") is True
+            and audit.get("all_dependency_digests_verified") is True
+            and audit.get("failure_accounting_complete") is True
+            and audit.get("quota_physical_audits_verified") is True
+            and audit.get("same_global_token_budget_verified") is True
+            and audit.get("causal_layer_order_verified") is True
+            and audit.get("phi_specific_reselection") is False
+            and audit.get("outcome_dependent_execution") is False,
+            "Phi adaptive RULER prerequisite lacks verified transfer evidence.",
+        )
+    elif experiment_id == "p3-natural-adaptive-quota-longbench-v2-audit-v1":
+        _require(
+            payload.get("status") == "terminal"
+            and audit.get("total_predictions") == predictions
+            and audit.get("paired_examples") == predictions // 2
+            and audit.get("all_raw_records_verified") is True
+            and audit.get("all_scores_recomputed_from_raw_response") is True
+            and audit.get("all_dependency_digests_verified") is True
+            and audit.get("exact_token_id_pairing_verified") is True
+            and audit.get("quota_physical_audits_verified") is True
+            and audit.get("same_initial_global_token_budget_verified") is True
+            and audit.get("failure_accounting_complete") is True
+            and audit.get("outcome_dependent_execution") is False,
+            "Qwen adaptive LongBench v2 prerequisite lacks verified evidence.",
         )
     else:
         raise ValueError(f"Unsupported adaptive LongBench v2 prerequisite: {experiment_id}.")
@@ -403,7 +444,11 @@ def runtime_environment() -> dict[str, Any]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run frozen Qwen3-4B LongBench v2 arms.")
-    parser.add_argument("--cohort", choices=("baseline", "adaptive-quota"), default="baseline")
+    parser.add_argument(
+        "--cohort",
+        choices=("baseline", "adaptive-quota", "cross-family-adaptive-quota"),
+        default="baseline",
+    )
     parser.add_argument("--kvpress-root", type=Path, required=True)
     parser.add_argument("--model-snapshot", type=Path, required=True)
     parser.add_argument(
@@ -464,6 +509,30 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--cross-family-adaptive-quota-manifest",
+        type=Path,
+        default=Path(
+            "research/adaptive_v4_memory/manifests/"
+            "p3-cross-family-adaptive-quota-longbench-v2-v1.json"
+        ),
+    )
+    parser.add_argument(
+        "--phi-adaptive-ruler-summary",
+        type=Path,
+        default=Path(
+            "artifacts/adaptive_v4_memory/paper_grade/p3/cross-family/"
+            "phi4-mini-adaptive-quota-ruler.summary.json"
+        ),
+    )
+    parser.add_argument(
+        "--qwen-adaptive-longbench-summary",
+        type=Path,
+        default=Path(
+            "artifacts/adaptive_v4_memory/paper_grade/p3/natural-adaptive-quota/"
+            "longbench-v2-qwen3-4b.summary.json"
+        ),
+    )
+    parser.add_argument(
         "--baseline-longbench-summary",
         type=Path,
         default=Path(
@@ -480,7 +549,11 @@ def main() -> None:
         type=Path,
         default=DEFAULT_OUTPUT_ROOT,
     )
-    parser.add_argument("--arm", action="append", choices=(*ARMS, *ADAPTIVE_QUOTA_ARMS))
+    parser.add_argument(
+        "--arm",
+        action="append",
+        choices=(*ARMS, *ADAPTIVE_QUOTA_ARMS, *CROSS_FAMILY_ADAPTIVE_QUOTA_ARMS),
+    )
     parser.add_argument("--max-new-examples", type=int)
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
@@ -489,32 +562,57 @@ def main() -> None:
         "max-new-examples must be positive.",
     )
     adaptive_manifest: dict[str, Any] | None = None
+    adaptive_manifest_path: Path | None = None
     adaptive_prerequisites: dict[str, dict[str, str]] = {}
-    if args.cohort == "adaptive-quota":
+    if args.cohort in {"adaptive-quota", "cross-family-adaptive-quota"}:
         decision = require_cross_family_sequence_gate(
             primary_core=args.primary_core_summary,
             primary_causal=args.causal_gate,
             nine_seed_causal=args.nine_seed_causal_summary,
             fixed_selection=args.fixed_selection,
         )
-        adaptive_manifest = json.loads(args.adaptive_quota_manifest.read_text())
-        validate_adaptive_longbench_manifest(adaptive_manifest)
-        adaptive_prerequisites = {
-            "adaptive_ruler": load_adaptive_prerequisite(
-                args.adaptive_ruler_summary,
-                experiment_id="p3-natural-adaptive-quota-ruler-audit-v1",
-                predictions=65_000,
-                label="Qwen3-4B adaptive-quota RULER audit",
-            ),
-            "baseline_longbench_v2": load_adaptive_prerequisite(
-                args.baseline_longbench_summary,
-                experiment_id="p3-natural-longbench-v2-audit-v1",
-                predictions=1_006,
-                label="Qwen3-4B baseline LongBench v2 audit",
-            ),
-        }
-        if args.output_root == DEFAULT_OUTPUT_ROOT:
-            args.output_root = ADAPTIVE_QUOTA_OUTPUT_ROOT
+        if args.cohort == "adaptive-quota":
+            adaptive_manifest_path = args.adaptive_quota_manifest
+            adaptive_manifest = json.loads(args.adaptive_quota_manifest.read_text())
+            validate_adaptive_longbench_manifest(adaptive_manifest)
+            adaptive_prerequisites = {
+                "adaptive_ruler": load_adaptive_prerequisite(
+                    args.adaptive_ruler_summary,
+                    experiment_id="p3-natural-adaptive-quota-ruler-audit-v1",
+                    predictions=65_000,
+                    label="Qwen3-4B adaptive-quota RULER audit",
+                ),
+                "baseline_longbench_v2": load_adaptive_prerequisite(
+                    args.baseline_longbench_summary,
+                    experiment_id="p3-natural-longbench-v2-audit-v1",
+                    predictions=1_006,
+                    label="Qwen3-4B baseline LongBench v2 audit",
+                ),
+            }
+            if args.output_root == DEFAULT_OUTPUT_ROOT:
+                args.output_root = ADAPTIVE_QUOTA_OUTPUT_ROOT
+        else:
+            adaptive_manifest_path = args.cross_family_adaptive_quota_manifest
+            adaptive_manifest = json.loads(
+                args.cross_family_adaptive_quota_manifest.read_text()
+            )
+            validate_cross_family_adaptive_longbench_manifest(adaptive_manifest)
+            adaptive_prerequisites = {
+                "phi_adaptive_ruler": load_adaptive_prerequisite(
+                    args.phi_adaptive_ruler_summary,
+                    experiment_id="p3-cross-family-adaptive-quota-ruler-audit-v1",
+                    predictions=7_800,
+                    label="Phi-4-mini adaptive-quota RULER audit",
+                ),
+                "qwen_adaptive_longbench_v2": load_adaptive_prerequisite(
+                    args.qwen_adaptive_longbench_summary,
+                    experiment_id="p3-natural-adaptive-quota-longbench-v2-audit-v1",
+                    predictions=1_006,
+                    label="Qwen3-4B adaptive-quota LongBench v2 audit",
+                ),
+            }
+            if args.output_root == DEFAULT_OUTPUT_ROOT:
+                args.output_root = CROSS_FAMILY_ADAPTIVE_QUOTA_OUTPUT_ROOT
     else:
         decision = require_p3_sequence_gate(args.p2_matrix, args.causal_gate)
     source_commit = git_head(Path.cwd())
@@ -535,18 +633,24 @@ def main() -> None:
         args.seed == manifest["benchmarks"][BENCHMARK]["generation_seed"],
         "LongBench v2 generation seed drifted from the frozen manifest.",
     )
+    execution_model = (
+        adaptive_manifest["model"]
+        if args.cohort == "cross-family-adaptive-quota"
+        and adaptive_manifest is not None
+        else manifest["model"]
+    )
     model_snapshot = args.model_snapshot.resolve()
-    verify_snapshot(model_snapshot, manifest["model"])
+    verify_snapshot(model_snapshot, execution_model)
     rows = load_rows(dataset_path, prompt_template)
     if adaptive_manifest is not None:
         _require(
             adaptive_manifest["benchmark"]["predictions_per_arm"] == len(rows)
             and adaptive_manifest["model"]["snapshot_digest_set_sha256"]
-            == manifest["model"]["snapshot_digest_set_sha256"]
+            == execution_model["snapshot_digest_set_sha256"]
             and adaptive_manifest["benchmark"]["dataset_sha256"]
             == manifest["benchmarks"][BENCHMARK]["dataset"]["files"][0]["sha256"]
             and adaptive_manifest["benchmark"]["prompt_sha256"] == sha256(prompt_path),
-            "Adaptive LongBench v2 example count drifted from the base suite.",
+            "Adaptive LongBench v2 immutable inputs drifted from the base suite.",
         )
     runner_digest = sha256(Path(__file__).resolve())
     manifest_digest = sha256(args.manifest)
@@ -555,18 +659,24 @@ def main() -> None:
     selection_digest = sha256(args.fixed_selection)
     source_inventory_digest = sha256(args.source_inventory)
     adaptive_manifest_digest = (
-        sha256(args.adaptive_quota_manifest) if adaptive_manifest is not None else None
+        sha256(adaptive_manifest_path) if adaptive_manifest_path is not None else None
     )
     scorer_digest = sha256(Path(__file__).with_name("p3_natural_metrics.py"))
-    maximum_context = manifest["model"]["maximum_supported_context_tokens"]
+    maximum_context = execution_model["maximum_supported_context_tokens"]
     revisions = {
-        "model_revision": MODEL_REVISION,
+        "model_revision": execution_model["revision"],
         "dataset_revision": DATASET_REVISION,
         "code_revision": CODE_REVISION,
         "scorer_sha256": scorer_digest,
         "prompt_sha256": sha256(prompt_path),
     }
-    cohort_arms = ADAPTIVE_QUOTA_ARMS if args.cohort == "adaptive-quota" else ARMS
+    cohort_arms = (
+        ADAPTIVE_QUOTA_ARMS
+        if args.cohort == "adaptive-quota"
+        else CROSS_FAMILY_ADAPTIVE_QUOTA_ARMS
+        if args.cohort == "cross-family-adaptive-quota"
+        else ARMS
+    )
     selected_arms = tuple(args.arm or cohort_arms)
     _require(
         len(selected_arms) == len(set(selected_arms))
@@ -591,10 +701,14 @@ def main() -> None:
                 name: metadata["sha256"]
                 for name, metadata in decision.get("dependencies", {}).items()
             },
-            "model_snapshot_digest_set_sha256": manifest["model"]["snapshot_digest_set_sha256"],
+            "model_snapshot_digest_set_sha256": execution_model[
+                "snapshot_digest_set_sha256"
+            ],
             "arm_config": (
                 compatibility_arm_config(arm, selection, selection_digest)
                 if args.cohort == "adaptive-quota"
+                else adaptive_quota_arm_config(arm, selection, selection_digest)
+                if args.cohort == "cross-family-adaptive-quota"
                 else arm_config(arm, selection, selection_digest)
             ),
             "seed": args.seed,
@@ -645,7 +759,7 @@ def main() -> None:
             runner._setup_press()
             active_press: Any = runner.press
             compatibility_press: Any = None
-            if args.cohort == "adaptive-quota":
+            if args.cohort != "baseline":
                 if arm == "fixed+pins":
                     compatibility_press = wrap_same_budget_protected_prefix(runner.press)
                 else:
@@ -681,7 +795,7 @@ def main() -> None:
                         config=config,
                         revisions=revisions,
                     )
-                    if args.cohort == "adaptive-quota":
+                    if args.cohort != "baseline":
                         base_row["quota_physical_audit"] = None
                     if rendered["exact_input_tokens"] + GENERATION_RESERVE > maximum_context:
                         record = failure_record(
@@ -712,7 +826,7 @@ def main() -> None:
                                 if compatibility_press is not None
                                 else None
                             )
-                            if args.cohort == "adaptive-quota":
+                            if args.cohort != "baseline":
                                 base_row["quota_physical_audit"] = compatibility_audit
                             torch.cuda.synchronize()
                             latency_ms = (time.perf_counter_ns() - started) / 1_000_000.0
@@ -798,7 +912,7 @@ def main() -> None:
                 },
                 "adaptive_quota_manifest": (
                     {
-                        "path": str(args.adaptive_quota_manifest),
+                        "path": str(adaptive_manifest_path),
                         "sha256": adaptive_manifest_digest,
                     }
                     if adaptive_manifest_digest is not None
@@ -818,7 +932,9 @@ def main() -> None:
                     "path": str(args.source_inventory),
                     "sha256": source_inventory_digest,
                 },
-                "model_snapshot_digest_set_sha256": manifest["model"]["snapshot_digest_set_sha256"],
+                "model_snapshot_digest_set_sha256": execution_model[
+                    "snapshot_digest_set_sha256"
+                ],
                 "p3_sequence_decision": decision,
                 "environment": environment,
                 "raw_records": {"path": str(records_path), "sha256": sha256(records_path)},

@@ -214,6 +214,71 @@ def test_adaptive_longbench_accepts_terminal_prerequisites_regardless_of_gate_ou
     assert len(baseline_dependency["sha256"]) == 64
 
 
+def test_phi_longbench_accepts_both_terminal_transfer_prerequisites(
+    tmp_path: Path,
+) -> None:
+    phi_ruler = tmp_path / "phi-adaptive-ruler.json"
+    phi_ruler.write_text(
+        json.dumps(
+            {
+                "experiment_id": "p3-cross-family-adaptive-quota-ruler-audit-v1",
+                "status": "terminal",
+                "classification": "bounded-negative-result",
+                "audit": {
+                    "total_predictions": 7_800,
+                    "paired_examples": 3_900,
+                    "all_raw_records_verified": True,
+                    "all_dependency_digests_verified": True,
+                    "failure_accounting_complete": True,
+                    "quota_physical_audits_verified": True,
+                    "same_global_token_budget_verified": True,
+                    "causal_layer_order_verified": True,
+                    "phi_specific_reselection": False,
+                    "outcome_dependent_execution": False,
+                },
+            }
+        )
+    )
+    qwen_longbench = tmp_path / "qwen-adaptive-longbench.json"
+    qwen_longbench.write_text(
+        json.dumps(
+            {
+                "experiment_id": "p3-natural-adaptive-quota-longbench-v2-audit-v1",
+                "status": "terminal",
+                "classification": "bounded-negative-result",
+                "audit": {
+                    "total_predictions": 1_006,
+                    "paired_examples": 503,
+                    "all_raw_records_verified": True,
+                    "all_scores_recomputed_from_raw_response": True,
+                    "all_dependency_digests_verified": True,
+                    "exact_token_id_pairing_verified": True,
+                    "quota_physical_audits_verified": True,
+                    "same_initial_global_token_budget_verified": True,
+                    "failure_accounting_complete": True,
+                    "outcome_dependent_execution": False,
+                },
+            }
+        )
+    )
+
+    phi_dependency = load_adaptive_prerequisite(
+        phi_ruler,
+        experiment_id="p3-cross-family-adaptive-quota-ruler-audit-v1",
+        predictions=7_800,
+        label="Phi adaptive RULER",
+    )
+    qwen_dependency = load_adaptive_prerequisite(
+        qwen_longbench,
+        experiment_id="p3-natural-adaptive-quota-longbench-v2-audit-v1",
+        predictions=1_006,
+        label="Qwen adaptive LongBench v2",
+    )
+
+    assert len(phi_dependency["sha256"]) == 64
+    assert len(qwen_dependency["sha256"]) == 64
+
+
 def test_longbench_runner_is_sequence_gated_before_model_or_dataset_io(
     tmp_path: Path,
 ) -> None:
