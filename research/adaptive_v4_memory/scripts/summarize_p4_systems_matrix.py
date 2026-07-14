@@ -238,6 +238,9 @@ def main() -> None:
         "audit": {
             "all_terminal_cells_verified": True,
             "all_artifact_digests_verified": True,
+            "available_measurement_schema_verified": True,
+            "repetition_order_and_pairing_verified": True,
+            "tail_latency_metrics_verified": True,
             "terminal_cells": len(seen),
             "complete_cells": len(complete),
             "partial_cells": len(partial),

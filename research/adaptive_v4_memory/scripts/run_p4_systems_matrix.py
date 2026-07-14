@@ -358,7 +358,8 @@ def _artifact_valid(
         return False
     payload = json.loads(path.read_text())
     identity_ok = (
-        payload.get("experiment_id") == "p4-reference-systems-cell-v1"
+        payload.get("schema_version") == 1
+        and payload.get("experiment_id") == "p4-reference-systems-cell-v1"
         and tuple(
             payload.get("cell", {}).get(name)
             for name in ("scale", "context", "generation", "profile", "batch", "active_requests")
@@ -377,14 +378,7 @@ def _artifact_valid(
         and payload.get("measured_repetitions") == MEASURED_REPETITIONS
         and isinstance(repetitions, list)
         and len(repetitions) <= MEASURED_REPETITIONS
-        and all(
-            set(row.get("policies", {})).issubset(POLICIES)
-            and all(
-                row.get("input_digest") == policy_run.get("input_digest")
-                for policy_run in row.get("policies", {}).values()
-            )
-            for row in repetitions
-        )
+        and all(_valid_repetition(row, index) for index, row in enumerate(repetitions))
     ):
         return False
     policy_status = payload.get("policy_status", {})
@@ -406,6 +400,30 @@ def _artifact_valid(
         or isinstance(policy_status[policy].get("failure"), dict)
         for policy in POLICIES
     )
+
+
+def _valid_repetition(row: dict[str, Any], index: int) -> bool:
+    policies = row.get("policies", {})
+    input_digest = row.get("input_digest")
+    expected_order = POLICIES if index % 2 == 0 else tuple(reversed(POLICIES))
+    if not (
+        row.get("repetition") == index
+        and isinstance(input_digest, str)
+        and len(input_digest) == 64
+        and set(input_digest) <= set("0123456789abcdef")
+        and tuple(row.get("execution_order", ())) == expected_order
+        and isinstance(policies, dict)
+        and set(policies).issubset(POLICIES)
+        and all(input_digest == policy_run.get("input_digest") for policy_run in policies.values())
+    ):
+        return False
+    if set(policies) != set(POLICIES):
+        return True
+    identical = (
+        policies[POLICIES[0]].get("prediction_digest")
+        == policies[POLICIES[1]].get("prediction_digest")
+    )
+    return row.get("greedy_predictions_identical") is identical
 
 
 def _run_row(

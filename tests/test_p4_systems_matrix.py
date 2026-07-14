@@ -136,14 +136,20 @@ def test_p4_partial_artifact_preserves_surviving_policy(tmp_path: Path) -> None:
     repetitions = [
         {
             "repetition": index,
-            "input_digest": f"input-{index}",
+            "input_digest": f"{index:064x}",
+            "execution_order": list(
+                systems.POLICIES
+                if index % 2 == 0
+                else tuple(reversed(systems.POLICIES))
+            ),
             "policies": {
-                "tiered-native": {"input_digest": f"input-{index}"},
+                "tiered-native": {"input_digest": f"{index:064x}"},
             },
         }
         for index in range(systems.MEASURED_REPETITIONS)
     ]
     payload = {
+        "schema_version": 1,
         "experiment_id": "p4-reference-systems-cell-v1",
         "status": "partial",
         "cell": dict(
@@ -181,6 +187,17 @@ def test_p4_partial_artifact_preserves_surviving_policy(tmp_path: Path) -> None:
     artifact.write_text(json.dumps(payload))
 
     assert systems._artifact_valid(
+        artifact,
+        cell=cell,
+        digest="implementation",
+        manifest_digest="manifest",
+        p3_digest="p3",
+    )
+
+    wrong_order = json.loads(artifact.read_text())
+    wrong_order["repetitions"][0]["execution_order"] = list(reversed(systems.POLICIES))
+    artifact.write_text(json.dumps(wrong_order))
+    assert not systems._artifact_valid(
         artifact,
         cell=cell,
         digest="implementation",

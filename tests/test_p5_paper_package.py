@@ -222,6 +222,14 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
     assert manifest["evidence"]["p3_ruler"]["required_audit"]["total_predictions"] == 253500
     assert manifest["evidence"]["p3_safety"]["required_audit"]["examples_accounted_per_arm"] == 1200
     assert manifest["evidence"]["p4_reference_systems"]["required_audit"]["terminal_cells"] == 216
+    assert all(
+        manifest["evidence"]["p4_reference_systems"]["required_audit"][field] is True
+        for field in (
+            "available_measurement_schema_verified",
+            "repetition_order_and_pairing_verified",
+            "tail_latency_metrics_verified",
+        )
+    )
     assert manifest["evidence"]["p4_500k_context"]["required_audit"] == {
         "all_terminal_cells_verified": True,
         "all_artifact_digests_verified": True,
