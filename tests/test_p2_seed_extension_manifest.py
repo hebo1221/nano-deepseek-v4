@@ -17,6 +17,12 @@ def test_independent_seed_extension_removes_exact_test_resolution_floor() -> Non
     inference = manifest["combined_confirmatory_inference"]
     volume = manifest["planned_extension_volume"]
     combined = manifest["combined_p2_volume"]
+    scale_audit = json.loads(
+        (
+            root
+            / "research/adaptive_v4_memory/manifests/experiment-scale-audit-v1.json"
+        ).read_text()
+    )
 
     primary_seeds = set(primary["training_seeds"])
     extension_seeds = set(extension["training_seeds"])
@@ -55,4 +61,18 @@ def test_independent_seed_extension_removes_exact_test_resolution_floor() -> Non
         "core_policy_example_evaluations": 1_134_000,
         "causal_shards": 16_200,
         "causal_policy_example_evaluations": 5_184_000,
+    }
+    assert scale_audit["planned_volume"]["p2_independent_seed_extension"] == volume
+    assert scale_audit["planned_volume"]["combined_p2_confirmatory"] == {
+        "independent_training_seeds_per_scale": 9,
+        **combined,
+    }
+    assert scale_audit["confirmatory_extension_resolution"] == {
+        "independent_training_seed_clusters_per_scale": 9,
+        "exact_two_sided_sign_flip_assignments": assignments,
+        "minimum_attainable_two_sided_p": minimum_p,
+        "minimum_attainable_holm_adjusted_family_p": minimum_p * 9,
+        "primary_cohort_remains_independently_reportable": True,
+        "pooling_requires_identical_frozen_contracts": True,
+        "outcome_dependent_early_stopping": False,
     }

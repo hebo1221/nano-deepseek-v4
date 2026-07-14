@@ -79,6 +79,9 @@ BOUNDARY_EXPERIMENT_IDS = {
 SCALE_AUDIT_SOURCE_MANIFESTS = {
     "study": Path("research/adaptive_v4_memory/manifests/paper-grade-study-v1.json"),
     "causal": Path("research/adaptive_v4_memory/manifests/p2-causal-factorial-v1.json"),
+    "seed_extension": Path(
+        "research/adaptive_v4_memory/manifests/p2-independent-seed-extension-v1.json"
+    ),
     "online": Path("research/adaptive_v4_memory/manifests/p1-online-learned-lookahead-v1.json"),
     "ruler": Path("research/adaptive_v4_memory/manifests/p3-ruler-qwen3-1.7b-v1.json"),
     "natural": Path("research/adaptive_v4_memory/manifests/p3-natural-suite-v1.json"),
@@ -218,6 +221,73 @@ def _validate_experiment_scale_audit(payload: dict[str, Any]) -> None:
         "offline_registered_arm_oracle": True,
     }
     _require(planned.get("p2_causal") == expected_causal, "P2 causal scale count drifted.")
+
+    extension_manifest = sources["seed_extension"]
+    primary_cohort = extension_manifest.get("primary_cohort", {})
+    extension_cohort = extension_manifest.get("extension_cohort", {})
+    primary_seeds = set(primary_cohort.get("training_seeds", []))
+    extension_seeds = set(extension_cohort.get("training_seeds", []))
+    _require(
+        extension_manifest.get("status")
+        == "preregistered_before_primary_outcome_inspection"
+        and extension_manifest.get("outcome_blinding", {}).get(
+            "primary_outcome_summary_inspected"
+        )
+        is False
+        and primary_seeds == set(study.get("training_seeds", []))
+        and primary_seeds.isdisjoint(extension_seeds)
+        and extension_cohort.get("outcome_dependent_early_stopping") is False
+        and extension_cohort.get("separate_artifact_namespace_required") is True,
+        "P2 independent-seed extension boundary drifted.",
+    )
+    extension_core_shards = (
+        len(extension_seeds)
+        * len(extension_cohort.get("scales", []))
+        * extension_cohort.get("families", 0)
+        * extension_cohort.get("contexts", 0)
+        * extension_cohort.get("replicates_per_context", 0)
+    )
+    expected_extension_volume = {
+        "training_runs": len(extension_seeds)
+        * len(extension_cohort.get("scales", [])),
+        "core_shards": extension_core_shards,
+        "core_policy_example_evaluations": extension_core_shards
+        * extension_cohort.get("examples_per_shard", 0)
+        * len(core_policies),
+        "causal_shards": extension_core_shards * budget_count,
+        "causal_policy_example_evaluations": extension_core_shards
+        * budget_count
+        * extension_cohort.get("examples_per_shard", 0)
+        * causal_arm_count,
+    }
+    _require(
+        extension_manifest.get("planned_extension_volume") == expected_extension_volume
+        and planned.get("p2_independent_seed_extension") == expected_extension_volume,
+        "P2 independent-seed extension volume drifted.",
+    )
+    expected_combined_volume = {
+        "independent_training_seeds_per_scale": len(primary_seeds | extension_seeds),
+        "core_shards": core_shards + extension_core_shards,
+        "core_policy_example_evaluations": expected_core[
+            "policy_example_evaluations"
+        ]
+        + expected_extension_volume["core_policy_example_evaluations"],
+        "causal_shards": causal_shards + expected_extension_volume["causal_shards"],
+        "causal_policy_example_evaluations": expected_causal[
+            "policy_example_evaluations"
+        ]
+        + expected_extension_volume["causal_policy_example_evaluations"],
+    }
+    _require(
+        planned.get("combined_p2_confirmatory") == expected_combined_volume
+        and extension_manifest.get("combined_p2_volume")
+        == {
+            key: value
+            for key, value in expected_combined_volume.items()
+            if key != "independent_training_seeds_per_scale"
+        },
+        "Combined P2 confirmatory volume drifted.",
+    )
 
     online = sources["online"]
     online_matrix = online.get("matrix", {})
@@ -416,6 +486,24 @@ def _validate_experiment_scale_audit(payload: dict[str, Any]) -> None:
     _require(
         payload.get("inference_resolution") == expected_resolution,
         "Experiment-scale independent-unit resolution drifted.",
+    )
+    combined_seed_count = len(primary_seeds | extension_seeds)
+    combined_assignments = 1 << combined_seed_count
+    expected_extension_resolution = {
+        "independent_training_seed_clusters_per_scale": combined_seed_count,
+        "exact_two_sided_sign_flip_assignments": combined_assignments,
+        "minimum_attainable_two_sided_p": 2.0 / combined_assignments,
+        "minimum_attainable_holm_adjusted_family_p": 9
+        * 2.0
+        / combined_assignments,
+        "primary_cohort_remains_independently_reportable": True,
+        "pooling_requires_identical_frozen_contracts": True,
+        "outcome_dependent_early_stopping": False,
+    }
+    _require(
+        payload.get("confirmatory_extension_resolution")
+        == expected_extension_resolution,
+        "Experiment-scale confirmatory seed resolution drifted.",
     )
     _require(
         "Do not add synthetic policy-example evaluations"

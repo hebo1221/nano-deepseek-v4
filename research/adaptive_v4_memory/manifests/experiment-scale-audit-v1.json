@@ -65,15 +65,18 @@
       "causal_policy_example_evaluations": 5184000
     },
     "p2_independent_seed_extension": {
-      "manifest": "research/adaptive_v4_memory/manifests/p2-independent-seed-extension-v1.json",
-      "additional_training_seeds_per_scale": 4,
-      "combined_training_seeds_per_scale": 9,
-      "additional_core_shards": 3600,
-      "combined_core_shards": 8100,
-      "additional_causal_shards": 7200,
-      "combined_causal_shards": 16200,
-      "minimum_attainable_two_sided_seed_p": 0.00390625,
-      "minimum_attainable_holm_adjusted_family_p": 0.03515625
+      "training_runs": 8,
+      "core_shards": 3600,
+      "core_policy_example_evaluations": 504000,
+      "causal_shards": 7200,
+      "causal_policy_example_evaluations": 2304000
+    },
+    "combined_p2_confirmatory": {
+      "independent_training_seeds_per_scale": 9,
+      "core_shards": 8100,
+      "core_policy_example_evaluations": 1134000,
+      "causal_shards": 16200,
+      "causal_policy_example_evaluations": 5184000
     },
     "p1_online_learned_lookahead": {
       "label_shards": 6750,
@@ -148,6 +151,15 @@
     "example_level_role": "paired descriptive precision within a training seed; examples do not increase the number of independent trained-model clusters",
     "p_value_used_as_success_gate": false,
     "interpretation": "The study has high within-seed sample density but only five independent training seeds per scale. Exact and multiplicity-adjusted seed-level p-values are reported, while causal success requires effect direction, corrected seed-cluster intervals, memory matching, and five-of-five seed consistency rather than an unattainable p<0.05 threshold."
+  },
+  "confirmatory_extension_resolution": {
+    "independent_training_seed_clusters_per_scale": 9,
+    "exact_two_sided_sign_flip_assignments": 512,
+    "minimum_attainable_two_sided_p": 0.00390625,
+    "minimum_attainable_holm_adjusted_family_p": 0.03515625,
+    "primary_cohort_remains_independently_reportable": true,
+    "pooling_requires_identical_frozen_contracts": true,
+    "outcome_dependent_early_stopping": false
   },
   "confirmatory_extension_resolution": {
     "independent_training_seed_clusters_per_scale": 9,

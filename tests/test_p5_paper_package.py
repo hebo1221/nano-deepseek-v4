@@ -676,6 +676,19 @@ def test_experiment_scale_audit_recomputes_headline_counts(tmp_path: Path) -> No
     with pytest.raises(ValueError, match="P2 causal scale count drifted"):
         package._validate_boundary_manifest("experiment_scale_audit", tampered)
 
+    payload = json.loads(source.read_text())
+    assert payload["planned_volume"]["combined_p2_confirmatory"] == {
+        "independent_training_seeds_per_scale": 9,
+        "core_shards": 8_100,
+        "core_policy_example_evaluations": 1_134_000,
+        "causal_shards": 16_200,
+        "causal_policy_example_evaluations": 5_184_000,
+    }
+    payload["planned_volume"]["p2_independent_seed_extension"]["core_shards"] += 1
+    tampered.write_text(json.dumps(payload))
+    with pytest.raises(ValueError, match="extension volume drifted"):
+        package._validate_boundary_manifest("experiment_scale_audit", tampered)
+
 
 def test_p3_ruler_boundary_records_pre_gate_orphan_without_outcomes(
     tmp_path: Path,
@@ -711,6 +724,14 @@ def test_experiment_scale_audit_binds_independent_seed_resolution(tmp_path: Path
     tampered = tmp_path / "scale-audit.json"
     tampered.write_text(json.dumps(payload))
     with pytest.raises(ValueError, match="independent-unit resolution drifted"):
+        package._validate_boundary_manifest("experiment_scale_audit", tampered)
+
+    payload = json.loads(source.read_text())
+    payload["confirmatory_extension_resolution"][
+        "minimum_attainable_two_sided_p"
+    ] = 0.01
+    tampered.write_text(json.dumps(payload))
+    with pytest.raises(ValueError, match="confirmatory seed resolution drifted"):
         package._validate_boundary_manifest("experiment_scale_audit", tampered)
 
 
