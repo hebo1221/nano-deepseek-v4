@@ -381,6 +381,23 @@ def _validate_experiment_scale_audit(payload: dict[str, Any]) -> None:
         planned.get("p4_500k_context_preflight") == expected_preflight,
         "P4 500K preflight scale count drifted.",
     )
+    independent_seeds = len(study.get("training_seeds", []))
+    exact_assignments = 1 << independent_seeds
+    expected_resolution = {
+        "independent_training_seed_clusters_per_scale": independent_seeds,
+        "exact_two_sided_sign_flip_assignments": exact_assignments,
+        "minimum_attainable_two_sided_p": 2.0 / exact_assignments,
+        "seed_cluster_bootstrap_resamples": study.get("statistics", {}).get(
+            "bootstrap_resamples"
+        ),
+        "example_level_role": "paired descriptive precision within a training seed; examples do not increase the number of independent trained-model clusters",
+        "p_value_used_as_success_gate": False,
+        "interpretation": "The study has high within-seed sample density but only five independent training seeds per scale. Exact and multiplicity-adjusted seed-level p-values are reported, while causal success requires effect direction, corrected seed-cluster intervals, memory matching, and five-of-five seed consistency rather than an unattainable p<0.05 threshold.",
+    }
+    _require(
+        payload.get("inference_resolution") == expected_resolution,
+        "Experiment-scale independent-unit resolution drifted.",
+    )
     _require(
         "Do not add synthetic policy-example evaluations"
         in payload.get("non_aggregation_rule", ""),

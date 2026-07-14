@@ -10,6 +10,13 @@
       "change": "reuse a completed forward only when the full SameTokenControllerConfig dataclass and its canonical SHA-256 digest are identical within the same paired batch",
       "reason": "avoid redundant computation for structurally identical preregistered arms without changing examples, arm labels, predictions, controller records, paired units, or inference claims",
       "reporting": "retain one record per arm and conversation; mark executed versus reused-exact-config and report physical forward counts separately from arm-conversation counts"
+    },
+    {
+      "date": "2026-07-14",
+      "timing": "before any causal-factorial held-out shard was generated",
+      "change": "enumerate all 32 sign assignments for five-seed paired randomization and correct the multiplicity contract from 12 to all 15 implemented preregistered contrasts",
+      "reason": "exact enumeration exposes the minimum attainable two-sided p=0.0625 and prevents Monte Carlo noise or a stale contrast count from overstating inferential resolution",
+      "reporting": "treat exact and Holm-adjusted p-values as resolution-limited descriptive evidence; do not use p<0.05 as a success gate with five independent seeds"
     }
   ],
   "execution_prerequisite": "strict chain: P2 core has 4500 validated shards -> calibration-only physical hot-memory matching for every seed/scale -> exact equivalence for every seed/scale -> held-out causal factorial",
@@ -237,12 +244,15 @@
     "confidence_level": 0.95,
     "independent_cluster": "training checkpoint seed",
     "primary_inference": "resample the five independent training-seed means; conversation-paired intervals are descriptive within seed",
-    "paired_randomization_resamples": 10000,
+    "paired_randomization": "exact enumeration of all 2^5 sign assignments for five training-seed mean paired differences; 10000 Monte Carlo draws are only a fallback above 16 seeds",
     "paired_randomization_unit": "training-seed mean paired difference",
+    "paired_randomization_assignments": 32,
+    "minimum_attainable_two_sided_p": 0.0625,
+    "p_value_used_as_success_gate": false,
     "primary_four_cell_confidence_level": 0.9875,
     "primary_four_cell_correction": "Bonferroni over the 2 scales x 2 required budget cells using the five independent training-seed means as bootstrap clusters",
     "family_correction": "Holm-Bonferroni over the 9 families separately within each contrast, scale, and budget",
-    "contrast_correction": "Holm-Bonferroni over all 12 preregistered contrasts separately within each scale and budget",
+    "contrast_correction": "Holm-Bonferroni over all 15 preregistered contrasts separately within each scale and budget",
     "required_slices": ["scale", "budget", "training-seed", "family", "context"]
   },
   "central_gate": {

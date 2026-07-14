@@ -179,6 +179,19 @@ def test_seed_cluster_statistics_use_five_independent_training_seeds() -> None:
     assert result["seed_cluster_bootstrap_ci"] == pytest.approx([0.1, 0.1])
     assert result["mean_difference"] == pytest.approx(0.1)
     assert result["two_sided_seed_cluster_bootstrap_p"] < 0.01
+    assert result["paired_randomization_method"] == "exact-sign-flip-enumeration"
+    assert result["paired_randomization_assignments"] == 32
+    assert result["paired_randomization_two_sided_p"] == pytest.approx(0.0625)
+    assert result["minimum_attainable_two_sided_p"] == pytest.approx(0.0625)
+
+
+def test_seed_cluster_exact_randomization_retains_symmetric_null() -> None:
+    result = seed_cluster_statistics(
+        [-0.2, -0.1, 0.0, 0.1, 0.2], label="symmetric-seeds", resamples=1_000
+    )
+
+    assert result["paired_randomization_method"] == "exact-sign-flip-enumeration"
+    assert result["paired_randomization_two_sided_p"] == pytest.approx(1.0)
 
 
 def test_quality_gate_requires_corrected_families_on_each_scale() -> None:

@@ -67,6 +67,11 @@ def test_manifest_matches_implemented_arms_and_strict_budget_scale_gate() -> Non
     assert manifest["central_gate"]["required_budget_points"] == ["2x", "4x"]
     assert manifest["scales"] == ["s55", "s151"]
     assert len(manifest["training_seeds"]) == 5
+    assert len(summary.CONTRASTS) == 15
+    assert "all 15 preregistered contrasts" in manifest["statistics"]["contrast_correction"]
+    assert manifest["statistics"]["paired_randomization_assignments"] == 32
+    assert manifest["statistics"]["minimum_attainable_two_sided_p"] == 0.0625
+    assert manifest["statistics"]["p_value_used_as_success_gate"] is False
 
 
 def test_arm_builder_holds_pins_and_total_quota_constant_for_central_contrast() -> None:

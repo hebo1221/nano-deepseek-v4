@@ -104,6 +104,15 @@
       "policy_runs_including_warmups": 15120
     }
   },
+  "inference_resolution": {
+    "independent_training_seed_clusters_per_scale": 5,
+    "exact_two_sided_sign_flip_assignments": 32,
+    "minimum_attainable_two_sided_p": 0.0625,
+    "seed_cluster_bootstrap_resamples": 10000,
+    "example_level_role": "paired descriptive precision within a training seed; examples do not increase the number of independent trained-model clusters",
+    "p_value_used_as_success_gate": false,
+    "interpretation": "The study has high within-seed sample density but only five independent training seeds per scale. Exact and multiplicity-adjusted seed-level p-values are reported, while causal success requires effect direction, corrected seed-cluster intervals, memory matching, and five-of-five seed consistency rather than an unattainable p<0.05 threshold."
+  },
   "primary_paper_comparators": [
     {
       "work": "SCBench",

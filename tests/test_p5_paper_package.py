@@ -455,6 +455,17 @@ def test_experiment_scale_audit_requires_nonaggregation_rule(tmp_path: Path) -> 
         package._validate_boundary_manifest("experiment_scale_audit", tampered)
 
 
+def test_experiment_scale_audit_binds_independent_seed_resolution(tmp_path: Path) -> None:
+    root = Path(__file__).resolve().parents[1]
+    source = root / "research/adaptive_v4_memory/manifests/experiment-scale-audit-v1.json"
+    payload = json.loads(source.read_text())
+    payload["inference_resolution"]["minimum_attainable_two_sided_p"] = 0.01
+    tampered = tmp_path / "scale-audit.json"
+    tampered.write_text(json.dumps(payload))
+    with pytest.raises(ValueError, match="independent-unit resolution drifted"):
+        package._validate_boundary_manifest("experiment_scale_audit", tampered)
+
+
 def test_production_runtime_boundary_validation_rejects_relabeling(
     tmp_path: Path,
 ) -> None:

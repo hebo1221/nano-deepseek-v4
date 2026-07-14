@@ -18,6 +18,17 @@ deterministic scoring; the paid LongSafety judge remains blocked. These units
 are reported separately and are never combined into a
 misleading headline total.
 
+This density does not turn all examples into independent replications. The
+primary trained-model inference unit is the checkpoint seed, with five
+independent seeds per scale. A paired two-sided sign-flip test therefore has
+only 32 possible assignments and a minimum attainable p-value of 0.0625.
+The analysis enumerates those assignments exactly, reports multiplicity-adjusted
+p-values as resolution-limited descriptive evidence, and never treats the
+10,000 within-seed bootstrap draws as 10,000 independent models. The positive
+gate instead requires a corrected seed-cluster interval above zero, matched
+physical memory, and a positive effect in all five seeds. This is a real
+inferential limitation even though the within-seed sample count is large.
+
 Execution is scheduled with three disjoint same-accelerator workers for the
 remaining S151 core scale, the causal factorial, and the online learned
 lookahead study. This does not multiply experimental units: coordinates remain
@@ -27,10 +38,10 @@ online study. Canonical matrices are emitted only after exact-count,
 no-overlap, implementation-digest, dependency-digest, and raw-artifact checks;
 concurrent shard wall time is not used as P4 performance evidence.
 
-The remaining weakness is breadth, not raw count. The primary natural and
-safety evidence uses one compatible model family, actual-model evaluation stops
-at 128K, and the 500K preflight uses only the two Tier-S reference scales. Official
-DeepSeek-V4 execution remains blocked by the frozen
+The remaining weaknesses are breadth and independent-seed resolution, not raw
+count. The primary natural and safety evidence uses one compatible model family,
+actual-model evaluation stops at 128K, and the 500K preflight uses only the two
+Tier-S reference scales. Official DeepSeek-V4 execution remains blocked by the frozen
 weights/runtime contract. The paper must therefore be framed as a deep,
 digest-bound single-compatible-model study unless a later cross-family
 replication is completed.

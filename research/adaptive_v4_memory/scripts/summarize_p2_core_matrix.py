@@ -110,13 +110,28 @@ def seed_cluster_statistics(
     )
     lower_tail = (np.count_nonzero(bootstrap_means <= 0.0) + 1) / (resamples + 1)
     upper_tail = (np.count_nonzero(bootstrap_means >= 0.0) + 1) / (resamples + 1)
-    signs = np.where(rng.integers(0, 2, size=(resamples, len(values))) == 0, -1.0, 1.0)
-    null_means = (signs * values).mean(axis=1)
     observed = float(values.mean())
     threshold = max(0.0, abs(observed) - np.finfo(np.float64).eps * 16.0)
-    randomization_p = (
-        np.count_nonzero(np.abs(null_means) >= threshold) + 1
-    ) / (resamples + 1)
+    if len(values) <= 16:
+        total_assignments = 1 << len(values)
+        assignments = np.arange(total_assignments, dtype=np.uint64)[:, None]
+        bit_positions = np.arange(len(values), dtype=np.uint64)[None, :]
+        signs = np.where(((assignments >> bit_positions) & 1) == 0, -1.0, 1.0)
+        null_means = (signs * values).mean(axis=1)
+        randomization_p = np.count_nonzero(np.abs(null_means) >= threshold) / total_assignments
+        randomization_method = "exact-sign-flip-enumeration"
+        minimum_attainable_p = min(1.0, 2.0 / total_assignments)
+    else:
+        signs = np.where(
+            rng.integers(0, 2, size=(resamples, len(values))) == 0, -1.0, 1.0
+        )
+        null_means = (signs * values).mean(axis=1)
+        randomization_p = (
+            np.count_nonzero(np.abs(null_means) >= threshold) + 1
+        ) / (resamples + 1)
+        total_assignments = resamples
+        randomization_method = "monte-carlo-sign-flip"
+        minimum_attainable_p = 1.0 / (resamples + 1)
     standard_deviation = float(values.std(ddof=1))
     return {
         "independent_seed_clusters": len(values),
@@ -134,6 +149,9 @@ def seed_cluster_statistics(
             1.0, 2.0 * min(lower_tail, upper_tail)
         ),
         "paired_randomization_two_sided_p": float(randomization_p),
+        "paired_randomization_method": randomization_method,
+        "paired_randomization_assignments": total_assignments,
+        "minimum_attainable_two_sided_p": minimum_attainable_p,
         "bootstrap_resamples": resamples,
         "inference_seed": stable_seed(label),
     }
