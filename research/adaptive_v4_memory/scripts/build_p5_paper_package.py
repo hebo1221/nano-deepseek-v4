@@ -1193,12 +1193,42 @@ def _p2_quality_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return [
         {
             **row,
-            "holm_significant_positive_families_by_scale": json.dumps(
-                row["holm_significant_positive_families_by_scale"], sort_keys=True
+            "corrected_positive_families_by_scale": json.dumps(
+                row["corrected_positive_families_by_scale"], sort_keys=True
             ),
         }
         for row in payload["quality_gate"]
     ]
+
+
+def _p2_inference_resolution_rows(
+    core: dict[str, Any], causal: dict[str, Any]
+) -> list[dict[str, Any]]:
+    rows = []
+    for stage, payload in (("p2-core", core), ("p2-causal", causal)):
+        audit = payload["audit"]
+        clusters = audit["independent_seed_clusters_per_cell"]
+        rows.append(
+            {
+                "stage": stage,
+                "independent_seed_clusters_per_cell": clusters,
+                "exact_sign_flip_assignments": 1 << clusters,
+                "minimum_attainable_two_sided_seed_p": audit[
+                    "minimum_attainable_two_sided_seed_p"
+                ],
+                "exact_seed_randomization_verified": audit[
+                    "exact_seed_randomization_verified"
+                ],
+                "p_value_used_as_success_gate": audit[
+                    "seed_p_values_used_as_success_gate"
+                ],
+                "interpretation": (
+                    "seed-level exact p-values are resolution-limited descriptive evidence; "
+                    "within-seed examples do not add independent trained-model clusters"
+                ),
+            }
+        )
+    return rows
 
 
 def _p2_core_effect_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
@@ -1720,6 +1750,15 @@ manually, remains mandatory before goal completion, and is never reported as pas
   executed and {p2_causal["audit"]["quality_execution_counts"]["reused_exact_config"]:,}
   arm-batches reused an exact byte-identical config; the calibrated+pins versus
   fixed+pins gate passed: **{causal["passed"]}**.
+- P2 independent inference: each scale-budget cell has
+  {p2_causal["audit"]["independent_seed_clusters_per_cell"]} independent training-seed
+  clusters. Exact enumeration covers
+  {1 << p2_causal["audit"]["independent_seed_clusters_per_cell"]} sign assignments, so the
+  minimum attainable two-sided seed-level p-value is
+  {p2_causal["audit"]["minimum_attainable_two_sided_seed_p"]:.4f}. These p-values are
+  resolution-limited descriptive evidence and are not used as a p<0.05 success gate;
+  the much larger within-seed example count does not increase the number of independently
+  trained models.
 - P2 supplemental baselines: fixed top-p 0.5/0.8 are evaluated on the complete
   factorial, and the target-aware registered-arm oracle is reported only as a
   non-causal upper bound over {len(p2_causal["offline_oracle_upper_bound"]["registered_arms"])} arms.
@@ -1918,6 +1957,14 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
             "binding_status",
             "scientific_classification",
         ],
+    )
+    inference_resolution = _p2_inference_resolution_rows(
+        loaded["p2_core"], loaded["p2_causal"]
+    )
+    _write_csv(
+        output_root / "table-p2-inference-resolution.csv",
+        inference_resolution,
+        list(inference_resolution[0]),
     )
     quality = _p2_quality_rows(loaded["p2_core"])
     _write_csv(output_root / "table-p2-quality-gate.csv", quality, list(quality[0]))

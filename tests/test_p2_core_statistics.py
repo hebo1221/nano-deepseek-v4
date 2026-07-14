@@ -213,12 +213,12 @@ def test_quality_gate_requires_corrected_families_on_each_scale() -> None:
                 "scale": scale,
                 "family": f"family-{index}",
                 "mean_difference": 0.01,
-                "holm_adjusted_p": 0.01 if index < significant else 1.0,
+                "holm_adjusted_p": 1.0,
                 "seed_cluster_inference": {
                     "seed_cluster_bootstrap_ci": [0.001, 0.02]
                 },
             }
-            for scale, significant in (("s55", 2), ("s151", 2))
+            for scale in ("s55", "s151")
             for index in range(2)
         ],
         "by_seed": [
@@ -245,16 +245,21 @@ def test_quality_gate_requires_corrected_families_on_each_scale() -> None:
 
     passing = _quality_gate(fixed, native)[0]
     assert passing["passes_fixed_baseline_component"] is True
+    assert passing["family_holm_p_values_used_as_success_gate"] is False
 
-    fixed["by_scale_family"][-1]["holm_adjusted_p"] = 1.0
+    fixed["by_scale_family"][-1]["seed_cluster_inference"]["seed_cluster_bootstrap_ci"][
+        0
+    ] = -0.001
     corrected_failure = _quality_gate(fixed, native)[0]
-    assert corrected_failure["holm_significant_positive_families_by_scale"] == {
+    assert corrected_failure["corrected_positive_families_by_scale"] == {
         "s55": 2,
         "s151": 1,
     }
     assert corrected_failure["passes_fixed_baseline_component"] is False
 
-    fixed["by_scale_family"][-1]["holm_adjusted_p"] = 0.01
+    fixed["by_scale_family"][-1]["seed_cluster_inference"]["seed_cluster_bootstrap_ci"][
+        0
+    ] = 0.001
     native["by_scale_family"][0]["mean_difference"] = -0.03
     native_failure = _quality_gate(fixed, native)[0]
     assert native_failure["native_family_regression_within_2pp_on_both_scales"] is False

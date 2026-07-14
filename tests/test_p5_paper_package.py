@@ -185,6 +185,18 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
     assert manifest["evidence"]["p2_core"]["required_audit"][
         "minimum_attainable_two_sided_seed_p"
     ] == pytest.approx(0.0625)
+    assert (
+        manifest["evidence"]["p2_core"]["required_audit"][
+            "family_holm_p_values_used_as_success_gate"
+        ]
+        is False
+    )
+    assert (
+        manifest["evidence"]["p2_core"]["required_audit"][
+            "seed_p_values_used_as_success_gate"
+        ]
+        is False
+    )
     assert all(
         manifest["evidence"]["p2_core"]["required_audit"][field] is True
         for field in (
@@ -310,6 +322,7 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
         "table-p2-core-family-effects.csv",
         "table-p2-core-seed-effects.csv",
         "table-p2-core-worst-slices.csv",
+        "table-p2-inference-resolution.csv",
         "table-p2-causal-contrasts.csv",
         "table-p2-causal-family-effects.csv",
         "table-p2-causal-seed-effects.csv",
@@ -1033,6 +1046,9 @@ def test_p5_p2_detailed_tables_retain_seed_family_worst_slice_and_memory() -> No
                 "seed_cluster_inference": {
                     "seed_cluster_bootstrap_ci": [0.01, 0.05],
                     "cohens_dz_across_seeds": 1.2,
+                    "paired_randomization_method": "exact-sign-flip-enumeration",
+                    "paired_randomization_two_sided_p": 0.0625,
+                    "minimum_attainable_two_sided_p": 0.0625,
                 },
             }
         ],
@@ -1077,6 +1093,12 @@ def test_p5_p2_detailed_tables_retain_seed_family_worst_slice_and_memory() -> No
         package._p2_core_effect_rows(core)[0]["seed_cluster_inference.seed_cluster_bootstrap_ci"]
         == "[0.01,0.05]"
     )
+    assert (
+        package._p2_core_effect_rows(core)[0][
+            "seed_cluster_inference.paired_randomization_two_sided_p"
+        ]
+        == 0.0625
+    )
     assert package._p2_core_family_rows(core)[0]["holm_adjusted_p"] == 0.02
     assert package._p2_core_seed_rows(core)[0]["training_seed"] == 6071401
     assert {row["scope"] for row in package._p2_core_worst_slice_rows(core)} == {
@@ -1092,7 +1114,12 @@ def test_p5_p2_detailed_tables_retain_seed_family_worst_slice_and_memory() -> No
                 "scale": "s55",
                 "budget": "2x",
                 "mean_difference": 0.03,
-                "seed_cluster_inference": {"seed_means": [0.01, 0.02]},
+                "seed_cluster_inference": {
+                    "seed_means": [0.01, 0.02],
+                    "paired_randomization_method": "exact-sign-flip-enumeration",
+                    "paired_randomization_two_sided_p": 0.0625,
+                    "minimum_attainable_two_sided_p": 0.0625,
+                },
             }
         ],
         "by_family_with_holm_bonferroni": [
@@ -1152,6 +1179,12 @@ def test_p5_p2_detailed_tables_retain_seed_family_worst_slice_and_memory() -> No
 
     assert package._causal_contrast_rows(causal)[0]["contrast"] == ("adaptive_quota_with_pins")
     assert package._causal_family_rows(causal)[0]["holm_adjusted_p"] == 0.02
+    assert (
+        package._causal_contrast_rows(causal)[0][
+            "seed_cluster_inference.paired_randomization_method"
+        ]
+        == "exact-sign-flip-enumeration"
+    )
     assert package._causal_seed_rows(causal)[0]["training_seed"] == 6071401
     assert package._causal_worst_slice_rows(causal)[0]["context"] == 1024
     assert {row["scope"] for row in package._causal_physical_memory_rows(causal)} == {
@@ -1160,3 +1193,21 @@ def test_p5_p2_detailed_tables_retain_seed_family_worst_slice_and_memory() -> No
         "all-physical-arms",
     }
     assert package._causal_oracle_rows(causal)[0]["used_for_primary_gate"] is False
+
+
+def test_p2_inference_resolution_table_separates_examples_from_seed_clusters() -> None:
+    audit = {
+        "independent_seed_clusters_per_cell": 5,
+        "minimum_attainable_two_sided_seed_p": 0.0625,
+        "exact_seed_randomization_verified": True,
+        "seed_p_values_used_as_success_gate": False,
+    }
+
+    rows = package._p2_inference_resolution_rows(
+        {"audit": audit}, {"audit": audit}
+    )
+
+    assert [row["stage"] for row in rows] == ["p2-core", "p2-causal"]
+    assert all(row["exact_sign_flip_assignments"] == 32 for row in rows)
+    assert all(row["p_value_used_as_success_gate"] is False for row in rows)
+    assert all("do not add independent" in row["interpretation"] for row in rows)

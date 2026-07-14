@@ -22,7 +22,9 @@
         "batch_coverage_verified": true,
         "exact_seed_randomization_verified": true,
         "independent_seed_clusters_per_cell": 5,
-        "minimum_attainable_two_sided_seed_p": 0.0625
+        "minimum_attainable_two_sided_seed_p": 0.0625,
+        "seed_p_values_used_as_success_gate": false,
+        "family_holm_p_values_used_as_success_gate": false
       }
     },
     "m5_one_token_pilot": {
@@ -99,6 +101,7 @@
         "exact_seed_randomization_verified": true,
         "independent_seed_clusters_per_cell": 5,
         "minimum_attainable_two_sided_seed_p": 0.0625,
+        "seed_p_values_used_as_success_gate": false,
         "registered_causal_arms": 16,
         "registered_paired_contrasts": 15,
         "preregistered_component_contrasts_verified": true,
@@ -291,6 +294,7 @@
     "table-evidence.csv",
     "table-requirement-traceability.csv",
     "reproduction-guide.md",
+    "table-p2-inference-resolution.csv",
     "table-p2-quality-gate.csv",
     "table-p2-core-policy-summary.csv",
     "table-p2-core-effects.csv",

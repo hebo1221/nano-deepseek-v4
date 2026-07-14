@@ -3,6 +3,14 @@
   "experiment_id": "adaptive-v4-memory-paper-grade-v1",
   "protocol_version": "1.2",
   "frozen_date": "2026-07-14",
+  "amendments": [
+    {
+      "date": "2026-07-14",
+      "timing": "before primary P2 core completion and before causal-factorial execution",
+      "change": "replace the structurally unattainable five-seed Holm p<0.05 family success condition with the already registered positive-mean and nonnegative seed-cluster lower-interval condition; retain exact and Holm p-values for reporting",
+      "reason": "five independent seeds permit only 32 exact sign assignments and a minimum two-sided p-value of 0.0625; no P2 outcome summary was inspected"
+    }
+  ],
   "protocol": "research/adaptive_v4_memory/paper_grade_protocol.md",
   "scales": ["s55", "s151"],
   "training_seeds": [6071401, 6071402, 6071403, 6071404, 6071405],
@@ -110,6 +118,7 @@
     "maximum_mean_native_regression_percentage_points": 1.0,
     "maximum_family_native_regression_percentage_points": 2.0,
     "fixed_baseline_improvement_lower_ci_minimum": 0.0,
+    "family_holm_p_values_used_as_success_gate": false,
     "minimum_improved_families": 2,
     "positive_seed_effects_required_per_scale": 5,
     "required_scales": 2

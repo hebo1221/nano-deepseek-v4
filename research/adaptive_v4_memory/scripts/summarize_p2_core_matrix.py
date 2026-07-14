@@ -581,11 +581,10 @@ def _quality_gate(
             for row in native_statistics["by_scale_family"]
             if row["budget_multiplier"] == budget
         ]
-        significant_by_scale = {
+        corrected_positive_by_scale = {
             scale: sum(
                 row["mean_difference"] > 0.0
                 and row["seed_cluster_inference"]["seed_cluster_bootstrap_ci"][0] >= 0.0
-                and row["holm_adjusted_p"] < 0.05
                 for row in budget_scale_families
                 if row["scale"] == scale
             )
@@ -603,7 +602,8 @@ def _quality_gate(
                 "all_seed_effects_positive": all(
                     row["mean_difference"] > 0.0 for row in budget_seeds
                 ),
-                "holm_significant_positive_families_by_scale": significant_by_scale,
+                "corrected_positive_families_by_scale": corrected_positive_by_scale,
+                "family_holm_p_values_used_as_success_gate": False,
                 "minimum_required_improved_families": 2,
                 "native_mean_regression_within_1pp_on_both_scales": all(
                     row["mean_difference"] >= -0.01 for row in native_pooled
@@ -619,7 +619,7 @@ def _quality_gate(
             and row["all_seed_effects_positive"]
             and all(
                 count >= row["minimum_required_improved_families"]
-                for count in row["holm_significant_positive_families_by_scale"].values()
+                for count in row["corrected_positive_families_by_scale"].values()
             )
             and row["native_mean_regression_within_1pp_on_both_scales"]
             and row["native_family_regression_within_2pp_on_both_scales"]
@@ -775,6 +775,8 @@ def main() -> None:
             "independent_seed_clusters_per_cell": len(shard.TRAINING_SEEDS),
             "minimum_attainable_two_sided_seed_p": 2.0
             / (1 << len(shard.TRAINING_SEEDS)),
+            "seed_p_values_used_as_success_gate": False,
+            "family_holm_p_values_used_as_success_gate": False,
             **STRICT_RAW_AUDIT,
             "unique_shards": len(seen),
             "raw_shard_digest_set_sha256": hashlib.sha256(
