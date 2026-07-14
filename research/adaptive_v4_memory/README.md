@@ -149,6 +149,11 @@ pins the Qwen3-4B 262K transfer model, all five natural benchmark revisions,
 minimum, and the sequence-gated acquisition path. Oversized examples are
 reported as unsupported and are never head-tail truncated.
 
+The suite RULER evidence is regenerated separately with the pinned Qwen3-4B
+tokenizer at 8K/16K/32K/64K/128K, then executed as 32,500 paired records per
+required arm. The earlier Qwen3-1.7B RULER matrix remains the leakage-safe
+fixed-baseline selection set and is not substituted for this 4B evidence.
+
 LongBench v2 has an executable Qwen3-4B native/frozen-fixed runner with
 example-level resume. It renders the pinned direct 0-shot prompt, scores invalid
 answer formats as zero instead of excluding them, records every operational

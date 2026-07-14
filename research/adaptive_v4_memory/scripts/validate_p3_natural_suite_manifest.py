@@ -96,6 +96,17 @@ def validate_manifest(payload: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("RULER must retain every preregistered 8K-128K length.")
     if ruler["samples_per_task"] != 500 or ruler["task_count"] != 13:
         raise ValueError("RULER sample or task count drifted.")
+    ruler_execution = ruler["execution"]
+    if (
+        ruler_execution["dataset_generator"]
+        != "research/adaptive_v4_memory/scripts/prepare_p3_natural_ruler_dataset.py"
+        or ruler_execution["runner"]
+        != "research/adaptive_v4_memory/scripts/run_p3_natural_ruler.py"
+        or ruler_execution["resume_unit"] != "one example within one arm"
+        or "exact rendered context and question token-id" not in ruler_execution["tokenization_boundary"]
+        or "exact bytes" not in ruler_execution["hot_memory_measurement"]
+    ):
+        raise ValueError("Natural RULER execution or exact-token contract drifted.")
 
     scbench = _benchmark(payload, "SCBench")
     if scbench["dataset"]["revision"] != EXPECTED_REVISIONS["SCBench-data"]:

@@ -109,7 +109,19 @@
         "path": "evaluation/benchmarks/ruler/calculate_metrics.py",
         "sha256": "1df51402a3948f14d96e1fe87b1a4aff10f619f81f80f8840d8e0118fc9b"
       },
-      "migration": "Regenerate the same frozen tasks with the Qwen3-4B tokenizer; do not reuse Qwen3-1.7B token-length labels for 64K or 128K."
+      "migration": "Regenerate the same frozen tasks with the Qwen3-4B tokenizer; do not reuse Qwen3-1.7B token-length labels for 64K or 128K.",
+      "execution": {
+        "dataset_generator": "research/adaptive_v4_memory/scripts/prepare_p3_natural_ruler_dataset.py",
+        "runner": "research/adaptive_v4_memory/scripts/run_p3_natural_ruler.py",
+        "dataset_root": "artifacts/adaptive_v4_memory/paper_grade/p3/natural/ruler-qwen3-4b/data",
+        "raw_output_root": "artifacts/adaptive_v4_memory/paper_grade/p3/natural/ruler-qwen3-4b",
+        "native_arm_artifact": "artifacts/adaptive_v4_memory/paper_grade/p3/natural/ruler-qwen3-4b/native-dense/cell.json",
+        "fixed_arm_artifact": "artifacts/adaptive_v4_memory/paper_grade/p3/natural/ruler-qwen3-4b/strongest-memory-matched-fixed/cell.json",
+        "resume_unit": "one example within one arm",
+        "tokenization_boundary": "hash the exact rendered context and question token-id sequences; never reuse 1.7B length labels",
+        "operational_failure_policy": "retain explicit failure and include as zero in the conservative all-expected quality mean",
+        "hot_memory_measurement": "exact bytes in DynamicCache key/value tensors immediately after prefill compression and before question decoding"
+      }
     },
     "SCBench": {
       "dataset": {

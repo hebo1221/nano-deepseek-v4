@@ -49,6 +49,14 @@ def test_natural_suite_freezes_full_scale_and_sample_contract() -> None:
     assert result["longmemeval_examples"] == 500
     assert result["mrcr_examples_through_128k"] == 1500
     assert manifest["execution_totals"]["minimum_predictions_per_arm"] == 45289
+    ruler_execution = manifest["benchmarks"]["RULER"]["execution"]
+    assert ruler_execution["dataset_generator"].endswith(
+        "prepare_p3_natural_ruler_dataset.py"
+    )
+    assert ruler_execution["runner"].endswith("run_p3_natural_ruler.py")
+    assert "exact rendered context and question token-id" in ruler_execution[
+        "tokenization_boundary"
+    ]
 
 
 def test_natural_suite_rejects_task_subselection_and_silent_truncation() -> None:
