@@ -187,7 +187,12 @@ def _verify_adaptive_cell(
 
 
 def verify_quota_records(
-    records: list[dict[str, Any]], *, arm: str, allowed_failures: set[str]
+    records: list[dict[str, Any]],
+    *,
+    arm: str,
+    allowed_failures: set[str],
+    layer_count: int = 36,
+    adaptive_arm: str = ADAPTIVE_QUOTA_ARMS[1],
 ) -> None:
     for row in records:
         failure = row.get("failure_type")
@@ -217,8 +222,8 @@ def verify_quota_records(
             row["verified_quota"] = verify_quota_audit(
                 audit,
                 arm=arm,
-                layer_count=36,
-                adaptive_arm=ADAPTIVE_QUOTA_ARMS[1],
+                layer_count=layer_count,
+                adaptive_arm=adaptive_arm,
             )
             _require(
                 row["hot_resident_bytes"] > 0,
@@ -272,6 +277,7 @@ def analyze_pairs(
     *,
     expected_examples: int = PREDICTIONS_PER_ARM,
     categories: tuple[str, ...] = CATEGORIES,
+    arms: tuple[str, str] = ADAPTIVE_QUOTA_ARMS,
 ) -> dict[str, Any]:
     _require(
         len(fixed) == len(adaptive) == expected_examples,
@@ -408,8 +414,8 @@ def analyze_pairs(
     passed = all(checks.values())
     return {
         "arms": {
-            ADAPTIVE_QUOTA_ARMS[0]: fixed_failure,
-            ADAPTIVE_QUOTA_ARMS[1]: adaptive_failure,
+            arms[0]: fixed_failure,
+            arms[1]: adaptive_failure,
         },
         "overall": overall,
         "by_category": category_rows,
