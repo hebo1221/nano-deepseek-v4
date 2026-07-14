@@ -60,8 +60,10 @@ def validate_manifest(manifest: dict[str, Any]) -> dict[str, Any]:
         "Natural safety prefetch and execution sequence boundary drifted.",
     )
     _require(
-        "bootstrap seed at 9171403" in amendments[2].get("change", "")
+        "generation seed at 9171402" in amendments[2].get("change", "")
+        and "bootstrap seed at 9171403" in amendments[2].get("change", "")
         and "before any natural-safety dataset acquisition" in amendments[2].get("reason", "")
+        and manifest.get("statistics", {}).get("generation_seed") == 9_171_402
         and manifest.get("statistics", {}).get("paired_bootstrap_replicates") == 10_000
         and manifest.get("statistics", {}).get("paired_bootstrap_seed") == 9_171_403
         and manifest.get("statistics", {}).get("confidence_level") == 0.95,

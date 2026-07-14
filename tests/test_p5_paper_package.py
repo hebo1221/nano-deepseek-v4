@@ -117,6 +117,7 @@ def _natural_safety_evidence() -> dict[str, object]:
             "longsafety_expected_generations_per_arm": 3_086,
             "longsafety_official_judge_status": "blocked",
             "longsafety_safety_scores_reported": False,
+            "longsafety_raw_evidence_verified": True,
             "ifeval_official_terminal": True,
             "ifeval_input_pairing_verified": True,
             "ifeval_expected_prompts_per_arm": 541,
@@ -136,6 +137,10 @@ def _longsafety_evidence(judge_status: str = "blocked") -> dict[str, object]:
             "input_pairing_verified": True,
             "generation_failure_accounting_complete": True,
             "source_implementations_verified": True,
+            "dependency_digests_verified": True,
+            "record_revisions_verified": True,
+            "terminal_measurement_schema_verified": True,
+            "generation_seed_verified": True,
             "official_judge_status": judge_status,
             "expected_generations_total": 6_172,
         }
@@ -386,6 +391,12 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
     assert (
         manifest["evidence"]["p3_safety"]["required_audit"][
             "target_and_canary_pairing_verified"
+        ]
+        is True
+    )
+    assert (
+        manifest["evidence"]["p3_longsafety"]["required_audit"][
+            "record_revisions_verified"
         ]
         is True
     )

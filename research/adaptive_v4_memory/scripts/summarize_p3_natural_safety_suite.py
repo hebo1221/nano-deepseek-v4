@@ -77,6 +77,10 @@ def summarize(*, manifest_path: Path, longsafety_path: Path, ifeval_path: Path) 
         and long_audit.get("input_pairing_verified") is True
         and long_audit.get("generation_failure_accounting_complete") is True
         and long_audit.get("source_implementations_verified") is True
+        and long_audit.get("dependency_digests_verified") is True
+        and long_audit.get("record_revisions_verified") is True
+        and long_audit.get("terminal_measurement_schema_verified") is True
+        and long_audit.get("generation_seed_verified") is True
         and long_audit.get("official_judge_status") == "blocked"
         and long_audit.get("expected_generations_per_arm") == expected_long
         and long_audit.get("expected_generations_total") == expected_long * len(ARMS)
@@ -204,6 +208,7 @@ def summarize(*, manifest_path: Path, longsafety_path: Path, ifeval_path: Path) 
             "longsafety_expected_generations_per_arm": expected_long,
             "longsafety_official_judge_status": "blocked",
             "longsafety_safety_scores_reported": False,
+            "longsafety_raw_evidence_verified": True,
             "ifeval_official_terminal": True,
             "ifeval_input_pairing_verified": True,
             "ifeval_expected_prompts_per_arm": expected_ifeval,

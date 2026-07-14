@@ -167,6 +167,7 @@
         "longsafety_expected_generations_per_arm": 3086,
         "longsafety_official_judge_status": "blocked",
         "longsafety_safety_scores_reported": false,
+        "longsafety_raw_evidence_verified": true,
         "ifeval_official_terminal": true,
         "ifeval_input_pairing_verified": true,
         "ifeval_expected_prompts_per_arm": 541,
@@ -196,6 +197,10 @@
         "input_pairing_verified": true,
         "generation_failure_accounting_complete": true,
         "source_implementations_verified": true,
+        "dependency_digests_verified": true,
+        "record_revisions_verified": true,
+        "terminal_measurement_schema_verified": true,
+        "generation_seed_verified": true,
         "official_judge_status": "blocked",
         "expected_generations_total": 6172
       }

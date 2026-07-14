@@ -27,9 +27,6 @@ from verify_p3_natural_model import verify_snapshot
 
 BENCHMARKS = ("LongSafety", "IFEval")
 ARMS = ("native-dense", "strongest-memory-matched-fixed")
-SEED = 9171402
-
-
 def _require(condition: bool, message: str) -> None:
     if not condition:
         raise ValueError(message)
@@ -229,6 +226,7 @@ def main() -> None:
         if benchmark == "LongSafety"
         else contract["protocol"]["generation_max_new_tokens"]
     )
+    generation_seed = manifest["statistics"]["generation_seed"]
     manifest_digest = hashlib.sha256(raw_manifest).hexdigest()
     inventory_digest = sha256(args.asset_inventory)
     natural_digest = sha256(args.natural_manifest)
@@ -246,7 +244,7 @@ def main() -> None:
             "model_snapshot_digest_set_sha256": manifest["model"]["snapshot_digest_set_sha256"],
             "benchmark": benchmark,
             "arm_config": arm_config(arm, selection, selection_digest),
-            "seed": SEED,
+            "seed": generation_seed,
         }
         for arm in selected_arms
     }
@@ -270,7 +268,7 @@ def main() -> None:
             press_name="no_press",
             compression_ratio=0.0,
             output_dir=str(root),
-            seed=SEED,
+            seed=generation_seed,
             max_context_length=manifest["model"]["maximum_supported_context_tokens"],
             model_kwargs={"torch_dtype": torch.bfloat16},
         )
@@ -279,10 +277,10 @@ def main() -> None:
         runner._setup_model_pipeline()
         tokenizer = runner.pipeline.tokenizer
         environment = runtime_environment()
-        random.seed(SEED)
-        np.random.seed(SEED)
-        torch.manual_seed(SEED)
-        torch.cuda.manual_seed_all(SEED)
+        random.seed(generation_seed)
+        np.random.seed(generation_seed)
+        torch.manual_seed(generation_seed)
+        torch.cuda.manual_seed_all(generation_seed)
         for arm in pending:
             settings = identities[arm]["arm_config"]
             runner.config.press_name = settings["press_name"]
@@ -321,6 +319,12 @@ def main() -> None:
                     "token_boundary_retreat": rendered["token_boundary_retreat"],
                     "arm_config": settings,
                     "metadata": case.metadata,
+                    "revisions": {
+                        "model_revision": manifest["model"]["revision"],
+                        "dataset_revision": contract["dataset"]["revision"],
+                        "code_revision": contract["upstream_code"]["revision"],
+                        "runner_sha256": runner_digest,
+                    },
                 }
                 torch.cuda.empty_cache()
                 torch.cuda.reset_peak_memory_stats()

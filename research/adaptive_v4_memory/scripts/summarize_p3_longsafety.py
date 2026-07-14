@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import subprocess
 from collections import defaultdict
 from pathlib import Path
@@ -30,6 +31,30 @@ def _is_sha256(value: Any) -> bool:
     )
 
 
+def _nonnegative_integer(value: Any) -> bool:
+    return type(value) is int and value >= 0
+
+
+def _positive_integer(value: Any) -> bool:
+    return type(value) is int and value > 0
+
+
+def _finite_nonnegative_number(value: Any) -> bool:
+    return type(value) in (int, float) and (
+        type(value) is int or math.isfinite(value)
+    ) and value >= 0
+
+
+def _dependency(metadata: Any, label: str) -> str:
+    _require(isinstance(metadata, dict), f"Missing LongSafety {label} dependency.")
+    path = Path(metadata.get("path", ""))
+    _require(
+        path.is_file() and metadata.get("sha256") == sha256(path),
+        f"LongSafety {label} dependency drifted.",
+    )
+    return metadata["sha256"]
+
+
 def audit_arm(
     *,
     arm: str,
@@ -37,6 +62,7 @@ def audit_arm(
     expected: int,
     failures: set[str],
     manifest_digest: str,
+    manifest: dict[str, Any],
 ) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
     cell = json.loads(cell_path.read_text())
     _require(
@@ -48,15 +74,53 @@ def audit_arm(
         and cell.get("expected_generations") == expected,
         f"LongSafety generation cell is invalid: {arm}.",
     )
-    inventory_digest = cell.get("asset_inventory", {}).get("sha256")
+    manifest_dependency = _dependency(cell.get("manifest"), "manifest")
+    inventory_digest = _dependency(cell.get("asset_inventory"), "asset inventory")
+    natural_manifest_digest = _dependency(
+        cell.get("natural_manifest"), "natural manifest"
+    )
+    fixed_selection_digest = _dependency(
+        cell.get("fixed_selection"), "fixed selection"
+    )
     _require(
-        cell.get("manifest", {}).get("sha256") == manifest_digest and _is_sha256(inventory_digest),
+        manifest_dependency == manifest_digest and _is_sha256(inventory_digest),
         f"LongSafety generation provenance drifted: {arm}.",
     )
     source_implementation = verify_git_implementation(
         cell.get("source"),
         expected_path=GENERATION_RUNNER_PATH,
         label=f"LongSafety/{arm}",
+    )
+    identity = cell.get("run_identity", {})
+    arm_config = identity.get("arm_config") if isinstance(identity, dict) else None
+    model_snapshot_digest = cell.get("run_identity", {}).get(
+        "model_snapshot_digest_set_sha256"
+    )
+    expected_revisions = {
+        "model_revision": manifest["model"]["revision"],
+        "dataset_revision": manifest["benchmarks"]["LongSafety"]["dataset"][
+            "revision"
+        ],
+        "code_revision": manifest["benchmarks"]["LongSafety"]["upstream_code"][
+            "revision"
+        ],
+        "runner_sha256": source_implementation["implementation_sha256"],
+    }
+    _require(
+        isinstance(identity, dict)
+        and identity.get("source_commit") == cell["source"]["commit"]
+        and identity.get("implementation_sha256")
+        == source_implementation["implementation_sha256"]
+        and identity.get("manifest_sha256") == manifest_digest
+        and identity.get("asset_inventory_sha256") == inventory_digest
+        and identity.get("natural_manifest_sha256") == natural_manifest_digest
+        and identity.get("fixed_selection_sha256") == fixed_selection_digest
+        and identity.get("benchmark") == "LongSafety"
+        and isinstance(arm_config, dict)
+        and identity.get("seed") == manifest["statistics"]["generation_seed"]
+        and _is_sha256(model_snapshot_digest)
+        and model_snapshot_digest == manifest["model"]["snapshot_digest_set_sha256"],
+        f"LongSafety run identity drifted: {arm}.",
     )
     records_path = Path(cell.get("raw_records", {}).get("path", ""))
     _require(
@@ -77,13 +141,26 @@ def audit_arm(
         _require(
             isinstance(identifier, str)
             and identifier not in by_id
-            and isinstance(source_id, int)
+            and _nonnegative_integer(source_id)
             and position in POSITIONS
             and isinstance(metadata, dict)
             and isinstance(metadata.get("safety_type"), str)
+            and bool(metadata["safety_type"])
             and isinstance(metadata.get("task_type"), str)
+            and bool(metadata["task_type"])
+            and _positive_integer(metadata.get("source_word_length"))
+            and _positive_integer(metadata.get("source_doc_count"))
             and record.get("benchmark") == "LongSafety"
             and record.get("arm") == arm
+            and identifier == f"longsafety:{source_id}:{position}"
+            and _positive_integer(record.get("exact_input_tokens"))
+            and record.get("generation_reserve_tokens")
+            == manifest["benchmarks"]["LongSafety"]["prompt_protocol"][
+                "generation_max_new_tokens"
+            ]
+            and _nonnegative_integer(record.get("token_boundary_retreat"))
+            and record.get("arm_config") == arm_config
+            and record.get("revisions") == expected_revisions
             and _is_sha256(record.get("raw_prompt_sha256"))
             and _is_sha256(record.get("input_token_ids_sha256")),
             f"LongSafety record coordinates drifted: {identifier}.",
@@ -92,11 +169,22 @@ def audit_arm(
         by_id[identifier] = record
         source_positions[source_id].add(position)
         status = record.get("status")
+        _require(
+            isinstance(record.get("raw_response"), str)
+            and record.get("score") is None
+            and isinstance(record.get("stop_reason"), str)
+            and bool(record["stop_reason"])
+            and _finite_nonnegative_number(record.get("latency_ms"))
+            and _nonnegative_integer(record.get("peak_hbm_bytes"))
+            and _nonnegative_integer(record.get("hot_resident_bytes")),
+            f"LongSafety terminal measurements drifted: {identifier}.",
+        )
         if status == "generated":
             _require(
                 record.get("failure_type") is None
-                and isinstance(record.get("raw_response"), str)
-                and bool(record["raw_response"].strip()),
+                and bool(record["raw_response"].strip())
+                and record.get("evaluation_status") == "pending-paid-official-judge"
+                and _nonnegative_integer(record.get("generated_tokens_observed")),
                 f"LongSafety generated record drifted: {identifier}.",
             )
         else:
@@ -161,6 +249,7 @@ def summarize(manifest_path: Path, arm_paths: dict[str, Path]) -> dict[str, Any]
             expected=expected,
             failures=failures,
             manifest_digest=manifest_digest,
+            manifest=manifest,
         )
     _require(
         len({arms[arm]["asset_inventory_sha256"] for arm in ARMS}) == 1,
@@ -176,6 +265,7 @@ def summarize(manifest_path: Path, arm_paths: dict[str, Path]) -> dict[str, Any]
             records[ARMS[0]][key]["raw_prompt_sha256"] == records[ARMS[1]][key]["raw_prompt_sha256"]
             and records[ARMS[0]][key]["input_token_ids_sha256"]
             == records[ARMS[1]][key]["input_token_ids_sha256"]
+            and records[ARMS[0]][key]["metadata"] == records[ARMS[1]][key]["metadata"]
             for key in records[ARMS[0]]
         ),
         "LongSafety arms are not prompt/token paired.",
@@ -195,6 +285,10 @@ def summarize(manifest_path: Path, arm_paths: dict[str, Path]) -> dict[str, Any]
             "input_pairing_verified": True,
             "generation_failure_accounting_complete": True,
             "source_implementations_verified": True,
+            "dependency_digests_verified": True,
+            "record_revisions_verified": True,
+            "terminal_measurement_schema_verified": True,
+            "generation_seed_verified": True,
             "official_judge_status": "blocked",
             "expected_generations_per_arm": expected,
             "expected_generations_total": expected * len(ARMS),

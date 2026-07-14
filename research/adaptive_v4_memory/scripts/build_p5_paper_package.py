@@ -978,6 +978,7 @@ def classify_evidence(
         and natural_safety_audit.get("longsafety_expected_generations_per_arm") == 3_086
         and natural_safety_audit.get("longsafety_official_judge_status") == "blocked"
         and natural_safety_audit.get("longsafety_safety_scores_reported") is False
+        and natural_safety_audit.get("longsafety_raw_evidence_verified") is True
         and natural_safety_audit.get("ifeval_official_terminal") is True
         and natural_safety_audit.get("ifeval_input_pairing_verified") is True
         and natural_safety_audit.get("ifeval_expected_prompts_per_arm") == 541
@@ -1001,6 +1002,10 @@ def classify_evidence(
         and longsafety_audit.get("input_pairing_verified") is True
         and longsafety_audit.get("generation_failure_accounting_complete") is True
         and longsafety_audit.get("source_implementations_verified") is True
+        and longsafety_audit.get("dependency_digests_verified") is True
+        and longsafety_audit.get("record_revisions_verified") is True
+        and longsafety_audit.get("terminal_measurement_schema_verified") is True
+        and longsafety_audit.get("generation_seed_verified") is True
         and longsafety_audit.get("expected_generations_total") == 6_172
         and longsafety_audit.get("official_judge_status") == "complete"
     )

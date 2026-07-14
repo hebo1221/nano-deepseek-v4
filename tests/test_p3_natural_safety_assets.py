@@ -29,6 +29,7 @@ def test_natural_safety_manifest_freezes_official_counts_and_paid_judge_guard() 
 
     assert manifest["status"] == "amended_and_frozen_before_execution"
     assert len(manifest["amendments"]) == 3
+    assert manifest["statistics"]["generation_seed"] == 9_171_402
     assert manifest["statistics"]["paired_bootstrap_seed"] == 9_171_403
     assert validate_manifest(manifest) == {
         "benchmarks": 2,
