@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "experiment_id": "p3-natural-adaptive-quota-longmemeval-v1",
+  "status": "frozen_before_any_adaptive_longmemeval_generation",
+  "frozen_date": "2026-07-15",
+  "role": "official-judge-blocked adaptive layer-quota response-generation cohort",
+  "prerequisites": [
+    "terminal digest-bound nine-seed P2 causal audit",
+    "terminal Qwen3-4B adaptive-quota RULER audit regardless of outcome",
+    "terminal baseline Qwen3-4B LongMemEval audit regardless of official-judge availability",
+    "verified frozen LongMemEval dataset, source, model, and fixed-baseline selection"
+  ],
+  "execution_policy": "generate all 500 frozen examples under both arms; prerequisite outcomes and judge availability never select, cancel, truncate, or reorder examples",
+  "model": {
+    "repo_id": "Qwen/Qwen3-4B-Instruct-2507",
+    "revision": "cdbee75f17c01a7cc42f958dc650907174af0554",
+    "dtype": "bfloat16",
+    "num_hidden_layers": 36,
+    "maximum_supported_context_tokens": 262144,
+    "snapshot_digest_set_sha256": "c01e398afbd27d139b203e4b4b13d34dedec6d0a2db521083f55c50522c76e35"
+  },
+  "benchmark": {
+    "name": "LongMemEval",
+    "base_manifest": "research/adaptive_v4_memory/manifests/p3-natural-suite-v1.json",
+    "dataset_revision": "98d7416c24c778c2fee6e6f3006e7a073259d48f",
+    "dataset_sha256": "d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442",
+    "code_revision": "9e0b455f4ef0e2ab8f2e582289761153549043fc",
+    "official_judge_source_sha256": "ecce9c4c79dc89d99534ac17b383a5cbb5b9f0c69ee98adaf0684742e3d95251",
+    "examples_per_arm": 500,
+    "paired_predictions_total": 1000,
+    "generation_seed": 42,
+    "generation_reserve_tokens": 512,
+    "history_protocol": "full orig-session natural-language history with no external retrieval, compression, or truncation before context-fit classification",
+    "paired_unit": "the same frozen question with identical rendered history, current-date suffix, question, and exact token ids",
+    "overflow_policy": "retain unsupported-context as an intention-to-evaluate failure; never truncate"
+  },
+  "arms": {
+    "fixed+pins": {
+      "compression_ratio": 0.5,
+      "context_prefill_quota": "floor(context_tokens * 0.5) at every layer",
+      "protected_prefix_token_span": {"start": 0, "end": 4}
+    },
+    "natural-adaptive-quota+pins": {
+      "compression_ratio": 0.5,
+      "context_prefill_global_quota": "36 * floor(context_tokens * 0.5), exactly equal to fixed+pins",
+      "layer_signal": "normalized entropy concentration of z-scored current-layer scorer values",
+      "causal_prior": "running mean of earlier-layer concentrations only",
+      "maximum_layer_adjustment_fraction": 0.25,
+      "protected_prefix_token_span": {"start": 0, "end": 4}
+    }
+  },
+  "scorer_selection": {
+    "source": "artifacts/adaptive_v4_memory/paper_grade/p3/fixed-baseline-selection.json",
+    "eligible_arms": ["streaming_llm", "snapkv", "critical_expected_attention"],
+    "rule": "reuse the frozen score-compatible Qwen selection without LongMemEval outcome inspection",
+    "longmemeval_outcome_inspection_allowed": false
+  },
+  "cache_lifecycle_contract": {
+    "adaptive_allocation_scope": "initial history-context prefill only",
+    "same_initial_global_kept_tokens": true,
+    "same_scorer": true,
+    "same_protected_prefix": true,
+    "current_question_tokens": "append identically after history compression without adaptive reallocation",
+    "generation_tokens": "decode identically under the arm-specific post-prefill cache",
+    "continuous_refresh_claim_available": false,
+    "per_successful_generation_audit": [
+      "all 36 initial layer allocations in causal order",
+      "configured and observed initial total kept tokens",
+      "score concentration and controller time per layer",
+      "initial hot-resident bytes, peak HBM, latency, generated tokens, and stop reason"
+    ]
+  },
+  "official_metric_contract": {
+    "primary_metric": "official GPT-4o judge accuracy overall and by question type",
+    "judge_model": "gpt-4o-2024-08-06",
+    "temperature": 0,
+    "max_tokens": 10,
+    "initial_execution_mode": "blocked",
+    "blocked_record_policy": "retain the complete local-model response and physical measurements with failure_type judge-blocked; do not convert judge unavailability into a model-quality failure",
+    "auxiliary_metric_policy": "no deterministic, lexical, embedding, or local-LLM proxy may replace the official metric",
+    "quality_classification_before_official_judging": "unverified",
+    "confirmation_gate_available_before_official_judging": false,
+    "paid_judge_policy": "a later explicit paid-judge cohort requires a separately frozen manifest and OPENAI_API_KEY; never invoke it implicitly"
+  },
+  "failure_reporting": {
+    "allowed_failure_types": [
+      "unsupported-context",
+      "empty-generation",
+      "oom",
+      "runtime-error",
+      "judge-blocked"
+    ],
+    "unknown_or_missing_failure_type_policy": "reject the artifact during audit",
+    "successful_generation_with_blocked_judge_policy": "status failure, failure_type judge-blocked, score null, response and generation measurements retained",
+    "operational_failure_policy": "retain every frozen example; never silently retry or drop it"
+  },
+  "reporting": {
+    "generation_completion": "report response-generation coverage, operational failures, token lengths, latency, HBM, hot-resident bytes, and quota audits by arm and question type",
+    "quality": "report official quality as unverified until an explicit paid-judge artifact exists",
+    "cross_benchmark_suite_membership": false,
+    "reason_excluded_from_adaptive_confirmation_suite": "the official paid judge is unavailable and no proxy substitution is permitted"
+  },
+  "outputs": {
+    "result_root": "artifacts/adaptive_v4_memory/paper_grade/p3/natural-adaptive-quota/longmemeval-qwen3-4b",
+    "summary": "artifacts/adaptive_v4_memory/paper_grade/p3/natural-adaptive-quota/longmemeval-qwen3-4b.summary.json"
+  },
+  "claim_boundary": "This cohort can establish paired response-generation completion and initial-prefill physical-budget behavior for fixed+pins versus the causal layer-quota heuristic on LongMemEval. Without the frozen official GPT-4o judge it provides no model-quality success, non-inferiority, or negative-result claim; it does not establish continuous adaptive reallocation, cross-model transfer, or official DeepSeek-V4 behavior."
+}
