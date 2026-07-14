@@ -451,6 +451,30 @@
         "outcome_dependent_execution": false
       }
     },
+    "p3_natural_adaptive_quota_suite": {
+      "path": "artifacts/adaptive_v4_memory/paper_grade/p3/natural-adaptive-quota/suite.summary.json",
+      "experiment_id": "p3-natural-adaptive-quota-suite-audit-v1",
+      "required_audit": {
+        "terminal_components": 4,
+        "predictions_per_arm": 44789,
+        "total_predictions": 89578,
+        "all_component_manifest_digests_verified": true,
+        "all_component_summary_digests_recorded": true,
+        "all_component_arm_cell_digests_verified": true,
+        "all_component_raw_audits_verified": true,
+        "all_component_score_recomputation_verified": true,
+        "all_component_dependency_digests_verified": true,
+        "all_component_runtime_bindings_verified": true,
+        "all_component_failure_accounting_verified": true,
+        "same_model_revision_verified": true,
+        "same_arm_pair_verified": true,
+        "same_initial_global_token_budget_verified": true,
+        "no_cross_benchmark_score_pooling": true,
+        "no_cross_benchmark_p_value_pooling": true,
+        "longmemeval_official_judge_boundary_preserved": true,
+        "outcome_dependent_benchmark_selection": false
+      }
+    },
     "p3_natural": {
       "path": "artifacts/adaptive_v4_memory/paper_grade/p3/natural-suite.summary.json",
       "experiment_id": "p3-natural-language-suite-audit-v1",
@@ -709,6 +733,7 @@
     "natural_adaptive_quota_scbench": "research/adaptive_v4_memory/manifests/p3-natural-adaptive-quota-scbench-v1.json",
     "natural_adaptive_quota_longbench_v2": "research/adaptive_v4_memory/manifests/p3-natural-adaptive-quota-longbench-v2-v1.json",
     "natural_adaptive_quota_mrcr": "research/adaptive_v4_memory/manifests/p3-natural-adaptive-quota-mrcr-v1.json",
+    "natural_adaptive_quota_suite": "research/adaptive_v4_memory/manifests/p3-natural-adaptive-quota-suite-v1.json",
     "natural_suite": "research/adaptive_v4_memory/manifests/p3-natural-suite-v1.json",
     "safety_stress": "research/adaptive_v4_memory/manifests/p3-safety-stress-v1.json",
     "natural_safety": "research/adaptive_v4_memory/manifests/p3-natural-safety-v1.json",
@@ -755,6 +780,7 @@
     "table-p3-natural-adaptive-longbench-slices.csv",
     "table-p3-natural-adaptive-mrcr-summary.csv",
     "table-p3-natural-adaptive-mrcr-cells.csv",
+    "table-p3-natural-adaptive-suite.csv",
     "table-p3-safety-slices.csv",
     "table-p3-natural-benchmark-arms.csv",
     "table-p3-natural-paired-contrasts.csv",

@@ -64,6 +64,8 @@ REPRODUCTION_REQUIRED_MARKERS = [
     "validate_p3_natural_adaptive_quota_mrcr_manifest.py",
     "run_p3_mrcr.py --cohort adaptive-quota",
     "summarize_p3_natural_adaptive_quota_mrcr.py",
+    "validate_p3_natural_adaptive_quota_suite_manifest.py",
+    "summarize_p3_natural_adaptive_quota_suite.py",
     "prepare_p3_cross_family_ruler_dataset.py",
     "run_p3_cross_family_ruler.py",
     "summarize_p3_cross_family_ruler.py",
@@ -103,6 +105,7 @@ BOUNDARY_EXPERIMENT_IDS = {
         "p3-natural-adaptive-quota-longbench-v2-v1"
     ),
     "natural_adaptive_quota_mrcr": "p3-natural-adaptive-quota-mrcr-v1",
+    "natural_adaptive_quota_suite": "p3-natural-adaptive-quota-suite-v1",
     "natural_suite": "p3-natural-language-suite-v1",
     "safety_stress": "p3-qwen3-4b-safety-stress-v1",
     "natural_safety": "p3-qwen3-4b-natural-safety-v1",
@@ -898,6 +901,31 @@ def _validate_boundary_manifest(name: str, path: Path) -> dict[str, Any]:
             in payload.get("claim_boundary", ""),
             "P3 adaptive MRCR boundary drifted.",
         )
+    elif name == "natural_adaptive_quota_suite":
+        coverage = payload.get("coverage", {})
+        statistics = payload.get("statistics", {})
+        gate = payload.get("confirmation_gate", {})
+        components = payload.get("components", {})
+        _require(
+            payload.get("status") == "frozen_before_any_adaptive_suite_summary"
+            and tuple(components) == ("RULER", "SCBench", "LongBench-v2", "MRCR")
+            and coverage.get("benchmarks") == 4
+            and coverage.get("predictions_per_arm") == 44_789
+            and coverage.get("paired_predictions_total") == 89_578
+            and "official GPT-4o judge unavailable"
+            in coverage.get("excluded_from_adaptive_suite", {}).get("LongMemEval", "")
+            and statistics.get("no_cross_benchmark_score_pooling") is True
+            and statistics.get("no_cross_benchmark_p_value_pooling") is True
+            and statistics.get("suite_gate_uses_component_p_values") is False
+            and statistics.get("outcome_dependent_benchmark_selection") is False
+            and gate.get("required_terminal_components") == 4
+            and gate.get("minimum_component_confirmation_gates_passed") == 3
+            and gate.get("minimum_nonnegative_overall_effects") == 4
+            and gate.get("all_required_physical_and_failure_checks_must_pass") is True
+            and "does not pool incomparable benchmark scores"
+            in payload.get("claim_boundary", ""),
+            "P3 adaptive natural suite boundary drifted.",
+        )
     elif name == "cross_family_adaptive_quota":
         benchmark = payload.get("benchmark", {})
         relationship = payload.get("relationship_to_other_cohorts", {})
@@ -1424,6 +1452,7 @@ def classify_evidence(
     p3_natural_adaptive_quota_scbench: dict[str, Any] | None = None,
     p3_natural_adaptive_quota_longbench_v2: dict[str, Any] | None = None,
     p3_natural_adaptive_quota_mrcr: dict[str, Any] | None = None,
+    p3_natural_adaptive_quota_suite: dict[str, Any] | None = None,
 ) -> dict[str, str]:
     core_audit = p2_core.get("audit", {})
     core_complete = (
@@ -1895,6 +1924,37 @@ def classify_evidence(
             if mrcr_terminal and mrcr_gate.get("passed") is True
             else "negative-result"
             if mrcr_terminal and mrcr_gate.get("passed") is False
+            else "unverified"
+        )
+    if isinstance(p3_natural_adaptive_quota_suite, dict):
+        suite_audit = p3_natural_adaptive_quota_suite.get("audit", {})
+        suite_terminal = (
+            p3_natural_adaptive_quota_suite.get("status") == "terminal"
+            and suite_audit.get("terminal_components") == 4
+            and suite_audit.get("predictions_per_arm") == 44_789
+            and suite_audit.get("total_predictions") == 89_578
+            and suite_audit.get("all_component_manifest_digests_verified") is True
+            and suite_audit.get("all_component_summary_digests_recorded") is True
+            and suite_audit.get("all_component_arm_cell_digests_verified") is True
+            and suite_audit.get("all_component_raw_audits_verified") is True
+            and suite_audit.get("all_component_score_recomputation_verified") is True
+            and suite_audit.get("all_component_dependency_digests_verified") is True
+            and suite_audit.get("all_component_runtime_bindings_verified") is True
+            and suite_audit.get("all_component_failure_accounting_verified") is True
+            and suite_audit.get("same_model_revision_verified") is True
+            and suite_audit.get("same_arm_pair_verified") is True
+            and suite_audit.get("same_initial_global_token_budget_verified") is True
+            and suite_audit.get("no_cross_benchmark_score_pooling") is True
+            and suite_audit.get("no_cross_benchmark_p_value_pooling") is True
+            and suite_audit.get("longmemeval_official_judge_boundary_preserved") is True
+            and suite_audit.get("outcome_dependent_benchmark_selection") is False
+        )
+        suite_gate = p3_natural_adaptive_quota_suite.get("suite_confirmation_gate", {})
+        result["p3_natural_adaptive_quota_suite"] = (
+            "success"
+            if suite_terminal and suite_gate.get("passed") is True
+            else "negative-result"
+            if suite_terminal and suite_gate.get("passed") is False
             else "unverified"
         )
     if isinstance(p3_cross_family_adaptive_quota, dict):
@@ -2485,6 +2545,10 @@ def _p3_adaptive_mrcr_cell_rows(payload: dict[str, Any]) -> list[dict[str, Any]]
     ]
 
 
+def _p3_adaptive_suite_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    return [_flatten_json_row(row) for row in payload["components"]]
+
+
 def _p3_safety_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return [
         {"arm": arm, **row}
@@ -2982,6 +3046,7 @@ def _report(
     p3_natural_adaptive_quota_scbench: dict[str, Any],
     p3_natural_adaptive_quota_longbench_v2: dict[str, Any],
     p3_natural_adaptive_quota_mrcr: dict[str, Any],
+    p3_natural_adaptive_quota_suite: dict[str, Any],
     p3_natural: dict[str, Any],
     p3_safety: dict[str, Any],
     p3_natural_safety: dict[str, Any],
@@ -3129,6 +3194,15 @@ user request, is outside the completion gate, and is never reported as passed.
   gate passed: **{p3_natural_adaptive_quota_mrcr["confirmation_gate"]["passed"]}**.
   Every needle/bin cell remains visible, and this result does not claim continuous
   adaptive reallocation or contexts beyond 128K.
+- P3 adaptive natural suite: the four digest-bound component audits account for
+  {p3_natural_adaptive_quota_suite["audit"]["total_predictions"]:,} predictions without
+  pooling heterogeneous scores or p-values. Its preregistered broad-transfer gate passed:
+  **{p3_natural_adaptive_quota_suite["suite_confirmation_gate"]["passed"]}** with
+  {p3_natural_adaptive_quota_suite["suite_confirmation_gate"]["component_gates_passed"]}/4
+  component gates and
+  {p3_natural_adaptive_quota_suite["suite_confirmation_gate"]["nonnegative_overall_effects"]}/4
+  nonnegative overall effects. LongMemEval remains excluded because its official judge is
+  unavailable; no auxiliary metric is substituted.
 - P3 natural suite: {p3_natural["audit"]["benchmarks_terminal"]} terminal benchmarks and
   at least {p3_natural["audit"]["minimum_protocol_examples_accounted_per_arm"]:,}
   examples accounted per required arm. The fixed arm was selected before any Qwen3-4B
@@ -3339,6 +3413,9 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
             "p3_natural_adaptive_quota_longbench_v2"
         ],
         p3_natural_adaptive_quota_mrcr=loaded["p3_natural_adaptive_quota_mrcr"],
+        p3_natural_adaptive_quota_suite=loaded[
+            "p3_natural_adaptive_quota_suite"
+        ],
     )
     classes["p2_core_confirmatory"] = _classify_validated_confirmatory_core(
         loaded["p2_core_confirmatory"]
@@ -3534,6 +3611,14 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         output_root / "table-p3-natural-adaptive-mrcr-cells.csv",
         p3_adaptive_mrcr_cells,
         _field_union(p3_adaptive_mrcr_cells),
+    )
+    p3_adaptive_suite = _p3_adaptive_suite_rows(
+        loaded["p3_natural_adaptive_quota_suite"]
+    )
+    _write_csv(
+        output_root / "table-p3-natural-adaptive-suite.csv",
+        p3_adaptive_suite,
+        _field_union(p3_adaptive_suite),
     )
     p3_safety = _p3_safety_rows(loaded["p3_safety"])
     _write_csv(
@@ -3751,6 +3836,9 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
             "p3_natural_adaptive_quota_longbench_v2"
         ],
         p3_natural_adaptive_quota_mrcr=loaded["p3_natural_adaptive_quota_mrcr"],
+        p3_natural_adaptive_quota_suite=loaded[
+            "p3_natural_adaptive_quota_suite"
+        ],
         p3_natural=loaded["p3_natural"],
         p3_safety=loaded["p3_safety"],
         p3_natural_safety=loaded["p3_natural_safety"],

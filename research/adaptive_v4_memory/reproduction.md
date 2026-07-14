@@ -142,6 +142,16 @@ the long context prefill; the final query is appended identically under both arm
 .venv/bin/python research/adaptive_v4_memory/scripts/summarize_p3_natural_adaptive_quota_mrcr.py
 ```
 
+After all four adaptive Qwen summaries are terminal, run the separately frozen
+cross-benchmark audit. It preserves each benchmark's interval and multiplicity
+correction; it never pools heterogeneous scores or p-values. LongMemEval remains
+outside this adaptive suite while its paid official judge is unavailable.
+
+```bash
+.venv/bin/python research/adaptive_v4_memory/scripts/validate_p3_natural_adaptive_quota_suite_manifest.py
+.venv/bin/python research/adaptive_v4_memory/scripts/summarize_p3_natural_adaptive_quota_suite.py
+```
+
 Run the separately reported Phi-4-mini cross-family transfer only after the
 nine-seed P2 causal audit and Qwen fixed-baseline selection are terminal:
 

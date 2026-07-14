@@ -279,6 +279,7 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
         "p3_natural_adaptive_quota_scbench",
         "p3_natural_adaptive_quota_longbench_v2",
         "p3_natural_adaptive_quota_mrcr",
+        "p3_natural_adaptive_quota_suite",
         "p3_natural",
         "p3_safety",
         "p3_natural_safety",
@@ -330,6 +331,15 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
     assert adaptive_mrcr["required_audit"]["paired_examples"] == 1_500
     assert adaptive_mrcr["required_audit"]["needle_token_bin_cells"] == 15
     assert adaptive_mrcr["required_audit"]["holm_family_size"] == 15
+    adaptive_suite = manifest["evidence"]["p3_natural_adaptive_quota_suite"]
+    assert adaptive_suite["required_audit"]["terminal_components"] == 4
+    assert adaptive_suite["required_audit"]["predictions_per_arm"] == 44_789
+    assert adaptive_suite["required_audit"]["total_predictions"] == 89_578
+    assert adaptive_suite["required_audit"]["no_cross_benchmark_score_pooling"] is True
+    assert adaptive_suite["required_audit"]["no_cross_benchmark_p_value_pooling"] is True
+    assert adaptive_suite["required_audit"][
+        "longmemeval_official_judge_boundary_preserved"
+    ] is True
     assert manifest["execution_audits"]["p2_core_parallel_equivalence"]["required_probes"] == 3
     assert manifest["execution_audits"]["p2_causal_parallel_equivalence"]["required_probes"] == 3
     assert manifest["execution_audits"]["p1_online_checkpoint_reuse"]["required_probes"] == 10
@@ -669,6 +679,7 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
         "figure-p4-production-tradeoffs.svg",
         "table-p3-natural-benchmark-arms.csv",
         "table-p3-natural-paired-contrasts.csv",
+        "table-p3-natural-adaptive-suite.csv",
         "table-p2-core-effects.csv",
         "table-p2-core-family-effects.csv",
         "table-p2-core-seed-effects.csv",
@@ -912,6 +923,7 @@ def test_natural_suite_boundary_rejects_projected_dsa_baselines(tmp_path: Path) 
     with pytest.raises(ValueError, match="IndexCache architecture or provenance"):
         package._validate_boundary_manifest("natural_suite", tampered)
 
+
     payload = json.loads(source.read_text())
     payload["external_baselines"]["IndexCache"]["files_sha256"]["README.md"] = "0" * 64
     tampered.write_text(json.dumps(payload))
@@ -941,6 +953,25 @@ def test_natural_suite_boundary_rejects_projected_dsa_baselines(tmp_path: Path) 
     tampered.write_text(json.dumps(payload))
     with pytest.raises(ValueError, match="selection-inference boundary"):
         package._validate_boundary_manifest("natural_suite", tampered)
+
+
+def test_adaptive_natural_suite_boundary_rejects_cross_benchmark_pooling(
+    tmp_path: Path,
+) -> None:
+    root = Path(__file__).resolve().parents[1]
+    source = (
+        root
+        / "research/adaptive_v4_memory/manifests/"
+        "p3-natural-adaptive-quota-suite-v1.json"
+    )
+    payload = json.loads(source.read_text())
+    package._validate_boundary_manifest("natural_adaptive_quota_suite", source)
+
+    payload["statistics"]["no_cross_benchmark_score_pooling"] = False
+    tampered = tmp_path / "adaptive-natural-suite.json"
+    tampered.write_text(json.dumps(payload))
+    with pytest.raises(ValueError, match="adaptive natural suite boundary drifted"):
+        package._validate_boundary_manifest("natural_adaptive_quota_suite", tampered)
 
 
 def test_experiment_scale_audit_recomputes_headline_counts(tmp_path: Path) -> None:
@@ -1406,6 +1437,58 @@ def test_adaptive_mrcr_classification_is_gate_bound(
         p3_natural_adaptive_quota_mrcr=evidence,
     )
     assert classifications["p3_natural_adaptive_quota_mrcr"] == expected
+
+
+@pytest.mark.parametrize(
+    ("passed", "expected"),
+    [(True, "success"), (False, "negative-result")],
+)
+def test_adaptive_natural_suite_classification_is_gate_bound(
+    passed: bool, expected: str
+) -> None:
+    evidence = {
+        "status": "terminal",
+        "audit": {
+            "terminal_components": 4,
+            "predictions_per_arm": 44_789,
+            "total_predictions": 89_578,
+            "all_component_manifest_digests_verified": True,
+            "all_component_summary_digests_recorded": True,
+            "all_component_arm_cell_digests_verified": True,
+            "all_component_raw_audits_verified": True,
+            "all_component_score_recomputation_verified": True,
+            "all_component_dependency_digests_verified": True,
+            "all_component_runtime_bindings_verified": True,
+            "all_component_failure_accounting_verified": True,
+            "same_model_revision_verified": True,
+            "same_arm_pair_verified": True,
+            "same_initial_global_token_budget_verified": True,
+            "no_cross_benchmark_score_pooling": True,
+            "no_cross_benchmark_p_value_pooling": True,
+            "longmemeval_official_judge_boundary_preserved": True,
+            "outcome_dependent_benchmark_selection": False,
+        },
+        "suite_confirmation_gate": {"passed": passed},
+    }
+    classifications = package.classify_evidence(
+        _p2_core_evidence(),
+        _m5_pilot_evidence(),
+        _m3_offline_learned_risk_evidence(),
+        _online_learned_lookahead_evidence(),
+        {"primary_causal_gate": {"passed": False}},
+        {"benchmark_complete": False},
+        {"audit": {}},
+        {"audit": {}},
+        {"audit": {}},
+        {"audit": {}},
+        {"audit": {}},
+        {"audit": {}},
+        {"audit": {}},
+        {"audit": {}},
+        {"audit": {}},
+        p3_natural_adaptive_quota_suite=evidence,
+    )
+    assert classifications["p3_natural_adaptive_quota_suite"] == expected
 
 
 def test_p5_success_requires_full_system_coverage() -> None:
