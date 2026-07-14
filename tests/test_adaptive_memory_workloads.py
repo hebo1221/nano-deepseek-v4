@@ -52,6 +52,13 @@ def test_paper_grade_workloads_are_well_formed_and_deterministic(family: str):
     if family == "irrelevant-context-local-only":
         distance = first.query_positions - first.evidence_positions
         assert torch.all(distance < config.sliding_window)
+        for batch_index in range(first.input_ids.shape[0]):
+            evidence = int(first.evidence_positions[batch_index, 0])
+            query = int(first.query_positions[batch_index, 0])
+            assert first.input_ids[batch_index, evidence] == first.targets[batch_index, 0]
+            assert first.input_ids[batch_index, evidence + 1] == first.input_ids[
+                batch_index, query
+            ]
     else:
         distance = first.query_positions - first.evidence_positions
         assert torch.all(distance > config.sliding_window)

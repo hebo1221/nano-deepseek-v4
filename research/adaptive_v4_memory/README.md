@@ -173,6 +173,14 @@ including native, failed the irrelevant-local slice. These are directional
 single-checkpoint findings only; see the checked held-out pilot report and
 digest-bound paired analysis.
 
+The exact-example pin ablation has since isolated that effect: no-pins
+hierarchical-1x was prediction-identical to fixed-1x (44/80), while pins reached
+57/80, with all 13 recoveries at context 256+. The 1x gain is therefore a
+protected-retention result, not a calibrated-quota result. Native full-sequence
+forward also reproduced the irrelevant-local 0/20 result, and strengthened
+generator invariants verified the local target/key construction; that slice is
+a checkpoint generalization failure.
+
 ## P2 training matrix
 
 The preregistered 5-seed × 2-scale Tier-S training matrix is complete. All ten

@@ -1,0 +1,84 @@
+{
+  "design": {
+    "contexts": [
+      80,
+      128,
+      256,
+      512,
+      1024
+    ],
+    "conversations": 20,
+    "evaluation_seed": 8071401,
+    "family": "instruction-persistence",
+    "queries": 80,
+    "scale": "s55"
+  },
+  "experiment_id": "p1-protected-pin-diagnostic-audit-v1",
+  "interpretation": "single-checkpoint causal diagnostic; pin effect isolated on exact examples",
+  "pilot_artifact": {
+    "path": "artifacts/adaptive_v4_memory/paper_grade/heldout_pilot/s55/seed-6071401/p1-heldout-policy-pilot.json",
+    "sha256": "7dcdadfca99ee3fe0ecc18d0445ed60703b283ec2823fd5aa4853e1426372265"
+  },
+  "raw_artifact": {
+    "path": "artifacts/adaptive_v4_memory/paper_grade/diagnostics/s55/seed-6071401/p1-protected-pin.json",
+    "sha256": "763cbcbd3c0dd1089680a5a5c91612b12c2e6d5fe7b775a6ab0c7fad9b8ac91b"
+  },
+  "result": {
+    "by_context": [
+      {
+        "calibrated-hierarchical-1x": 14,
+        "calibrated-hierarchical-no-pins-1x": 14,
+        "context": 80,
+        "fixed-1x": 14,
+        "total": 16
+      },
+      {
+        "calibrated-hierarchical-1x": 12,
+        "calibrated-hierarchical-no-pins-1x": 12,
+        "context": 128,
+        "fixed-1x": 12,
+        "total": 16
+      },
+      {
+        "calibrated-hierarchical-1x": 16,
+        "calibrated-hierarchical-no-pins-1x": 12,
+        "context": 256,
+        "fixed-1x": 12,
+        "total": 16
+      },
+      {
+        "calibrated-hierarchical-1x": 12,
+        "calibrated-hierarchical-no-pins-1x": 6,
+        "context": 512,
+        "fixed-1x": 6,
+        "total": 16
+      },
+      {
+        "calibrated-hierarchical-1x": 3,
+        "calibrated-hierarchical-no-pins-1x": 0,
+        "context": 1024,
+        "fixed-1x": 0,
+        "total": 16
+      }
+    ],
+    "fixed_1x_correct": 44,
+    "no_pins_correct": 44,
+    "pin_query_recoveries": 13,
+    "pin_query_regressions": 0,
+    "pinned_correct": 57,
+    "total": 80
+  },
+  "schema_version": 1,
+  "source": {
+    "commit": "69c262b16147c63a87d293f80699f3693d698958",
+    "dirty": false
+  },
+  "validation": {
+    "all_correctness_recomputed": true,
+    "clean_source_verified": true,
+    "exact_pilot_examples_regenerated": true,
+    "no_pins_predictions_identical_to_fixed_1x": true,
+    "raw_and_record_digests_verified": true,
+    "zero_budget_violations": true
+  }
+}

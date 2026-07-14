@@ -46,6 +46,12 @@ allocation. It points instead to the controller path, most plausibly the
 protected instruction block. A no-protected-pin arm is therefore mandatory
 before attributing the gain.
 
+A subsequent exact-example causal diagnostic completed that ablation. Disabling
+pins reproduced fixed-1x predictions bit-for-bit (44/80 on instruction
+persistence), while enabling pins scored 57/80. All 13 recoveries occurred at
+context 256 or longer. The 1x gain is therefore attributed to protected pin,
+not quota calibration; see the separate checked diagnostic.
+
 Cross-layer hierarchy added only one net correct query at 2x and at 4x relative
 to the local controller. Those differences are too small for a mechanism claim.
 
@@ -56,9 +62,12 @@ reported negative ablation but should not consume the core full-matrix budget.
 ## Worst slice and execution lesson
 
 Every policy, including native, scored 0/20 on
-`irrelevant-context-local-only`. This is a model/workload-coverage failure, not
-an adaptive-memory regression. The generator and training coverage must be
-audited before the full result is interpreted.
+`irrelevant-context-local-only`. Native full-sequence forward reproduced the
+same 0/20 predictions, ruling out cache decode and tier/controller paths. The
+generator audit also verifies that the local evidence token equals the target,
+the evidence key equals the query key, and the distance is inside the sliding
+window. This is a checkpoint generalization failure, not an adaptive-memory
+regression or malformed target.
 
 The reference run took roughly 25 minutes because long-generation evaluation
 performs real sequential cache decode and the controller uses a Python/CPU
@@ -68,9 +77,9 @@ not fused-runtime performance claims.
 
 ## Next decision
 
-Run protected-pin and irrelevant-local diagnostics first. If the 1x recovery is
-confirmed as a pin effect, retain protected pin as an independent mechanism and
-do not credit quota calibration. Then expand the minimal core set—native,
+The protected-pin and irrelevant-local diagnostics are complete. Retain
+protected pin as an independent mechanism and do not credit quota calibration
+for its gain. Expand the minimal core set—native,
 fixed 1x/2x/4x, and calibrated hierarchical without fallback 1x/2x/4x—to all
 five seeds and both scales at 1,000 conversations per family. Local,
 cross-layer, fallback, refresh, temporal, and score ablations run as separate
