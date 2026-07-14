@@ -221,6 +221,7 @@ def main() -> None:
     require_p3_sequence_gate(args.p2_matrix, args.causal_gate)
     ruler_root = args.ruler_root.resolve()
     tokenizer_path = args.tokenizer_snapshot.resolve()
+    output_root = args.output_root.resolve()
     if git_head(ruler_root) != RULER_REVISION:
         raise ValueError("RULER checkout revision does not match the frozen manifest.")
     if args.samples_per_task <= 0:
@@ -246,7 +247,7 @@ def main() -> None:
         prepare_length(
             ruler_root=ruler_root,
             tokenizer_path=tokenizer_path,
-            output_root=args.output_root,
+            output_root=output_root,
             tokenizer=tokenizer,
             length=length,
             samples=args.samples_per_task,
