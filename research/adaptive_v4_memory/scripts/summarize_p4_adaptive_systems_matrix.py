@@ -27,6 +27,7 @@ def summarize_terminal_cell(payload: dict[str, Any]) -> dict[str, Any]:
     result: dict[str, Any] = {
         "cell": payload["cell"],
         "status": payload["status"],
+        "policy_status": payload["policy_status"],
         "p2_causal_gate_passed": payload["p2_causal_gate_passed"],
         "cell_timeout_seconds": payload["cell_timeout_seconds"],
         "warmup_repetitions_attempted": payload["warmup_repetitions_attempted"],
@@ -216,6 +217,12 @@ def main() -> None:
             failures.append(
                 {
                     "cell": payload["cell"],
+                    "cell_timeout_seconds": payload["cell_timeout_seconds"],
+                    "warmup_accounting_available": payload["warmup_accounting_available"],
+                    "warmup_repetitions_attempted": payload["warmup_repetitions_attempted"],
+                    "warmup_paired_repetitions_completed": payload[
+                        "warmup_paired_repetitions_completed"
+                    ],
                     "failure_type": payload.get("failure_type"),
                     "error_type": payload.get("error_type"),
                     "error": payload.get("error"),

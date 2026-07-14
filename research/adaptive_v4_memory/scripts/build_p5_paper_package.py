@@ -60,6 +60,8 @@ REPRODUCTION_REQUIRED_MARKERS = [
     "run_p3_safety_stress.py",
     "run_p4_500k_context_preflight.py",
     "run_p4_systems_matrix.py",
+    "run_p4_adaptive_systems_matrix.py",
+    "summarize_p4_adaptive_systems_matrix.py",
     "run_p4_production_systems_matrix.py",
     "run_p1_online_lookahead_parallel.py --workers 3",
     "build_p5_paper_package.py",
@@ -80,6 +82,7 @@ BOUNDARY_EXPERIMENT_IDS = {
     "natural_safety": "p3-qwen3-4b-natural-safety-v1",
     "p4_500k_context": "p4-500k-context-preflight-v1",
     "p4_reference_systems": "p4-reference-systems-matrix-v1",
+    "p4_adaptive_systems": "p4-adaptive-systems-matrix-v1",
     "p4_production_systems": "p4-production-systems-matrix-v1",
     "official_deepseek_v4": "p3-official-flashmemory-deepseek-v4-v1",
     "production_runtime_blocker": "p4-production-resource-blocker-v1",
@@ -94,11 +97,15 @@ SCALE_AUDIT_SOURCE_MANIFESTS = {
     "online": Path("research/adaptive_v4_memory/manifests/p1-online-learned-lookahead-v1.json"),
     "ruler": Path("research/adaptive_v4_memory/manifests/p3-ruler-qwen3-1.7b-v1.json"),
     "natural": Path("research/adaptive_v4_memory/manifests/p3-natural-suite-v1.json"),
+    "cross_family": Path(
+        "research/adaptive_v4_memory/manifests/p3-cross-family-ruler-transfer-v1.json"
+    ),
     "safety": Path("research/adaptive_v4_memory/manifests/p3-safety-stress-v1.json"),
     "natural_safety": Path("research/adaptive_v4_memory/manifests/p3-natural-safety-v1.json"),
     "p4_reference": Path(
         "research/adaptive_v4_memory/manifests/p4-reference-systems-matrix-v1.json"
     ),
+    "p4_adaptive": Path("research/adaptive_v4_memory/manifests/p4-adaptive-systems-matrix-v1.json"),
     "p4_preflight": Path("research/adaptive_v4_memory/manifests/p4-500k-context-preflight-v1.json"),
     "p4_production": Path(
         "research/adaptive_v4_memory/manifests/p4-production-systems-matrix-v1.json"
@@ -106,9 +113,7 @@ SCALE_AUDIT_SOURCE_MANIFESTS = {
 }
 SCALE_AUDIT_CORE_DESIGN = Path("research/adaptive_v4_memory/scripts/evaluate_p2_core_shard.py")
 P2_ANALYSIS_PATHS = {
-    "p2_core": (
-        "research/adaptive_v4_memory/scripts/summarize_p2_core_matrix.py",
-    ),
+    "p2_core": ("research/adaptive_v4_memory/scripts/summarize_p2_core_matrix.py",),
     "p2_core_confirmatory": (
         "research/adaptive_v4_memory/scripts/summarize_p2_core_matrix.py",
         "research/adaptive_v4_memory/scripts/summarize_p2_seed_extension.py",
@@ -156,9 +161,7 @@ def _analysis_implementation_metadata(paths: tuple[str, ...]) -> dict[str, Any]:
         capture_output=True,
         text=True,
     ).stdout
-    observed = tuple(
-        line.split("\t", 1)[1] for line in tracked.splitlines() if "\t" in line
-    )
+    observed = tuple(line.split("\t", 1)[1] for line in tracked.splitlines() if "\t" in line)
     _require(
         observed == canonical_paths,
         f"P2 analysis implementation paths are untracked or reordered: {observed}",
@@ -280,11 +283,8 @@ def _validate_experiment_scale_audit(payload: dict[str, Any]) -> None:
     primary_seeds = set(primary_cohort.get("training_seeds", []))
     extension_seeds = set(extension_cohort.get("training_seeds", []))
     _require(
-        extension_manifest.get("status")
-        == "preregistered_before_primary_outcome_inspection"
-        and extension_manifest.get("outcome_blinding", {}).get(
-            "primary_outcome_summary_inspected"
-        )
+        extension_manifest.get("status") == "preregistered_before_primary_outcome_inspection"
+        and extension_manifest.get("outcome_blinding", {}).get("primary_outcome_summary_inspected")
         is False
         and primary_seeds == set(study.get("training_seeds", []))
         and primary_seeds.isdisjoint(extension_seeds)
@@ -300,8 +300,7 @@ def _validate_experiment_scale_audit(payload: dict[str, Any]) -> None:
         * extension_cohort.get("replicates_per_context", 0)
     )
     expected_extension_volume = {
-        "training_runs": len(extension_seeds)
-        * len(extension_cohort.get("scales", [])),
+        "training_runs": len(extension_seeds) * len(extension_cohort.get("scales", [])),
         "core_shards": extension_core_shards,
         "core_policy_example_evaluations": extension_core_shards
         * extension_cohort.get("examples_per_shard", 0)
@@ -320,14 +319,10 @@ def _validate_experiment_scale_audit(payload: dict[str, Any]) -> None:
     expected_combined_volume = {
         "independent_training_seeds_per_scale": len(primary_seeds | extension_seeds),
         "core_shards": core_shards + extension_core_shards,
-        "core_policy_example_evaluations": expected_core[
-            "policy_example_evaluations"
-        ]
+        "core_policy_example_evaluations": expected_core["policy_example_evaluations"]
         + expected_extension_volume["core_policy_example_evaluations"],
         "causal_shards": causal_shards + expected_extension_volume["causal_shards"],
-        "causal_policy_example_evaluations": expected_causal[
-            "policy_example_evaluations"
-        ]
+        "causal_policy_example_evaluations": expected_causal["policy_example_evaluations"]
         + expected_extension_volume["causal_policy_example_evaluations"],
     }
     _require(
@@ -415,6 +410,25 @@ def _validate_experiment_scale_audit(payload: dict[str, Any]) -> None:
         "P3 natural-suite scale count drifted.",
     )
 
+    cross_family = sources["cross_family"]
+    cross_benchmark = cross_family.get("benchmark", {})
+    cross_relationship = cross_family.get("relationship_to_primary", {})
+    expected_cross_family = {
+        "predictions": cross_benchmark.get("paired_predictions_total"),
+        "predictions_per_arm": cross_benchmark.get("predictions_per_arm"),
+        "paired_arms": len(cross_family.get("arms", {})),
+        "model_families_added": 1,
+        "tasks": len(cross_benchmark.get("tasks", [])),
+        "context_lengths": cross_benchmark.get("lengths_tokens", []),
+        "examples_per_task_context_arm": cross_benchmark.get("samples_per_task_length"),
+        "pooled_with_primary": cross_relationship.get("pooled_with_primary"),
+        "phi_specific_tuning_allowed": cross_relationship.get("phi_specific_tuning_allowed"),
+    }
+    _require(
+        planned.get("p3_cross_family_phi4_mini_ruler") == expected_cross_family,
+        "P3 cross-family scale count drifted.",
+    )
+
     safety = sources["safety"]
     expected_safety = {
         "predictions": safety.get("expected_examples_per_arm", 0) * len(safety.get("arms", [])),
@@ -484,6 +498,34 @@ def _validate_experiment_scale_audit(payload: dict[str, Any]) -> None:
             f"{planned_name} scale count drifted.",
         )
 
+    adaptive = sources["p4_adaptive"]
+    adaptive_cells = (
+        len(adaptive.get("scales", []))
+        * len(adaptive.get("budgets", []))
+        * len(adaptive.get("contexts_tokens", []))
+        * len(adaptive.get("generation_tokens", []))
+        * len(adaptive.get("load_profiles", []))
+    )
+    expected_adaptive = {
+        "cells": adaptive_cells,
+        "scales": len(adaptive.get("scales", [])),
+        "budgets": len(adaptive.get("budgets", [])),
+        "warmups_per_cell": adaptive.get("warmups_per_paired_cell"),
+        "measured_repetitions_per_cell": adaptive.get("measured_repetitions_per_paired_cell"),
+        "paired_policies": adaptive.get("paired_policies"),
+        "policy_runs_including_warmups": adaptive_cells
+        * (
+            adaptive.get("warmups_per_paired_cell", 0)
+            + adaptive.get("measured_repetitions_per_paired_cell", 0)
+        )
+        * len(adaptive.get("paired_policies", [])),
+        "outcome_dependent_cell_selection": False,
+    }
+    _require(
+        planned.get("p4_adaptive_reference") == expected_adaptive,
+        "P4 adaptive reference scale count drifted.",
+    )
+
     preflight = sources["p4_preflight"]
     expected_preflight = {
         "scale_cells": len(preflight.get("scales", [])),
@@ -545,16 +587,13 @@ def _validate_experiment_scale_audit(payload: dict[str, Any]) -> None:
         "independent_training_seed_clusters_per_scale": combined_seed_count,
         "exact_two_sided_sign_flip_assignments": combined_assignments,
         "minimum_attainable_two_sided_p": 2.0 / combined_assignments,
-        "minimum_attainable_holm_adjusted_family_p": 9
-        * 2.0
-        / combined_assignments,
+        "minimum_attainable_holm_adjusted_family_p": 9 * 2.0 / combined_assignments,
         "primary_cohort_remains_independently_reportable": True,
         "pooling_requires_identical_frozen_contracts": True,
         "outcome_dependent_early_stopping": False,
     }
     _require(
-        payload.get("confirmatory_extension_resolution")
-        == expected_extension_resolution,
+        payload.get("confirmatory_extension_resolution") == expected_extension_resolution,
         "Experiment-scale confirmatory seed resolution drifted.",
     )
     _require(
@@ -617,8 +656,7 @@ def _validate_boundary_manifest(name: str, path: Path) -> dict[str, Any]:
         indexcache_files = indexcache.get("files_sha256", {})
         _require(
             payload.get("status") == "amended_and_frozen_before_execution"
-            and kvpress.get("revision")
-            == "6d965557a5b9f0201a2301b23c454473dd681d0d",
+            and kvpress.get("revision") == "6d965557a5b9f0201a2301b23c454473dd681d0d",
             "P3 compatible-model baseline boundary drifted.",
         )
         _require(
@@ -640,13 +678,9 @@ def _validate_boundary_manifest(name: str, path: Path) -> dict[str, Any]:
         )
         _require(
             "no winner-vs-runner-up significance claim"
-            in kvpress.get("fixed_baseline_selection", {}).get(
-                "selection_inference_boundary", ""
-            )
+            in kvpress.get("fixed_baseline_selection", {}).get("selection_inference_boundary", "")
             and "held-out transfer"
-            in kvpress.get("fixed_baseline_selection", {}).get(
-                "selection_inference_boundary", ""
-            ),
+            in kvpress.get("fixed_baseline_selection", {}).get("selection_inference_boundary", ""),
             "P3 compatible baseline selection-inference boundary drifted.",
         )
         _require(
@@ -658,12 +692,10 @@ def _validate_boundary_manifest(name: str, path: Path) -> dict[str, Any]:
         )
         _require(
             indexcache.get("repository") == "https://github.com/THUDM/IndexCache"
-            and indexcache.get("revision")
-            == "08d22d69b1aa2aa0a3de23df6d6b88dbd5b5d044"
+            and indexcache.get("revision") == "08d22d69b1aa2aa0a3de23df6d6b88dbd5b5d044"
             and indexcache.get("license") == "apache-2.0"
             and indexcache.get("compatible_with_primary_qwen3_model") is False
-            and "DeepSeek Sparse Attention"
-            in indexcache.get("supported_architecture_boundary", "")
+            and "DeepSeek Sparse Attention" in indexcache.get("supported_architecture_boundary", "")
             and "supported DSA runtime" in indexcache.get("action", "")
             and indexcache_files
             == {
@@ -1090,8 +1122,7 @@ def _classify_validated_confirmatory_core(payload: dict[str, Any]) -> str:
     return (
         "success"
         if any(
-            isinstance(row, dict)
-            and row.get("passes_fixed_baseline_component") is True
+            isinstance(row, dict) and row.get("passes_fixed_baseline_component") is True
             for row in quality_gate
         )
         else "negative-result"
@@ -1120,6 +1151,7 @@ def classify_evidence(
     p4_500k_context: dict[str, Any],
     p4_reference_systems: dict[str, Any],
     p4_production_systems: dict[str, Any],
+    p4_adaptive_systems: dict[str, Any] | None = None,
 ) -> dict[str, str]:
     core_audit = p2_core.get("audit", {})
     core_complete = (
@@ -1312,6 +1344,41 @@ def classify_evidence(
         and sum(reference_counts) == P4_EXPECTED_CELLS
     )
     reference_measured = reference_accounted and sum(reference_counts[:2]) > 0
+    adaptive_audit = (
+        p4_adaptive_systems.get("audit", {}) if isinstance(p4_adaptive_systems, dict) else {}
+    )
+    adaptive_counts = tuple(
+        adaptive_audit.get(field) for field in ("complete_cells", "partial_cells", "failed_cells")
+    )
+    adaptive_counts_valid = all(
+        type(value) is int and value >= 0 for value in adaptive_counts
+    )
+    adaptive_count_values = (
+        tuple(cast(int, value) for value in adaptive_counts)
+        if adaptive_counts_valid
+        else (-1, -1, -1)
+    )
+    adaptive_accounted = (
+        adaptive_audit.get("terminal_cells") == 432
+        and adaptive_audit.get("fixed_calibrated_policy_pair_verified") is True
+        and adaptive_audit.get("both_budgets_verified") is True
+        and adaptive_audit.get("both_scales_verified") is True
+        and adaptive_audit.get("outcome_independent_execution_verified") is True
+        and adaptive_audit.get("adaptive_controller_measurement_verified") is True
+        and adaptive_audit.get("physical_hot_budget_schema_verified") is True
+        and adaptive_audit.get("raw_latency_samples_and_derived_statistics_verified") is True
+        and adaptive_audit.get("tail_failure_accounting_complete") is True
+        and adaptive_audit.get("input_seed_base") == 9_171_400
+        and adaptive_counts_valid
+        and sum(adaptive_count_values) == 432
+    )
+    adaptive_class = (
+        "bounded-result"
+        if adaptive_accounted and sum(adaptive_count_values[:2]) > 0
+        else "negative-result"
+        if adaptive_accounted
+        else "unverified"
+    )
     production_audit = p4_production_systems["audit"]
     production_counts = tuple(
         production_audit.get(field) for field in ("complete_cells", "partial_cells", "failed_cells")
@@ -1358,11 +1425,7 @@ def classify_evidence(
     )
     result = {
         "p2_core": (
-            "success"
-            if core_passed
-            else "negative-result"
-            if core_complete
-            else "unverified"
+            "success" if core_passed else "negative-result" if core_complete else "unverified"
         ),
         "m5_one_token_pilot": "negative-result" if m5_complete else "unverified",
         "m3_offline_learned_risk_pilot": ("negative-result" if m3_complete else "unverified"),
@@ -1382,6 +1445,7 @@ def classify_evidence(
         "p3_longsafety": "bounded-result" if longsafety_judged else "unverified",
         "p4_500k_context": preflight_class,
         "p4_reference_systems": "bounded-result" if reference_measured else "unverified",
+        "p4_adaptive_systems": adaptive_class,
         "p4_production_systems": production_class,
         "production_runtime_blocker": "unverified",
         "official_deepseek_v4": "unverified",
@@ -2108,6 +2172,109 @@ def _p4_metric_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return rows
 
 
+def _p4_adaptive_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for cell in [
+        *payload["complete_cell_statistics"],
+        *payload["partial_cell_statistics"],
+    ]:
+        coordinates = cell["cell"]
+        rows.append(
+            {
+                **coordinates,
+                "status": cell["status"],
+                "paired_repetitions": cell["paired_repetitions"],
+                "cell_timeout_seconds": cell["cell_timeout_seconds"],
+                "warmup_repetitions_attempted": cell["warmup_repetitions_attempted"],
+                "warmup_paired_repetitions_completed": cell["warmup_paired_repetitions_completed"],
+                "warmup_failures": json.dumps(
+                    cell["warmup_failures"], sort_keys=True, separators=(",", ":")
+                ),
+                "fixed_ttft_p95_ms_mean": _metric_mean(cell, "ttft_p95_ms", "fixed+pins"),
+                "calibrated_ttft_p95_ms_mean": _metric_mean(cell, "ttft_p95_ms", "calibrated+pins"),
+                "fixed_throughput_mean": _metric_mean(
+                    cell, "throughput_tokens_per_second", "fixed+pins"
+                ),
+                "calibrated_throughput_mean": _metric_mean(
+                    cell, "throughput_tokens_per_second", "calibrated+pins"
+                ),
+                "fixed_peak_hbm_mean": _metric_mean(cell, "peak_allocated_bytes", "fixed+pins"),
+                "calibrated_peak_hbm_mean": _metric_mean(
+                    cell, "peak_allocated_bytes", "calibrated+pins"
+                ),
+                "fixed_controller_time_ns_mean": _metric_mean(
+                    cell, "controller_time_ns", "fixed+pins"
+                ),
+                "calibrated_controller_time_ns_mean": _metric_mean(
+                    cell, "controller_time_ns", "calibrated+pins"
+                ),
+                "prediction_digest_mismatches": cell["prediction_digest_mismatches"],
+                "failure": (
+                    ""
+                    if cell["status"] == "complete"
+                    else json.dumps(
+                        cell.get("policy_status", {}),
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    )
+                ),
+            }
+        )
+    for failure in payload["failure_table"]:
+        rows.append(
+            {
+                **failure["cell"],
+                "status": "failed",
+                "paired_repetitions": 0,
+                "cell_timeout_seconds": failure["cell_timeout_seconds"],
+                "warmup_repetitions_attempted": failure["warmup_repetitions_attempted"],
+                "warmup_paired_repetitions_completed": failure[
+                    "warmup_paired_repetitions_completed"
+                ],
+                "warmup_failures": json.dumps(
+                    failure["warmup_failures"], sort_keys=True, separators=(",", ":")
+                ),
+                "failure": json.dumps(
+                    failure.get("policy_status"), sort_keys=True, separators=(",", ":")
+                ),
+            }
+        )
+    return rows
+
+
+def _p4_adaptive_metric_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for cell in [
+        *payload["complete_cell_statistics"],
+        *payload["partial_cell_statistics"],
+    ]:
+        for metric, metric_payload in sorted(cell["metrics"].items()):
+            paired = metric_payload.get("calibrated_minus_fixed")
+            for policy in ("fixed+pins", "calibrated+pins"):
+                distribution_payload = metric_payload.get(policy)
+                if distribution_payload is None:
+                    continue
+                rows.append(
+                    {
+                        **cell["cell"],
+                        "status": cell["status"],
+                        "metric": metric,
+                        "policy": policy,
+                        **distribution_payload,
+                        "paired_observations": metric_payload["paired_observations"],
+                        "mean_ratio_calibrated_over_fixed": metric_payload.get(
+                            "mean_ratio_calibrated_over_fixed"
+                        ),
+                        "paired_calibrated_minus_fixed": (
+                            json.dumps(paired, sort_keys=True, separators=(",", ":"))
+                            if paired is not None
+                            else ""
+                        ),
+                    }
+                )
+    return rows
+
+
 def _p4_500k_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return [
         {
@@ -2147,6 +2314,7 @@ def _report(
     p3_longsafety: dict[str, Any],
     p4_500k_context: dict[str, Any],
     p4_reference_systems: dict[str, Any],
+    p4_adaptive_systems: dict[str, Any],
     p4_production_systems: dict[str, Any],
     inputs: list[dict[str, Any]],
 ) -> str:
@@ -2154,6 +2322,7 @@ def _report(
     p4_500k = p4_500k_context["audit"]
     p4_500k_correctness = p4_500k_context["correctness"]
     p4_reference = p4_reference_systems["audit"]
+    p4_adaptive = p4_adaptive_systems["audit"]
     p4_production = p4_production_systems["audit"]
     evidence_lines = "\n".join(
         f"| {row['name']} | {classifications.get(row['name'], 'unverified')} | `{row['sha256']}` |"
@@ -2284,6 +2453,12 @@ user request, is outside the completion gate, and is never reported as passed.
   from {p4_reference["minimum_cell_timeout_seconds"]:,.0f} to
   {p4_reference["maximum_cell_timeout_seconds"]:,.0f} seconds; this does not claim that a
   Python signal preempts an uninterruptible native CUDA call.
+- P4 adaptive systems: {p4_adaptive["terminal_cells"]} terminal serial-interleaved
+  `fixed+pins` versus `calibrated+pins` cells across both 2x/4x budgets;
+  {p4_adaptive["complete_cells"]} complete, {p4_adaptive["partial_cells"]} partial,
+  and {p4_adaptive["failed_cells"]} failed. The P2 gate outcome was recorded but did not
+  select cells. Controller time, physical hot budgets, raw latency, HBM, and transfer
+  metrics are independently audited; this table is not an actual-concurrency claim.
 - P4 production systems: {p4_production["terminal_cells"]} terminal actual-concurrency cells,
   {p4_production["complete_cells"]} complete, {p4_production["partial_cells"]} partial, and
   {p4_production["failed_cells"]} failed. Each adapter cell runs in a subprocess under a
@@ -2432,6 +2607,7 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         loaded["p4_500k_context"],
         loaded["p4_reference_systems"],
         loaded["p4_production_systems"],
+        loaded["p4_adaptive_systems"],
     )
     classes["p2_core_confirmatory"] = _classify_validated_confirmatory_core(
         loaded["p2_core_confirmatory"]
@@ -2483,21 +2659,12 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
     _write_csv(output_root / "table-p2-quality-gate.csv", quality, list(quality[0]))
     p2_core_tables = {
         "table-p2-core-policy-summary.csv": [
-            _flatten_json_row(row)
-            for row in loaded["p2_core_confirmatory"]["policy_summary"]
+            _flatten_json_row(row) for row in loaded["p2_core_confirmatory"]["policy_summary"]
         ],
-        "table-p2-core-effects.csv": _p2_core_effect_rows(
-            loaded["p2_core_confirmatory"]
-        ),
-        "table-p2-core-family-effects.csv": _p2_core_family_rows(
-            loaded["p2_core_confirmatory"]
-        ),
-        "table-p2-core-seed-effects.csv": _p2_core_seed_rows(
-            loaded["p2_core_confirmatory"]
-        ),
-        "table-p2-core-worst-slices.csv": _p2_core_worst_slice_rows(
-            loaded["p2_core_confirmatory"]
-        ),
+        "table-p2-core-effects.csv": _p2_core_effect_rows(loaded["p2_core_confirmatory"]),
+        "table-p2-core-family-effects.csv": _p2_core_family_rows(loaded["p2_core_confirmatory"]),
+        "table-p2-core-seed-effects.csv": _p2_core_seed_rows(loaded["p2_core_confirmatory"]),
+        "table-p2-core-worst-slices.csv": _p2_core_worst_slice_rows(loaded["p2_core_confirmatory"]),
     }
     for name, rows in p2_core_tables.items():
         _write_csv(output_root / name, rows, _field_union(rows))
@@ -2510,24 +2677,16 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
     causal = _causal_rows(loaded["p2_causal_confirmatory"])
     _write_csv(output_root / "table-p2-causal-gate.csv", causal, list(causal[0]))
     p2_causal_tables = {
-        "table-p2-causal-contrasts.csv": _causal_contrast_rows(
-            loaded["p2_causal_confirmatory"]
-        ),
-        "table-p2-causal-family-effects.csv": _causal_family_rows(
-            loaded["p2_causal_confirmatory"]
-        ),
-        "table-p2-causal-seed-effects.csv": _causal_seed_rows(
-            loaded["p2_causal_confirmatory"]
-        ),
+        "table-p2-causal-contrasts.csv": _causal_contrast_rows(loaded["p2_causal_confirmatory"]),
+        "table-p2-causal-family-effects.csv": _causal_family_rows(loaded["p2_causal_confirmatory"]),
+        "table-p2-causal-seed-effects.csv": _causal_seed_rows(loaded["p2_causal_confirmatory"]),
         "table-p2-causal-worst-slices.csv": _causal_worst_slice_rows(
             loaded["p2_causal_confirmatory"]
         ),
         "table-p2-causal-physical-memory.csv": _causal_physical_memory_rows(
             loaded["p2_causal_confirmatory"]
         ),
-        "table-p2-causal-offline-oracle.csv": _causal_oracle_rows(
-            loaded["p2_causal_confirmatory"]
-        ),
+        "table-p2-causal-offline-oracle.csv": _causal_oracle_rows(loaded["p2_causal_confirmatory"]),
     }
     for name, rows in p2_causal_tables.items():
         _write_csv(output_root / name, rows, _field_union(rows))
@@ -2558,6 +2717,7 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         list(p4_500k[0]),
     )
     p4_reference = _p4_rows(loaded["p4_reference_systems"])
+    p4_adaptive = _p4_adaptive_rows(loaded["p4_adaptive_systems"])
     p4_production = _p4_rows(loaded["p4_production_systems"])
     p4_fields = [
         "scale",
@@ -2592,6 +2752,35 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         p4_production,
         p4_fields,
     )
+    _write_csv(
+        output_root / "table-p4-adaptive-system-cells.csv",
+        p4_adaptive,
+        [
+            "scale",
+            "budget",
+            "context",
+            "generation",
+            "profile",
+            "batch",
+            "active_requests",
+            "status",
+            "paired_repetitions",
+            "cell_timeout_seconds",
+            "warmup_repetitions_attempted",
+            "warmup_paired_repetitions_completed",
+            "warmup_failures",
+            "fixed_ttft_p95_ms_mean",
+            "calibrated_ttft_p95_ms_mean",
+            "fixed_throughput_mean",
+            "calibrated_throughput_mean",
+            "fixed_peak_hbm_mean",
+            "calibrated_peak_hbm_mean",
+            "fixed_controller_time_ns_mean",
+            "calibrated_controller_time_ns_mean",
+            "prediction_digest_mismatches",
+            "failure",
+        ],
+    )
     p4_metric_fields = [
         "scale",
         "context",
@@ -2625,6 +2814,33 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         _p4_metric_rows(loaded["p4_production_systems"]),
         p4_metric_fields,
     )
+    _write_csv(
+        output_root / "table-p4-adaptive-system-metrics.csv",
+        _p4_adaptive_metric_rows(loaded["p4_adaptive_systems"]),
+        [
+            "scale",
+            "budget",
+            "context",
+            "generation",
+            "profile",
+            "batch",
+            "active_requests",
+            "status",
+            "metric",
+            "policy",
+            "observations",
+            "mean",
+            "sample_standard_deviation",
+            "p50",
+            "p95",
+            "p99",
+            "minimum",
+            "maximum",
+            "paired_observations",
+            "mean_ratio_calibrated_over_fixed",
+            "paired_calibrated_minus_fixed",
+        ],
+    )
     _write_p2_causal_figure(
         output_root / "figure-p2-causal-effect.svg",
         loaded["p2_causal_confirmatory"],
@@ -2652,6 +2868,7 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         p3_longsafety=loaded["p3_longsafety"],
         p4_500k_context=loaded["p4_500k_context"],
         p4_reference_systems=loaded["p4_reference_systems"],
+        p4_adaptive_systems=loaded["p4_adaptive_systems"],
         p4_production_systems=loaded["p4_production_systems"],
         inputs=inputs,
     )

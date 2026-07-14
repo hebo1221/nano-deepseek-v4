@@ -280,6 +280,7 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
         "p3_longsafety",
         "p4_500k_context",
         "p4_reference_systems",
+        "p4_adaptive_systems",
         "p4_production_systems",
     }
     assert set(manifest["execution_audits"]) == {
@@ -322,28 +323,26 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
             "batch_coverage_verified",
         )
     )
-    assert manifest["evidence"]["p2_core"]["required_audit"][
-        "paired_units_per_seed_scale_family"
-    ] == 1_000
-    assert manifest["evidence"]["p2_core"]["required_audit"][
-        "statistical_cells_per_comparison"
-    ] == 1_350
+    assert (
+        manifest["evidence"]["p2_core"]["required_audit"]["paired_units_per_seed_scale_family"]
+        == 1_000
+    )
+    assert (
+        manifest["evidence"]["p2_core"]["required_audit"]["statistical_cells_per_comparison"]
+        == 1_350
+    )
     confirmatory = manifest["evidence"]["p2_core_confirmatory"]
     assert confirmatory["required_audit"]["unique_shards"] == 8_100
     assert confirmatory["required_audit"]["independent_seed_clusters_per_cell"] == 9
     assert confirmatory["required_audit"]["statistical_cells_per_comparison"] == 2_430
-    assert confirmatory["required_audit"][
-        "minimum_attainable_two_sided_seed_p"
-    ] == pytest.approx(0.00390625)
-    assert confirmatory["required_sections"]["pooling_audit"][
-        "identical_frozen_contracts"
-    ] is True
-    assert confirmatory["required_sections"]["pooling_audit"][
-        "disjoint_training_seeds"
-    ] is True
-    assert confirmatory["required_sections"]["confirmatory_inference"][
-        "exact_sign_assignments"
-    ] == 512
+    assert confirmatory["required_audit"]["minimum_attainable_two_sided_seed_p"] == pytest.approx(
+        0.00390625
+    )
+    assert confirmatory["required_sections"]["pooling_audit"]["identical_frozen_contracts"] is True
+    assert confirmatory["required_sections"]["pooling_audit"]["disjoint_training_seeds"] is True
+    assert (
+        confirmatory["required_sections"]["confirmatory_inference"]["exact_sign_assignments"] == 512
+    )
     assert (
         manifest["evidence"]["p1_online_learned_lookahead"]["required_audit"][
             "checkpoint_reuse_equivalence_verified"
@@ -375,34 +374,39 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
             "exact_statistical_cell_coverage_verified",
         )
     )
-    assert manifest["evidence"]["p2_causal"]["required_audit"][
-        "paired_units_per_seed_scale_budget_family_context"
-    ] == 200
-    assert manifest["evidence"]["p2_causal"]["required_audit"][
-        "statistical_cells_per_contrast"
-    ] == 900
-    assert manifest["evidence"]["p2_causal"]["required_audit"][
-        "physical_batches_per_cell"
-    ] == 2_250
+    assert (
+        manifest["evidence"]["p2_causal"]["required_audit"][
+            "paired_units_per_seed_scale_budget_family_context"
+        ]
+        == 200
+    )
+    assert (
+        manifest["evidence"]["p2_causal"]["required_audit"]["statistical_cells_per_contrast"] == 900
+    )
+    assert manifest["evidence"]["p2_causal"]["required_audit"]["physical_batches_per_cell"] == 2_250
     causal_confirmatory = manifest["evidence"]["p2_causal_confirmatory"]
     assert causal_confirmatory["required_audit"]["unique_shards"] == 16_200
-    assert causal_confirmatory["required_audit"][
-        "independent_seed_clusters_per_cell"
-    ] == 9
+    assert causal_confirmatory["required_audit"]["independent_seed_clusters_per_cell"] == 9
     assert causal_confirmatory["required_audit"]["statistical_cells_per_contrast"] == 1_620
     assert causal_confirmatory["required_audit"]["physical_cells"] == 144
-    assert causal_confirmatory["required_sections"]["confirmatory_inference"][
-        "exact_sign_assignments"
-    ] == 512
+    assert (
+        causal_confirmatory["required_sections"]["confirmatory_inference"]["exact_sign_assignments"]
+        == 512
+    )
     assert manifest["evidence"]["p3_ruler"]["required_audit"]["total_predictions"] == 370500
     assert (
-        manifest["evidence"]["p3_ruler"]["required_audit"][
-            "all_runtime_kvpress_bindings_verified"
-        ]
+        manifest["evidence"]["p3_ruler"]["required_audit"]["all_runtime_kvpress_bindings_verified"]
         is True
     )
     assert manifest["evidence"]["p3_safety"]["required_audit"]["examples_accounted_per_arm"] == 1200
     assert manifest["evidence"]["p4_reference_systems"]["required_audit"]["terminal_cells"] == 216
+    adaptive_audit = manifest["evidence"]["p4_adaptive_systems"]["required_audit"]
+    assert adaptive_audit["terminal_cells"] == 432
+    assert adaptive_audit["fixed_calibrated_policy_pair_verified"] is True
+    assert adaptive_audit["both_budgets_verified"] is True
+    assert adaptive_audit["outcome_independent_execution_verified"] is True
+    assert adaptive_audit["adaptive_controller_measurement_verified"] is True
+    assert adaptive_audit["input_seed_base"] == 9_171_400
     assert all(
         manifest["evidence"]["p4_reference_systems"]["required_audit"][field] is True
         for field in (
@@ -604,9 +608,7 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
         manifest["evidence"]["p3_safety"]["required_audit"]["statistical_schema_verified"] is True
     )
     assert (
-        manifest["evidence"]["p3_safety"]["required_audit"][
-            "runtime_kvpress_bindings_verified"
-        ]
+        manifest["evidence"]["p3_safety"]["required_audit"]["runtime_kvpress_bindings_verified"]
         is True
     )
     assert manifest["boundary_manifests"]["production_runtime_blocker"].endswith(
@@ -862,9 +864,7 @@ def test_natural_suite_boundary_rejects_projected_dsa_baselines(tmp_path: Path) 
     payload = json.loads(source.read_text())
     package._validate_boundary_manifest("natural_suite", source)
 
-    payload["external_baselines"]["IndexCache"][
-        "compatible_with_primary_qwen3_model"
-    ] = True
+    payload["external_baselines"]["IndexCache"]["compatible_with_primary_qwen3_model"] = True
     tampered = tmp_path / "natural-suite.json"
     tampered.write_text(json.dumps(payload))
     with pytest.raises(ValueError, match="IndexCache architecture or provenance"):
@@ -885,9 +885,9 @@ def test_natural_suite_boundary_rejects_projected_dsa_baselines(tmp_path: Path) 
         package._validate_boundary_manifest("natural_suite", tampered)
 
     payload = json.loads(source.read_text())
-    payload["external_baselines"]["kvpress"]["fixed_baseline_selection"][
-        "label_semantics"
-    ] = "all candidates use fixed allocation"
+    payload["external_baselines"]["kvpress"]["fixed_baseline_selection"]["label_semantics"] = (
+        "all candidates use fixed allocation"
+    )
     tampered.write_text(json.dumps(payload))
     with pytest.raises(ValueError, match="legacy-label boundary"):
         package._validate_boundary_manifest("natural_suite", tampered)
@@ -970,9 +970,7 @@ def test_experiment_scale_audit_binds_independent_seed_resolution(tmp_path: Path
         package._validate_boundary_manifest("experiment_scale_audit", tampered)
 
     payload = json.loads(source.read_text())
-    payload["confirmatory_extension_resolution"][
-        "minimum_attainable_two_sided_p"
-    ] = 0.01
+    payload["confirmatory_extension_resolution"]["minimum_attainable_two_sided_p"] = 0.01
     tampered.write_text(json.dumps(payload))
     with pytest.raises(ValueError, match="confirmatory seed resolution drifted"):
         package._validate_boundary_manifest("experiment_scale_audit", tampered)
@@ -1089,6 +1087,23 @@ def test_p5_classification_preserves_claim_boundaries() -> None:
                 "external_fused_dynamic_runtime_verified": False,
             }
         },
+        {
+            "audit": {
+                "terminal_cells": 432,
+                "complete_cells": 420,
+                "partial_cells": 4,
+                "failed_cells": 8,
+                "fixed_calibrated_policy_pair_verified": True,
+                "both_budgets_verified": True,
+                "both_scales_verified": True,
+                "outcome_independent_execution_verified": True,
+                "adaptive_controller_measurement_verified": True,
+                "physical_hot_budget_schema_verified": True,
+                "raw_latency_samples_and_derived_statistics_verified": True,
+                "tail_failure_accounting_complete": True,
+                "input_seed_base": 9_171_400,
+            }
+        },
     )
 
     assert classifications == {
@@ -1105,6 +1120,7 @@ def test_p5_classification_preserves_claim_boundaries() -> None:
         "p3_longsafety": "unverified",
         "p4_500k_context": "bounded-result",
         "p4_reference_systems": "bounded-result",
+        "p4_adaptive_systems": "bounded-result",
         "p4_production_systems": "bounded-result",
         "production_runtime_blocker": "unverified",
         "official_deepseek_v4": "unverified",

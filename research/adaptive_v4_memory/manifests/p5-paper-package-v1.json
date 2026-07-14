@@ -389,6 +389,24 @@
         "raw_latency_samples_and_derived_statistics_verified": true
       }
     },
+    "p4_adaptive_systems": {
+      "path": "artifacts/adaptive_v4_memory/paper_grade/p4/adaptive-systems.summary.json",
+      "experiment_id": "p4-adaptive-systems-matrix-audit-v1",
+      "required_audit": {
+        "terminal_cells": 432,
+        "all_terminal_cells_verified": true,
+        "all_artifact_digests_verified": true,
+        "fixed_calibrated_policy_pair_verified": true,
+        "both_budgets_verified": true,
+        "both_scales_verified": true,
+        "outcome_independent_execution_verified": true,
+        "adaptive_controller_measurement_verified": true,
+        "physical_hot_budget_schema_verified": true,
+        "raw_latency_samples_and_derived_statistics_verified": true,
+        "tail_failure_accounting_complete": true,
+        "input_seed_base": 9171400
+      }
+    },
     "p4_production_systems": {
       "path": "artifacts/adaptive_v4_memory/paper_grade/p4/production-systems.summary.json",
       "experiment_id": "p4-production-systems-matrix-audit-v1",
@@ -471,6 +489,7 @@
     "natural_safety": "research/adaptive_v4_memory/manifests/p3-natural-safety-v1.json",
     "p4_500k_context": "research/adaptive_v4_memory/manifests/p4-500k-context-preflight-v1.json",
     "p4_reference_systems": "research/adaptive_v4_memory/manifests/p4-reference-systems-matrix-v1.json",
+    "p4_adaptive_systems": "research/adaptive_v4_memory/manifests/p4-adaptive-systems-matrix-v1.json",
     "p4_production_systems": "research/adaptive_v4_memory/manifests/p4-production-systems-matrix-v1.json",
     "official_deepseek_v4": "research/adaptive_v4_memory/manifests/p3-flashmemory-deepseek-v4-v1.json",
     "production_runtime_blocker": "research/adaptive_v4_memory/manifests/p4-production-resource-blocker-v1.json"
@@ -501,6 +520,8 @@
     "table-p4-500k-context.csv",
     "table-p4-reference-system-cells.csv",
     "table-p4-reference-system-metrics.csv",
+    "table-p4-adaptive-system-cells.csv",
+    "table-p4-adaptive-system-metrics.csv",
     "table-p4-production-system-cells.csv",
     "table-p4-production-system-metrics.csv",
     "figure-p2-causal-effect.svg",

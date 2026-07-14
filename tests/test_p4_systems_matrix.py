@@ -261,6 +261,10 @@ def test_p4_adaptive_summary_preserves_paired_system_costs() -> None:
         "warmup_paired_repetitions_completed": adaptive.WARMUPS,
         "warmup_policy_runs_completed": {policy: adaptive.WARMUPS for policy in adaptive.POLICIES},
         "warmup_failures": [],
+        "policy_status": {
+            policy: {"status": "complete", "measured_repetitions": 1, "failure": None}
+            for policy in adaptive.POLICIES
+        },
         "repetitions": [
             {
                 "execution_order": list(adaptive.POLICIES),
