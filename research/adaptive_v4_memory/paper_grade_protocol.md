@@ -414,6 +414,11 @@ throughput, tail, variance, or production-serving claims.
 
 Reference PyTorch and fused production runtimes are separate result tables.
 Projected kernel speedups are never mixed with measured results.
+Production-runtime success additionally requires kernel-level evidence for the
+physical layout of non-contiguous resident blocks, position-aware recomputation
+timing on cache misses, and the fused attention kernel cost model. A checked
+static adapter that lacks those three observations records each as explicitly
+unverified and remains a bounded result even when every scheduled cell succeeds.
 
 The resident-vs-tiered reference matrix does not answer the adaptive-quota
 systems question. A separate 432-cell reference matrix crosses both scales and

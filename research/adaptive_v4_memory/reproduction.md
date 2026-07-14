@@ -277,3 +277,6 @@ requirements in `manifests/p3-flashmemory-deepseek-v4-v1.json` are satisfied, ke
 that result blocked and use the frozen reproduction command and cost/resource
 contract in that manifest. Never substitute a compatible model or the static local
 adapter for official FlashMemory or an external fused multi-GPU production runtime.
+The static adapter also cannot verify non-contiguous residency-layout costs,
+position-aware cache-miss recomputation, or a fused attention-kernel cost model;
+those boundaries are machine-readable in the P4 blocker and final P5 audit.
