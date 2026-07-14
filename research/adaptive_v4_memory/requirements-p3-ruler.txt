@@ -1,4 +1,10 @@
 accelerate==1.14.0
 datasets==4.8.5
 transformers==5.2.0
-git+https://github.com/NVIDIA/kvpress.git@6d965557a5b9f0201a2301b23c454473dd681d0d
+kvpress[eval] @ git+https://github.com/NVIDIA/kvpress.git@6d965557a5b9f0201a2301b23c454473dd681d0d
+beautifulsoup4==4.15.0
+fire==0.6.0
+html2text==2025.4.15
+PyYAML==6.0.3
+tenacity==9.1.4
+wonderwords==3.0.1
