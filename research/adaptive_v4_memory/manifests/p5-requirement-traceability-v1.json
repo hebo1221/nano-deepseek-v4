@@ -158,10 +158,12 @@
         {"kind": "evidence", "name": "p3_cross_family"},
         {"kind": "evidence", "name": "p3_cross_family_adaptive_quota"},
         {"kind": "evidence", "name": "p3_natural_adaptive_quota"},
+        {"kind": "evidence", "name": "p3_natural_adaptive_quota_scbench"},
         {"kind": "evidence", "name": "p3_natural"},
         {"kind": "boundary-manifest", "name": "cross_family"},
         {"kind": "boundary-manifest", "name": "cross_family_adaptive_quota"},
         {"kind": "boundary-manifest", "name": "natural_adaptive_quota"},
+        {"kind": "boundary-manifest", "name": "natural_adaptive_quota_scbench"},
         {"kind": "boundary-manifest", "name": "natural_suite"}
       ]
     },
@@ -174,9 +176,11 @@
         {"kind": "evidence", "name": "p3_cross_family"},
         {"kind": "evidence", "name": "p3_cross_family_adaptive_quota"},
         {"kind": "evidence", "name": "p3_natural_adaptive_quota"},
+        {"kind": "evidence", "name": "p3_natural_adaptive_quota_scbench"},
         {"kind": "boundary-manifest", "name": "cross_family"},
         {"kind": "boundary-manifest", "name": "cross_family_adaptive_quota"},
-        {"kind": "boundary-manifest", "name": "natural_adaptive_quota"}
+        {"kind": "boundary-manifest", "name": "natural_adaptive_quota"},
+        {"kind": "boundary-manifest", "name": "natural_adaptive_quota_scbench"}
       ]
     },
     {
@@ -301,7 +305,8 @@
       "requirement": "Execute at least one natural-language long-context suite on a real model.",
       "sources": [
         {"kind": "evidence", "name": "p3_natural"},
-        {"kind": "evidence", "name": "p3_natural_adaptive_quota"}
+        {"kind": "evidence", "name": "p3_natural_adaptive_quota"},
+        {"kind": "evidence", "name": "p3_natural_adaptive_quota_scbench"}
       ]
     },
     {

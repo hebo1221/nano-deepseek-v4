@@ -45,6 +45,12 @@
       "timing": "after immutable public model prefetch but before any P3 model prediction, generated RULER dataset, fixed-baseline selection, or natural benchmark outcome existed",
       "change": "add a separately reported Phi-4-mini cross-family RULER transfer cohort with 7800 paired predictions and no Phi-specific method selection",
       "reason": "model-family breadth remained the largest empirical gap after the nine-seed and full natural-suite expansions"
+    },
+    {
+      "date": "2026-07-15",
+      "timing": "before any adaptive SCBench prediction and before either prerequisite outcome was inspected",
+      "change": "add a separately reported 20572-prediction Qwen3-4B adaptive-quota SCBench replication across both shared-context modes and all twelve tasks",
+      "reason": "the adaptive natural-language contrast otherwise relied on RULER only and did not test shared-cache reuse"
     }
   ],
   "date": "2026-07-14",
@@ -138,6 +144,17 @@
       "examples_per_task_context_arm": 500,
       "same_global_token_budget": true,
       "unchanged_synthetic_controller_transfer": false
+    },
+    "p3_natural_adaptive_quota_scbench_qwen3_4b": {
+      "predictions": 20572,
+      "predictions_per_arm": 10286,
+      "paired_arms": 2,
+      "modes": 2,
+      "tasks": 12,
+      "shared_context_rows_per_mode": 922,
+      "turn_predictions_per_mode": 5143,
+      "same_initial_global_token_budget": true,
+      "continuous_refresh_claim_available": false
     },
     "p3_safety_qwen3_4b": {
       "predictions": 3600,

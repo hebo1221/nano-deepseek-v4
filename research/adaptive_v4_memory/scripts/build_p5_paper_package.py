@@ -55,6 +55,9 @@ REPRODUCTION_REQUIRED_MARKERS = [
     "run_p3_natural_ruler.py",
     "run_p3_natural_ruler.py --cohort adaptive-quota",
     "summarize_p3_natural_adaptive_quota_ruler.py",
+    "validate_p3_natural_adaptive_quota_scbench_manifest.py",
+    "run_p3_scbench.py --cohort adaptive-quota",
+    "summarize_p3_natural_adaptive_quota_scbench.py",
     "prepare_p3_cross_family_ruler_dataset.py",
     "run_p3_cross_family_ruler.py",
     "summarize_p3_cross_family_ruler.py",
@@ -89,6 +92,7 @@ BOUNDARY_EXPERIMENT_IDS = {
     "cross_family": "p3-cross-family-ruler-transfer-v1",
     "cross_family_adaptive_quota": "p3-cross-family-adaptive-quota-ruler-v1",
     "natural_adaptive_quota": "p3-natural-adaptive-quota-ruler-v1",
+    "natural_adaptive_quota_scbench": "p3-natural-adaptive-quota-scbench-v1",
     "natural_suite": "p3-natural-language-suite-v1",
     "safety_stress": "p3-qwen3-4b-safety-stress-v1",
     "natural_safety": "p3-qwen3-4b-natural-safety-v1",
@@ -119,6 +123,9 @@ SCALE_AUDIT_SOURCE_MANIFESTS = {
     ),
     "natural_adaptive_quota": Path(
         "research/adaptive_v4_memory/manifests/p3-natural-adaptive-quota-ruler-v1.json"
+    ),
+    "natural_adaptive_quota_scbench": Path(
+        "research/adaptive_v4_memory/manifests/p3-natural-adaptive-quota-scbench-v1.json"
     ),
     "safety": Path("research/adaptive_v4_memory/manifests/p3-safety-stress-v1.json"),
     "natural_safety": Path("research/adaptive_v4_memory/manifests/p3-natural-safety-v1.json"),
@@ -493,6 +500,34 @@ def _validate_experiment_scale_audit(payload: dict[str, Any]) -> None:
         "P3 natural adaptive-quota scale count drifted.",
     )
 
+    adaptive_scbench = sources["natural_adaptive_quota_scbench"]
+    adaptive_scbench_benchmark = adaptive_scbench.get("benchmark", {})
+    adaptive_scbench_lifecycle = adaptive_scbench.get("cache_lifecycle_contract", {})
+    expected_adaptive_scbench = {
+        "predictions": adaptive_scbench_benchmark.get("paired_predictions_total"),
+        "predictions_per_arm": adaptive_scbench_benchmark.get("predictions_per_arm"),
+        "paired_arms": len(adaptive_scbench.get("arms", {})),
+        "modes": len(adaptive_scbench_benchmark.get("modes", [])),
+        "tasks": len(adaptive_scbench_benchmark.get("tasks", [])),
+        "shared_context_rows_per_mode": adaptive_scbench_benchmark.get(
+            "shared_context_rows_per_mode"
+        ),
+        "turn_predictions_per_mode": adaptive_scbench_benchmark.get(
+            "turn_predictions_per_mode"
+        ),
+        "same_initial_global_token_budget": adaptive_scbench_lifecycle.get(
+            "same_initial_global_kept_tokens"
+        ),
+        "continuous_refresh_claim_available": adaptive_scbench_lifecycle.get(
+            "continuous_refresh_claim_available"
+        ),
+    }
+    _require(
+        planned.get("p3_natural_adaptive_quota_scbench_qwen3_4b")
+        == expected_adaptive_scbench,
+        "P3 adaptive SCBench scale count drifted.",
+    )
+
     safety = sources["safety"]
     expected_safety = {
         "predictions": safety.get("expected_examples_per_arm", 0) * len(safety.get("arms", [])),
@@ -730,6 +765,25 @@ def _validate_boundary_manifest(name: str, path: Path) -> dict[str, Any]:
             and "PyramidKV" in amendments[0].get("change", "")
             and "not an unchanged transfer" in payload.get("claim_boundary", ""),
             "P3 natural adaptive-quota boundary drifted.",
+        )
+    elif name == "natural_adaptive_quota_scbench":
+        benchmark = payload.get("benchmark", {})
+        lifecycle = payload.get("cache_lifecycle_contract", {})
+        _require(
+            payload.get("status") == "frozen_before_any_adaptive_scbench_prediction"
+            and benchmark.get("predictions_per_arm") == 10_286
+            and benchmark.get("paired_predictions_total") == 20_572
+            and len(benchmark.get("modes", [])) == 2
+            and len(benchmark.get("tasks", [])) == 12
+            and lifecycle.get("adaptive_allocation_scope")
+            == "initial shared-context prefill only"
+            and lifecycle.get("same_initial_global_kept_tokens") is True
+            and lifecycle.get("continuous_refresh_claim_available") is False
+            and payload.get("statistics", {}).get("paired_cluster_bootstrap_seed")
+            == 9_371_504
+            and "does not establish continuous adaptive reallocation"
+            in payload.get("claim_boundary", ""),
+            "P3 adaptive SCBench boundary drifted.",
         )
     elif name == "cross_family_adaptive_quota":
         benchmark = payload.get("benchmark", {})
@@ -1254,6 +1308,7 @@ def classify_evidence(
     p3_cross_family: dict[str, Any] | None = None,
     p3_cross_family_adaptive_quota: dict[str, Any] | None = None,
     p3_natural_adaptive_quota: dict[str, Any] | None = None,
+    p3_natural_adaptive_quota_scbench: dict[str, Any] | None = None,
 ) -> dict[str, str]:
     core_audit = p2_core.get("audit", {})
     core_complete = (
@@ -1638,6 +1693,33 @@ def classify_evidence(
             if adaptive_natural_terminal and adaptive_natural_gate.get("passed") is True
             else "negative-result"
             if adaptive_natural_terminal and adaptive_natural_gate.get("passed") is False
+            else "unverified"
+        )
+    if isinstance(p3_natural_adaptive_quota_scbench, dict):
+        scbench_audit = p3_natural_adaptive_quota_scbench.get("audit", {})
+        scbench_terminal = (
+            p3_natural_adaptive_quota_scbench.get("status") == "terminal"
+            and scbench_audit.get("terminal_arms") == 2
+            and scbench_audit.get("total_predictions") == 20_572
+            and scbench_audit.get("paired_turns") == 10_286
+            and scbench_audit.get("all_raw_records_verified") is True
+            and scbench_audit.get("all_scores_recomputed_from_raw_response") is True
+            and scbench_audit.get("all_dependency_digests_verified") is True
+            and scbench_audit.get("exact_input_pairing_verified") is True
+            and scbench_audit.get("shared_context_cluster_pairing_verified") is True
+            and scbench_audit.get("initial_prefill_quota_audits_verified") is True
+            and scbench_audit.get("same_initial_global_token_budget_verified") is True
+            and scbench_audit.get("failure_accounting_complete") is True
+            and scbench_audit.get("operational_failure_vocabulary_verified") is True
+            and scbench_audit.get("continuous_refresh_claim_available") is False
+            and scbench_audit.get("outcome_dependent_execution") is False
+        )
+        scbench_gate = p3_natural_adaptive_quota_scbench.get("confirmation_gate", {})
+        result["p3_natural_adaptive_quota_scbench"] = (
+            "success"
+            if scbench_terminal and scbench_gate.get("passed") is True
+            else "negative-result"
+            if scbench_terminal and scbench_gate.get("passed") is False
             else "unverified"
         )
     if isinstance(p3_cross_family_adaptive_quota, dict):
@@ -2154,6 +2236,27 @@ def _p3_natural_adaptive_layer_rows(payload: dict[str, Any]) -> list[dict[str, A
     ]
 
 
+def _p3_adaptive_scbench_summary_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    analysis = payload["analysis"]
+    rows = [{"scope": "overall", **_flatten_json_row(analysis["overall"])}]
+    rows.extend(
+        {"scope": "mode", **_flatten_json_row(row)} for row in analysis["by_mode"]
+    )
+    rows.append(
+        {
+            "scope": "initial-prefill-physical",
+            **_flatten_json_row(analysis["initial_prefill_physical"]),
+        }
+    )
+    for arm, row in analysis["arms"].items():
+        rows.append({"scope": "arm", "arm": arm, **_flatten_json_row(row)})
+    return rows
+
+
+def _p3_adaptive_scbench_mode_task_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    return [_flatten_json_row(row) for row in payload["analysis"]["by_mode_task"]]
+
+
 def _p3_safety_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return [
         {"arm": arm, **row}
@@ -2648,6 +2751,7 @@ def _report(
     p3_cross_family: dict[str, Any],
     p3_cross_family_adaptive_quota: dict[str, Any],
     p3_natural_adaptive_quota: dict[str, Any],
+    p3_natural_adaptive_quota_scbench: dict[str, Any],
     p3_natural: dict[str, Any],
     p3_safety: dict[str, Any],
     p3_natural_safety: dict[str, Any],
@@ -2775,6 +2879,12 @@ user request, is outside the completion gate, and is never reported as passed.
   exactly the same global KV-token budget; confirmation gate passed:
   **{p3_natural_adaptive_quota["analysis"]["confirmation_gate"]["passed"]}**. This is an
   architecture-compatibility result, not an unchanged synthetic-controller transfer.
+- P3 adaptive SCBench replication:
+  {p3_natural_adaptive_quota_scbench["audit"]["total_predictions"]:,} Qwen3-4B turn
+  predictions cover both shared-context modes and all twelve frozen tasks. The initial
+  prefill uses equal global KV tokens and its confirmation gate passed:
+  **{p3_natural_adaptive_quota_scbench["confirmation_gate"]["passed"]}**. This does not
+  claim adaptive reallocation after prefill or continuous-refresh behavior.
 - P3 natural suite: {p3_natural["audit"]["benchmarks_terminal"]} terminal benchmarks and
   at least {p3_natural["audit"]["minimum_protocol_examples_accounted_per_arm"]:,}
   examples accounted per required arm. The fixed arm was selected before any Qwen3-4B
@@ -2978,6 +3088,9 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         p3_cross_family=loaded["p3_cross_family"],
         p3_cross_family_adaptive_quota=loaded["p3_cross_family_adaptive_quota"],
         p3_natural_adaptive_quota=loaded["p3_natural_adaptive_quota"],
+        p3_natural_adaptive_quota_scbench=loaded[
+            "p3_natural_adaptive_quota_scbench"
+        ],
     )
     classes["p2_core_confirmatory"] = _classify_validated_confirmatory_core(
         loaded["p2_core_confirmatory"]
@@ -3117,6 +3230,22 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         output_root / "table-p3-natural-adaptive-layer-distributions.csv",
         p3_adaptive_layers,
         _field_union(p3_adaptive_layers),
+    )
+    p3_adaptive_scbench_summary = _p3_adaptive_scbench_summary_rows(
+        loaded["p3_natural_adaptive_quota_scbench"]
+    )
+    _write_csv(
+        output_root / "table-p3-natural-adaptive-scbench-summary.csv",
+        p3_adaptive_scbench_summary,
+        _field_union(p3_adaptive_scbench_summary),
+    )
+    p3_adaptive_scbench_mode_task = _p3_adaptive_scbench_mode_task_rows(
+        loaded["p3_natural_adaptive_quota_scbench"]
+    )
+    _write_csv(
+        output_root / "table-p3-natural-adaptive-scbench-mode-task.csv",
+        p3_adaptive_scbench_mode_task,
+        _field_union(p3_adaptive_scbench_mode_task),
     )
     p3_safety = _p3_safety_rows(loaded["p3_safety"])
     _write_csv(
@@ -3327,6 +3456,9 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         p3_cross_family=loaded["p3_cross_family"],
         p3_cross_family_adaptive_quota=loaded["p3_cross_family_adaptive_quota"],
         p3_natural_adaptive_quota=loaded["p3_natural_adaptive_quota"],
+        p3_natural_adaptive_quota_scbench=loaded[
+            "p3_natural_adaptive_quota_scbench"
+        ],
         p3_natural=loaded["p3_natural"],
         p3_safety=loaded["p3_safety"],
         p3_natural_safety=loaded["p3_natural_safety"],

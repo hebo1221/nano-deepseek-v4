@@ -109,6 +109,17 @@ it is not an unchanged port of the synthetic controller.
 .venv/bin/python research/adaptive_v4_memory/scripts/summarize_p3_natural_adaptive_quota_ruler.py
 ```
 
+After both the adaptive RULER audit and baseline SCBench audit are terminal, run the
+separately frozen shared-context replication. Adaptive allocation occurs only during
+the initial shared-context prefill; later turn tokens are appended identically.
+
+```bash
+.venv/bin/python research/adaptive_v4_memory/scripts/validate_p3_natural_adaptive_quota_scbench_manifest.py
+.venv/bin/python research/adaptive_v4_memory/scripts/run_p3_scbench.py --cohort adaptive-quota \
+  --kvpress-root "$KVPRESS_ROOT" --model-snapshot "$MODEL_SNAPSHOT"
+.venv/bin/python research/adaptive_v4_memory/scripts/summarize_p3_natural_adaptive_quota_scbench.py
+```
+
 Run the separately reported Phi-4-mini cross-family transfer only after the
 nine-seed P2 causal audit and Qwen fixed-baseline selection are terminal:
 

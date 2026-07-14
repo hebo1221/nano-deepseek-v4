@@ -276,6 +276,7 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
         "p3_cross_family",
         "p3_cross_family_adaptive_quota",
         "p3_natural_adaptive_quota",
+        "p3_natural_adaptive_quota_scbench",
         "p3_natural",
         "p3_safety",
         "p3_natural_safety",
@@ -303,6 +304,13 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
     assert natural_adaptive["required_audit"]["same_global_token_budget_verified"] is True
     assert natural_adaptive["required_audit"]["causal_layer_order_verified"] is True
     assert natural_adaptive["required_audit"]["synthetic_controller_unchanged_transfer"] is False
+    adaptive_scbench = manifest["evidence"]["p3_natural_adaptive_quota_scbench"]
+    assert adaptive_scbench["required_audit"]["total_predictions"] == 20_572
+    assert adaptive_scbench["required_audit"]["paired_turns"] == 10_286
+    assert adaptive_scbench["required_audit"][
+        "same_initial_global_token_budget_verified"
+    ] is True
+    assert adaptive_scbench["required_audit"]["continuous_refresh_claim_available"] is False
     assert manifest["execution_audits"]["p2_core_parallel_equivalence"]["required_probes"] == 3
     assert manifest["execution_audits"]["p2_causal_parallel_equivalence"]["required_probes"] == 3
     assert manifest["execution_audits"]["p1_online_checkpoint_reuse"]["required_probes"] == 10
@@ -1235,6 +1243,52 @@ def test_natural_adaptive_quota_classification_is_gate_bound(passed: bool, expec
     assert classifications["p3_natural_adaptive_quota"] == expected
 
 
+@pytest.mark.parametrize(
+    ("passed", "expected"),
+    [(True, "success"), (False, "negative-result")],
+)
+def test_adaptive_scbench_classification_is_gate_bound(passed: bool, expected: str) -> None:
+    evidence = {
+        "status": "terminal",
+        "audit": {
+            "terminal_arms": 2,
+            "total_predictions": 20_572,
+            "paired_turns": 10_286,
+            "all_raw_records_verified": True,
+            "all_scores_recomputed_from_raw_response": True,
+            "all_dependency_digests_verified": True,
+            "exact_input_pairing_verified": True,
+            "shared_context_cluster_pairing_verified": True,
+            "initial_prefill_quota_audits_verified": True,
+            "same_initial_global_token_budget_verified": True,
+            "failure_accounting_complete": True,
+            "operational_failure_vocabulary_verified": True,
+            "continuous_refresh_claim_available": False,
+            "outcome_dependent_execution": False,
+        },
+        "confirmation_gate": {"passed": passed},
+    }
+    classifications = package.classify_evidence(
+        _p2_core_evidence(),
+        _m5_pilot_evidence(),
+        _m3_offline_learned_risk_evidence(),
+        _online_learned_lookahead_evidence(),
+        {"primary_causal_gate": {"passed": False}},
+        {"benchmark_complete": False},
+        {"audit": {}},
+        {"audit": {}},
+        {"audit": {}},
+        {"audit": {}},
+        {"audit": {}},
+        {"audit": {}},
+        {"audit": {}},
+        {"audit": {}},
+        {"audit": {}},
+        p3_natural_adaptive_quota_scbench=evidence,
+    )
+    assert classifications["p3_natural_adaptive_quota_scbench"] == expected
+
+
 def test_p5_success_requires_full_system_coverage() -> None:
     classifications = package.classify_evidence(
         _p2_core_evidence(passed=True),
@@ -2053,6 +2107,43 @@ def test_natural_adaptive_quota_tables_preserve_effects_and_layer_distributions(
     assert layer["layer_index"] == 0
     assert layer["kept_tokens.mean"] == 4096.0
     assert layer["score_concentration.mean"] == 0.25
+
+
+def test_adaptive_scbench_tables_preserve_cluster_inference_and_physical_scope() -> None:
+    payload = {
+        "analysis": {
+            "overall": {"mean_difference": 0.01, "paired_shared_context_clusters": 1844},
+            "by_mode": [{"mode": "multi-turn", "mean_difference": 0.02}],
+            "by_mode_task": [
+                {
+                    "mode": "multi-turn",
+                    "task": "scbench_kv",
+                    "mean_difference": 0.03,
+                    "holm_adjusted_p": 0.2,
+                }
+            ],
+            "initial_prefill_physical": {
+                "shared_context_clusters": 1844,
+                "maximum_global_kept_token_relative_error": 0.0,
+            },
+            "arms": {
+                "fixed+pins": {"failure_rate": 0.0},
+                "natural-adaptive-quota+pins": {"failure_rate": 0.001},
+            },
+        }
+    }
+
+    summary = package._p3_adaptive_scbench_summary_rows(payload)
+    cells = package._p3_adaptive_scbench_mode_task_rows(payload)
+
+    assert {row["scope"] for row in summary} == {
+        "overall",
+        "mode",
+        "initial-prefill-physical",
+        "arm",
+    }
+    assert cells[0]["task"] == "scbench_kv"
+    assert cells[0]["holm_adjusted_p"] == 0.2
 
 
 def test_p2_inference_resolution_table_separates_examples_from_seed_clusters() -> None:
