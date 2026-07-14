@@ -15,6 +15,12 @@ from adaptive_v4_gpu_lock import acquire_gpu_lock
 
 from nano_deepseek_v4 import PAPER_GRADE_WORKLOAD_FAMILIES
 
+PARALLEL_PROBE_COORDINATES = (
+    ("s55", shard.TRAINING_SEEDS[0], "2x", "long-generation-changing-evidence", 80, 0),
+    ("s55", shard.TRAINING_SEEDS[1], "4x", "dense-global-aggregation", 80, 0),
+    ("s151", shard.TRAINING_SEEDS[2], "2x", "single-remote-retrieval", 80, 0),
+)
+
 
 class _BorrowedGpuLock:
     def close(self) -> None:
@@ -59,6 +65,15 @@ def _worker(config: dict[str, Any]) -> None:
     ]
     for seed in config["seeds"]:
         arguments.extend(("--training-seed", str(seed)))
+    for config_name, option in (
+        ("scales", "--scale"),
+        ("budgets", "--budget"),
+        ("families", "--family"),
+        ("contexts", "--context"),
+        ("replicates", "--replicate"),
+    ):
+        for value in config.get(config_name, ()):
+            arguments.extend((option, str(value)))
     sys.argv = arguments
     matrix.acquire_gpu_lock = _borrowed_gpu_lock  # type: ignore[assignment]
     matrix.main()
@@ -147,6 +162,146 @@ def _wait_for_processes(processes: list[Any]) -> None:
         raise RuntimeError(f"Parallel causal workers failed: {failures}")
 
 
+def _without_timing(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            key: _without_timing(item)
+            for key, item in value.items()
+            if key not in {"wall_ms", "wall_seconds"}
+        }
+    if isinstance(value, list):
+        return [_without_timing(item) for item in value]
+    return value
+
+
+def audit_parallel_probe(
+    *, serial_root: Path, parallel_root: Path, audit_path: Path
+) -> dict[str, Any]:
+    probes = []
+    for scale, seed, budget, family, context, replicate in PARALLEL_PROBE_COORDINATES:
+        relative = (
+            Path(scale)
+            / f"seed-{seed}"
+            / f"budget-{budget}"
+            / family
+            / f"context-{context}"
+            / f"replicate-{replicate}.json"
+        )
+        serial_path = serial_root / relative
+        parallel_path = parallel_root / relative
+        if not serial_path.is_file() or not parallel_path.is_file():
+            raise RuntimeError(f"Causal parallel probe is missing: {relative}")
+        serial = json.loads(serial_path.read_text())
+        concurrent = json.loads(parallel_path.read_text())
+        fields = (
+            "generation_seed",
+            "records_digest",
+            "records",
+            "arm_metadata",
+            "batch_metrics",
+            "physical_measurements",
+        )
+        if any(
+            _without_timing(serial.get(field)) != _without_timing(concurrent.get(field))
+            for field in fields
+        ):
+            raise RuntimeError(f"Parallel execution changed causal evidence: {relative}")
+        probes.append(
+            {
+                "scale": scale,
+                "training_seed": seed,
+                "budget": budget,
+                "family": family,
+                "context": context,
+                "replicate": replicate,
+                "records_digest": serial["records_digest"],
+                "serial": {
+                    "path": str(serial_path),
+                    "sha256": matrix._sha256(serial_path),
+                },
+                "parallel": {
+                    "path": str(parallel_path),
+                    "sha256": matrix._sha256(parallel_path),
+                },
+            }
+        )
+    payload = {
+        "schema_version": 1,
+        "experiment_id": "p2-causal-parallel-equivalence-audit-v1",
+        "source": {
+            "commit": matrix._head(),
+            "dirty": False,
+            "orchestrator_sha256": matrix._sha256(Path(__file__)),
+            "implementation_digest": shard.implementation_digest(),
+        },
+        "audit": {
+            "workers": len(PARALLEL_PROBE_COORDINATES),
+            "probe_shards": len(probes),
+            "all_quality_records_identical": True,
+            "all_controller_accounting_identical": True,
+            "all_physical_accounting_identical": True,
+            "timing_fields_excluded": True,
+        },
+        "probes": probes,
+    }
+    audit_path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = audit_path.with_suffix(audit_path.suffix + ".tmp")
+    temporary.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+    temporary.replace(audit_path)
+    return payload
+
+
+def run_parallel_probe(
+    *,
+    context: Any,
+    base: dict[str, Any],
+    serial_root: Path,
+    parallel_root: Path,
+    probe_worker_root: Path,
+    audit_path: Path,
+) -> dict[str, Any]:
+    parallel_processes = []
+    for worker, (scale, seed, budget, family, token_context, replicate) in enumerate(
+        PARALLEL_PROBE_COORDINATES
+    ):
+        filters = {
+            "worker": worker,
+            "seeds": (seed,),
+            "scales": (scale,),
+            "budgets": (budget,),
+            "families": (family,),
+            "contexts": (token_context,),
+            "replicates": (replicate,),
+        }
+        serial_config = {
+            **base,
+            **filters,
+            "output_root": str(serial_root),
+            "worker_root": str(probe_worker_root / "serial"),
+        }
+        process = context.Process(target=_worker, args=(serial_config,))
+        process.start()
+        process.join()
+        if process.exitcode != 0:
+            raise RuntimeError(f"Serial causal probe failed: {process.exitcode}")
+        parallel_config = {
+            **base,
+            **filters,
+            "output_root": str(parallel_root),
+            "worker_root": str(probe_worker_root / "parallel"),
+        }
+        parallel_process = context.Process(target=_worker, args=(parallel_config,))
+        parallel_processes.append(parallel_process)
+    for process in parallel_processes:
+        process.start()
+    _wait_for_processes(parallel_processes)
+    return audit_parallel_probe(
+        serial_root=serial_root,
+        parallel_root=parallel_root,
+        audit_path=audit_path,
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Run disjoint causal seed groups concurrently under one GPU lock."
@@ -204,6 +359,18 @@ def main() -> None:
         type=Path,
         default=Path("artifacts/adaptive_v4_memory/paper_grade/p2-causal-parallel-workers"),
     )
+    parser.add_argument(
+        "--parallel-probe-root",
+        type=Path,
+        default=Path("artifacts/adaptive_v4_memory/paper_grade/p2_causal_parallel_equivalence"),
+    )
+    parser.add_argument(
+        "--parallel-probe-audit",
+        type=Path,
+        default=Path(
+            "artifacts/adaptive_v4_memory/paper_grade/p2-causal-parallel-equivalence.summary.json"
+        ),
+    )
     args = parser.parse_args()
     if args.workers <= 0:
         raise ValueError("workers must be positive.")
@@ -226,6 +393,14 @@ def main() -> None:
     lock = acquire_gpu_lock("p2-causal-factorial-parallel")
     try:
         context = mp.get_context("spawn")
+        run_parallel_probe(
+            context=context,
+            base=base,
+            serial_root=args.parallel_probe_root / "serial",
+            parallel_root=args.parallel_probe_root / "parallel",
+            probe_worker_root=args.parallel_probe_root / "worker-matrices",
+            audit_path=args.parallel_probe_audit,
+        )
         processes = []
         for worker, seeds in enumerate(assignments):
             process = context.Process(

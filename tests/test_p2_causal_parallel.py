@@ -98,3 +98,65 @@ def test_causal_parallel_merge_rejects_overlap_and_writes_complete_matrix(
             },
             output=tmp_path / "merged.json",
         )
+
+
+def test_causal_parallel_probe_ignores_timing_but_rejects_prediction_drift(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    serial_root = tmp_path / "serial"
+    parallel_root = tmp_path / "parallel"
+    for scale, seed, budget, family, context, replicate in parallel.PARALLEL_PROBE_COORDINATES:
+        relative = (
+            Path(scale)
+            / f"seed-{seed}"
+            / f"budget-{budget}"
+            / family
+            / f"context-{context}"
+            / f"replicate-{replicate}.json"
+        )
+        serial = serial_root / relative
+        concurrent = parallel_root / relative
+        serial.parent.mkdir(parents=True)
+        concurrent.parent.mkdir(parents=True)
+        payload: dict[str, Any] = {
+            "generation_seed": seed,
+            "records_digest": f"digest-{seed}",
+            "records": [{"prediction": seed}],
+            "arm_metadata": {"arm": {"config": "same"}},
+            "batch_metrics": [{"wall_ms": 1.0, "budget_violations": 0}],
+            "physical_measurements": [{"wall_ms": 2.0, "predictions_identical_to_chunked": True}],
+        }
+        serial.write_text(json.dumps(payload))
+        payload["batch_metrics"][0]["wall_ms"] = 99.0
+        payload["physical_measurements"][0]["wall_ms"] = 101.0
+        concurrent.write_text(json.dumps(payload))
+    monkeypatch.setattr(parallel.matrix, "_head", lambda: "commit")
+    monkeypatch.setattr(parallel.shard, "implementation_digest", lambda: "implementation")
+
+    audit = parallel.audit_parallel_probe(
+        serial_root=serial_root,
+        parallel_root=parallel_root,
+        audit_path=tmp_path / "audit.json",
+    )
+
+    assert audit["audit"]["all_physical_accounting_identical"] is True
+    coordinate = parallel.PARALLEL_PROBE_COORDINATES[0]
+    scale, seed, budget, family, context, replicate = coordinate
+    tampered = (
+        parallel_root
+        / scale
+        / f"seed-{seed}"
+        / f"budget-{budget}"
+        / family
+        / f"context-{context}"
+        / f"replicate-{replicate}.json"
+    )
+    payload = json.loads(tampered.read_text())
+    payload["records"] = [{"prediction": -1}]
+    tampered.write_text(json.dumps(payload))
+    with pytest.raises(RuntimeError, match="changed causal evidence"):
+        parallel.audit_parallel_probe(
+            serial_root=serial_root,
+            parallel_root=parallel_root,
+            audit_path=tmp_path / "audit.json",
+        )
