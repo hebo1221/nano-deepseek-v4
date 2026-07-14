@@ -263,10 +263,6 @@ def test_combined_causal_matrix_requires_two_complete_independent_audits(
         "exact_execution_rotation_verified": True,
         "exact_quality_schedule_coordinates_verified": True,
         "exact_statistical_cell_coverage_verified": True,
-        "exact_record_schema_verified": True,
-        "exact_execution_rotation_verified": True,
-        "exact_quality_schedule_coordinates_verified": True,
-        "exact_statistical_cell_coverage_verified": True,
     }
     _write(
         primary_audit_path,
