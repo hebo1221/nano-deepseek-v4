@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import csv
 import hashlib
 import html
@@ -75,6 +76,26 @@ BOUNDARY_EXPERIMENT_IDS = {
     "production_runtime_blocker": "p4-production-resource-blocker-v1",
 }
 
+SCALE_AUDIT_SOURCE_MANIFESTS = {
+    "study": Path("research/adaptive_v4_memory/manifests/paper-grade-study-v1.json"),
+    "causal": Path("research/adaptive_v4_memory/manifests/p2-causal-factorial-v1.json"),
+    "online": Path("research/adaptive_v4_memory/manifests/p1-online-learned-lookahead-v1.json"),
+    "ruler": Path("research/adaptive_v4_memory/manifests/p3-ruler-qwen3-1.7b-v1.json"),
+    "natural": Path("research/adaptive_v4_memory/manifests/p3-natural-suite-v1.json"),
+    "safety": Path("research/adaptive_v4_memory/manifests/p3-safety-stress-v1.json"),
+    "natural_safety": Path("research/adaptive_v4_memory/manifests/p3-natural-safety-v1.json"),
+    "p4_reference": Path(
+        "research/adaptive_v4_memory/manifests/p4-reference-systems-matrix-v1.json"
+    ),
+    "p4_preflight": Path("research/adaptive_v4_memory/manifests/p4-500k-context-preflight-v1.json"),
+    "p4_production": Path(
+        "research/adaptive_v4_memory/manifests/p4-production-systems-matrix-v1.json"
+    ),
+}
+SCALE_AUDIT_CORE_DESIGN = Path(
+    "research/adaptive_v4_memory/scripts/evaluate_p2_core_shard.py"
+)
+
 
 def sha256(path: Path) -> str:
     digest = hashlib.sha256()
@@ -96,6 +117,277 @@ def _load(path: Path) -> dict[str, Any]:
     return payload
 
 
+def _literal_assignment(path: Path, name: str) -> Any:
+    """Load one top-level literal without importing an experiment runner."""
+
+    _require(path.is_file(), f"Missing scale-audit design source: {path}")
+    tree = ast.parse(path.read_text(), filename=str(path))
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        if any(isinstance(target, ast.Name) and target.id == name for target in node.targets):
+            try:
+                return ast.literal_eval(node.value)
+            except (TypeError, ValueError) as error:
+                value = node.value
+                if (
+                    isinstance(value, ast.Call)
+                    and isinstance(value.func, ast.Name)
+                    and value.func.id == "tuple"
+                    and len(value.args) == 1
+                    and isinstance(value.args[0], ast.Call)
+                    and isinstance(value.args[0].func, ast.Name)
+                    and value.args[0].func.id == "range"
+                    and not value.args[0].keywords
+                    and all(
+                        isinstance(argument, ast.Constant)
+                        and isinstance(argument.value, int)
+                        for argument in value.args[0].args
+                    )
+                ):
+                    range_args = [
+                        cast(int, cast(ast.Constant, argument).value)
+                        for argument in value.args[0].args
+                    ]
+                    return tuple(range(*range_args))
+                raise ValueError(f"Scale-audit design field {name} is not literal.") from error
+    raise ValueError(f"Scale-audit design field {name} is missing from {path}.")
+
+
+def _validate_experiment_scale_audit(payload: dict[str, Any]) -> None:
+    """Recompute every headline planned-volume count from frozen manifests."""
+
+    sources = {name: _load(path) for name, path in SCALE_AUDIT_SOURCE_MANIFESTS.items()}
+    planned = payload.get("planned_volume")
+    _require(isinstance(planned, dict), "Experiment-scale planned volume is missing.")
+    planned = cast(dict[str, Any], planned)
+
+    study = sources["study"]
+    causal = sources["causal"]
+    training_seeds = len(study.get("training_seeds", []))
+    scales = len(study.get("scales", []))
+    families = len(study.get("workload_families", []))
+    contexts = len(study.get("context_lengths", []))
+    examples_per_family = study.get("minimum_examples_per_seed_scale_family")
+    examples_per_shard = _literal_assignment(SCALE_AUDIT_CORE_DESIGN, "EXAMPLES_PER_SHARD")
+    core_policies = _literal_assignment(SCALE_AUDIT_CORE_DESIGN, "CORE_POLICIES")
+    frozen_replicates = _literal_assignment(SCALE_AUDIT_CORE_DESIGN, "REPLICATES")
+    _require(
+        isinstance(examples_per_family, int)
+        and isinstance(examples_per_shard, int)
+        and isinstance(core_policies, tuple)
+        and isinstance(frozen_replicates, tuple)
+        and contexts > 0
+        and examples_per_family % (contexts * examples_per_shard) == 0,
+        "P2 core shard derivation is not integral.",
+    )
+    examples_per_family = cast(int, examples_per_family)
+    examples_per_shard = cast(int, examples_per_shard)
+    core_policies = cast(tuple[str, ...], core_policies)
+    frozen_replicates = cast(tuple[int, ...], frozen_replicates)
+    replicates = examples_per_family // (contexts * examples_per_shard)
+    _require(
+        replicates == len(frozen_replicates),
+        "P2 core replicate count drifted between protocol and runner.",
+    )
+    core_shards = training_seeds * scales * families * contexts * replicates
+    expected_core = {
+        "independent_shards": core_shards,
+        "policy_example_evaluations": core_shards * examples_per_shard * len(core_policies),
+        "training_seeds": training_seeds,
+        "scales": scales,
+        "workload_families": families,
+        "context_lengths": contexts,
+        "examples_per_seed_scale_family": examples_per_family,
+    }
+    _require(planned.get("p2_core") == expected_core, "P2 core scale count drifted.")
+
+    primary_names = set(causal.get("primary_arms", {}))
+    supplemental_names = set(causal.get("supplemental_baseline_arms", {}))
+    contrast_names = {
+        arm for pair in causal.get("component_contrasts", {}).values() for arm in pair
+    }
+    component_only_names = contrast_names - primary_names - supplemental_names
+    causal_arm_count = len(primary_names | supplemental_names | component_only_names)
+    budget_count = len(causal.get("primary_budget_points", []))
+    causal_shards = core_shards * budget_count
+    expected_causal = {
+        "independent_shards": causal_shards,
+        "policy_example_evaluations": causal_shards * examples_per_shard * causal_arm_count,
+        "training_seeds": len(causal.get("training_seeds", [])),
+        "scales": len(causal.get("scales", [])),
+        "factorial_arms": causal_arm_count,
+        "fixed_top_p_thresholds": [0.5, 0.8],
+        "offline_registered_arm_oracle": True,
+    }
+    _require(planned.get("p2_causal") == expected_causal, "P2 causal scale count drifted.")
+
+    online = sources["online"]
+    online_matrix = online.get("matrix", {})
+    online_seed_scales = len(online_matrix.get("scales", [])) * len(
+        online.get("splits", {}).get("training_model_seeds", [])
+    )
+    training_examples = online_matrix.get("minimum_training_examples_per_seed_scale")
+    calibration_examples = online_matrix.get("minimum_calibration_examples_per_seed_scale")
+    _require(
+        isinstance(training_examples, int)
+        and isinstance(calibration_examples, int)
+        and (training_examples + calibration_examples) % examples_per_shard == 0,
+        "Online-lookahead label shard derivation is not integral.",
+    )
+    online_arms = len(online.get("arms", []))
+    test_examples_per_arm = online_matrix.get("test_examples_per_arm")
+    expected_online = {
+        "label_shards": online_seed_scales
+        * (training_examples + calibration_examples)
+        // examples_per_shard,
+        "fitted_policies": online_seed_scales * len(online_matrix.get("budgets", [])),
+        "heldout_test_shards": online_seed_scales
+        * len(online_matrix.get("workload_families", []))
+        * len(online_matrix.get("contexts", []))
+        * len(online_matrix.get("budgets", []))
+        * online_matrix.get("replicates_per_context", 0),
+        "paired_test_conversations_per_arm": test_examples_per_arm,
+        "quality_arm_conversations": test_examples_per_arm * online_arms,
+        "training_seeds": len(online.get("splits", {}).get("training_model_seeds", [])),
+        "scales": len(online_matrix.get("scales", [])),
+        "workload_families": len(online_matrix.get("workload_families", [])),
+        "context_lengths": len(online_matrix.get("contexts", [])),
+        "budgets": len(online_matrix.get("budgets", [])),
+        "arms": online_arms,
+    }
+    _require(
+        planned.get("p1_online_learned_lookahead") == expected_online,
+        "Online-lookahead scale count drifted.",
+    )
+
+    ruler = sources["ruler"]
+    ruler_benchmark = ruler.get("benchmark", {})
+    ruler_cells_per_length = sum(
+        len(arm.get("compression_ratios", [])) for arm in ruler.get("arms", [])
+    )
+    ruler_cells = ruler_cells_per_length * len(ruler_benchmark.get("lengths_tokens", []))
+    expected_ruler = {
+        "predictions": ruler_cells * ruler_benchmark.get("examples_per_length", 0),
+        "model_scales": 1,
+        "cells": ruler_cells,
+    }
+    _require(
+        planned.get("p3_small_model_ruler") == expected_ruler,
+        "P3 small-model RULER scale count drifted.",
+    )
+
+    natural = sources["natural"]
+    natural_totals = natural.get("execution_totals", {})
+    natural_protocol = natural.get("common_protocol", {})
+    natural_benchmarks = natural.get("benchmarks", {})
+    natural_arms = len(natural_protocol.get("mandatory_compatible_arms", []))
+    expected_natural = {
+        "predictions": natural_totals.get("minimum_predictions_per_arm", 0) * natural_arms,
+        "benchmarks": len(natural_benchmarks),
+        "required_arms": natural_arms,
+        "model_families": 1,
+        "maximum_primary_context_tokens": max(
+            natural_benchmarks.get("RULER", {}).get("lengths_tokens", [])
+        ),
+    }
+    _require(
+        planned.get("p3_natural_qwen3_4b") == expected_natural,
+        "P3 natural-suite scale count drifted.",
+    )
+
+    safety = sources["safety"]
+    expected_safety = {
+        "predictions": safety.get("expected_examples_per_arm", 0) * len(safety.get("arms", [])),
+        "families": len(safety.get("families", [])),
+        "context_lengths": len(safety.get("context_targets_tokens", [])),
+        "paired_arms": len(safety.get("arms", [])),
+        "examples_per_family_context_arm": safety.get("examples_per_family_context"),
+    }
+    _require(
+        planned.get("p3_safety_qwen3_4b") == expected_safety,
+        "P3 safety scale count drifted.",
+    )
+
+    natural_safety = sources["natural_safety"]
+    safety_arms = len(natural_safety.get("required_arms", []))
+    benchmarks = natural_safety.get("benchmarks", {})
+    longsafety_per_arm = (
+        benchmarks.get("LongSafety", {})
+        .get("prompt_protocol", {})
+        .get("expected_predictions_per_arm", 0)
+    )
+    ifeval_per_arm = (
+        benchmarks.get("IFEval", {}).get("protocol", {}).get("expected_prompts_per_arm", 0)
+    )
+    expected_natural_safety = {
+        "actual_model_generations": (longsafety_per_arm + ifeval_per_arm) * safety_arms,
+        "longsafety_generations": longsafety_per_arm * safety_arms,
+        "ifeval_generations_and_official_scores": ifeval_per_arm * safety_arms,
+        "paired_arms": safety_arms,
+        "longsafety_source_examples": sum(
+            row.get("rows", 0)
+            for row in benchmarks.get("LongSafety", {}).get("dataset", {}).get("files", [])
+        ),
+        "ifeval_prompts_per_arm": ifeval_per_arm,
+        "official_longsafety_judge": "blocked_pending_explicit_paid_api_opt_in",
+    }
+    _require(
+        planned.get("p3_natural_safety_qwen3_4b") == expected_natural_safety,
+        "P3 natural-safety scale count drifted.",
+    )
+
+    for source_name, planned_name in (
+        ("p4_reference", "p4_reference"),
+        ("p4_production", "p4_production"),
+    ):
+        systems = sources[source_name]
+        cells = (
+            len(systems.get("scales", []))
+            * len(systems.get("contexts_tokens", []))
+            * len(systems.get("generation_tokens", []))
+            * len(systems.get("load_profiles", []))
+        )
+        expected_systems = {
+            "cells": cells,
+            "warmups_per_cell": systems.get("warmups_per_paired_cell"),
+            "measured_repetitions_per_cell": systems.get("measured_repetitions_per_paired_cell"),
+            "policies": len(systems.get("policies", [])),
+            "policy_runs_including_warmups": cells
+            * (
+                systems.get("warmups_per_paired_cell", 0)
+                + systems.get("measured_repetitions_per_paired_cell", 0)
+            )
+            * len(systems.get("policies", [])),
+        }
+        _require(
+            planned.get(planned_name) == expected_systems,
+            f"{planned_name} scale count drifted.",
+        )
+
+    preflight = sources["p4_preflight"]
+    expected_preflight = {
+        "scale_cells": len(preflight.get("scales", [])),
+        "policies": len(preflight.get("policies", [])),
+        "terminal_policy_attempts": len(preflight.get("scales", []))
+        * len(preflight.get("policies", []))
+        * preflight.get("attempts_per_scale_policy", 0),
+        "context_tokens": preflight.get("context_tokens"),
+        "generation_tokens": preflight.get("generation_tokens"),
+        "attempts_per_scale_policy": preflight.get("attempts_per_scale_policy"),
+        "performance_claim_available": False,
+    }
+    _require(
+        planned.get("p4_500k_context_preflight") == expected_preflight,
+        "P4 500K preflight scale count drifted.",
+    )
+    _require(
+        "Do not add synthetic policy-example evaluations"
+        in payload.get("non_aggregation_rule", ""),
+        "Experiment-scale non-aggregation rule is missing.",
+    )
+
+
 def _validate_boundary_manifest(name: str, path: Path) -> dict[str, Any]:
     payload = _load(path)
     _require(name in BOUNDARY_EXPERIMENT_IDS, f"Unknown boundary manifest: {name}")
@@ -103,7 +395,9 @@ def _validate_boundary_manifest(name: str, path: Path) -> dict[str, Any]:
         payload.get("experiment_id") == BOUNDARY_EXPERIMENT_IDS[name],
         f"Wrong {name} boundary experiment id.",
     )
-    if name == "official_deepseek_v4":
+    if name == "experiment_scale_audit":
+        _validate_experiment_scale_audit(payload)
+    elif name == "official_deepseek_v4":
         blockers = payload.get("blockers")
         blocker_ids = (
             {row.get("id") for row in blockers if isinstance(row, dict)}

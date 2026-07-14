@@ -431,6 +431,30 @@ def test_official_v4_boundary_validation_fails_closed(tmp_path: Path) -> None:
         package._validate_boundary_manifest("official_deepseek_v4", tampered)
 
 
+def test_experiment_scale_audit_recomputes_headline_counts(tmp_path: Path) -> None:
+    root = Path(__file__).resolve().parents[1]
+    source = root / "research/adaptive_v4_memory/manifests/experiment-scale-audit-v1.json"
+    payload = json.loads(source.read_text())
+    package._validate_boundary_manifest("experiment_scale_audit", source)
+
+    payload["planned_volume"]["p2_causal"]["policy_example_evaluations"] += 1
+    tampered = tmp_path / "scale-audit.json"
+    tampered.write_text(json.dumps(payload))
+    with pytest.raises(ValueError, match="P2 causal scale count drifted"):
+        package._validate_boundary_manifest("experiment_scale_audit", tampered)
+
+
+def test_experiment_scale_audit_requires_nonaggregation_rule(tmp_path: Path) -> None:
+    root = Path(__file__).resolve().parents[1]
+    source = root / "research/adaptive_v4_memory/manifests/experiment-scale-audit-v1.json"
+    payload = json.loads(source.read_text())
+    payload["non_aggregation_rule"] = "Report one large combined sample count."
+    tampered = tmp_path / "scale-audit.json"
+    tampered.write_text(json.dumps(payload))
+    with pytest.raises(ValueError, match="non-aggregation rule"):
+        package._validate_boundary_manifest("experiment_scale_audit", tampered)
+
+
 def test_production_runtime_boundary_validation_rejects_relabeling(
     tmp_path: Path,
 ) -> None:
