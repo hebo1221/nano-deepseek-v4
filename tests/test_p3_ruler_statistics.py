@@ -34,9 +34,31 @@ def test_ruler_screen_covers_token_layer_and_head_adaptive_baselines() -> None:
     assert summary.EXPECTED_CELLS == 57
 
 
-def test_ruler_loader_imports_press_code_from_pinned_checkout() -> None:
-    root = Path(__file__).resolve().parents[1]
-    checkout = root / "artifacts/adaptive_v4_memory/paper_grade/p3/assets/sources/kvpress"
+def test_ruler_loader_imports_press_code_from_pinned_checkout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    checkout = tmp_path / "kvpress-checkout"
+    package = checkout / "kvpress"
+    evaluation = checkout / "evaluation"
+    package.mkdir(parents=True)
+    evaluation.mkdir()
+    (package / "__init__.py").write_text("PINNED_TEST_PACKAGE = True\n")
+    (evaluation / "evaluate.py").write_text(
+        "class EvaluationConfig:\n    pass\n\nclass EvaluationRunner:\n    pass\n"
+    )
+    required_presses = {
+        "no_press",
+        "streaming_llm",
+        "snapkv",
+        "pyramidkv",
+        "adakv_snapkv",
+        "expected_attention",
+        "critical_expected_attention",
+    }
+    (evaluation / "evaluate_registry.py").write_text(
+        f"PRESS_REGISTRY = {dict.fromkeys(sorted(required_presses))!r}\n"
+        "SCORER_REGISTRY = {'ruler': object()}\n"
+    )
     code = f"""
 import json
 import sys
@@ -57,6 +79,7 @@ print(json.dumps(runner.kvpress_runtime_binding(), sort_keys=True))
     assert len(binding["registry_sha256"]) == 64
     import summarize_p3_ruler_matrix as summary
 
+    monkeypatch.setattr(summary, "_verify_kvpress_checkout", lambda _root: checkout)
     assert summary.verify_runtime_kvpress_binding(binding)["module_sha256"] == binding[
         "module_sha256"
     ]
