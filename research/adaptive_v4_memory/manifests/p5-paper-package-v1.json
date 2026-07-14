@@ -205,6 +205,8 @@
     "table-p4-reference-system-metrics.csv",
     "table-p4-production-system-cells.csv",
     "table-p4-production-system-metrics.csv",
+    "figure-p2-causal-effect.svg",
+    "figure-p4-production-tradeoffs.svg",
     "paper-report.md",
     "artifact-index.json"
   ],

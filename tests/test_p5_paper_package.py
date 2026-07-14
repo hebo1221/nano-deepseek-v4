@@ -218,6 +218,10 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
         "experiment-scale-audit-v1.json"
     )
     assert set(manifest["boundary_manifests"]) == set(package.BOUNDARY_EXPERIMENT_IDS)
+    assert {
+        "figure-p2-causal-effect.svg",
+        "figure-p4-production-tradeoffs.svg",
+    }.issubset(manifest["generated_files"])
 
 
 def test_official_v4_boundary_validation_fails_closed(tmp_path: Path) -> None:
@@ -580,3 +584,84 @@ def test_p5_p4_long_metric_table_retains_tail_and_paired_statistics() -> None:
     assert rows[0]["p99"] == 5.0
     assert rows[0]["paired_observations"] == 30
     assert '"mean":-0.2' in rows[0]["paired_tiered_minus_resident"]
+
+
+def test_p5_causal_figure_embeds_digest_bound_corrected_intervals(
+    tmp_path: Path,
+) -> None:
+    cells = []
+    for scale_index, scale in enumerate(("s55", "s151")):
+        for budget_index, budget in enumerate(("2x", "4x")):
+            mean = 0.01 + scale_index * 0.005 + budget_index * 0.002
+            cells.append(
+                {
+                    "scale": scale,
+                    "budget": budget,
+                    "mean_difference_percentage_points": mean * 100.0,
+                    "four_cell_corrected_bootstrap": {
+                        "confidence_interval": [mean - 0.004, mean + 0.004]
+                    },
+                }
+            )
+    target = tmp_path / "causal.svg"
+    package._write_p2_causal_figure(
+        target,
+        {
+            "experiment_id": "p2-causal-ablation-audit-v1",
+            "raw_matrix": {"sha256": "a" * 64},
+            "paired_statistics": {"adaptive_quota_with_pins": {"cells": cells}},
+        },
+    )
+
+    rendered = target.read_text()
+    assert "98.75% seed-cluster bootstrap intervals" in rendered
+    assert "s55 · 2x" in rendered
+    assert "rows_sha256" in rendered
+    assert "nan" not in rendered.lower()
+
+
+def test_p5_production_figure_retains_terminal_counts_and_measured_ranges(
+    tmp_path: Path,
+) -> None:
+    def metric(ratio: float) -> dict[str, float]:
+        return {"mean_ratio_tiered_over_resident": ratio}
+
+    target = tmp_path / "production.svg"
+    package._write_p4_tradeoff_figure(
+        target,
+        {
+            "experiment_id": "p4-production-systems-matrix-audit-v1",
+            "raw_matrix": {"sha256": "b" * 64},
+            "audit": {
+                "terminal_cells": 216,
+                "complete_cells": 214,
+                "partial_cells": 1,
+                "failed_cells": 1,
+            },
+            "complete_cell_statistics": [
+                {
+                    "cell": {"context": 8192},
+                    "metrics": {
+                        "ttft_p95_ms": metric(1.1),
+                        "throughput_tokens_per_second": metric(0.95),
+                        "peak_allocated_bytes": metric(0.7),
+                    },
+                },
+                {
+                    "cell": {"context": 8192},
+                    "metrics": {
+                        "ttft_p95_ms": metric(1.2),
+                        "throughput_tokens_per_second": metric(0.9),
+                        "peak_allocated_bytes": metric(0.6),
+                    },
+                },
+            ],
+            "partial_cell_statistics": [],
+        },
+    )
+
+    rendered = target.read_text()
+    assert "terminal cells: 216, complete: 214, partial: 1, failed: 1" in rendered
+    assert "8K · TTFT p95 (n=2)" in rendered
+    assert "8K · HBM peak (n=2)" in rendered
+    assert "rows_sha256" in rendered

@@ -3,11 +3,13 @@ from __future__ import annotations
 import argparse
 import csv
 import hashlib
+import html
 import json
+import math
 import subprocess
 from collections.abc import Iterable
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 ALLOWED_CLASSES = {"success", "bounded-result", "negative-result", "unverified"}
 P4_EXPECTED_CELLS = 216
@@ -370,6 +372,221 @@ def _write_csv(path: Path, rows: Iterable[dict[str, Any]], fields: list[str]) ->
         writer.writerows(rows)
 
 
+def _canonical_digest(payload: Any) -> str:
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _write_interval_svg(
+    path: Path,
+    *,
+    title: str,
+    subtitle: str,
+    x_label: str,
+    rows: list[dict[str, Any]],
+    source: dict[str, Any],
+) -> None:
+    """Write a deterministic, dependency-free forest plot with embedded provenance."""
+
+    for row in rows:
+        values = (row.get("lower"), row.get("value"), row.get("upper"))
+        _require(
+            all(
+                isinstance(value, (int, float))
+                and not isinstance(value, bool)
+                and math.isfinite(value)
+                for value in values
+            ),
+            "Figure interval contains a non-finite value.",
+        )
+        numeric_values = cast(tuple[float | int, float | int, float | int], values)
+        _require(
+            numeric_values[0] <= numeric_values[1] <= numeric_values[2],
+            "Figure interval order drifted.",
+        )
+    width = 1_080
+    left = 330
+    right = 140
+    top = 112
+    row_height = 42
+    plot_width = width - left - right
+    height = max(250, top + max(1, len(rows)) * row_height + 92)
+    observed = [0.0]
+    for row in rows:
+        observed.extend((float(row["lower"]), float(row["upper"])))
+    minimum = min(observed)
+    maximum = max(observed)
+    span = maximum - minimum
+    padding = max(0.5, span * 0.12)
+    x_min = minimum - padding
+    x_max = maximum + padding
+    if x_min == x_max:
+        x_min, x_max = -1.0, 1.0
+
+    def x_position(value: float) -> float:
+        return left + (value - x_min) / (x_max - x_min) * plot_width
+
+    metadata = {
+        "schema_version": 1,
+        "source": source,
+        "rows_sha256": _canonical_digest(rows),
+        "rows": rows,
+    }
+    lines = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        (
+            f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
+            f'viewBox="0 0 {width} {height}" role="img" aria-labelledby="title desc">'
+        ),
+        f"<title id=\"title\">{html.escape(title)}</title>",
+        f"<desc id=\"desc\">{html.escape(subtitle)}</desc>",
+        f"<metadata>{html.escape(json.dumps(metadata, sort_keys=True))}</metadata>",
+        f'<rect width="{width}" height="{height}" fill="#ffffff"/>',
+        (
+            f'<text x="32" y="38" font-family="sans-serif" font-size="22" '
+            f'font-weight="700" fill="#172033">{html.escape(title)}</text>'
+        ),
+        (
+            f'<text x="32" y="66" font-family="sans-serif" font-size="13" '
+            f'fill="#516071">{html.escape(subtitle)}</text>'
+        ),
+    ]
+    axis_y = height - 58
+    zero_x = x_position(0.0)
+    lines.append(
+        f'<line x1="{zero_x:.2f}" y1="88" x2="{zero_x:.2f}" y2="{axis_y}" '
+        'stroke="#8b96a5" stroke-width="1.5" stroke-dasharray="4 4"/>'
+    )
+    for index in range(5):
+        value = x_min + (x_max - x_min) * index / 4
+        x = x_position(value)
+        lines.extend(
+            [
+                f'<line x1="{x:.2f}" y1="{axis_y}" x2="{x:.2f}" y2="{axis_y + 6}" stroke="#566273"/>',
+                (
+                    f'<text x="{x:.2f}" y="{axis_y + 24}" text-anchor="middle" '
+                    f'font-family="monospace" font-size="11" fill="#516071">{value:.2f}</text>'
+                ),
+            ]
+        )
+    if not rows:
+        lines.append(
+            '<text x="540" y="145" text-anchor="middle" font-family="sans-serif" '
+            'font-size="16" fill="#8a3b31">No paired measured cells; terminal failures are retained.</text>'
+        )
+    for index, row in enumerate(rows):
+        y = top + index * row_height
+        lower = x_position(float(row["lower"]))
+        value = x_position(float(row["value"]))
+        upper = x_position(float(row["upper"]))
+        color = str(row.get("color", "#176b87"))
+        label = html.escape(str(row["label"]))
+        lines.extend(
+            [
+                f'<text x="{left - 18}" y="{y + 5}" text-anchor="end" font-family="sans-serif" font-size="13" fill="#253247">{label}</text>',
+                f'<line x1="{lower:.2f}" y1="{y}" x2="{upper:.2f}" y2="{y}" stroke="{color}" stroke-width="3"/>',
+                f'<line x1="{lower:.2f}" y1="{y - 6}" x2="{lower:.2f}" y2="{y + 6}" stroke="{color}"/>',
+                f'<line x1="{upper:.2f}" y1="{y - 6}" x2="{upper:.2f}" y2="{y + 6}" stroke="{color}"/>',
+                f'<circle cx="{value:.2f}" cy="{y}" r="5" fill="{color}"/>',
+                (
+                    f'<text x="{width - right + 12}" y="{y + 5}" font-family="monospace" '
+                    f'font-size="11" fill="#253247">{float(row["value"]):+.2f} '
+                    f'[{float(row["lower"]):+.2f}, {float(row["upper"]):+.2f}]</text>'
+                ),
+            ]
+        )
+    lines.append(
+        f'<text x="{left + plot_width / 2:.2f}" y="{height - 10}" text-anchor="middle" '
+        f'font-family="sans-serif" font-size="12" fill="#253247">{html.escape(x_label)}</text>'
+    )
+    lines.append("</svg>")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines) + "\n")
+
+
+def _write_p2_causal_figure(path: Path, payload: dict[str, Any]) -> None:
+    cells = payload["paired_statistics"]["adaptive_quota_with_pins"]["cells"]
+    _require(len(cells) == 4, "P2 causal figure requires all four primary cells.")
+    rows = []
+    for cell in sorted(cells, key=lambda row: (row["scale"], row["budget"])):
+        interval = cell["four_cell_corrected_bootstrap"]["confidence_interval"]
+        rows.append(
+            {
+                "label": f'{cell["scale"]} · {cell["budget"]}',
+                "value": float(cell["mean_difference_percentage_points"]),
+                "lower": float(interval[0]) * 100.0,
+                "upper": float(interval[1]) * 100.0,
+                "color": "#16734a" if interval[0] > 0.0 else "#a84b37",
+            }
+        )
+    _write_interval_svg(
+        path,
+        title="Causal adaptive-quota effect at matched hot memory",
+        subtitle="calibrated+pins minus fixed+pins; 98.75% seed-cluster bootstrap intervals",
+        x_label="paired conversation accuracy difference (percentage points)",
+        rows=rows,
+        source={
+            "experiment_id": payload["experiment_id"],
+            "raw_matrix_sha256": payload["raw_matrix"]["sha256"],
+            "contrast": "adaptive_quota_with_pins",
+        },
+    )
+
+
+def _write_p4_tradeoff_figure(path: Path, payload: dict[str, Any]) -> None:
+    metric_labels = {
+        "ttft_p95_ms": "TTFT p95",
+        "throughput_tokens_per_second": "Throughput",
+        "peak_allocated_bytes": "HBM peak",
+    }
+    grouped: dict[tuple[int, str], list[float]] = {}
+    measured_cells = [
+        *payload["complete_cell_statistics"],
+        *payload["partial_cell_statistics"],
+    ]
+    for cell in measured_cells:
+        context = int(cell["cell"]["context"])
+        for metric in metric_labels:
+            ratio = cell.get("metrics", {}).get(metric, {}).get(
+                "mean_ratio_tiered_over_resident"
+            )
+            if (
+                isinstance(ratio, (int, float))
+                and not isinstance(ratio, bool)
+                and math.isfinite(ratio)
+            ):
+                grouped.setdefault((context, metric), []).append((float(ratio) - 1.0) * 100.0)
+    rows = []
+    for (context, metric), values in sorted(grouped.items()):
+        mean = sum(values) / len(values)
+        rows.append(
+            {
+                "label": f"{context // 1024}K · {metric_labels[metric]} (n={len(values)})",
+                "value": mean,
+                "lower": min(values),
+                "upper": max(values),
+                "color": "#7047a3" if metric == "throughput_tokens_per_second" else "#176b87",
+            }
+        )
+    audit = payload["audit"]
+    _write_interval_svg(
+        path,
+        title="Production adapter trade-offs across measured cells",
+        subtitle=(
+            f'tiered relative to resident; mean and range; terminal cells: {audit["terminal_cells"]}, '
+            f'complete: {audit["complete_cells"]}, partial: {audit["partial_cells"]}, '
+            f'failed: {audit["failed_cells"]}'
+        ),
+        x_label="tiered over resident change (%)",
+        rows=rows,
+        source={
+            "experiment_id": payload["experiment_id"],
+            "raw_matrix_sha256": payload["raw_matrix"]["sha256"],
+            "metrics": list(metric_labels),
+        },
+    )
+
+
 def _p2_quality_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return [
         {
@@ -641,6 +858,20 @@ mechanical and deliberately narrower than the motivating hypothesis.
   p50/p95/p99, minimum, and maximum) plus paired bootstrap effects for every registered
   latency, throughput, HBM, fragmentation, cache, transfer, miss, and controller metric.
 
+## Digest-bound figures
+
+![Causal effect with corrected intervals](figure-p2-causal-effect.svg)
+
+The causal figure reports the four preregistered scale-budget cells without pooling them
+into a single favorable average. Its interval and point data are embedded in the SVG
+metadata and bound to the audited causal matrix.
+
+![Production latency, throughput, and memory trade-offs](figure-p4-production-tradeoffs.svg)
+
+The production figure reports mean and full observed cell range for each context-metric
+pair. Failed cells remain in the terminal counts in the subtitle and are never imputed as
+measured ratios.
+
 ## Claim boundary
 
 The P2 result is synthetic Tier-S evidence. A failed causal gate bounds only the tested
@@ -793,6 +1024,13 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         output_root / "table-p4-production-system-metrics.csv",
         _p4_metric_rows(loaded["p4_production_systems"]),
         p4_metric_fields,
+    )
+    _write_p2_causal_figure(
+        output_root / "figure-p2-causal-effect.svg", loaded["p2_causal"]
+    )
+    _write_p4_tradeoff_figure(
+        output_root / "figure-p4-production-tradeoffs.svg",
+        loaded["p4_production_systems"],
     )
     report = _report(
         classifications=classes,
