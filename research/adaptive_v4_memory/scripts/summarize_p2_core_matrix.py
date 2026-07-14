@@ -5,9 +5,11 @@ import hashlib
 import json
 import math
 import platform
+import re
 import subprocess
 from collections import defaultdict
 from collections.abc import Iterable
+from functools import cache
 from itertools import product
 from pathlib import Path
 from typing import Any, cast
@@ -27,6 +29,8 @@ STRICT_RAW_AUDIT = {
 CONFIDENCE_LEVEL = 0.95
 BUDGETS = (1, 2, 4)
 CORE_ANALYSIS_PATH = "research/adaptive_v4_memory/scripts/summarize_p2_core_matrix.py"
+PARALLEL_ORCHESTRATOR_PATH = "research/adaptive_v4_memory/scripts/run_p2_core_parallel.py"
+COMMIT_PATTERN = re.compile(r"[0-9a-f]{40}")
 
 
 def analysis_implementation(paths: tuple[str, ...]) -> dict[str, Any]:
@@ -51,6 +55,77 @@ def analysis_implementation(paths: tuple[str, ...]) -> dict[str, Any]:
         "tracked_file_count": len(canonical_paths),
         "git_index_sha256": hashlib.sha256(tracked.encode()).hexdigest(),
     }
+
+
+@cache
+def implementation_digest_at_commit(commit: str) -> str:
+    """Reconstruct the evaluator's index digest from a committed Git tree."""
+
+    _require(COMMIT_PATTERN.fullmatch(commit) is not None, "Invalid P2 execution commit.")
+    tree = subprocess.run(
+        ["git", "ls-tree", "-r", "--full-tree", commit, "--", *shard.IMPLEMENTATION_PATHS],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    _require(bool(tree), f"P2 execution commit has no implementation tree: {commit}")
+    normalized: list[str] = []
+    for line in tree.splitlines():
+        metadata, path = line.split("\t", 1)
+        mode, object_type, object_id = metadata.split()
+        _require(object_type == "blob", f"Non-blob P2 implementation entry: {path}")
+        normalized.append(f"{mode} {object_id} 0\t{path}\n")
+    return hashlib.sha256("".join(normalized).encode()).hexdigest()
+
+
+@cache
+def _commit_is_ancestor(commit: str, descendant: str) -> bool:
+    return (
+        subprocess.run(
+            ["git", "merge-base", "--is-ancestor", commit, descendant],
+            check=False,
+            capture_output=True,
+            text=True,
+        ).returncode
+        == 0
+    )
+
+
+def verify_execution_provenance(
+    raw: dict[str, Any], implementation_digest: str, analysis_commit: str
+) -> tuple[str, str]:
+    """Bind each raw shard to its committed evaluator and parallel orchestrator."""
+
+    source = raw.get("source", {})
+    execution_commit = source.get("commit")
+    _require(
+        isinstance(execution_commit, str)
+        and COMMIT_PATTERN.fullmatch(execution_commit) is not None,
+        "Invalid P2 raw execution commit.",
+    )
+    _require(
+        _commit_is_ancestor(execution_commit, analysis_commit),
+        f"P2 execution commit is not an ancestor of analysis HEAD: {execution_commit}",
+    )
+    _require(
+        implementation_digest_at_commit(execution_commit) == implementation_digest,
+        f"P2 committed implementation digest drifted: {execution_commit}",
+    )
+    orchestration = raw.get("orchestration", {})
+    expected_orchestrator_sha256 = sha256(Path(PARALLEL_ORCHESTRATOR_PATH))
+    worker = orchestration.get("worker")
+    workers = orchestration.get("workers")
+    _require(
+        orchestration.get("mode") == "single-gpu-disjoint-processes"
+        and orchestration.get("path") == PARALLEL_ORCHESTRATOR_PATH
+        and orchestration.get("sha256") == expected_orchestrator_sha256
+        and type(worker) is int
+        and type(workers) is int
+        and workers > 0
+        and 0 <= worker < workers,
+        "P2 parallel orchestration provenance drifted.",
+    )
+    return execution_commit, expected_orchestrator_sha256
 
 
 def sha256(path: Path) -> str:
@@ -776,6 +851,23 @@ def main() -> None:
         implementation_digest == shard._implementation_digest(),
         "Matrix implementation is not the checked-out P2 implementation.",
     )
+    source_commit = subprocess.run(
+        ["git", "rev-parse", "HEAD"], check=True, capture_output=True, text=True
+    ).stdout.strip()
+    matrix_source_commit = matrix.get("source_commit")
+    _require(
+        isinstance(matrix_source_commit, str)
+        and COMMIT_PATTERN.fullmatch(matrix_source_commit) is not None,
+        "Invalid P2 matrix source commit.",
+    )
+    _require(
+        _commit_is_ancestor(matrix_source_commit, source_commit),
+        "P2 matrix source commit is not an ancestor of analysis HEAD.",
+    )
+    _require(
+        implementation_digest_at_commit(matrix_source_commit) == implementation_digest,
+        "P2 matrix commit does not contain the recorded implementation.",
+    )
     expected_identities = set(
         product(
             shard.CHUNK_SIZE_BY_SCALE,
@@ -790,6 +882,8 @@ def main() -> None:
     fixed_differences: dict[tuple[int, str, int, str, int], list[float]] = defaultdict(list)
     native_differences: dict[tuple[int, str, int, str, int], list[float]] = defaultdict(list)
     raw_digests: list[str] = []
+    execution_source_commits: set[str] = set()
+    orchestration_digests: set[str] = set()
     for run in runs:
         identity = (
             run["scale"],
@@ -808,6 +902,11 @@ def main() -> None:
         raw_digests.append(digest)
         raw = json.loads(raw_path.read_text())
         verify_raw_shard(raw, run, implementation_digest)
+        execution_commit, orchestration_digest = verify_execution_provenance(
+            raw, implementation_digest, source_commit
+        )
+        execution_source_commits.add(execution_commit)
+        orchestration_digests.add(orchestration_digest)
         by_policy_and_conversation = {
             (record["policy"], record["conversation_id"]): record for record in raw["records"]
         }
@@ -887,9 +986,6 @@ def main() -> None:
         comparison="calibrated-hierarchical-minus-native",
         namespace="native",
     )
-    source_commit = subprocess.run(
-        ["git", "rev-parse", "HEAD"], check=True, capture_output=True, text=True
-    ).stdout.strip()
     dirty = bool(
         subprocess.run(
             ["git", "status", "--porcelain"], check=True, capture_output=True, text=True
@@ -903,6 +999,17 @@ def main() -> None:
         "analysis_implementation": analysis_implementation((CORE_ANALYSIS_PATH,)),
         "raw_matrix": {"path": str(args.matrix), "sha256": sha256(args.matrix)},
         "implementation_digest": implementation_digest,
+        "execution_provenance": {
+            "raw_source_commits": sorted(execution_source_commits),
+            "raw_source_commit_count": len(execution_source_commits),
+            "matrix_source_commit": matrix_source_commit,
+            "analysis_source_commit": source_commit,
+            "implementation_digest": implementation_digest,
+            "parallel_orchestrator": {
+                "path": PARALLEL_ORCHESTRATOR_PATH,
+                "sha256": next(iter(orchestration_digests)),
+            },
+        },
         "audit": {
             "all_raw_shards_verified": True,
             "all_dependency_digests_verified": True,
@@ -917,6 +1024,9 @@ def main() -> None:
             "exact_record_schema_verified": True,
             "exact_execution_rotation_verified": True,
             "exact_statistical_cell_coverage_verified": True,
+            "raw_execution_commits_are_ancestors": True,
+            "raw_execution_commit_trees_verified": True,
+            "parallel_orchestration_verified": len(orchestration_digests) == 1,
             **fixed_coverage,
             **STRICT_RAW_AUDIT,
             "unique_shards": len(seen),

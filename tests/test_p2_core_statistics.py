@@ -192,6 +192,51 @@ def test_analysis_implementation_is_git_index_bound_and_fails_on_untracked_path(
         core.analysis_implementation(("research/adaptive_v4_memory/untracked.py",))
 
 
+def test_execution_provenance_binds_commit_tree_and_parallel_orchestrator() -> None:
+    commit = core.subprocess.run(
+        ["git", "rev-parse", "HEAD"], check=True, capture_output=True, text=True
+    ).stdout.strip()
+    implementation = core.shard._implementation_digest()
+    raw = {
+        "source": {
+            "commit": commit,
+            "dirty": False,
+            "implementation_digest": implementation,
+        },
+        "orchestration": {
+            "mode": "single-gpu-disjoint-processes",
+            "worker": 0,
+            "workers": 3,
+            "path": core.PARALLEL_ORCHESTRATOR_PATH,
+            "sha256": core.sha256(Path(core.PARALLEL_ORCHESTRATOR_PATH)),
+        },
+    }
+
+    assert core.implementation_digest_at_commit(commit) == implementation
+    assert core.verify_execution_provenance(raw, implementation, commit) == (
+        commit,
+        core.sha256(Path(core.PARALLEL_ORCHESTRATOR_PATH)),
+    )
+
+    stale = copy.deepcopy(raw)
+    stale["orchestration"]["sha256"] = "0" * 64
+    with pytest.raises(ValueError, match="orchestration provenance drifted"):
+        core.verify_execution_provenance(stale, implementation, commit)
+
+
+def test_execution_provenance_rejects_uncommitted_or_divergent_source(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    raw = {
+        "source": {"commit": "1" * 40},
+        "orchestration": {},
+    }
+    monkeypatch.setattr(core, "_commit_is_ancestor", lambda _commit, _head: False)
+
+    with pytest.raises(ValueError, match="not an ancestor"):
+        core.verify_execution_provenance(raw, "implementation", "2" * 40)
+
+
 def test_bootstrap_paired_mean_is_deterministic_and_uses_paired_units() -> None:
     values = [0.25] * 20
     first = bootstrap_paired_mean(values, label="constant-test", resamples=1_000)
