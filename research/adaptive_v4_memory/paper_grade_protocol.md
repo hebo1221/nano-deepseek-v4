@@ -190,12 +190,14 @@ fixed policy is non-negative on at least two families at both scales.
 
 The central causal claim has a separate, stricter gate. At the same measured
 hot-memory footprint, `calibrated+pins` must beat `fixed+pins` on both S55 and
-S151: the pooled paired effect must be positive, its 95% cluster-bootstrap lower
-bound must be greater than zero after the preregistered family correction, and
+S151: the pooled paired effect and its preregistered four-cell-corrected
+cluster-bootstrap lower bound must both be greater than zero, and
 all five seed-level effects must be positive at each scale. Any failed clause is
 reported as a failed or bounded causal claim rather than averaged away. Every
 clause is required separately at both 2x and 4x; one budget cannot rescue the
-other. The
+other. The four primary scale-by-budget cells use a Bonferroni-corrected 98.75%
+paired cluster-bootstrap interval; family slices use Holm-Bonferroni separately
+within each scale and budget. The
 contrasts `fixed+pins - fixed` and `calibrated+pins - calibrated-no-pins`
 estimate the pin contribution; `calibrated-no-pins - fixed` and
 `calibrated+pins - fixed+pins` estimate adaptive-quota contribution; shuffled
