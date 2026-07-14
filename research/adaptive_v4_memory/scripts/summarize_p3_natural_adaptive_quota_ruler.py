@@ -4,7 +4,10 @@ import argparse
 import hashlib
 import json
 import math
+import platform
+import subprocess
 from collections import Counter, defaultdict
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -50,6 +53,22 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
 def _canonical_digest(payload: Any) -> str:
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
     return hashlib.sha256(encoded).hexdigest()
+
+
+def _distribution(values: Sequence[float | int]) -> dict[str, Any] | None:
+    if not values:
+        return None
+    array = np.asarray(values, dtype=np.float64)
+    return {
+        "observations": len(array),
+        "mean": float(array.mean()),
+        "sample_standard_deviation": float(array.std(ddof=1)) if len(array) > 1 else 0.0,
+        "p50": float(np.quantile(array, 0.50)),
+        "p95": float(np.quantile(array, 0.95)),
+        "p99": float(np.quantile(array, 0.99)),
+        "minimum": float(array.min()),
+        "maximum": float(array.max()),
+    }
 
 
 def _answer_map(dataset_manifests: dict[int, dict[str, Any]]) -> dict[str, list[str]]:
@@ -141,6 +160,13 @@ def verify_quota_audit(
         "target_total_kept_tokens": target_total,
         "observed_total_kept_tokens": observed_total,
         "controller_time_ns": sum(int(row.get("controller_time_ns", 0)) for row in layers),
+        "layer_kept_tokens": [int(value) for value in kept],
+        "layer_controller_time_ns": [int(row.get("controller_time_ns", 0)) for row in layers],
+        "layer_score_concentration": [
+            float(row["score_concentration"])
+            for row in layers
+            if row.get("score_concentration") is not None
+        ],
         "quota_min": min(int(value) for value in kept),
         "quota_max": max(int(value) for value in kept),
     }
@@ -158,6 +184,8 @@ def _load_arm(
     answers: dict[str, list[str]],
     expected_revisions: dict[str, str],
     model_digest_set: str,
+    maximum_context_tokens: int,
+    allowed_failures: set[str],
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     path = root / arm / "cell.json"
     _require(path.is_file(), f"Missing adaptive RULER cell: {path}.")
@@ -207,6 +235,24 @@ def _load_arm(
             dependency.is_file() and metadata.get("sha256") == sha256(dependency),
             f"Adaptive RULER {label} dependency drifted for {arm}.",
         )
+    _require(
+        cell.get("causal_gate", {}).get("sha256") == dependencies["primary_causal"]["sha256"],
+        f"Adaptive RULER primary causal dependency drifted for {arm}.",
+    )
+    for label, metadata in (
+        ("dataset inventory", cell.get("dataset_inventory")),
+        ("fixed selection", cell.get("fixed_baseline_selection")),
+    ):
+        _require(isinstance(metadata, dict), f"Missing adaptive RULER {label}.")
+        dependency = Path(metadata.get("path", ""))
+        _require(
+            dependency.is_file() and metadata.get("sha256") == sha256(dependency),
+            f"Adaptive RULER {label} drifted for {arm}.",
+        )
+    _require(
+        cell["fixed_baseline_selection"]["sha256"] == selection_digest,
+        f"Adaptive RULER fixed selection identity drifted for {arm}.",
+    )
     raw = cell.get("raw_records", {})
     raw_path = Path(raw.get("path", ""))
     _require(
@@ -242,6 +288,7 @@ def _load_arm(
             and type(row.get("generation_reserve_tokens")) is int
             and row["generation_reserve_tokens"] > 0
             and row["exact_input_tokens"] + row["generation_reserve_tokens"] <= row["length_tokens"]
+            and row["length_tokens"] <= maximum_context_tokens
             and type(row.get("hot_resident_bytes")) is int
             and row["hot_resident_bytes"] >= 0
             and type(row.get("peak_hbm_bytes")) is int
@@ -264,7 +311,9 @@ def _load_arm(
             row["effective_score"] = recomputed
         else:
             _require(
-                row.get("score") is None and isinstance(row.get("failure_type"), str),
+                row.get("score") is None
+                and isinstance(row.get("failure_type"), str)
+                and row["failure_type"] in allowed_failures,
                 f"Adaptive RULER failure drifted at {example_id}/{arm}.",
             )
             row["effective_score"] = 0.0
@@ -303,6 +352,9 @@ def analyze_pairs(
     audited_pairs = 0
     hot_relative_differences: list[float] = []
     controller_times: list[int] = []
+    quota_by_layer: list[list[int]] = [[] for _ in range(36)]
+    concentration_by_layer: list[list[float]] = [[] for _ in range(36)]
+    controller_time_by_layer: list[list[int]] = [[] for _ in range(36)]
     for fixed_row, adaptive_row in pairs:
         _require(fixed_row["example_id"] == adaptive_row["example_id"], "Pair identity drifted.")
         for field in (
@@ -330,6 +382,12 @@ def analyze_pairs(
             )
             audited_pairs += 1
             controller_times.append(adaptive_quota["controller_time_ns"])
+            for layer, value in enumerate(adaptive_quota["layer_kept_tokens"]):
+                quota_by_layer[layer].append(value)
+            for layer, value in enumerate(adaptive_quota["layer_score_concentration"]):
+                concentration_by_layer[layer].append(value)
+            for layer, value in enumerate(adaptive_quota["layer_controller_time_ns"]):
+                controller_time_by_layer[layer].append(value)
             fixed_hot = fixed_row["hot_resident_bytes"]
             adaptive_hot = adaptive_row["hot_resident_bytes"]
             if fixed_hot > 0:
@@ -445,6 +503,21 @@ def analyze_pairs(
                 "p95": float(np.quantile(controller_times, 0.95)) if controller_times else None,
                 "p99": float(np.quantile(controller_times, 0.99)) if controller_times else None,
             },
+            "adaptive_layer_quota_distribution": _distribution(
+                [value for values in quota_by_layer for value in values]
+            ),
+            "adaptive_score_concentration_distribution": _distribution(
+                [value for values in concentration_by_layer for value in values]
+            ),
+            "adaptive_per_layer_distributions": [
+                {
+                    "layer_index": layer,
+                    "kept_tokens": _distribution(quota_by_layer[layer]),
+                    "score_concentration": _distribution(concentration_by_layer[layer]),
+                    "controller_time_ns": _distribution(controller_time_by_layer[layer]),
+                }
+                for layer in range(36)
+            ],
         },
         "confirmation_gate": {
             "passed": all(checks.values()),
@@ -496,6 +569,8 @@ def summarize(
         "official_scorer_sha256": natural_manifest["benchmarks"]["RULER"]["scorer"]["sha256"],
     }
     model_digest_set = natural_manifest["model"]["snapshot_digest_set_sha256"]
+    maximum_context_tokens = natural_manifest["model"]["maximum_supported_context_tokens"]
+    allowed_failures = set(natural_manifest["common_protocol"]["failure_accounting"])
     cells: dict[str, dict[str, Any]] = {}
     records: dict[str, list[dict[str, Any]]] = {}
     for arm in ADAPTIVE_QUOTA_ARMS:
@@ -510,6 +585,8 @@ def summarize(
             answers=answers,
             expected_revisions=expected_revisions,
             model_digest_set=model_digest_set,
+            maximum_context_tokens=maximum_context_tokens,
+            allowed_failures=allowed_failures,
         )
     analysis = analyze_pairs(
         records[ADAPTIVE_QUOTA_ARMS[0]], records[ADAPTIVE_QUOTA_ARMS[1]], compatibility_manifest
@@ -531,12 +608,38 @@ def summarize(
         },
         "analysis": analysis,
         "audit": {
+            "required_arms_terminal": True,
+            "terminal_arms": 2,
+            "expected_examples_per_arm": EXPECTED_EXAMPLES,
+            "predictions_per_arm": EXPECTED_EXAMPLES,
+            "total_predictions": EXPECTED_EXAMPLES * 2,
+            "paired_examples": EXPECTED_EXAMPLES,
             "raw_scores_recomputed": True,
+            "all_scores_recomputed_from_raw_response": True,
             "exact_example_pairing_verified": True,
+            "exact_input_pairing_verified": True,
             "all_cell_and_raw_digests_verified": True,
+            "all_raw_record_digests_verified": True,
+            "all_raw_records_verified": True,
             "sequence_dependencies_verified": True,
+            "all_dependency_digests_verified": True,
             "runtime_kvpress_binding_verified": True,
+            "all_runtime_kvpress_bindings_verified": True,
             "quota_physical_audits_verified": True,
+            "same_global_token_budget_verified": True,
+            "causal_layer_order_verified": True,
+            "failure_accounting_complete": True,
+            "record_revision_provenance_verified": True,
+            "model_snapshot_digest_set_verified": True,
+            "operational_failure_vocabulary_verified": True,
+            "task_length_cells": len(LENGTHS) * len(TASKS),
+            "exact_task_sign_flip_assignments_per_length": 2 ** len(TASKS),
+            "paired_bootstrap_resamples": compatibility_manifest["statistics"][
+                "paired_bootstrap_resamples"
+            ],
+            "paired_bootstrap_seed": compatibility_manifest["statistics"]["paired_bootstrap_seed"],
+            "synthetic_controller_unchanged_transfer": False,
+            "outcome_dependent_execution": False,
             "natural_manifest_sha256": natural_digest,
             "compatibility_manifest_sha256": compatibility_digest,
             "dataset_manifest_digest_set_sha256": dataset_digest_set,
@@ -592,6 +695,10 @@ def main() -> None:
         ),
     )
     args = parser.parse_args()
+    dirty = subprocess.run(
+        ["git", "status", "--porcelain"], check=True, capture_output=True, text=True
+    ).stdout.strip()
+    _require(not dirty, "Adaptive RULER summarization requires a clean source tree.")
     payload = summarize(
         compatibility_manifest_path=args.compatibility_manifest,
         natural_manifest_path=args.natural_manifest,
@@ -599,6 +706,17 @@ def main() -> None:
         selection_path=args.selection,
         result_root=args.result_root,
     )
+    payload["source"] = {
+        "commit": subprocess.run(
+            ["git", "rev-parse", "HEAD"], check=True, capture_output=True, text=True
+        ).stdout.strip(),
+        "dirty": False,
+        "implementation_sha256": sha256(Path(__file__)),
+    }
+    payload["environment"] = {
+        "python": platform.python_version(),
+        "numpy": np.__version__,
+    }
     atomic_json(args.output, payload)
     print(
         json.dumps(

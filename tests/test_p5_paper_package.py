@@ -274,6 +274,7 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
         "p2_causal_confirmatory",
         "p3_ruler",
         "p3_cross_family",
+        "p3_natural_adaptive_quota",
         "p3_natural",
         "p3_safety",
         "p3_natural_safety",
@@ -294,6 +295,12 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
     assert cross["required_audit"]["total_predictions"] == 7_800
     assert cross["required_audit"]["paired_examples"] == 3_900
     assert cross["required_audit"]["all_scores_recomputed_from_raw_response"] is True
+    natural_adaptive = manifest["evidence"]["p3_natural_adaptive_quota"]
+    assert natural_adaptive["required_audit"]["total_predictions"] == 65_000
+    assert natural_adaptive["required_audit"]["paired_examples"] == 32_500
+    assert natural_adaptive["required_audit"]["same_global_token_budget_verified"] is True
+    assert natural_adaptive["required_audit"]["causal_layer_order_verified"] is True
+    assert natural_adaptive["required_audit"]["synthetic_controller_unchanged_transfer"] is False
     assert manifest["execution_audits"]["p2_core_parallel_equivalence"]["required_probes"] == 3
     assert manifest["execution_audits"]["p2_causal_parallel_equivalence"]["required_probes"] == 3
     assert manifest["execution_audits"]["p1_online_checkpoint_reuse"]["required_probes"] == 10
@@ -1177,6 +1184,54 @@ def test_cross_family_classification_is_gate_bound(passed: bool, expected: str) 
     assert classifications["p3_cross_family"] == expected
 
 
+@pytest.mark.parametrize(
+    ("passed", "expected"),
+    [(True, "success"), (False, "negative-result")],
+)
+def test_natural_adaptive_quota_classification_is_gate_bound(passed: bool, expected: str) -> None:
+    evidence = {
+        "status": "terminal",
+        "audit": {
+            "terminal_arms": 2,
+            "total_predictions": 65_000,
+            "paired_examples": 32_500,
+            "all_scores_recomputed_from_raw_response": True,
+            "all_runtime_kvpress_bindings_verified": True,
+            "all_dependency_digests_verified": True,
+            "exact_input_pairing_verified": True,
+            "quota_physical_audits_verified": True,
+            "same_global_token_budget_verified": True,
+            "causal_layer_order_verified": True,
+            "failure_accounting_complete": True,
+            "record_revision_provenance_verified": True,
+            "model_snapshot_digest_set_verified": True,
+            "operational_failure_vocabulary_verified": True,
+            "synthetic_controller_unchanged_transfer": False,
+            "outcome_dependent_execution": False,
+        },
+        "analysis": {"confirmation_gate": {"passed": passed}},
+    }
+    classifications = package.classify_evidence(
+        _p2_core_evidence(),
+        _m5_pilot_evidence(),
+        _m3_offline_learned_risk_evidence(),
+        _online_learned_lookahead_evidence(),
+        {"primary_causal_gate": {"passed": False}},
+        {"benchmark_complete": False},
+        {"audit": {}},
+        {"audit": {}},
+        {"audit": {}},
+        {"audit": {}},
+        {"audit": {}},
+        {"audit": {}},
+        {"audit": {}},
+        {"audit": {}},
+        {"audit": {}},
+        p3_natural_adaptive_quota=evidence,
+    )
+    assert classifications["p3_natural_adaptive_quota"] == expected
+
+
 def test_p5_success_requires_full_system_coverage() -> None:
     classifications = package.classify_evidence(
         _p2_core_evidence(passed=True),
@@ -1958,6 +2013,43 @@ def test_p5_p2_detailed_tables_retain_seed_family_worst_slice_and_memory() -> No
         "all-physical-arms",
     }
     assert package._causal_oracle_rows(causal)[0]["used_for_primary_gate"] is False
+
+
+def test_natural_adaptive_quota_tables_preserve_effects_and_layer_distributions() -> None:
+    payload = {
+        "analysis": {
+            "by_task_length": [
+                {"length_tokens": 8192, "task": "niah_single_1", "mean_difference": 0.01}
+            ],
+            "by_length": [
+                {
+                    "length_tokens": 8192,
+                    "mean_difference": 0.01,
+                    "paired_bootstrap_95_ci": [-0.01, 0.02],
+                }
+            ],
+            "quota_audit": {
+                "adaptive_per_layer_distributions": [
+                    {
+                        "layer_index": 0,
+                        "kept_tokens": {"mean": 4096.0, "p95": 4200.0},
+                        "score_concentration": {"mean": 0.25},
+                        "controller_time_ns": {"mean": 100.0},
+                    }
+                ]
+            },
+        }
+    }
+
+    assert package._p3_natural_adaptive_task_length_rows(payload)[0]["task"] == ("niah_single_1")
+    assert (
+        package._p3_natural_adaptive_length_rows(payload)[0]["paired_bootstrap_95_ci"]
+        == "[-0.01,0.02]"
+    )
+    layer = package._p3_natural_adaptive_layer_rows(payload)[0]
+    assert layer["layer_index"] == 0
+    assert layer["kept_tokens.mean"] == 4096.0
+    assert layer["score_concentration.mean"] == 0.25
 
 
 def test_p2_inference_resolution_table_separates_examples_from_seed_clusters() -> None:

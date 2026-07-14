@@ -98,6 +98,17 @@ git -C "$KVPRESS_ROOT" checkout --detach FETCH_HEAD
 .venv/bin/python research/adaptive_v4_memory/scripts/run_p3_mrcr.py --kvpress-root "$KVPRESS_ROOT" --model-snapshot "$MODEL_SNAPSHOT"
 ```
 
+After the terminal nine-seed P2 causal audit, fixed scorer selection, and all five
+Qwen3-4B RULER datasets exist, run the separately preregistered same-global-budget
+compatibility cohort. It compares `fixed+pins` with `natural-adaptive-quota+pins`;
+it is not an unchanged port of the synthetic controller.
+
+```bash
+.venv/bin/python research/adaptive_v4_memory/scripts/run_p3_natural_ruler.py --cohort adaptive-quota \
+  --kvpress-root "$KVPRESS_ROOT" --model-snapshot "$MODEL_SNAPSHOT"
+.venv/bin/python research/adaptive_v4_memory/scripts/summarize_p3_natural_adaptive_quota_ruler.py
+```
+
 Run the separately reported Phi-4-mini cross-family transfer only after the
 nine-seed P2 causal audit and Qwen fixed-baseline selection are terminal:
 

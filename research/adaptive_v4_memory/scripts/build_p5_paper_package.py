@@ -53,6 +53,8 @@ REPRODUCTION_REQUIRED_MARKERS = [
     "run_p2_seed_extension_causal.py --scale s151 --workers 3",
     "summarize_p2_seed_extension_causal.py",
     "run_p3_natural_ruler.py",
+    "run_p3_natural_ruler.py --cohort adaptive-quota",
+    "summarize_p3_natural_adaptive_quota_ruler.py",
     "prepare_p3_cross_family_ruler_dataset.py",
     "run_p3_cross_family_ruler.py",
     "summarize_p3_cross_family_ruler.py",
@@ -81,6 +83,7 @@ BOUNDARY_EXPERIMENT_IDS = {
     "online_learned_lookahead": "p1-online-learned-lookahead-v1",
     "p3_ruler": "p3-ruler-qwen3-1.7b-v1",
     "cross_family": "p3-cross-family-ruler-transfer-v1",
+    "natural_adaptive_quota": "p3-natural-adaptive-quota-ruler-v1",
     "natural_suite": "p3-natural-language-suite-v1",
     "safety_stress": "p3-qwen3-4b-safety-stress-v1",
     "natural_safety": "p3-qwen3-4b-natural-safety-v1",
@@ -103,6 +106,9 @@ SCALE_AUDIT_SOURCE_MANIFESTS = {
     "natural": Path("research/adaptive_v4_memory/manifests/p3-natural-suite-v1.json"),
     "cross_family": Path(
         "research/adaptive_v4_memory/manifests/p3-cross-family-ruler-transfer-v1.json"
+    ),
+    "natural_adaptive_quota": Path(
+        "research/adaptive_v4_memory/manifests/p3-natural-adaptive-quota-ruler-v1.json"
     ),
     "safety": Path("research/adaptive_v4_memory/manifests/p3-safety-stress-v1.json"),
     "natural_safety": Path("research/adaptive_v4_memory/manifests/p3-natural-safety-v1.json"),
@@ -433,6 +439,23 @@ def _validate_experiment_scale_audit(payload: dict[str, Any]) -> None:
         "P3 cross-family scale count drifted.",
     )
 
+    natural_adaptive = sources["natural_adaptive_quota"]
+    adaptive_benchmark = natural_adaptive.get("benchmark", {})
+    expected_natural_adaptive = {
+        "predictions": adaptive_benchmark.get("paired_predictions_total"),
+        "predictions_per_arm": adaptive_benchmark.get("predictions_per_arm"),
+        "paired_arms": len(natural_adaptive.get("arms", {})),
+        "tasks": adaptive_benchmark.get("tasks"),
+        "context_lengths": adaptive_benchmark.get("lengths_tokens"),
+        "examples_per_task_context_arm": adaptive_benchmark.get("samples_per_task_length"),
+        "same_global_token_budget": natural_adaptive.get("pins", {}).get("same_budget"),
+        "unchanged_synthetic_controller_transfer": False,
+    }
+    _require(
+        planned.get("p3_natural_adaptive_quota_qwen3_4b") == expected_natural_adaptive,
+        "P3 natural adaptive-quota scale count drifted.",
+    )
+
     safety = sources["safety"]
     expected_safety = {
         "predictions": safety.get("expected_examples_per_arm", 0) * len(safety.get("arms", [])),
@@ -651,6 +674,18 @@ def _validate_boundary_manifest(name: str, path: Path) -> dict[str, Any]:
             and "site-packages" in amendments[3].get("reason", "")
             and "zero result cells" in amendments[3].get("reason", ""),
             "P3 RULER runtime import boundary drifted.",
+        )
+    elif name == "natural_adaptive_quota":
+        benchmark = payload.get("benchmark", {})
+        adaptive = payload.get("arms", {}).get("natural-adaptive-quota+pins", {})
+        _require(
+            payload.get("status") == "frozen_before_any_compatibility_arm_prediction"
+            and benchmark.get("predictions_per_arm") == 32_500
+            and benchmark.get("paired_predictions_total") == 65_000
+            and adaptive.get("maximum_layer_adjustment_fraction") == 0.25
+            and payload.get("pins", {}).get("same_budget") is True
+            and "not an unchanged transfer" in payload.get("claim_boundary", ""),
+            "P3 natural adaptive-quota boundary drifted.",
         )
     elif name == "natural_suite":
         baselines = payload.get("external_baselines", {})
@@ -1157,6 +1192,7 @@ def classify_evidence(
     p4_production_systems: dict[str, Any],
     p4_adaptive_systems: dict[str, Any] | None = None,
     p3_cross_family: dict[str, Any] | None = None,
+    p3_natural_adaptive_quota: dict[str, Any] | None = None,
 ) -> dict[str, str]:
     core_audit = p2_core.get("audit", {})
     core_complete = (
@@ -1355,9 +1391,7 @@ def classify_evidence(
     adaptive_counts = tuple(
         adaptive_audit.get(field) for field in ("complete_cells", "partial_cells", "failed_cells")
     )
-    adaptive_counts_valid = all(
-        type(value) is int and value >= 0 for value in adaptive_counts
-    )
+    adaptive_counts_valid = all(type(value) is int and value >= 0 for value in adaptive_counts)
     adaptive_count_values = (
         tuple(cast(int, value) for value in adaptive_counts)
         if adaptive_counts_valid
@@ -1478,6 +1512,37 @@ def classify_evidence(
             if cross_terminal and cross_gate.get("passed") is True
             else "negative-result"
             if cross_terminal and cross_gate.get("passed") is False
+            else "unverified"
+        )
+    if isinstance(p3_natural_adaptive_quota, dict):
+        adaptive_natural_audit = p3_natural_adaptive_quota.get("audit", {})
+        adaptive_natural_terminal = (
+            p3_natural_adaptive_quota.get("status") == "terminal"
+            and adaptive_natural_audit.get("terminal_arms") == 2
+            and adaptive_natural_audit.get("total_predictions") == 65_000
+            and adaptive_natural_audit.get("paired_examples") == 32_500
+            and adaptive_natural_audit.get("all_scores_recomputed_from_raw_response") is True
+            and adaptive_natural_audit.get("all_runtime_kvpress_bindings_verified") is True
+            and adaptive_natural_audit.get("all_dependency_digests_verified") is True
+            and adaptive_natural_audit.get("exact_input_pairing_verified") is True
+            and adaptive_natural_audit.get("quota_physical_audits_verified") is True
+            and adaptive_natural_audit.get("same_global_token_budget_verified") is True
+            and adaptive_natural_audit.get("causal_layer_order_verified") is True
+            and adaptive_natural_audit.get("failure_accounting_complete") is True
+            and adaptive_natural_audit.get("record_revision_provenance_verified") is True
+            and adaptive_natural_audit.get("model_snapshot_digest_set_verified") is True
+            and adaptive_natural_audit.get("operational_failure_vocabulary_verified") is True
+            and adaptive_natural_audit.get("synthetic_controller_unchanged_transfer") is False
+            and adaptive_natural_audit.get("outcome_dependent_execution") is False
+        )
+        adaptive_natural_gate = p3_natural_adaptive_quota.get("analysis", {}).get(
+            "confirmation_gate", {}
+        )
+        result["p3_natural_adaptive_quota"] = (
+            "success"
+            if adaptive_natural_terminal and adaptive_natural_gate.get("passed") is True
+            else "negative-result"
+            if adaptive_natural_terminal and adaptive_natural_gate.get("passed") is False
             else "unverified"
         )
     _require(set(result.values()).issubset(ALLOWED_CLASSES), "Unknown conclusion class.")
@@ -1943,16 +2008,28 @@ def _p3_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _p3_cross_family_task_length_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
-    return [
-        _flatten_json_row(row)
-        for row in payload["statistics"]["by_task_length"]
-    ]
+    return [_flatten_json_row(row) for row in payload["statistics"]["by_task_length"]]
 
 
 def _p3_cross_family_length_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return [
         _flatten_json_row(row)
         for row in payload["statistics"]["by_length_with_exact_task_cluster_inference"]
+    ]
+
+
+def _p3_natural_adaptive_task_length_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    return [_flatten_json_row(row) for row in payload["analysis"]["by_task_length"]]
+
+
+def _p3_natural_adaptive_length_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    return [_flatten_json_row(row) for row in payload["analysis"]["by_length"]]
+
+
+def _p3_natural_adaptive_layer_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        _flatten_json_row(row)
+        for row in payload["analysis"]["quota_audit"]["adaptive_per_layer_distributions"]
     ]
 
 
@@ -2352,6 +2429,7 @@ def _report(
     p2_causal_confirmatory: dict[str, Any],
     p3_ruler: dict[str, Any],
     p3_cross_family: dict[str, Any],
+    p3_natural_adaptive_quota: dict[str, Any],
     p3_natural: dict[str, Any],
     p3_safety: dict[str, Any],
     p3_natural_safety: dict[str, Any],
@@ -2467,6 +2545,11 @@ user request, is outside the completion gate, and is never reported as passed.
   50%-KV operating point was transferred without Phi-specific tuning; its frozen
   transfer gate passed: **{p3_cross_family["transfer_gate"]["passed"]}**. This is a
   separately reported model-family transfer cohort, not a second full natural suite.
+- P3 real-model adaptive quota: {p3_natural_adaptive_quota["audit"]["total_predictions"]:,}
+  Qwen3-4B RULER predictions pair fixed+pins with a causal adaptive layer-quota arm at
+  exactly the same global KV-token budget; confirmation gate passed:
+  **{p3_natural_adaptive_quota["analysis"]["confirmation_gate"]["passed"]}**. This is an
+  architecture-compatibility result, not an unchanged synthetic-controller transfer.
 - P3 natural suite: {p3_natural["audit"]["benchmarks_terminal"]} terminal benchmarks and
   at least {p3_natural["audit"]["minimum_protocol_examples_accounted_per_arm"]:,}
   examples accounted per required arm. The fixed arm was selected before any Qwen3-4B
@@ -2659,6 +2742,7 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         loaded["p4_production_systems"],
         loaded["p4_adaptive_systems"],
         p3_cross_family=loaded["p3_cross_family"],
+        p3_natural_adaptive_quota=loaded["p3_natural_adaptive_quota"],
     )
     classes["p2_core_confirmatory"] = _classify_validated_confirmatory_core(
         loaded["p2_core_confirmatory"]
@@ -2754,6 +2838,26 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         output_root / "table-p3-cross-family-length-inference.csv",
         p3_cross_length,
         _field_union(p3_cross_length),
+    )
+    p3_adaptive_task_length = _p3_natural_adaptive_task_length_rows(
+        loaded["p3_natural_adaptive_quota"]
+    )
+    _write_csv(
+        output_root / "table-p3-natural-adaptive-task-length.csv",
+        p3_adaptive_task_length,
+        _field_union(p3_adaptive_task_length),
+    )
+    p3_adaptive_length = _p3_natural_adaptive_length_rows(loaded["p3_natural_adaptive_quota"])
+    _write_csv(
+        output_root / "table-p3-natural-adaptive-length-inference.csv",
+        p3_adaptive_length,
+        _field_union(p3_adaptive_length),
+    )
+    p3_adaptive_layers = _p3_natural_adaptive_layer_rows(loaded["p3_natural_adaptive_quota"])
+    _write_csv(
+        output_root / "table-p3-natural-adaptive-layer-distributions.csv",
+        p3_adaptive_layers,
+        _field_union(p3_adaptive_layers),
     )
     p3_safety = _p3_safety_rows(loaded["p3_safety"])
     _write_csv(
@@ -2925,6 +3029,7 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         p2_causal_confirmatory=loaded["p2_causal_confirmatory"],
         p3_ruler=loaded["p3_ruler"],
         p3_cross_family=loaded["p3_cross_family"],
+        p3_natural_adaptive_quota=loaded["p3_natural_adaptive_quota"],
         p3_natural=loaded["p3_natural"],
         p3_safety=loaded["p3_safety"],
         p3_natural_safety=loaded["p3_natural_safety"],

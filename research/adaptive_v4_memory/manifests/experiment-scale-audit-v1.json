@@ -117,6 +117,16 @@
       "pooled_with_primary": false,
       "phi_specific_tuning_allowed": false
     },
+    "p3_natural_adaptive_quota_qwen3_4b": {
+      "predictions": 65000,
+      "predictions_per_arm": 32500,
+      "paired_arms": 2,
+      "tasks": 13,
+      "context_lengths": [8192, 16384, 32768, 65536, 131072],
+      "examples_per_task_context_arm": 500,
+      "same_global_token_budget": true,
+      "unchanged_synthetic_controller_transfer": false
+    },
     "p3_safety_qwen3_4b": {
       "predictions": 3600,
       "families": 4,

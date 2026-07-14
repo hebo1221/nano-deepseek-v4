@@ -78,6 +78,8 @@ def test_quota_audits_prove_exact_global_budget_and_causal_trace() -> None:
     assert adaptive["quota_min"] == 4
     assert adaptive["quota_max"] == 6
     assert adaptive["controller_time_ns"] == 360
+    assert adaptive["layer_kept_tokens"] == [4, 6] * 18
+    assert adaptive["layer_score_concentration"] == [0.25] * 36
 
 
 def test_quota_audit_rejects_layer_order_drift() -> None:
@@ -118,6 +120,9 @@ def test_paired_analysis_closes_full_preregistered_grid_and_gate() -> None:
                         "target_total_kept_tokens": 100,
                         "observed_total_kept_tokens": 100,
                         "controller_time_ns": 10,
+                        "layer_kept_tokens": [5] * 36,
+                        "layer_score_concentration": [0.25] * 36,
+                        "layer_controller_time_ns": [1] * 36,
                     },
                 }
                 fixed.append(dict(common))
@@ -130,4 +135,9 @@ def test_paired_analysis_closes_full_preregistered_grid_and_gate() -> None:
     assert len(result["by_length"]) == 5
     assert all(row["exact_sign_assignments"] == 8192 for row in result["by_length"])
     assert result["quota_audit"]["audited_pairs"] == 32_500
+    assert len(result["quota_audit"]["adaptive_per_layer_distributions"]) == 36
+    assert (
+        result["quota_audit"]["adaptive_score_concentration_distribution"]["observations"]
+        == 32_500 * 36
+    )
     assert result["confirmation_gate"]["passed"] is True
