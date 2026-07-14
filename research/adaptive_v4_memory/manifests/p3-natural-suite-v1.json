@@ -28,6 +28,11 @@
       "date": "2026-07-14",
       "change": "expand the small-model compatible-baseline screen with PyramidKV and Ada-KV-wrapped SnapKV and permit the selected winner to propagate unchanged through every natural and safety runner",
       "reason": "cover layer- and head-adaptive cache allocation before any P3 prediction or baseline outcome inspection"
+    },
+    {
+      "date": "2026-07-14",
+      "change": "require every natural and safety runner to import evaluator and press modules from the pinned KVPress checkout and record the resolved module and registry SHA-256 digests",
+      "reason": "a pre-execution import audit found a site-packages press import despite the pinned checkout; no P3 prediction or baseline outcome existed"
     }
   ],
   "protocol": "research/adaptive_v4_memory/paper_grade_protocol.md",

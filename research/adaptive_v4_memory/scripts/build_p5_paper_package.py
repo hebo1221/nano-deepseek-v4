@@ -577,7 +577,7 @@ def _validate_boundary_manifest(name: str, path: Path) -> dict[str, Any]:
         _require(
             payload.get("status") == "amended_and_frozen_before_execution"
             and isinstance(amendments, list)
-            and len(amendments) == 3,
+            and len(amendments) == 4,
             "P3 RULER pre-execution amendment record drifted.",
         )
         _require(
@@ -602,6 +602,12 @@ def _validate_boundary_manifest(name: str, path: Path) -> dict[str, Any]:
             and payload.get("execution", {}).get("total_cells") == 57
             and payload.get("execution", {}).get("total_predictions") == 370_500,
             "P3 RULER baseline breadth drifted.",
+        )
+        _require(
+            "pinned KVPress checkout" in amendments[3].get("change", "")
+            and "site-packages" in amendments[3].get("reason", "")
+            and "zero result cells" in amendments[3].get("reason", ""),
+            "P3 RULER runtime import boundary drifted.",
         )
     elif name == "natural_suite":
         baselines = payload.get("external_baselines", {})

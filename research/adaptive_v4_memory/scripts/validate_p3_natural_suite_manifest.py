@@ -75,7 +75,7 @@ def validate_manifest(payload: dict[str, Any]) -> dict[str, Any]:
     amendments = payload.get("amendments", [])
     if (
         not isinstance(amendments, list)
-        or len(amendments) != 5
+        or len(amendments) != 6
         or "RULER scorer SHA-256" not in amendments[0].get("change", "")
         or "tokenizer.json SHA-256" not in amendments[1].get("change", "")
         or "pinned public code dependencies" not in amendments[2].get("change", "")
@@ -87,6 +87,9 @@ def validate_manifest(payload: dict[str, Any]) -> dict[str, Any]:
         or "PyramidKV" not in amendments[4].get("change", "")
         or "Ada-KV" not in amendments[4].get("change", "")
         or "before any P3 prediction" not in amendments[4].get("reason", "")
+        or "pinned KVPress checkout" not in amendments[5].get("change", "")
+        or "site-packages press import" not in amendments[5].get("reason", "")
+        or "no P3 prediction" not in amendments[5].get("reason", "")
     ):
         raise ValueError("Natural-suite pre-execution correction record drifted.")
     if tuple(payload.get("execution_order", ())) != EXPECTED_ORDER:

@@ -20,6 +20,12 @@
       "timing": "before any RULER model prediction or baseline outcome inspection",
       "change": "add the pinned KVPress PyramidKV and Ada-KV-wrapped SnapKV implementations at the same three compression ratios, expanding the screening matrix from 39 to 57 cells",
       "reason": "cover layer-adaptive and head-adaptive cache allocation rather than selecting the strongest fixed baseline from token-only methods"
+    },
+    {
+      "date": "2026-07-14",
+      "timing": "before any RULER model prediction or baseline outcome inspection",
+      "change": "require both evaluator and press modules to import from the pinned KVPress checkout and record their resolved paths and SHA-256 digests",
+      "reason": "a pre-execution import audit found that the evaluator resolved from the checkout while the press package resolved from site-packages; zero result cells existed"
     }
   ],
   "sequence_gate": {

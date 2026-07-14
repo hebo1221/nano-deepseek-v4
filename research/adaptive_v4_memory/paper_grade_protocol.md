@@ -1,6 +1,6 @@
 # Paper-grade expansion protocol
 
-Protocol version: 1.6
+Protocol version: 1.7
 Frozen: 2026-07-14  
 Amended: 2026-07-14, before causal-factorial held-out execution
 Status: active; P2 synthetic core runs first, followed by causal ablations,
@@ -47,6 +47,12 @@ to 57 cells by adding pinned PyramidKV and Ada-KV-wrapped SnapKV implementations
 at the same 25%, 50%, and 75% compression ratios. This adds layer- and
 head-adaptive comparators without changing datasets, model snapshots, selection
 criterion, natural-suite outcomes, or P2 execution.
+
+Version 1.7 closes a pre-execution provenance gap in the P3 harness. The
+evaluator previously resolved from the pinned KVPress checkout while the press
+package could resolve from site-packages. Every P3 runner now fails closed unless
+both modules resolve inside the clean pinned checkout and records their resolved
+paths and SHA-256 digests. No P3 result cell or model prediction existed.
 
 ## 1. Primary questions
 

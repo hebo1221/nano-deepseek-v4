@@ -915,6 +915,12 @@ def test_p3_ruler_boundary_records_pre_gate_orphan_without_outcomes(
     with pytest.raises(ValueError, match="pre-gate artifact accounting drifted"):
         package._validate_boundary_manifest("p3_ruler", tampered)
 
+    payload = json.loads(source.read_text())
+    payload["amendments"][3]["reason"] = "runtime import provenance was not audited"
+    tampered.write_text(json.dumps(payload))
+    with pytest.raises(ValueError, match="runtime import boundary drifted"):
+        package._validate_boundary_manifest("p3_ruler", tampered)
+
 
 def test_experiment_scale_audit_requires_nonaggregation_rule(tmp_path: Path) -> None:
     root = Path(__file__).resolve().parents[1]
