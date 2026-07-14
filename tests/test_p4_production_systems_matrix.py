@@ -88,6 +88,7 @@ def _adapter_payload(
         repetitions.append(
             {
                 "repetition": index,
+                "input_seed": production.INPUT_SEED_BASE + production.WARMUPS + index,
                 "input_digest": "1" * 64,
                 "execution_order": list(
                     production.POLICIES if index % 2 == 0 else tuple(reversed(production.POLICIES))
@@ -102,6 +103,7 @@ def _adapter_payload(
         "experiment_id": "p4-production-adapter-cell-v1",
         "cell": production.cell_dict(cell),
         "status": "complete",
+        "input_seed_base": production.INPUT_SEED_BASE,
         "warmups": production.WARMUPS,
         "warmup_accounting_available": True,
         "warmup_repetitions_attempted": production.WARMUPS,
@@ -201,6 +203,13 @@ def test_production_adapter_requires_timestamp_proven_concurrency() -> None:
     payload = _adapter_payload(cell, digest)
 
     production.validate_adapter_payload(payload, cell=cell, executable_digest=digest)
+
+    wrong_seed = deepcopy(payload)
+    wrong_seed["repetitions"][0]["input_seed"] += 1
+    with pytest.raises(ValueError, match="repetition seed drifted"):
+        production.validate_adapter_payload(
+            wrong_seed, cell=cell, executable_digest=digest
+        )
 
     serial = deepcopy(payload)
     serial["repetitions"][0]["policies"]["resident-native"]["load_execution"][
@@ -514,6 +523,31 @@ def test_orchestrator_failure_is_terminal_and_resumable(tmp_path: Path) -> None:
     adapter = tmp_path / "adapter"
     adapter.write_text("adapter")
     adapter_digest = production.sha256(adapter)
+    spec = tmp_path / "adapter-spec.json"
+    spec.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "experiment_id": "p4-production-adapter-spec-v1",
+                "cell": production.cell_dict(cell),
+                "policies": list(production.POLICIES),
+                "warmups": production.WARMUPS,
+                "measured_repetitions": production.MEASURED_REPETITIONS,
+                "cell_timeout_seconds": production.CELL_TIMEOUT_SECONDS,
+                "repetition_seeds": [
+                    production.INPUT_SEED_BASE + index
+                    for index in range(
+                        production.WARMUPS + production.MEASURED_REPETITIONS
+                    )
+                ],
+                "checkpoint": str(
+                    tmp_path / cell[0] / "seed-6071401" / f"{cell[0]}-step-1000.pt"
+                ),
+                "manifest": {"sha256": "manifest"},
+                "p3_audit": {"sha256": "p3"},
+            }
+        )
+    )
     terminal = production._terminal_failure(cell=cell, error="failed")
     assert terminal["warmup_accounting_available"] is False
     assert terminal["warmup_repetitions_attempted"] is None
@@ -536,6 +570,7 @@ def test_orchestrator_failure_is_terminal_and_resumable(tmp_path: Path) -> None:
         "manifest": {"sha256": "manifest"},
         "p3_audit": {"sha256": "p3"},
         "adapter": {"sha256": adapter_digest},
+        "adapter_spec": {"path": str(spec), "sha256": production.sha256(spec)},
         "adapter_payload": terminal,
     }
     artifact = tmp_path / "cell.json"
@@ -549,6 +584,24 @@ def test_orchestrator_failure_is_terminal_and_resumable(tmp_path: Path) -> None:
         p3_digest="p3",
         adapter_digest=adapter_digest,
     )
+
+    spec_payload = json.loads(spec.read_text())
+    spec_payload["repetition_seeds"][0] += 1
+    spec.write_text(json.dumps(spec_payload))
+    payload["adapter_spec"]["sha256"] = production.sha256(spec)
+    artifact.write_text(json.dumps(payload))
+    assert not production._artifact_valid(
+        artifact,
+        cell=cell,
+        implementation="implementation",
+        manifest_digest="manifest",
+        p3_digest="p3",
+        adapter_digest=adapter_digest,
+    )
+    spec_payload["repetition_seeds"][0] -= 1
+    spec.write_text(json.dumps(spec_payload))
+    payload["adapter_spec"]["sha256"] = production.sha256(spec)
+    artifact.write_text(json.dumps(payload))
 
     terminal["warmup_repetitions_attempted"] = None
     terminal["policy_status"]["resident-native"]["failure"]["error"] = ""

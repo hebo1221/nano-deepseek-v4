@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import signal
 import sys
+from copy import deepcopy
 from pathlib import Path
 
 import pytest
@@ -131,6 +132,7 @@ def test_p4_requires_full_natural_suite_not_ruler_only(tmp_path: Path) -> None:
                     "all_failure_accounting_complete": True,
                     "all_run_identities_verified": True,
                     "all_terminal_measurement_schema_verified": True,
+                    "all_dataset_example_identities_verified": True,
                     "safety_stress_terminal": True,
                     "natural_safety_terminal": True,
                     "benchmarks_terminal": 5,
@@ -262,6 +264,7 @@ def test_p4_partial_artifact_preserves_surviving_policy(tmp_path: Path) -> None:
     repetitions = [
         {
             "repetition": index,
+            "input_seed": systems.INPUT_SEED_BASE + systems.WARMUPS + index,
             "input_digest": f"{index:064x}",
             "execution_order": list(
                 systems.POLICIES
@@ -300,6 +303,7 @@ def test_p4_partial_artifact_preserves_surviving_policy(tmp_path: Path) -> None:
         "manifest": {"sha256": "manifest"},
         "p3_audit": {"sha256": "p3"},
         "warmups": systems.WARMUPS,
+        "input_seed_base": systems.INPUT_SEED_BASE,
         "cell_timeout_seconds": systems.CELL_TIMEOUT_SECONDS,
         "warmup_accounting_available": True,
         "warmup_repetitions_attempted": systems.WARMUPS,
@@ -339,7 +343,19 @@ def test_p4_partial_artifact_preserves_surviving_policy(tmp_path: Path) -> None:
         p3_digest="p3",
     )
 
-    wrong_order = json.loads(artifact.read_text())
+    wrong_seed = deepcopy(payload)
+    wrong_seed["repetitions"][0]["input_seed"] += 1
+    artifact.write_text(json.dumps(wrong_seed))
+    assert not systems._artifact_valid(
+        artifact,
+        cell=cell,
+        digest="implementation",
+        manifest_digest="manifest",
+        p3_digest="p3",
+    )
+
+    artifact.write_text(json.dumps(payload))
+    wrong_order = deepcopy(payload)
     wrong_order["repetitions"][0]["execution_order"] = list(reversed(systems.POLICIES))
     artifact.write_text(json.dumps(wrong_order))
     assert not systems._artifact_valid(

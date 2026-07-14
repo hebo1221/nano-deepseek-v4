@@ -43,6 +43,7 @@ P3_BENCHMARKS = ("RULER", "SCBench", "LongBench-v2", "LongMemEval", "MRCR")
 TERMINAL_STATUSES = ("complete", "partial", "failed")
 WARMUPS = 5
 MEASURED_REPETITIONS = 30
+INPUT_SEED_BASE = 9_071_400
 CELL_TIMEOUT_SECONDS = 21_600.0
 PREFILL_CHUNK = 256
 EXPECTED_CELLS = len(SCALES) * len(CONTEXTS) * len(GENERATIONS) * len(LOAD_PROFILES)
@@ -119,6 +120,7 @@ def require_p3_audit(path: Path) -> dict[str, Any]:
         or audit.get("all_failure_accounting_complete") is not True
         or audit.get("all_run_identities_verified") is not True
         or audit.get("all_terminal_measurement_schema_verified") is not True
+        or audit.get("all_dataset_example_identities_verified") is not True
         or audit.get("safety_stress_terminal") is not True
         or audit.get("natural_safety_terminal") is not True
         or audit.get("benchmarks_terminal") != len(P3_BENCHMARKS)
@@ -400,6 +402,7 @@ def _artifact_valid(
         and payload.get("manifest", {}).get("sha256") == manifest_digest
         and payload.get("p3_audit", {}).get("sha256") == p3_digest
         and payload.get("status") in TERMINAL_STATUSES
+        and payload.get("input_seed_base") == INPUT_SEED_BASE
         and type(payload.get("cell_timeout_seconds")) in (int, float)
         and 0.0 < payload["cell_timeout_seconds"] <= CELL_TIMEOUT_SECONDS
     )
@@ -630,6 +633,7 @@ def _valid_repetition(
     expected_order = POLICIES if index % 2 == 0 else tuple(reversed(POLICIES))
     if not (
         row.get("repetition") == index
+        and row.get("input_seed") == INPUT_SEED_BASE + WARMUPS + index
         and isinstance(input_digest, str)
         and len(input_digest) == 64
         and set(input_digest) <= set("0123456789abcdef")
@@ -766,6 +770,7 @@ def main() -> None:
         or manifest.get("primary_paired_cells") != EXPECTED_CELLS
         or manifest.get("execution", {}).get("maximum_cell_timeout_seconds")
         != CELL_TIMEOUT_SECONDS
+        or manifest.get("input_seed_base") != INPUT_SEED_BASE
     ):
         raise RuntimeError("The frozen P4 systems manifest is required.")
     if not torch.cuda.is_available():
@@ -849,7 +854,7 @@ def main() -> None:
                         generation=generation,
                         batch=batch,
                         active_requests=active_requests,
-                        seed=9_071_400 + repetition,
+                        seed=INPUT_SEED_BASE + repetition,
                     )
                     if repetition < WARMUPS:
                         warmup_repetitions_attempted += 1
@@ -896,6 +901,7 @@ def main() -> None:
                         repetitions.append(
                             {
                                 "repetition": repetition - WARMUPS,
+                                "input_seed": INPUT_SEED_BASE + repetition,
                                 "execution_order": order,
                                 "input_digest": input_digest,
                                 "greedy_predictions_identical": (
@@ -950,6 +956,7 @@ def main() -> None:
                         "active_requests": active_requests,
                     },
                     "warmups": WARMUPS,
+                    "input_seed_base": INPUT_SEED_BASE,
                     "cell_timeout_seconds": args.cell_timeout_seconds,
                     "warmup_accounting_available": True,
                     "warmup_repetitions_attempted": warmup_repetitions_attempted,
@@ -1015,6 +1022,7 @@ def main() -> None:
                         "active_requests": active_requests,
                     },
                     "warmups": WARMUPS,
+                    "input_seed_base": INPUT_SEED_BASE,
                     "cell_timeout_seconds": args.cell_timeout_seconds,
                     "warmup_accounting_available": True,
                     "warmup_repetitions_attempted": warmup_repetitions_attempted,

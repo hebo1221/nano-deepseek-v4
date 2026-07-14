@@ -20,12 +20,19 @@
       "timing": "before any P4 reference cell was generated",
       "change": "add a POSIX whole-cell timer in addition to repetition-boundary checks and record the actual deadline",
       "reason": "bound Python-visible prefill and decode failures without claiming that a Python signal can preempt an uninterruptible native CUDA call"
+    },
+    {
+      "date": "2026-07-14",
+      "timing": "before any P4 reference cell was generated",
+      "change": "freeze input_seed_base=9071400 and bind every measured repetition to input_seed_base + warmups + repetition",
+      "reason": "prevent an implementation-only seed constant from silently changing the paired latency, memory, and correctness workload"
     }
   ],
   "evidence_tier": "single-accelerator-serial-interleaved-reference-pytorch-runtime",
   "prerequisite": "complete digest-bound five-benchmark P3 natural-suite audit; P4 baselines run even if the adaptive causal arm is withheld",
   "scales": ["s55", "s151"],
   "checkpoint_training_seed": 6071401,
+  "input_seed_base": 9071400,
   "policies": ["resident-native", "tiered-native"],
   "contexts_tokens": [8192, 32768, 131072],
   "optional_context_tokens": 500000,

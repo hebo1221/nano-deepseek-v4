@@ -132,6 +132,7 @@
         "all_record_revisions_verified": true,
         "all_run_identities_verified": true,
         "all_terminal_measurement_schema_verified": true,
+        "all_dataset_example_identities_verified": true,
         "generation_seed_by_benchmark": {
           "RULER": 42,
           "SCBench": 42,
@@ -243,6 +244,8 @@
         "all_artifact_digests_verified": true,
         "available_measurement_schema_verified": true,
         "repetition_order_and_pairing_verified": true,
+        "repetition_seed_schedule_verified": true,
+        "input_seed_base": 9071400,
         "warmup_failure_accounting_verified": true,
         "whole_cell_timeout_contract_verified": true,
         "tail_latency_metrics_verified": true
@@ -255,6 +258,9 @@
         "terminal_cells": 216,
         "all_terminal_cells_verified": true,
         "all_artifact_digests_verified": true,
+        "adapter_spec_digests_and_seed_schedule_verified": true,
+        "repetition_seed_schedule_verified": true,
+        "input_seed_base": 9071400,
         "warmup_accounting_status_recorded": true,
         "whole_cell_timeout_contract_verified": true,
         "tail_failure_accounting_complete": true,

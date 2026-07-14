@@ -365,6 +365,9 @@ def summarize(matrix_path: Path) -> dict[str, Any]:
         "audit": {
             "all_terminal_cells_verified": True,
             "all_artifact_digests_verified": True,
+            "adapter_spec_digests_and_seed_schedule_verified": True,
+            "repetition_seed_schedule_verified": True,
+            "input_seed_base": systems.INPUT_SEED_BASE,
             "terminal_cells": len(seen),
             "complete_cells": len(complete),
             "partial_cells": len(partial),

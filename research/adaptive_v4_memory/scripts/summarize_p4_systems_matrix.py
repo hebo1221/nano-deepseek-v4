@@ -288,6 +288,8 @@ def main() -> None:
             "all_artifact_digests_verified": True,
             "available_measurement_schema_verified": True,
             "repetition_order_and_pairing_verified": True,
+            "repetition_seed_schedule_verified": True,
+            "input_seed_base": systems.INPUT_SEED_BASE,
             "warmup_failure_accounting_verified": True,
             "whole_cell_timeout_contract_verified": True,
             "minimum_cell_timeout_seconds": min(cell_timeouts),

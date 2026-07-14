@@ -134,6 +134,108 @@ def _records(path: Path) -> list[dict[str, Any]]:
     return records
 
 
+def _identifier_digest(identifiers: set[str]) -> str:
+    return hashlib.sha256("\n".join(sorted(identifiers)).encode()).hexdigest()
+
+
+def _dataset_paths(
+    *, benchmark: str, manifest: dict[str, Any], inventory_path: Path
+) -> list[Path]:
+    inventory = json.loads(inventory_path.read_text())
+    observed = inventory.get("benchmarks", {}).get(benchmark)
+    _require(isinstance(observed, dict), f"Missing {benchmark} dataset inventory entry.")
+    contract = manifest["benchmarks"][benchmark]["dataset"]
+    _require(
+        observed.get("repo_id") == contract["repo_id"]
+        and observed.get("revision") == contract["revision"],
+        f"{benchmark} dataset inventory revision drifted.",
+    )
+    expected = {entry["path"]: entry for entry in contract["files"]}
+    observed_files = observed.get("files")
+    _require(
+        isinstance(observed_files, list) and len(observed_files) == len(expected),
+        f"{benchmark} dataset inventory file count drifted.",
+    )
+    paths: list[Path] = []
+    seen: set[str] = set()
+    for metadata in observed_files:
+        _require(isinstance(metadata, dict), f"{benchmark} dataset file metadata drifted.")
+        path = Path(metadata.get("path", ""))
+        matches = [
+            relative
+            for relative in expected
+            if path.as_posix() == relative or path.as_posix().endswith(f"/{relative}")
+        ]
+        _require(len(matches) == 1, f"Unexpected {benchmark} dataset path: {path}.")
+        relative = matches[0]
+        contract_row = expected.get(relative)
+        _require(
+            contract_row is not None
+            and relative not in seen
+            and path.is_file()
+            and metadata.get("sha256") == contract_row["sha256"]
+            and sha256(path) == contract_row["sha256"],
+            f"{benchmark} dataset artifact drifted: {relative}.",
+        )
+        seen.add(relative)
+        paths.append(path)
+    _require(seen == set(expected), f"{benchmark} dataset file set drifted.")
+    return paths
+
+
+def expected_example_identifiers(
+    *, benchmark: str, manifest: dict[str, Any], inventory_path: Path
+) -> set[str]:
+    if benchmark == "RULER":
+        from prepare_p3_natural_ruler_dataset import LENGTHS, SAMPLES_PER_TASK
+        from prepare_p3_ruler_dataset import TASKS
+
+        return {
+            f"{length}:{task}:{row_number}"
+            for length in LENGTHS
+            for task in TASKS
+            for row_number in range(SAMPLES_PER_TASK)
+        }
+
+    paths = _dataset_paths(
+        benchmark=benchmark, manifest=manifest, inventory_path=inventory_path
+    )
+    if benchmark == "SCBench":
+        import pyarrow.parquet as pq
+
+        identifiers: set[str] = set()
+        modes = manifest["benchmarks"][benchmark]["modes"]
+        for path in paths:
+            task = path.parent.name
+            rows = pq.read_table(path, columns=["multi_turns"]).column(
+                "multi_turns"
+            ).to_pylist()
+            for mode in modes:
+                for row_index, turns in enumerate(rows):
+                    for turn_index, _turn in enumerate(turns):
+                        identifiers.add(f"{mode}:{task}:{row_index}:{turn_index}")
+        return identifiers
+    if benchmark == "LongBench-v2":
+        payload = json.loads(paths[0].read_text())
+        _require(isinstance(payload, list), "LongBench v2 dataset payload drifted.")
+        return {str(row["_id"]) for row in payload}
+    if benchmark == "LongMemEval":
+        payload = json.loads(paths[0].read_text())
+        _require(isinstance(payload, list), "LongMemEval dataset payload drifted.")
+        return {str(row["question_id"]) for row in payload}
+    if benchmark == "MRCR":
+        import tiktoken
+        from run_p3_mrcr import load_rows
+
+        rows = load_rows(
+            paths,
+            contract=manifest["benchmarks"][benchmark],
+            official_encoder=tiktoken.get_encoding("o200k_base"),
+        )
+        return {str(row["example_id"]) for row in rows}
+    raise ValueError(f"Unknown natural benchmark: {benchmark}")
+
+
 def _distribution(values: list[float | int]) -> dict[str, Any] | None:
     if not values:
         return None
@@ -316,6 +418,7 @@ def audit_arm(
     allowed_failures: set[str],
     expected_revisions: dict[str, str] | None = None,
     expected_seed: int = 42,
+    expected_identifiers: set[str] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     artifact = json.loads(artifact_path.read_text())
     _require(
@@ -554,6 +657,11 @@ def audit_arm(
         canonical = json.dumps(row, sort_keys=True, separators=(",", ":"))
         record_digests.append(hashlib.sha256(canonical.encode()).hexdigest())
     _require(scored + sum(failures.values()) == expected_examples, "Arm accounting does not close.")
+    if expected_identifiers is not None:
+        _require(
+            identifiers == expected_identifiers,
+            f"{benchmark}/{arm} example identities drifted from the frozen dataset.",
+        )
     benchmark_dataset_digest = artifact.get("benchmark_dataset_digest_set_sha256")
     if benchmark == "RULER" or benchmark_dataset_digest is not None:
         _sha256_value(benchmark_dataset_digest, f"{benchmark} dataset manifest set")
@@ -604,6 +712,8 @@ def audit_arm(
             "source_implementation": source_implementation,
             "run_identity_verified": True,
             "terminal_measurement_schema_verified": True,
+            "dataset_example_identities_verified": expected_identifiers is not None,
+            "expected_example_identity_set_sha256": _identifier_digest(identifiers),
         },
         dependencies,
     )
@@ -625,6 +735,18 @@ def summarize_benchmark(
     expected = manifest["suite_audit"]["per_arm_minimum_accounted_examples"][benchmark]
     expected_revisions = expected_record_revisions(benchmark, manifest)
     expected_seed = manifest["benchmarks"][benchmark]["generation_seed"]
+    first_cell = json.loads(arm_artifacts[required[0]].read_text())
+    inventory_metadata = first_cell.get("dataset_inventory")
+    inventory = _dependency(inventory_metadata, "dataset inventory")
+    expected_identifiers = expected_example_identifiers(
+        benchmark=benchmark,
+        manifest=manifest,
+        inventory_path=Path(inventory["path"]),
+    )
+    _require(
+        len(expected_identifiers) == expected,
+        f"{benchmark} frozen dataset identity count drifted.",
+    )
     arms: dict[str, Any] = {}
     dependencies: list[dict[str, Any]] = []
     for arm in required:
@@ -637,6 +759,7 @@ def summarize_benchmark(
             allowed_failures=allowed_failures,
             expected_revisions=expected_revisions,
             expected_seed=expected_seed,
+            expected_identifiers=expected_identifiers,
         )
         dependencies.append(dependency)
     causal = {row["causal_gate"]["sha256"] for row in dependencies}
@@ -692,6 +815,10 @@ def summarize_benchmark(
             "all_record_revisions_verified": True,
             "all_run_identities_verified": True,
             "all_terminal_measurement_schema_verified": True,
+            "all_dataset_example_identities_verified": True,
+            "expected_example_identity_set_sha256": _identifier_digest(
+                expected_identifiers
+            ),
             "raw_record_digest_set_sha256": hashlib.sha256(
                 "\n".join(
                     sorted(row["raw_record_digest_set_sha256"] for row in arms.values())

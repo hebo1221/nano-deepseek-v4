@@ -35,6 +35,7 @@ POLICIES = ("resident-native", "tiered-native")
 TERMINAL_STATUSES = ("complete", "partial", "failed")
 WARMUPS = 5
 MEASURED_REPETITIONS = 30
+INPUT_SEED_BASE = 9_071_400
 CELL_TIMEOUT_SECONDS = 21_600.0
 EXPECTED_CELLS = len(SCALES) * len(CONTEXTS) * len(GENERATIONS) * len(LOAD_PROFILES)
 IMPLEMENTATION_PATHS = (
@@ -487,6 +488,10 @@ def validate_adapter_payload(
         "Wrong production adapter artifact id.",
     )
     _require(payload.get("cell") == cell_dict(cell), "Production adapter cell drifted.")
+    _require(
+        payload.get("input_seed_base") == INPUT_SEED_BASE,
+        "Production input seed base drifted.",
+    )
     _require(payload.get("warmups") == WARMUPS, "Production warmup count drifted.")
     _require(
         payload.get("warmup_accounting_available") is True,
@@ -547,6 +552,10 @@ def validate_adapter_payload(
         observed_failures[policy] = failure
     for index, row in enumerate(repetitions):
         _require(row.get("repetition") == index, "Production repetition ordering drifted.")
+        _require(
+            row.get("input_seed") == INPUT_SEED_BASE + WARMUPS + index,
+            "Production repetition seed drifted.",
+        )
         expected_order = POLICIES if index % 2 == 0 else tuple(reversed(POLICIES))
         _require(
             tuple(row.get("execution_order", ())) == expected_order,
@@ -684,6 +693,45 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
     temporary.replace(path)
 
 
+def _adapter_spec_valid(
+    metadata: Any,
+    *,
+    cell: tuple[str, int, int, str, int, int],
+    manifest_digest: str,
+    p3_digest: str,
+    cell_timeout_seconds: int | float,
+) -> bool:
+    if not isinstance(metadata, dict):
+        return False
+    path = Path(metadata.get("path", ""))
+    if not path.is_file() or metadata.get("sha256") != sha256(path):
+        return False
+    try:
+        spec = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return False
+    checkpoint = Path(spec.get("checkpoint", ""))
+    expected_checkpoint_tail = (
+        cell[0],
+        "seed-6071401",
+        f"{cell[0]}-step-1000.pt",
+    )
+    return (
+        spec.get("schema_version") == 1
+        and spec.get("experiment_id") == "p4-production-adapter-spec-v1"
+        and spec.get("cell") == cell_dict(cell)
+        and spec.get("policies") == list(POLICIES)
+        and spec.get("warmups") == WARMUPS
+        and spec.get("measured_repetitions") == MEASURED_REPETITIONS
+        and spec.get("cell_timeout_seconds") == cell_timeout_seconds
+        and spec.get("repetition_seeds")
+        == [INPUT_SEED_BASE + index for index in range(WARMUPS + MEASURED_REPETITIONS)]
+        and checkpoint.parts[-3:] == expected_checkpoint_tail
+        and spec.get("manifest", {}).get("sha256") == manifest_digest
+        and spec.get("p3_audit", {}).get("sha256") == p3_digest
+    )
+
+
 def _artifact_valid(
     path: Path,
     *,
@@ -709,6 +757,13 @@ def _artifact_valid(
             or payload.get("manifest", {}).get("sha256") != manifest_digest
             or payload.get("p3_audit", {}).get("sha256") != p3_digest
             or payload.get("adapter", {}).get("sha256") != adapter_digest
+            or not _adapter_spec_valid(
+                payload.get("adapter_spec"),
+                cell=cell,
+                manifest_digest=manifest_digest,
+                p3_digest=p3_digest,
+                cell_timeout_seconds=payload.get("cell_timeout_seconds", 0),
+            )
             or type(payload.get("cell_timeout_seconds")) not in (int, float)
             or not 0.0 < payload["cell_timeout_seconds"] <= CELL_TIMEOUT_SECONDS
         ):
@@ -726,6 +781,7 @@ def _artifact_valid(
                 != "p4-production-adapter-cell-v1"
                 or adapter_payload.get("cell") != cell_dict(cell)
                 or adapter_payload.get("status") != "failed"
+                or adapter_payload.get("input_seed_base") != INPUT_SEED_BASE
                 or adapter_payload.get("repetitions") != []
                 or adapter_payload.get("warmups") != WARMUPS
                 or adapter_payload.get("warmup_accounting_available") is not False
@@ -775,6 +831,7 @@ def _terminal_failure(
         "orchestrator_failure": True,
         "cell": cell_dict(cell),
         "status": "failed",
+        "input_seed_base": INPUT_SEED_BASE,
         "warmups": WARMUPS,
         "warmup_accounting_available": False,
         "warmup_repetitions_attempted": None,
@@ -913,7 +970,8 @@ def main() -> None:
         manifest.get("experiment_id") == "p4-production-systems-matrix-v1"
         and manifest.get("primary_paired_cells") == EXPECTED_CELLS
         and manifest.get("execution", {}).get("maximum_cell_timeout_seconds")
-        == CELL_TIMEOUT_SECONDS,
+        == CELL_TIMEOUT_SECONDS
+        and manifest.get("input_seed_base") == INPUT_SEED_BASE,
         "The frozen P4 production manifest is required.",
     )
     lock = acquire_gpu_lock("p4-production-systems-matrix")
@@ -964,7 +1022,7 @@ def main() -> None:
             "measured_repetitions": MEASURED_REPETITIONS,
             "cell_timeout_seconds": args.cell_timeout_seconds,
             "repetition_seeds": [
-                9_071_400 + index for index in range(WARMUPS + MEASURED_REPETITIONS)
+                INPUT_SEED_BASE + index for index in range(WARMUPS + MEASURED_REPETITIONS)
             ],
             "checkpoint": str(
                 args.training_root / cell[0] / "seed-6071401" / f"{cell[0]}-step-1000.pt"

@@ -337,6 +337,8 @@ def _natural_benchmark_summaries(tmp_path: Path, manifest_path: Path) -> dict[st
                 "all_record_revisions_verified": True,
                 "all_run_identities_verified": True,
                 "all_terminal_measurement_schema_verified": True,
+                "all_dataset_example_identities_verified": True,
+                "expected_example_identity_set_sha256": "a" * 64,
                 "raw_record_digest_set_sha256": "0" * 64,
             },
             "arms": {
@@ -351,6 +353,8 @@ def _natural_benchmark_summaries(tmp_path: Path, manifest_path: Path) -> dict[st
                     "failure_rate": 1 / expected[name],
                     "run_identity_verified": True,
                     "terminal_measurement_schema_verified": True,
+                    "dataset_example_identities_verified": True,
+                    "expected_example_identity_set_sha256": "a" * 64,
                     "measurements": {
                         "all_terminal_attempts": {
                             metric: distribution(expected[name])
@@ -715,6 +719,7 @@ def test_natural_suite_audit_requires_all_examples_and_baselines(tmp_path: Path)
     assert payload["audit"]["all_record_revisions_verified"] is True
     assert payload["audit"]["all_run_identities_verified"] is True
     assert payload["audit"]["all_terminal_measurement_schema_verified"] is True
+    assert payload["audit"]["all_dataset_example_identities_verified"] is True
     assert set(payload["audit"]["generation_seed_by_benchmark"].values()) == {42}
     assert payload["audit"]["dataset_license_revision_inventory_verified"] is True
     assert payload["audit"]["upstream_code_license_revision_inventory_verified"] is True
@@ -856,6 +861,7 @@ def test_natural_suite_audit_rejects_unaccounted_failure(tmp_path: Path) -> None
     ("mutation", "message"),
     [
         ("record-revision-audit-false", "record revision audit failed"),
+        ("dataset-identity-audit-false", "frozen dataset identity audit failed"),
         ("infinite-distribution", "all-terminal latency_ms mean drifted"),
         ("boolean-failure-count", "invalid failure count"),
         ("infinite-bootstrap-ci", "paired quality statistics drifted"),
@@ -873,6 +879,8 @@ def test_natural_suite_rejects_invalid_derived_statistics(
     payload = json.loads(paths["MRCR"].read_text())
     if mutation == "record-revision-audit-false":
         payload["audit"]["all_record_revisions_verified"] = False
+    elif mutation == "dataset-identity-audit-false":
+        payload["audit"]["all_dataset_example_identities_verified"] = False
     elif mutation == "infinite-distribution":
         payload["arms"]["native-dense"]["measurements"]["all_terminal_attempts"][
             "latency_ms"
@@ -1037,6 +1045,16 @@ def test_natural_benchmark_summary_reports_paired_quality_and_physical_contrasts
     source_manifest = root / "research/adaptive_v4_memory/manifests/p3-natural-suite-v1.json"
     manifest = json.loads(source_manifest.read_text())
     manifest["suite_audit"]["per_arm_minimum_accounted_examples"]["LongBench-v2"] = 2
+    dataset = tmp_path / "data.json"
+    dataset.write_text(json.dumps([{"_id": "example-0"}, {"_id": "example-1"}]))
+    manifest["benchmarks"]["LongBench-v2"]["dataset"]["files"] = [
+        {
+            "path": "data.json",
+            "bytes": dataset.stat().st_size,
+            "sha256": _digest(dataset),
+            "rows": 2,
+        }
+    ]
     manifest_path = tmp_path / "natural-manifest.json"
     manifest_path.write_text(json.dumps(manifest))
     native_cell, native_raw, _causal = _raw_arm_cell(tmp_path)
@@ -1050,10 +1068,35 @@ def test_natural_benchmark_summary_reports_paired_quality_and_physical_contrasts
     native_payload["model_snapshot_digest_set_sha256"] = manifest["model"][
         "snapshot_digest_set_sha256"
     ]
+    inventory_path = Path(native_payload["dataset_inventory"]["path"])
+    inventory_path.write_text(
+        json.dumps(
+            {
+                "benchmarks": {
+                    "LongBench-v2": {
+                        "repo_id": manifest["benchmarks"]["LongBench-v2"]["dataset"][
+                            "repo_id"
+                        ],
+                        "revision": manifest["benchmarks"]["LongBench-v2"]["dataset"][
+                            "revision"
+                        ],
+                        "files": [
+                            {
+                                "path": str(dataset),
+                                "sha256": _digest(dataset),
+                            }
+                        ],
+                    }
+                }
+            }
+        )
+    )
+    native_payload["dataset_inventory"]["sha256"] = _digest(inventory_path)
     native_payload["run_identity"]["manifest_sha256"] = _digest(manifest_path)
     native_payload["run_identity"]["model_snapshot_digest_set_sha256"] = manifest["model"][
         "snapshot_digest_set_sha256"
     ]
+    native_payload["run_identity"]["inventory_sha256"] = _digest(inventory_path)
     native_payload["raw_records"]["sha256"] = _digest(native_raw)
     native_cell.write_text(json.dumps(native_payload))
 
@@ -1098,6 +1141,38 @@ def test_natural_benchmark_summary_reports_paired_quality_and_physical_contrasts
         "paired_examples"
     ] == 2
     assert result["audit"]["all_record_revisions_verified"] is True
+    assert result["audit"]["all_dataset_example_identities_verified"] is True
+
+    tampered_native = deepcopy(native_records)
+    tampered_fixed = deepcopy(fixed_records)
+    tampered_native[1]["example_id"] = "invented-example"
+    tampered_fixed[1]["example_id"] = "invented-example"
+    native_raw.write_text("".join(json.dumps(row) + "\n" for row in tampered_native))
+    fixed_raw.write_text("".join(json.dumps(row) + "\n" for row in tampered_fixed))
+    native_payload["raw_records"]["sha256"] = _digest(native_raw)
+    fixed_payload["raw_records"]["sha256"] = _digest(fixed_raw)
+    native_cell.write_text(json.dumps(native_payload))
+    fixed_cell.write_text(json.dumps(fixed_payload))
+    with pytest.raises(ValueError, match="example identities drifted from the frozen dataset"):
+        summarize_benchmark(
+            benchmark="LongBench-v2",
+            manifest_path=manifest_path,
+            arm_artifacts={
+                "native-dense": native_cell,
+                "strongest-memory-matched-fixed": fixed_cell,
+            },
+            conditional_arms={
+                "fixed+pins": "incompatible",
+                "synthetic-qualified-calibrated+pins": "withheld-by-causal-gate",
+            },
+        )
+
+    native_raw.write_text("".join(json.dumps(row) + "\n" for row in native_records))
+    fixed_raw.write_text("".join(json.dumps(row) + "\n" for row in fixed_records))
+    native_payload["raw_records"]["sha256"] = _digest(native_raw)
+    fixed_payload["raw_records"]["sha256"] = _digest(fixed_raw)
+    native_cell.write_text(json.dumps(native_payload))
+    fixed_cell.write_text(json.dumps(fixed_payload))
 
     fixed_records[0]["revisions"]["model_revision"] = "wrong-revision"
     fixed_raw.write_text("".join(json.dumps(row) + "\n" for row in fixed_records))

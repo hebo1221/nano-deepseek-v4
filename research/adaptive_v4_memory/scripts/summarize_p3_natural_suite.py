@@ -143,6 +143,14 @@ def audit_benchmark(
         f"{name} terminal measurement audit failed.",
     )
     _require(
+        audit.get("all_dataset_example_identities_verified") is True,
+        f"{name} frozen dataset identity audit failed.",
+    )
+    _sha256_value(
+        audit.get("expected_example_identity_set_sha256"),
+        f"{name} expected example identity set",
+    )
+    _require(
         audit.get("all_failure_accounting_complete") is True,
         f"{name} failure accounting is incomplete.",
     )
@@ -158,7 +166,10 @@ def audit_benchmark(
         row = arms[arm]
         _require(
             row.get("run_identity_verified") is True
-            and row.get("terminal_measurement_schema_verified") is True,
+            and row.get("terminal_measurement_schema_verified") is True
+            and row.get("dataset_example_identities_verified") is True
+            and row.get("expected_example_identity_set_sha256")
+            == audit["expected_example_identity_set_sha256"],
             f"{name}/{arm} execution evidence audit failed.",
         )
         failures = row.get("failures_by_type", {})
@@ -234,6 +245,10 @@ def audit_benchmark(
             "mean_score_over_all_expected_failures_zero": conservative_mean,
             "failure_rate": failure_rate,
             "measurements": measurements,
+            "dataset_example_identities_verified": True,
+            "expected_example_identity_set_sha256": row[
+                "expected_example_identity_set_sha256"
+            ],
         }
     contrast = payload.get("paired_quality_contrast", {})
     expected_clusters = 1_844 if name == "SCBench" else expected_examples
@@ -888,6 +903,7 @@ def summarize(
             "all_record_revisions_verified": True,
             "all_run_identities_verified": True,
             "all_terminal_measurement_schema_verified": True,
+            "all_dataset_example_identities_verified": True,
             "all_paired_quality_contrasts_verified": True,
             "dataset_license_revision_inventory_verified": True,
             "upstream_code_license_revision_inventory_verified": True,

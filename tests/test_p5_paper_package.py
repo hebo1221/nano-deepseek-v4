@@ -265,7 +265,14 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
             "warmup_failure_accounting_verified",
             "whole_cell_timeout_contract_verified",
             "tail_latency_metrics_verified",
+            "repetition_seed_schedule_verified",
         )
+    )
+    assert (
+        manifest["evidence"]["p4_reference_systems"]["required_audit"][
+            "input_seed_base"
+        ]
+        == 9_071_400
     )
     assert manifest["evidence"]["p4_500k_context"]["required_audit"] == {
         "all_terminal_cells_verified": True,
@@ -319,6 +326,18 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
             "failure_provenance_verified"
         ]
         is True
+    )
+    assert (
+        manifest["evidence"]["p4_production_systems"]["required_audit"][
+            "adapter_spec_digests_and_seed_schedule_verified"
+        ]
+        is True
+    )
+    assert (
+        manifest["evidence"]["p4_production_systems"]["required_audit"][
+            "input_seed_base"
+        ]
+        == 9_071_400
     )
     assert (
         manifest["evidence"]["p4_reference_systems"]["required_audit"][
@@ -396,6 +415,12 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
     assert (
         manifest["evidence"]["p3_natural"]["required_audit"][
             "all_terminal_measurement_schema_verified"
+        ]
+        is True
+    )
+    assert (
+        manifest["evidence"]["p3_natural"]["required_audit"][
+            "all_dataset_example_identities_verified"
         ]
         is True
     )
@@ -695,8 +720,9 @@ def test_p5_classification_preserves_claim_boundaries() -> None:
                 "all_failure_accounting_complete": True,
                     "all_source_implementations_verified": True,
                     "all_record_revisions_verified": True,
-                    "all_run_identities_verified": True,
-                    "all_terminal_measurement_schema_verified": True,
+                        "all_run_identities_verified": True,
+                        "all_terminal_measurement_schema_verified": True,
+                        "all_dataset_example_identities_verified": True,
                     "generation_seed_by_benchmark": {
                         "RULER": 42,
                         "SCBench": 42,
@@ -723,6 +749,8 @@ def test_p5_classification_preserves_claim_boundaries() -> None:
         {
             "audit": {
                 "terminal_cells": package.P4_EXPECTED_CELLS,
+                "repetition_seed_schedule_verified": True,
+                "input_seed_base": 9_071_400,
                 "complete_cells": 213,
                 "partial_cells": 1,
                 "failed_cells": 2,
@@ -731,6 +759,9 @@ def test_p5_classification_preserves_claim_boundaries() -> None:
         {
             "audit": {
                 "terminal_cells": package.P4_EXPECTED_CELLS,
+                "adapter_spec_digests_and_seed_schedule_verified": True,
+                "repetition_seed_schedule_verified": True,
+                "input_seed_base": 9_071_400,
                 "complete_cells": 213,
                 "partial_cells": 1,
                 "failed_cells": 2,
@@ -786,8 +817,9 @@ def test_p5_success_requires_full_system_coverage() -> None:
                 "all_failure_accounting_complete": True,
                     "all_source_implementations_verified": True,
                     "all_record_revisions_verified": True,
-                    "all_run_identities_verified": True,
-                    "all_terminal_measurement_schema_verified": True,
+                        "all_run_identities_verified": True,
+                        "all_terminal_measurement_schema_verified": True,
+                        "all_dataset_example_identities_verified": True,
                     "generation_seed_by_benchmark": {
                         "RULER": 42,
                         "SCBench": 42,
@@ -814,6 +846,8 @@ def test_p5_success_requires_full_system_coverage() -> None:
         {
             "audit": {
                 "terminal_cells": package.P4_EXPECTED_CELLS,
+                "repetition_seed_schedule_verified": True,
+                "input_seed_base": 9_071_400,
                 "complete_cells": package.P4_EXPECTED_CELLS,
                 "partial_cells": 0,
                 "failed_cells": 0,
@@ -822,6 +856,9 @@ def test_p5_success_requires_full_system_coverage() -> None:
         {
             "audit": {
                 "terminal_cells": package.P4_EXPECTED_CELLS,
+                "adapter_spec_digests_and_seed_schedule_verified": True,
+                "repetition_seed_schedule_verified": True,
+                "input_seed_base": 9_071_400,
                 "complete_cells": package.P4_EXPECTED_CELLS,
                 "partial_cells": 0,
                 "failed_cells": 0,
@@ -868,6 +905,7 @@ def test_p5_marks_all_failed_production_coverage_unverified() -> None:
                 "all_record_revisions_verified": True,
                 "all_run_identities_verified": True,
                 "all_terminal_measurement_schema_verified": True,
+                "all_dataset_example_identities_verified": True,
                 "all_paired_quality_contrasts_verified": True,
                 "dataset_license_revision_inventory_verified": True,
                 "upstream_code_license_revision_inventory_verified": True,

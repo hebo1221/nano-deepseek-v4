@@ -497,6 +497,7 @@ def execute(spec: dict[str, Any], *, executable: Path) -> dict[str, Any]:
         repetitions.append(
             {
                 "repetition": repetition,
+                "input_seed": seeds[spec["warmups"] + repetition],
                 "input_digest": input_digest,
                 "execution_order": list(order),
                 "greedy_predictions_identical": identical,
@@ -516,6 +517,7 @@ def execute(spec: dict[str, Any], *, executable: Path) -> dict[str, Any]:
         "experiment_id": "p4-production-adapter-cell-v1",
         "cell": cell,
         "status": status,
+        "input_seed_base": seeds[0],
         "warmups": spec["warmups"],
         "warmup_accounting_available": True,
         "warmup_repetitions_attempted": warmup_repetitions_attempted,

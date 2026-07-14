@@ -945,6 +945,7 @@ def classify_evidence(
         and natural_audit.get("all_record_revisions_verified") is True
         and natural_audit.get("all_run_identities_verified") is True
         and natural_audit.get("all_terminal_measurement_schema_verified") is True
+        and natural_audit.get("all_dataset_example_identities_verified") is True
         and natural_audit.get("generation_seed_by_benchmark")
         == {
             "RULER": 42,
@@ -1032,6 +1033,8 @@ def classify_evidence(
     )
     reference_accounted = (
         reference_audit.get("terminal_cells") == P4_EXPECTED_CELLS
+        and reference_audit.get("repetition_seed_schedule_verified") is True
+        and reference_audit.get("input_seed_base") == 9_071_400
         and all(type(value) is int and value >= 0 for value in reference_counts)
         and sum(reference_counts) == P4_EXPECTED_CELLS
     )
@@ -1040,8 +1043,14 @@ def classify_evidence(
     production_counts = tuple(
         production_audit.get(field) for field in ("complete_cells", "partial_cells", "failed_cells")
     )
+    production_seed_evidence = (
+        production_audit.get("adapter_spec_digests_and_seed_schedule_verified") is True
+        and production_audit.get("repetition_seed_schedule_verified") is True
+        and production_audit.get("input_seed_base") == 9_071_400
+    )
     production_accounted = (
         production_audit.get("terminal_cells") == P4_EXPECTED_CELLS
+        and production_seed_evidence
         and all(type(value) is int and value >= 0 for value in production_counts)
         and sum(production_counts) == P4_EXPECTED_CELLS
         and production_audit.get("tail_failure_accounting_complete") is True
