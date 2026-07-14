@@ -172,8 +172,8 @@ def calibrate(
         value_count=64,
     )
     calibration_seed = int(calibration["seed"])
-    if not 7_071_401 <= calibration_seed <= 7_071_405:
-        raise ValueError("Hot-memory matching is restricted to the frozen 707-series seeds.")
+    if calibration_seed not in heldout.CALIBRATION_SEEDS:
+        raise ValueError("Hot-memory matching requires a registered calibration seed.")
     measurements: list[dict[str, Any]] = []
     matches: dict[str, dict[str, Any]] = {}
     for budget in shard.BUDGET_LABELS:
