@@ -67,6 +67,8 @@ def require_cross_family_sequence_gate(
         and _audited(causal, shards=9_000, seeds=5)
         and causal.get("audit", {}).get("all_physical_predictions_identical") is True
         and causal.get("audit", {}).get("exact_config_reuse_verified") is True
+        and causal.get("audit", {}).get("outcome_dependent_early_stopping") is False
+        and causal.get("audit", {}).get("required_scale_seed_completion_verified") is True
         and primary_gate.get("candidate") == "calibrated+pins"
         and primary_gate.get("comparator") == "fixed+pins",
         "Cross-family P3 is deferred until the terminal five-seed P2 causal audit exists.",
@@ -83,6 +85,8 @@ def require_cross_family_sequence_gate(
         and _audited(combined, shards=16_200, seeds=9)
         and combined.get("audit", {}).get("all_physical_predictions_identical") is True
         and combined.get("audit", {}).get("exact_config_reuse_verified") is True
+        and combined.get("audit", {}).get("outcome_dependent_early_stopping") is False
+        and combined.get("audit", {}).get("required_scale_seed_completion_verified") is True
         and combined.get("pooling_audit", {}).get("identical_frozen_contracts") is True
         and combined.get("pooling_audit", {}).get("disjoint_training_seeds") is True
         and combined_gate.get("candidate") == "calibrated+pins"

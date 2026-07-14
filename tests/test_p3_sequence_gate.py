@@ -5,6 +5,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 SCRIPTS = Path(__file__).resolve().parents[1] / "research/adaptive_v4_memory/scripts"
 sys.path.insert(0, str(SCRIPTS))
 
@@ -96,6 +98,8 @@ def test_p3_gate_requires_each_budget_scale_causal_cell(tmp_path: Path) -> None:
             "all_dependency_digests_verified": True,
             "all_record_digests_verified": True,
             "all_physical_predictions_identical": True,
+            "outcome_dependent_early_stopping": False,
+            "required_scale_seed_completion_verified": True,
         },
         "primary_causal_gate": {
             "candidate": "calibrated+pins",
@@ -120,3 +124,10 @@ def test_p3_gate_requires_each_budget_scale_causal_cell(tmp_path: Path) -> None:
     decision = require_p3_sequence_gate(matrix, causal)
     assert decision["causal_candidate_qualified"] is False
     assert decision["baseline_evaluation_required"] is True
+
+    payload["audit"]["outcome_dependent_early_stopping"] = True
+    causal.write_text(json.dumps(payload))
+    with pytest.raises(
+        RuntimeError, match="complete preregistered 5-seed, 2-scale causal audit"
+    ):
+        require_p3_sequence_gate(matrix, causal)

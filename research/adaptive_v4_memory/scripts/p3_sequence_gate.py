@@ -47,6 +47,8 @@ def require_p3_sequence_gate(p2_matrix: Path, causal_gate: Path) -> dict[str, An
         or audit.get("all_dependency_digests_verified") is not True
         or audit.get("all_record_digests_verified") is not True
         or audit.get("all_physical_predictions_identical") is not True
+        or audit.get("outcome_dependent_early_stopping") is not False
+        or audit.get("required_scale_seed_completion_verified") is not True
         or gate.get("candidate") != "calibrated+pins"
         or gate.get("comparator") != "fixed+pins"
         or tuple(gate.get("scales", ())) != EXPECTED_SCALES

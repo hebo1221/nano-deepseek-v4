@@ -54,7 +54,11 @@ def _gate_inputs(tmp_path: Path) -> dict[str, Path]:
         tmp_path / "causal.json",
         {
             "experiment_id": "p2-causal-ablation-audit-v1",
-            "audit": _audit(9_000, 5),
+            "audit": {
+                **_audit(9_000, 5),
+                "outcome_dependent_early_stopping": False,
+                "required_scale_seed_completion_verified": True,
+            },
             "primary_causal_gate": {
                 "candidate": "calibrated+pins",
                 "comparator": "fixed+pins",
@@ -71,7 +75,11 @@ def _gate_inputs(tmp_path: Path) -> dict[str, Path]:
         tmp_path / "nine.json",
         {
             "experiment_id": "p2-nine-seed-causal-ablation-audit-v1",
-            "audit": _audit(16_200, 9),
+            "audit": {
+                **_audit(16_200, 9),
+                "outcome_dependent_early_stopping": False,
+                "required_scale_seed_completion_verified": True,
+            },
             "pooling_audit": {
                 "identical_frozen_contracts": True,
                 "disjoint_training_seeds": True,
@@ -120,6 +128,19 @@ def test_cross_family_gate_rejects_incomplete_audit(tmp_path: Path, dependency: 
     inputs = _gate_inputs(tmp_path)
     payload = json.loads(inputs[dependency].read_text())
     payload["audit"]["all_record_digests_verified"] = False
+    inputs[dependency].write_text(json.dumps(payload))
+
+    with pytest.raises(RuntimeError, match="deferred"):
+        require_cross_family_sequence_gate(**inputs)
+
+
+@pytest.mark.parametrize("dependency", ["primary_causal", "nine_seed_causal"])
+def test_cross_family_gate_rejects_outcome_dependent_execution(
+    tmp_path: Path, dependency: str
+) -> None:
+    inputs = _gate_inputs(tmp_path)
+    payload = json.loads(inputs[dependency].read_text())
+    payload["audit"]["outcome_dependent_early_stopping"] = True
     inputs[dependency].write_text(json.dumps(payload))
 
     with pytest.raises(RuntimeError, match="deferred"):
