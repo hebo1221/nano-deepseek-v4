@@ -56,7 +56,11 @@ def workspace_source() -> dict[str, Any]:
             ["git", "status", "--porcelain"], check=True, capture_output=True, text=True
         ).stdout.strip()
     )
-    return {"commit": git_head(Path.cwd()), "dirty": dirty}
+    return {
+        "commit": git_head(Path.cwd()),
+        "dirty": dirty,
+        "implementation_sha256": sha256(Path(__file__).resolve()),
+    }
 
 
 def load_rows(path: Path, expected: int) -> list[dict[str, Any]]:

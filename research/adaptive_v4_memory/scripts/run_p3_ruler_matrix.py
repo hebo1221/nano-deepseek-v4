@@ -39,8 +39,10 @@ QUESTION_PATTERNS = {
     "qa": re.compile(r"Answer the question based on the given documents\."),
 }
 ANSWER_PATTERNS = {
-    "niah": re.compile(r"The special magic"), "vt": re.compile(r"Answer:"),
-    "cwe": re.compile(r"Answer:"), "fwe": re.compile(r"Answer:"),
+    "niah": re.compile(r"The special magic"),
+    "vt": re.compile(r"Answer:"),
+    "cwe": re.compile(r"Answer:"),
+    "fwe": re.compile(r"Answer:"),
     "qa": re.compile(r"Answer:"),
 }
 MAX_NEW_TOKENS = {"niah": 128, "vt": 30, "cwe": 120, "fwe": 50, "qa": 32}
@@ -56,8 +58,11 @@ def git_head(path: Path) -> str:
 def git_dirty(path: Path) -> bool:
     return bool(
         subprocess.run(
-            ["git", "status", "--porcelain"], cwd=path, check=True,
-            capture_output=True, text=True,
+            ["git", "status", "--porcelain"],
+            cwd=path,
+            check=True,
+            capture_output=True,
+            text=True,
         ).stdout.strip()
     )
 
@@ -94,9 +99,12 @@ def load_dataset(manifest: dict[str, Any]) -> pd.DataFrame:
                 context, question, answer_prefix = split_prompt(row["input"], task)
                 records.append(
                     {
-                        "row_id": f"{task}:{row_number}", "context": context,
-                        "question": question, "answer_prefix": answer_prefix,
-                        "answer": row["outputs"], "task": task,
+                        "row_id": f"{task}:{row_number}",
+                        "context": context,
+                        "question": question,
+                        "answer_prefix": answer_prefix,
+                        "answer": row["outputs"],
+                        "task": task,
                         "max_new_tokens": MAX_NEW_TOKENS[task.split("_")[0]],
                     }
                 )
@@ -130,9 +138,7 @@ def cell_dir(root: Path, length: int, arm: str, ratio: float) -> Path:
     return root / str(length) / arm / f"ratio-{ratio:.2f}"
 
 
-def completed(
-    cell: Path, source_commit: str, manifest_digest: str, dataset_digest: str
-) -> bool:
+def completed(cell: Path, runner_digest: str, manifest_digest: str, dataset_digest: str) -> bool:
     audit_path = cell / "audit.json"
     if not audit_path.is_file():
         if cell.exists():
@@ -141,7 +147,8 @@ def completed(
     audit = json.loads(audit_path.read_text())
     if (
         audit.get("status") != "complete"
-        or audit.get("source") != {"commit": source_commit, "dirty": False}
+        or audit.get("source", {}).get("dirty") is not False
+        or audit.get("source", {}).get("implementation_sha256") != runner_digest
         or audit.get("experiment_manifest", {}).get("sha256") != manifest_digest
         or audit.get("dataset_manifest", {}).get("sha256") != dataset_digest
     ):
@@ -155,12 +162,16 @@ def completed(
 
 def environment() -> dict[str, Any]:
     freeze = subprocess.run(
-        [sys.executable, "-m", "pip", "freeze", "--all"], check=True,
-        capture_output=True, text=True,
+        [sys.executable, "-m", "pip", "freeze", "--all"],
+        check=True,
+        capture_output=True,
+        text=True,
     ).stdout
     return {
-        "python": platform.python_version(), "platform": platform.platform(),
-        "torch": torch.__version__, "cuda": torch.version.cuda,
+        "python": platform.python_version(),
+        "platform": platform.platform(),
+        "torch": torch.__version__,
+        "cuda": torch.version.cuda,
         "device": torch.cuda.get_device_name(0),
         "transformers": importlib.metadata.version("transformers"),
         "datasets": importlib.metadata.version("datasets"),
@@ -197,9 +208,12 @@ def write_failure(
         {
             "schema_version": 1,
             "experiment_id": "p3-ruler-qwen3-1.7b-cell-failure-v1",
-            "status": "failed", "source": {"commit": source_commit, "dirty": False},
-            "command": command, "elapsed_seconds": time.monotonic() - started,
-            "error_type": type(error).__name__, "error": str(error),
+            "status": "failed",
+            "source": {"commit": source_commit, "dirty": False},
+            "command": command,
+            "elapsed_seconds": time.monotonic() - started,
+            "error_type": type(error).__name__,
+            "error": str(error),
             "traceback": traceback.format_exc(),
         },
     )
@@ -210,15 +224,18 @@ def main() -> None:
     parser.add_argument("--kvpress-root", type=Path, required=True)
     parser.add_argument("--model-snapshot", type=Path, required=True)
     parser.add_argument(
-        "--dataset-root", type=Path,
+        "--dataset-root",
+        type=Path,
         default=Path("artifacts/adaptive_v4_memory/paper_grade/p3/ruler-qwen3-1.7b/data"),
     )
     parser.add_argument(
-        "--output-root", type=Path,
+        "--output-root",
+        type=Path,
         default=Path("artifacts/adaptive_v4_memory/paper_grade/p3/ruler-qwen3-1.7b/results"),
     )
     parser.add_argument(
-        "--manifest", type=Path,
+        "--manifest",
+        type=Path,
         default=Path("research/adaptive_v4_memory/manifests/p3-ruler-qwen3-1.7b-v1.json"),
     )
     parser.add_argument("--length", type=int, action="append", choices=LENGTHS)
@@ -242,11 +259,13 @@ def main() -> None:
         raise ValueError("Experiment manifest model revision drifted.")
     verify_model_snapshot(model_snapshot, manifest)
     manifest_digest = sha256(args.manifest)
+    runner_digest = sha256(Path(__file__).resolve())
     lengths = tuple(args.length or LENGTHS)
     arms = tuple(args.arm or ARMS)
     ratios = tuple(args.ratio) if args.ratio else None
     all_cells = cells(lengths, arms, ratios)
     datasets: dict[int, tuple[dict[str, Any], str, pd.DataFrame]] = {}
+    generator_digest = sha256(Path(__file__).with_name("prepare_p3_ruler_dataset.py"))
     for length in lengths:
         path = args.dataset_root / str(length) / "dataset-manifest.json"
         data_manifest = json.loads(path.read_text())
@@ -254,15 +273,19 @@ def main() -> None:
             data_manifest["ruler"]["revision"] != RULER_REVISION
             or data_manifest["tokenizer"]["model_revision"] != MODEL_REVISION
             or data_manifest["generation"]["length_tokens"] != length
-            or data_manifest["source"] != {"commit": source_commit, "dirty": False}
+            or data_manifest["source"].get("dirty") is not False
+            or data_manifest["source"].get("implementation_sha256") != generator_digest
         ):
             raise ValueError(f"Dataset provenance drifted for length {length}.")
         datasets[length] = (data_manifest, sha256(path), load_dataset(data_manifest))
     pending = [
-        item for item in all_cells
+        item
+        for item in all_cells
         if not completed(
             cell_dir(args.output_root, item[0], item[1], item[3]),
-            source_commit, manifest_digest, datasets[item[0]][1],
+            runner_digest,
+            manifest_digest,
+            datasets[item[0]][1],
         )
     ]
     if args.max_new_cells is not None:
@@ -276,9 +299,14 @@ def main() -> None:
     EvaluationConfig, EvaluationRunner, scorer = load_evaluator(kvpress_root)
     first_length = pending[0][0]
     base = EvaluationConfig(
-        dataset="ruler", data_dir=str(first_length), model=str(model_snapshot),
-        device="cuda:0", press_name="no_press", compression_ratio=0.0,
-        output_dir=str(args.output_root), seed=args.seed,
+        dataset="ruler",
+        data_dir=str(first_length),
+        model=str(model_snapshot),
+        device="cuda:0",
+        press_name="no_press",
+        compression_ratio=0.0,
+        output_dir=str(args.output_root),
+        seed=args.seed,
     )
     runner = EvaluationRunner(base)
     runner._setup_press()
@@ -299,9 +327,14 @@ def main() -> None:
             torch.cuda.manual_seed_all(args.seed)
             torch.cuda.reset_peak_memory_stats()
             config = EvaluationConfig(
-                dataset="ruler", data_dir=str(length), model=str(model_snapshot),
-                device="cuda:0", press_name=press, compression_ratio=ratio,
-                output_dir=str(args.output_root), seed=args.seed,
+                dataset="ruler",
+                data_dir=str(length),
+                model=str(model_snapshot),
+                device="cuda:0",
+                press_name=press,
+                compression_ratio=ratio,
+                output_dir=str(args.output_root),
+                seed=args.seed,
             )
             runner.config = config
             runner._setup_press()
@@ -321,8 +354,15 @@ def main() -> None:
             predictions_path, metrics_path = staging / "predictions.csv", staging / "metrics.json"
             config_path = staging / "config.json"
             columns = [
-                "row_id", "task", "question", "answer_prefix", "answer", "max_new_tokens",
-                "predicted_answer", "string_match", "compression_ratio",
+                "row_id",
+                "task",
+                "question",
+                "answer_prefix",
+                "answer",
+                "max_new_tokens",
+                "predicted_answer",
+                "string_match",
+                "compression_ratio",
             ]
             runner.df[[name for name in columns if name in runner.df]].to_csv(
                 predictions_path, index=False
@@ -332,25 +372,38 @@ def main() -> None:
             outputs = {
                 name: {"path": str(cell / path.name), "sha256": sha256(path)}
                 for name, path in {
-                    "predictions": predictions_path, "metrics": metrics_path, "config": config_path
+                    "predictions": predictions_path,
+                    "metrics": metrics_path,
+                    "config": config_path,
                 }.items()
             }
             dataset_manifest_path = args.dataset_root / str(length) / "dataset-manifest.json"
             audit = {
-                "schema_version": 1, "experiment_id": "p3-ruler-qwen3-1.7b-cell-v1",
-                "status": "complete", "source": {"commit": source_commit, "dirty": False},
+                "schema_version": 1,
+                "experiment_id": "p3-ruler-qwen3-1.7b-cell-v1",
+                "status": "complete",
+                "source": {
+                    "commit": source_commit,
+                    "dirty": False,
+                    "implementation_sha256": runner_digest,
+                },
                 "cell": {"length_tokens": length, "arm": arm, "press": press, "ratio": ratio},
-                "command": command, "seed": args.seed, "environment": runtime_environment,
+                "command": command,
+                "seed": args.seed,
+                "environment": runtime_environment,
                 "upstreams": {
-                    "kvpress_revision": KVPRESS_REVISION, "ruler_revision": RULER_REVISION,
+                    "kvpress_revision": KVPRESS_REVISION,
+                    "ruler_revision": RULER_REVISION,
                     "model_revision": MODEL_REVISION,
                 },
                 "experiment_manifest": {"path": str(args.manifest), "sha256": manifest_digest},
                 "dataset_manifest": {
-                    "path": str(dataset_manifest_path), "sha256": datasets[length][1]
+                    "path": str(dataset_manifest_path),
+                    "sha256": datasets[length][1],
                 },
                 "measurements": {
-                    "rows": len(runner.df), "elapsed_seconds": time.monotonic() - started,
+                    "rows": len(runner.df),
+                    "elapsed_seconds": time.monotonic() - started,
                     "peak_cuda_allocated_bytes": torch.cuda.max_memory_allocated(),
                     "peak_cuda_reserved_bytes": torch.cuda.max_memory_reserved(),
                 },
@@ -362,7 +415,9 @@ def main() -> None:
             failure = cell.with_name(cell.name + ".failure.json")
             if failure.exists():
                 failure.unlink()
-            print(json.dumps({"completed": str(cell), "completed_cells": completed_cells}), flush=True)
+            print(
+                json.dumps({"completed": str(cell), "completed_cells": completed_cells}), flush=True
+            )
         except BaseException as error:
             write_failure(cell, source_commit, command, started, error)
             raise
