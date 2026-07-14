@@ -139,3 +139,27 @@ def test_p4_partial_artifact_preserves_surviving_policy(tmp_path: Path) -> None:
         manifest_digest="manifest",
         p3_digest="p3",
     )
+
+
+def test_production_manifest_requires_actual_overlap_and_backend_provenance() -> None:
+    root = Path(__file__).resolve().parents[1]
+    manifest = json.loads(
+        (
+            root
+            / "research/adaptive_v4_memory/manifests/p4-production-systems-matrix-v1.json"
+        ).read_text()
+    )
+
+    profiles = manifest["load_profiles"]
+    assert len(manifest["scales"]) * len(manifest["contexts_tokens"]) * len(
+        manifest["generation_tokens"]
+    ) * len(profiles) == 108
+    assert {row["concurrency"] for row in profiles} == {1, 8, 32}
+    assert "overlap" in manifest["adapter_contract"]["actual_concurrency_proof"]
+    assert "serial-round-robin labeled concurrent" in manifest["adapter_contract"]["forbidden"]
+    assert "runtime-name-and-version" in manifest["adapter_contract"][
+        "required_backend_provenance"
+    ]
+    assert "request admission, first-token, and completion timestamps" in manifest[
+        "required_measurements"
+    ]

@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "experiment_id": "p4-production-systems-matrix-v1",
+  "status": "frozen_before_execution",
+  "evidence_tier": "external-serving-adapter-actual-request-concurrency",
+  "prerequisite": "complete digest-bound five-benchmark P3 natural-suite audit",
+  "scales": ["s55", "s151"],
+  "checkpoint_training_seed": 6071401,
+  "policies": ["resident-native", "tiered-native"],
+  "contexts_tokens": [8192, 32768, 131072],
+  "generation_tokens": [128, 512, 2048],
+  "load_profiles": [
+    {"name": "serving-b1-c1", "batch": 1, "concurrency": 1},
+    {"name": "serving-b4-c1", "batch": 4, "concurrency": 1},
+    {"name": "serving-b8-c1", "batch": 8, "concurrency": 1},
+    {"name": "serving-b16-c1", "batch": 16, "concurrency": 1},
+    {"name": "serving-b1-c8", "batch": 1, "concurrency": 8},
+    {"name": "serving-b1-c32", "batch": 1, "concurrency": 32}
+  ],
+  "matrix_interpretation": "Batch and concurrency are separate controlled sweeps. c8/c32 require overlapping request-lifecycle intervals measured by the serving scheduler; serial round-robin is invalid.",
+  "warmups_per_paired_cell": 5,
+  "measured_repetitions_per_paired_cell": 30,
+  "paired_policy_order": "alternate resident-first and tiered-first by repetition",
+  "primary_paired_cells": 108,
+  "primary_measured_policy_runs": 6480,
+  "primary_total_policy_runs_including_warmup": 7560,
+  "adapter_contract": {
+    "interface": "executable --spec <json> --output <json>",
+    "required_backend_provenance": [
+      "runtime-name-and-version",
+      "source-repository-and-revision",
+      "executable-sha256",
+      "container-image-digest-or-explicit-bare-metal",
+      "accelerator-model-count-and-driver"
+    ],
+    "actual_concurrency_proof": "request records must independently reconstruct maximum lifecycle overlap equal to the frozen concurrency; c8/c32 require a positive overlap window",
+    "forbidden": [
+      "serial-round-robin labeled concurrent",
+      "projected latency or throughput",
+      "aggregate-only latency without request timestamps",
+      "silent retry, truncation, or dropped failure"
+    ]
+  },
+  "required_measurements": [
+    "request admission, first-token, and completion timestamps",
+    "TTFT, TPOT, end-to-end p50/p95/p99 and maximum",
+    "generated-token throughput and terminal request failures",
+    "allocated, reserved, peak, process-total, and device-total HBM",
+    "pinned host, logical, hot, and cold cache bytes",
+    "H2D, D2H, useful-transfer bytes and counts",
+    "misses, late misses, prefetches, and evictions",
+    "controller and indexer time"
+  ],
+  "execution": {
+    "runner": "research/adaptive_v4_memory/scripts/run_p4_production_systems_matrix.py",
+    "audit_runner": "research/adaptive_v4_memory/scripts/summarize_p4_production_systems_matrix.py",
+    "raw_output_root": "artifacts/adaptive_v4_memory/paper_grade/p4/production-systems",
+    "matrix_progress": "artifacts/adaptive_v4_memory/paper_grade/p4/production-systems-matrix.json",
+    "audit_output": "artifacts/adaptive_v4_memory/paper_grade/p4/production-systems.summary.json",
+    "resume_unit": "one scale-context-generation-load-profile paired cell",
+    "failure_is_terminal_and_reported": true
+  },
+  "claim_boundary": "Actual request-concurrency evidence for the pinned adapter backend only. It is not official DeepSeek-V4 or FlashMemory evidence unless the separately frozen compatible runtime and weights are used."
+}
