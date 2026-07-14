@@ -1,0 +1,88 @@
+{
+  "schema_version": 1,
+  "experiment_id": "p4-adaptive-systems-matrix-v1",
+  "status": "frozen_before_any_adaptive_systems_cell",
+  "frozen_date": "2026-07-15",
+  "evidence_tier": "single-accelerator-serial-interleaved-reference-pytorch-runtime",
+  "prerequisites": [
+    "complete digest-bound nine-seed P2 causal audit",
+    "passing calibration-only physical hot-memory match for training seed 6071401 at both scales and budgets",
+    "complete digest-bound five-benchmark P3 natural-suite audit"
+  ],
+  "execution_policy": "run and retain every frozen cell regardless of whether the P2 central causal gate is positive, bounded, or negative; P2 qualification changes interpretation, never cell selection",
+  "scales": [
+    "s55",
+    "s151"
+  ],
+  "checkpoint_training_seed": 6071401,
+  "budgets": [
+    "2x",
+    "4x"
+  ],
+  "paired_policies": [
+    "fixed+pins",
+    "calibrated+pins"
+  ],
+  "protected_prefix_end_positions": [
+    3
+  ],
+  "protected_prefix_contract": "pin the first complete CSA block for both policies; the identical pin set isolates adaptive layer quota allocation from protected-prefix benefit",
+  "contexts_tokens": [
+    8192,
+    32768,
+    131072
+  ],
+  "generation_tokens": [
+    128,
+    512,
+    2048
+  ],
+  "load_profiles": [
+    {"name": "batch-b1", "batch": 1, "active_requests": 1},
+    {"name": "batch-b4", "batch": 4, "active_requests": 1},
+    {"name": "batch-b8", "batch": 8, "active_requests": 1},
+    {"name": "batch-b16", "batch": 16, "active_requests": 1},
+    {"name": "interleaved-c8", "batch": 1, "active_requests": 8},
+    {"name": "interleaved-b4-c8", "batch": 4, "active_requests": 8},
+    {"name": "interleaved-b8-c8", "batch": 8, "active_requests": 8},
+    {"name": "interleaved-b16-c8", "batch": 16, "active_requests": 8},
+    {"name": "interleaved-c32", "batch": 1, "active_requests": 32},
+    {"name": "interleaved-b4-c32", "batch": 4, "active_requests": 32},
+    {"name": "interleaved-b8-c32", "batch": 8, "active_requests": 32},
+    {"name": "interleaved-b16-c32", "batch": 16, "active_requests": 32}
+  ],
+  "matrix_interpretation": "all 2 scales x 2 budgets x 3 contexts x 3 generation lengths x 12 serial-interleaved load profiles; active requests are not actual serving concurrency",
+  "input_seed_base": 9171400,
+  "warmups_per_paired_cell": 5,
+  "measured_repetitions_per_paired_cell": 30,
+  "paired_policy_order": "alternate fixed-first and calibrated-first by repetition",
+  "fixed_mixture_schedule": "reuse the calibration-frozen low/high Bresenham schedule without outcome-dependent replacement",
+  "primary_paired_cells": 432,
+  "primary_measured_policy_runs": 25920,
+  "primary_total_policy_runs_including_warmup": 30240,
+  "required_measurements": [
+    "raw per-request prefill and TTFT samples",
+    "raw per-request-token decode-step latency",
+    "TTFT, TPOT, end-to-end p50/p95/p99 and maximum",
+    "generated-token throughput",
+    "allocated, reserved, peak, and fragmented HBM",
+    "logical, hot, cold, tier-hot, and pinned-host cache bytes",
+    "H2D, D2H, useful-transfer bytes and counts",
+    "late misses, prefetches, and evictions",
+    "measured same-token controller time and independently probed indexer time",
+    "configured and observed per-layer hot budgets",
+    "prediction digests without requiring equality between causal policies",
+    "OOM, timeout, numerical failure, and unexpected exception records"
+  ],
+  "execution": {
+    "runner": "research/adaptive_v4_memory/scripts/run_p4_adaptive_systems_matrix.py",
+    "audit_runner": "research/adaptive_v4_memory/scripts/summarize_p4_adaptive_systems_matrix.py",
+    "raw_output_root": "artifacts/adaptive_v4_memory/paper_grade/p4/adaptive-systems",
+    "matrix_progress": "artifacts/adaptive_v4_memory/paper_grade/p4/adaptive-systems-matrix.json",
+    "audit_output": "artifacts/adaptive_v4_memory/paper_grade/p4/adaptive-systems.summary.json",
+    "resume_unit": "one scale-budget-context-generation-load-profile paired cell",
+    "maximum_cell_timeout_seconds": 21600,
+    "failure_is_terminal_and_reported": true
+  },
+  "claim_boundary": "This matrix measures the system cost of the exact P2 fixed+pins and calibrated+pins controllers on the seed-6071401 compatible checkpoints. It is serial-interleaved reference evidence, not actual-concurrency, fused-kernel, multi-GPU, Qwen, or official DeepSeek-V4 serving evidence."
+}

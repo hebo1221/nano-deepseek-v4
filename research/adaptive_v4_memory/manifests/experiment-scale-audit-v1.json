@@ -33,6 +33,12 @@
       "date": "2026-07-14",
       "timing": "before any P3 model prediction or baseline outcome inspection",
       "change": "expand the Qwen3-1.7B RULER baseline screen from 39 to 57 cells by adding PyramidKV and Ada-KV-wrapped SnapKV"
+    },
+    {
+      "date": "2026-07-15",
+      "timing": "before any adaptive P4 systems cell and before primary P2 completion",
+      "change": "add a separate 432-cell fixed+pins versus calibrated+pins reference systems matrix across both scales, both budgets, and the complete context-generation-load factorial",
+      "reason": "the resident-versus-tiered matrices measure physical tiering but cannot quantify the system cost of the central adaptive-quota causal contrast"
     }
   ],
   "date": "2026-07-14",
@@ -146,6 +152,19 @@
       "measured_repetitions_per_cell": 30,
       "policies": 2,
       "policy_runs_including_warmups": 15120
+    },
+    "p4_adaptive_reference": {
+      "cells": 432,
+      "scales": 2,
+      "budgets": 2,
+      "warmups_per_cell": 5,
+      "measured_repetitions_per_cell": 30,
+      "paired_policies": [
+        "fixed+pins",
+        "calibrated+pins"
+      ],
+      "policy_runs_including_warmups": 30240,
+      "outcome_dependent_cell_selection": false
     }
   },
   "inference_resolution": {

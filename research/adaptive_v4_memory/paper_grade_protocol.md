@@ -1,6 +1,6 @@
 # Paper-grade expansion protocol
 
-Protocol version: 1.7
+Protocol version: 1.8
 Frozen: 2026-07-14  
 Amended: 2026-07-14, before causal-factorial held-out execution
 Status: active; P2 synthetic core runs first, followed by causal ablations,
@@ -53,6 +53,14 @@ evaluator previously resolved from the pinned KVPress checkout while the press
 package could resolve from site-packages. Every P3 runner now fails closed unless
 both modules resolve inside the clean pinned checkout and records their resolved
 paths and SHA-256 digests. No P3 result cell or model prediction existed.
+
+Version 1.8 adds a separate pre-outcome P4 adaptive-controller systems matrix.
+The existing resident-vs-tiered matrices cannot measure the system cost of the
+central causal contrast. The new 432 paired cells therefore cross both scales,
+both 2x/4x budgets, all context/generation/load axes, and the exact
+`fixed+pins`/`calibrated+pins` configurations. Every cell runs regardless of
+the eventual P2 gate outcome, so system-cell selection cannot depend on quality
+results. No adaptive P4 cell existed when this contract was frozen.
 
 ## 1. Primary questions
 
@@ -355,6 +363,13 @@ throughput, tail, variance, or production-serving claims.
 
 Reference PyTorch and fused production runtimes are separate result tables.
 Projected kernel speedups are never mixed with measured results.
+
+The resident-vs-tiered reference matrix does not answer the adaptive-quota
+systems question. A separate 432-cell reference matrix crosses both scales and
+both 2x/4x budgets for `fixed+pins` versus `calibrated+pins`, using identical
+protected-prefix positions and the calibration-frozen physical memory-match
+schedule. It runs whether the P2 causal result is positive, bounded, or negative;
+that result changes interpretation rather than selecting systems cells.
 
 The production matrix crosses all four batch sizes with actual concurrency
 1/8/32. This yields 216 paired cells across two scales, three contexts, and

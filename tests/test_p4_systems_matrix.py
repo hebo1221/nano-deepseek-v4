@@ -105,6 +105,39 @@ def test_p4_frozen_matrix_has_full_batch_load_factorial() -> None:
     assert any("raw per-request" in metric for metric in manifest["measurements"])
 
 
+def test_p4_adaptive_matrix_freezes_full_causal_systems_factorial() -> None:
+    root = Path(__file__).resolve().parents[1]
+    manifest = json.loads(
+        (
+            root / "research/adaptive_v4_memory/manifests/p4-adaptive-systems-matrix-v1.json"
+        ).read_text()
+    )
+
+    assert manifest["status"] == "frozen_before_any_adaptive_systems_cell"
+    assert manifest["scales"] == ["s55", "s151"]
+    assert manifest["budgets"] == ["2x", "4x"]
+    assert manifest["paired_policies"] == ["fixed+pins", "calibrated+pins"]
+    assert manifest["protected_prefix_end_positions"] == [3]
+    assert {
+        (profile["batch"], profile["active_requests"])
+        for profile in manifest["load_profiles"]
+    } == {
+        (batch, active_requests)
+        for batch in (1, 4, 8, 16)
+        for active_requests in (1, 8, 32)
+    }
+    cells = (
+        len(manifest["scales"])
+        * len(manifest["budgets"])
+        * len(manifest["contexts_tokens"])
+        * len(manifest["generation_tokens"])
+        * len(manifest["load_profiles"])
+    )
+    assert cells == manifest["primary_paired_cells"] == 432
+    assert manifest["primary_total_policy_runs_including_warmup"] == 30_240
+    assert "regardless" in manifest["execution_policy"]
+
+
 def test_p4_requires_full_natural_suite_not_ruler_only(tmp_path: Path) -> None:
     ruler_only = tmp_path / "ruler.json"
     ruler_only.write_text(
