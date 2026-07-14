@@ -1174,6 +1174,8 @@ def _validate_boundary_manifest(name: str, path: Path) -> dict[str, Any]:
             else set()
         )
         modes = payload.get("runtime_modes", {})
+        mode_a = modes.get("mode_a_score_masking", {})
+        mode_b = modes.get("mode_b_pd_disaggregated", {})
         audit = payload.get("public_release_contract_audit", {})
         verification = payload.get("post_acquisition_verification", {})
         protocol = payload.get("execution_protocol", {})
@@ -1193,12 +1195,23 @@ def _validate_boundary_manifest(name: str, path: Path) -> dict[str, Any]:
             "Official DeepSeek-V4 boundary could be misread as executed evidence.",
         )
         _require(
-            modes.get("mode_a_score_masking", {}).get("full_kv_remains_on_gpu") is True,
+            mode_a.get("full_kv_remains_on_gpu") is True,
             "Official DeepSeek-V4 Mode A memory boundary drifted.",
         )
         _require(
-            modes.get("mode_b_pd_disaggregated", {}).get("total_accelerator_slots") == 16,
+            mode_b.get("total_accelerator_slots") == 16,
             "Official DeepSeek-V4 Mode B topology boundary drifted.",
+        )
+        _require(
+            mode_a.get("launch")
+            == "MODEL=/models/deepseek-v4-flash CKPT=/weights/top3_R930_joint.pt TP=4 bash start_server.sh"
+            and mode_b.get("startup_order")
+            == [
+                "TGT_CONC=60 TGT_CTX=524288 CTX_LEN=1100000 MODEL=/models/deepseek-v4-flash CKPT=/weights/top3_R930_joint.pt bash high_concurrency/launch_decode.sh",
+                "CTX_LEN=1100000 SWA_RATIO=0.1 HOST=<PREFILL_IP> MODEL=/models/deepseek-v4-flash bash high_concurrency/launch_prefill.sh",
+                "PREFILL_IP=<PREFILL_IP> DECODE_IP=<DECODE_IP> bash high_concurrency/launch_router.sh",
+            ],
+            "Official DeepSeek-V4 launch sequence drifted.",
         )
         _require(
             base_model.get("revision") == "60d8d70770c6776ff598c94bb586a859a38244f1"
@@ -1268,6 +1281,7 @@ def _validate_boundary_manifest(name: str, path: Path) -> dict[str, Any]:
             "Official DeepSeek-V4 checkpoint verification contract is incomplete.",
         )
         systems = protocol.get("mode_b_physical_systems", {})
+        quality = protocol.get("mode_a_quality_only", {})
         _require(
             systems.get("context_tokens") == [8192, 32768, 131072, 512000]
             and systems.get("batch_sizes") == [1, 4, 8, 16]
@@ -1278,10 +1292,22 @@ def _validate_boundary_manifest(name: str, path: Path) -> dict[str, Any]:
             "Official DeepSeek-V4 systems execution matrix drifted.",
         )
         _require(
-            len(systems.get("required_metrics", [])) >= 10
+            quality.get("benchmarks")
+            == ["RULER", "SCBench", "LongBench-v2", "LongMemEval", "MRCR"]
+            and len(systems.get("required_metrics", [])) >= 10
             and len(protocol.get("paired_invariants", [])) >= 5
             and len(protocol.get("artifact_contract", [])) >= 4,
             "Official DeepSeek-V4 execution evidence contract is incomplete.",
+        )
+        preconditions = payload.get("execution_preconditions", [])
+        failure_policy = protocol.get("failure_policy", "")
+        _require(
+            len(preconditions) >= 5
+            and any("top3_R930_joint.pt" in item for item in preconditions)
+            and any("golden fixture" in item for item in preconditions)
+            and all(term in failure_policy for term in ("complete", "partial", "failed"))
+            and "may not be silently retried" in failure_policy,
+            "Official DeepSeek-V4 execution preconditions or failure policy drifted.",
         )
     elif name == "production_runtime_blocker":
         _require(

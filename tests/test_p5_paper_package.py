@@ -1015,6 +1015,18 @@ def test_official_v4_boundary_validation_fails_closed(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="acquisition contract drifted"):
         package._validate_boundary_manifest("official_deepseek_v4", tampered)
 
+    payload = json.loads(source.read_text())
+    payload["runtime_modes"]["mode_b_pd_disaggregated"]["startup_order"].pop()
+    tampered.write_text(json.dumps(payload))
+    with pytest.raises(ValueError, match="launch sequence drifted"):
+        package._validate_boundary_manifest("official_deepseek_v4", tampered)
+
+    payload = json.loads(source.read_text())
+    payload["execution_preconditions"] = []
+    tampered.write_text(json.dumps(payload))
+    with pytest.raises(ValueError, match="preconditions or failure policy drifted"):
+        package._validate_boundary_manifest("official_deepseek_v4", tampered)
+
 
 def test_natural_suite_boundary_rejects_projected_dsa_baselines(tmp_path: Path) -> None:
     root = Path(__file__).resolve().parents[1]
