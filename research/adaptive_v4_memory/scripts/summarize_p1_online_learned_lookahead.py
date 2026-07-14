@@ -283,13 +283,19 @@ def summarize(matrix_path: Path) -> dict[str, Any]:
             budget_violations += int(row["budget_violations"])
             arm = row["arm"]
             cell = physical[(shard["scale"], shard["budget"], arm)]
-            cell["peak_cuda_allocated_bytes"].append(float(row["peak_cuda_allocated_bytes"]))
-            cell["peak_cuda_reserved_bytes"].append(float(row["peak_cuda_reserved_bytes"]))
-            cell["h2d_bytes"].append(float(row["tier"]["h2d_bytes"]))
-            cell["d2h_bytes"].append(float(row["tier"]["d2h_bytes"]))
-            cell["late_misses"].append(float(row["tier"]["late_misses"]))
-            cell["wall_ms"].append(float(row["wall_ms"]))
-            failure_count += int(row.get("failure") is not None)
+            failed = row.get("failure") is not None
+            failure_count += int(failed)
+            if not failed:
+                accounting = row["accounting"]
+                _require(accounting is not None, "Successful system row lacks cache accounting.")
+                cell["peak_cuda_allocated_bytes"].append(float(row["peak_cuda_allocated_bytes"]))
+                cell["peak_cuda_reserved_bytes"].append(float(row["peak_cuda_reserved_bytes"]))
+                cell["hot_resident_bytes"].append(float(accounting["hot_resident_bytes"]))
+                cell["h2d_bytes"].append(float(row["tier"]["h2d_bytes"]))
+                cell["useful_h2d_bytes"].append(float(row["tier"]["useful_h2d_bytes"]))
+                cell["d2h_bytes"].append(float(row["tier"]["d2h_bytes"]))
+                cell["late_misses"].append(float(row["tier"]["late_misses"]))
+                cell["wall_ms"].append(float(row["wall_ms"]))
 
     contrast_payloads = {
         name: contrast_statistics(
@@ -335,12 +341,35 @@ def summarize(matrix_path: Path) -> dict[str, Any]:
         for budget in causal.BUDGET_LABELS:
             learned = physical[(scale, budget, PRIMARY)]
             fixed = physical[(scale, budget, FIXED)]
-            learned_hbm = float(np.mean(learned["peak_cuda_allocated_bytes"]))
-            fixed_hbm = float(np.mean(fixed["peak_cuda_allocated_bytes"]))
-            relative_hbm = (learned_hbm - fixed_hbm) / max(fixed_hbm, 1.0)
-            learned_h2d = float(np.mean(learned["h2d_bytes"]))
-            fixed_h2d = float(np.mean(fixed["h2d_bytes"]))
-            passed = relative_hbm <= MAXIMUM_HBM_DIFFERENCE and learned_h2d <= fixed_h2d
+
+            def mean_or_none(values: list[float]) -> float | None:
+                return float(np.mean(values)) if values else None
+
+            learned_hbm = mean_or_none(learned["peak_cuda_allocated_bytes"])
+            fixed_hbm = mean_or_none(fixed["peak_cuda_allocated_bytes"])
+            relative_hbm = (
+                (learned_hbm - fixed_hbm) / max(fixed_hbm, 1.0)
+                if learned_hbm is not None and fixed_hbm is not None
+                else None
+            )
+            learned_hot = mean_or_none(learned["hot_resident_bytes"])
+            fixed_hot = mean_or_none(fixed["hot_resident_bytes"])
+            relative_hot = (
+                (learned_hot - fixed_hot) / max(fixed_hot, 1.0)
+                if learned_hot is not None and fixed_hot is not None
+                else None
+            )
+            learned_h2d = mean_or_none(learned["h2d_bytes"])
+            fixed_h2d = mean_or_none(fixed["h2d_bytes"])
+            learned_useful_h2d = mean_or_none(learned["useful_h2d_bytes"])
+            fixed_useful_h2d = mean_or_none(fixed["useful_h2d_bytes"])
+            passed = (
+                relative_hot is not None
+                and learned_useful_h2d is not None
+                and fixed_useful_h2d is not None
+                and relative_hot <= MAXIMUM_HBM_DIFFERENCE
+                and learned_useful_h2d <= fixed_useful_h2d
+            )
             memory_passed = memory_passed and passed
             system_cells.append(
                 {
@@ -349,8 +378,15 @@ def summarize(matrix_path: Path) -> dict[str, Any]:
                     "learned_peak_allocated_bytes_mean": learned_hbm,
                     "fixed_peak_allocated_bytes_mean": fixed_hbm,
                     "relative_peak_allocated_difference": relative_hbm,
+                    "learned_hot_resident_bytes_mean": learned_hot,
+                    "fixed_hot_resident_bytes_mean": fixed_hot,
+                    "relative_hot_resident_difference": relative_hot,
                     "learned_h2d_bytes_mean": learned_h2d,
                     "fixed_h2d_bytes_mean": fixed_h2d,
+                    "learned_useful_h2d_bytes_mean": learned_useful_h2d,
+                    "fixed_useful_h2d_bytes_mean": fixed_useful_h2d,
+                    "successful_learned_measurements": len(learned["hot_resident_bytes"]),
+                    "successful_fixed_measurements": len(fixed["hot_resident_bytes"]),
                     "passed": passed,
                 }
             )
