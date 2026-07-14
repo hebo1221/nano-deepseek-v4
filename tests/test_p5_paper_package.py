@@ -62,6 +62,9 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
     assert manifest["boundary_manifests"]["production_runtime_blocker"].endswith(
         "p4-production-resource-blocker-v1.json"
     )
+    assert manifest["boundary_manifests"]["experiment_scale_audit"].endswith(
+        "experiment-scale-audit-v1.json"
+    )
 
 
 def test_p5_classification_preserves_claim_boundaries() -> None:

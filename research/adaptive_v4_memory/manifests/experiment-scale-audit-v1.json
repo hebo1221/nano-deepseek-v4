@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "experiment_id": "adaptive-v4-memory-experiment-scale-audit-v1",
+  "status": "frozen_before_primary_completion",
+  "date": "2026-07-14",
+  "planned_volume": {
+    "p2_core": {
+      "independent_shards": 4500,
+      "policy_example_evaluations": 630000,
+      "training_seeds": 5,
+      "scales": 2,
+      "workload_families": 9,
+      "context_lengths": 5,
+      "examples_per_seed_scale_family": 1000
+    },
+    "p2_causal": {
+      "independent_shards": 9000,
+      "policy_example_evaluations": 2520000,
+      "training_seeds": 5,
+      "scales": 2,
+      "factorial_arms": 14
+    },
+    "p3_small_model_ruler": {
+      "predictions": 253500,
+      "model_scales": 1,
+      "cells": 39
+    },
+    "p3_natural_qwen3_4b": {
+      "predictions": 90578,
+      "benchmarks": 5,
+      "required_arms": 2,
+      "model_families": 1,
+      "maximum_primary_context_tokens": 131072
+    },
+    "p3_safety_qwen3_4b": {
+      "predictions": 3600,
+      "families": 4,
+      "context_lengths": 3,
+      "paired_arms": 3,
+      "examples_per_family_context_arm": 100
+    },
+    "p4_reference": {
+      "cells": 108,
+      "warmups_per_cell": 5,
+      "measured_repetitions_per_cell": 30,
+      "policies": 2,
+      "policy_runs_including_warmups": 7560
+    },
+    "p4_production": {
+      "cells": 108,
+      "warmups_per_cell": 5,
+      "measured_repetitions_per_cell": 30,
+      "policies": 2
+    }
+  },
+  "primary_paper_comparators": [
+    {
+      "work": "SCBench",
+      "source": "https://arxiv.org/abs/2412.10319",
+      "reported_breadth": "12 tasks, two shared-context modes, four capability categories, eight long-context LLMs",
+      "comparison": "broader model-family coverage than this study; this study adds explicit example-level failure closure and a separate paired safety causal contrast"
+    },
+    {
+      "work": "SnapKV",
+      "source": "https://arxiv.org/abs/2404.14469",
+      "reported_breadth": "16 long-sequence datasets and a Needle-in-a-Haystack demonstration through 380K context",
+      "comparison": "broader dataset count and longer compatible-model demonstration; this study has denser multi-seed synthetic statistics and five lifecycle-oriented natural benchmarks"
+    },
+    {
+      "work": "FlashMemory-DeepSeek-V4",
+      "source": "https://arxiv.org/abs/2606.09079",
+      "reported_breadth": "RULER, LongBench-v2, LongMemEval, and physical-cache evidence at 500K scale on the target V4 architecture",
+      "comparison": "direct architecture and 500K evidence remain stronger; this study must keep official V4 claims unverified until the frozen resource contract is satisfied"
+    },
+    {
+      "work": "The Pitfalls of KV Cache Compression",
+      "source": "https://arxiv.org/abs/2510.00231",
+      "reported_breadth": "multi-instruction degradation, instruction order, eviction bias, and system-prompt leakage",
+      "comparison": "motivates this study's instruction, refusal, leakage, and same-budget protected-prefix stress; the local suite is synthetic retention evidence, not a red-team certification"
+    },
+    {
+      "work": "Benchmarking KV-Cache Optimizations across Task Quality and System Performance",
+      "source": "https://arxiv.org/abs/2607.05399",
+      "reported_breadth": "two model families, four workload categories, quality, TTFT, throughput, and realized compression",
+      "comparison": "model-family breadth remains a gap here; the local systems matrix is deeper in tail repetitions and metric accounting but narrower in compatible backbones"
+    }
+  ],
+  "adequacy_decision": {
+    "sample_density": "paper-grade if every preregistered artifact reaches terminal audit",
+    "model_breadth": "bounded single-family transfer evidence; not a population-level claim",
+    "target_architecture": "unverified until official DeepSeek-V4 weights and compatible serving runtime are provisioned",
+    "systems_breadth": "reference and checked static continuous batching are reportable separately; external dynamic fused and multi-GPU serving remain unverified",
+    "next_extension": "after the frozen primary run, replicate the chosen operating point on a second instruction-tuned model family only if the primary causal gate is positive or scientifically ambiguous"
+  },
+  "non_aggregation_rule": "Do not add synthetic policy-example evaluations, language-model predictions, and systems repetitions into one headline sample count; report each experimental unit separately.",
+  "claim_boundary": "The planned volume is competitive in sample density and failure accounting but intentionally narrower than multi-model benchmark papers. Completion supports a deep single-compatible-model study, not broad model-family or official DeepSeek-V4 generalization."
+}
