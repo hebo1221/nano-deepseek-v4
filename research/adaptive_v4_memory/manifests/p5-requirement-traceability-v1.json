@@ -6,6 +6,8 @@
   "verification_contracts": {
     "final-local-release-gate": {
       "timing": "after-final-paper-package-generation",
+      "runner": "research/adaptive_v4_memory/scripts/run_p5_release_gate.py",
+      "output": "artifacts/adaptive_v4_memory/paper_grade/p5/local-release-gate.summary.json",
       "commands": [
         ".venv/bin/ruff check nano_deepseek_v4 research/adaptive_v4_memory/scripts tests",
         ".venv/bin/mypy nano_deepseek_v4 research/adaptive_v4_memory/scripts",
@@ -15,6 +17,7 @@
       ],
       "github_actions": "required_before_goal_completion",
       "github_actions_current_status": "disabled_manually",
+      "github_actions_passed": false,
       "interpretation": "Local release gates and a successful GitHub Actions CI run on the final source are mandatory. Package generation may record the current disabled state, but it does not satisfy or waive the CI completion requirement."
     }
   },

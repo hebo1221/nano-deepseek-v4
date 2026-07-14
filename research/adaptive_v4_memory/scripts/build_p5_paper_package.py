@@ -54,6 +54,7 @@ REPRODUCTION_REQUIRED_MARKERS = [
     "run_p4_production_systems_matrix.py",
     "run_p1_online_lookahead_parallel.py --workers 3",
     "build_p5_paper_package.py",
+    "run_p5_release_gate.py",
     *FINAL_RELEASE_COMMANDS,
     "A successful final GitHub Actions CI run remains mandatory before goal completion",
     "Official DeepSeek-V4 boundary",
@@ -303,6 +304,11 @@ def _traceability_rows(
         release.get("commands") == FINAL_RELEASE_COMMANDS
         and release.get("github_actions") == "required_before_goal_completion"
         and release.get("github_actions_current_status") == "disabled_manually"
+        and release.get("github_actions_passed") is False
+        and release.get("runner")
+        == "research/adaptive_v4_memory/scripts/run_p5_release_gate.py"
+        and release.get("output")
+        == "artifacts/adaptive_v4_memory/paper_grade/p5/local-release-gate.summary.json"
         and release.get("timing") == "after-final-paper-package-generation",
         "Final local release-gate contract drifted.",
     )

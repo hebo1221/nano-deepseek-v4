@@ -328,6 +328,9 @@ def test_p5_traceability_covers_every_requirement_and_fails_closed() -> None:
             "scientific_classification": "not-applicable",
         }
     ]
+    final_gate = traceability["verification_contracts"]["final-local-release-gate"]
+    assert final_gate["runner"].endswith("run_p5_release_gate.py")
+    assert final_gate["github_actions_passed"] is False
 
     incomplete = json.loads(json.dumps(traceability))
     incomplete["requirements"].pop()

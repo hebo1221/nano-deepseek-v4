@@ -112,6 +112,7 @@ the digest-bound package:
 .venv/bin/pytest -q
 .venv/bin/python -m build
 .venv/bin/twine check dist/*
+.venv/bin/python research/adaptive_v4_memory/scripts/run_p5_release_gate.py
 ```
 
 The final package is valid only from a clean source tree. Check
