@@ -63,6 +63,12 @@
       "timing": "before any adaptive MRCR prediction and before either prerequisite outcome was inspected",
       "change": "add a separately reported 3000-prediction Qwen3-4B adaptive-quota MRCR replication across 2/4/8 needles and five token bins through 128K",
       "reason": "the adaptive evidence needed a natural multi-needle retrieval test whose longest cell cannot be hidden by pooled shorter contexts"
+    },
+    {
+      "date": "2026-07-15",
+      "timing": "before any Phi LongBench-v2 prediction and before either prerequisite outcome was inspected",
+      "change": "add a separately reported 1006-prediction Phi-4-mini adaptive-quota LongBench-v2 replication across all 503 frozen examples and six capability categories",
+      "reason": "Phi RULER alone does not separate model-family transfer from synthetic retrieval-task transfer; the 2 by 2 model-benchmark grid adds deterministic natural reasoning evidence without Phi-specific tuning"
     }
   ],
   "date": "2026-07-14",
@@ -146,6 +152,18 @@
       "pooled_with_qwen": false,
       "phi_specific_tuning_allowed": false,
       "unchanged_synthetic_controller_transfer": false
+    },
+    "p3_cross_family_adaptive_quota_phi4_mini_longbench_v2": {
+      "predictions": 1006,
+      "predictions_per_arm": 503,
+      "paired_arms": 2,
+      "categories": 6,
+      "maximum_supported_context_tokens": 131072,
+      "same_initial_global_token_budget": true,
+      "pooled_with_qwen": false,
+      "phi_specific_tuning_allowed": false,
+      "continuous_refresh_claim_available": false,
+      "secondary_slices_are_descriptive": true
     },
     "p3_natural_adaptive_quota_qwen3_4b": {
       "predictions": 65000,

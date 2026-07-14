@@ -275,6 +275,7 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
         "p3_ruler",
         "p3_cross_family",
         "p3_cross_family_adaptive_quota",
+        "p3_cross_family_adaptive_quota_longbench_v2",
         "p3_natural_adaptive_quota",
         "p3_natural_adaptive_quota_scbench",
         "p3_natural_adaptive_quota_longbench_v2",
@@ -301,6 +302,20 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
     assert cross["required_audit"]["total_predictions"] == 7_800
     assert cross["required_audit"]["paired_examples"] == 3_900
     assert cross["required_audit"]["all_scores_recomputed_from_raw_response"] is True
+    cross_adaptive_longbench = manifest["evidence"][
+        "p3_cross_family_adaptive_quota_longbench_v2"
+    ]
+    assert cross_adaptive_longbench["required_audit"]["total_predictions"] == 1_006
+    assert cross_adaptive_longbench["required_audit"]["paired_examples"] == 503
+    assert cross_adaptive_longbench["required_audit"]["category_cells"] == 6
+    assert cross_adaptive_longbench["required_audit"]["holm_family_size"] == 6
+    assert cross_adaptive_longbench["required_audit"][
+        "all_runtime_kvpress_bindings_verified"
+    ] is True
+    assert cross_adaptive_longbench["required_audit"][
+        "qwen_selection_reused_without_phi_tuning"
+    ] is True
+    assert cross_adaptive_longbench["required_audit"]["phi_specific_reselection"] is False
     natural_adaptive = manifest["evidence"]["p3_natural_adaptive_quota"]
     assert natural_adaptive["required_audit"]["total_predictions"] == 65_000
     assert natural_adaptive["required_audit"]["paired_examples"] == 32_500
@@ -974,6 +989,31 @@ def test_adaptive_natural_suite_boundary_rejects_cross_benchmark_pooling(
         package._validate_boundary_manifest("natural_adaptive_quota_suite", tampered)
 
 
+def test_cross_family_adaptive_longbench_boundary_rejects_phi_reselection(
+    tmp_path: Path,
+) -> None:
+    root = Path(__file__).resolve().parents[1]
+    source = (
+        root
+        / "research/adaptive_v4_memory/manifests/"
+        "p3-cross-family-adaptive-quota-longbench-v2-v1.json"
+    )
+    payload = json.loads(source.read_text())
+    package._validate_boundary_manifest(
+        "cross_family_adaptive_quota_longbench_v2", source
+    )
+
+    payload["scorer_selection"]["phi_specific_reselection_allowed"] = True
+    tampered = tmp_path / "cross-family-adaptive-longbench.json"
+    tampered.write_text(json.dumps(payload))
+    with pytest.raises(
+        ValueError, match="cross-family adaptive-quota LongBench-v2 boundary drifted"
+    ):
+        package._validate_boundary_manifest(
+            "cross_family_adaptive_quota_longbench_v2", tampered
+        )
+
+
 def test_experiment_scale_audit_recomputes_headline_counts(tmp_path: Path) -> None:
     root = Path(__file__).resolve().parents[1]
     source = root / "research/adaptive_v4_memory/manifests/experiment-scale-audit-v1.json"
@@ -1387,6 +1427,68 @@ def test_adaptive_longbench_v2_classification_is_gate_bound(
         p3_natural_adaptive_quota_longbench_v2=evidence,
     )
     assert classifications["p3_natural_adaptive_quota_longbench_v2"] == expected
+
+
+@pytest.mark.parametrize(
+    ("passed", "expected"),
+    [(True, "success"), (False, "negative-result")],
+)
+def test_cross_family_adaptive_longbench_v2_classification_is_gate_bound(
+    passed: bool, expected: str
+) -> None:
+    evidence = {
+        "status": "terminal",
+        "audit": {
+            "required_arms_terminal": True,
+            "terminal_arms": 2,
+            "predictions_per_arm": 503,
+            "total_predictions": 1_006,
+            "paired_examples": 503,
+            "all_raw_records_verified": True,
+            "all_scores_recomputed_from_raw_response": True,
+            "all_dependency_digests_verified": True,
+            "all_runtime_kvpress_bindings_verified": True,
+            "exact_input_pairing_verified": True,
+            "exact_token_id_pairing_verified": True,
+            "quota_physical_audits_verified": True,
+            "same_initial_global_token_budget_verified": True,
+            "causal_layer_order_verified": True,
+            "failure_accounting_complete": True,
+            "operational_failure_vocabulary_verified": True,
+            "record_revision_provenance_verified": True,
+            "model_snapshot_digest_set_verified": True,
+            "phi_specific_reselection": False,
+            "qwen_selection_reused_without_phi_tuning": True,
+            "category_cells": 6,
+            "holm_family_size": 6,
+            "paired_bootstrap_resamples": 10_000,
+            "paired_bootstrap_seed": 9_671_507,
+            "adaptive_allocation_scope": "initial context prefill only",
+            "continuous_refresh_claim_available": False,
+            "secondary_slices_are_descriptive": True,
+            "outcome_dependent_execution": False,
+        },
+        "confirmation_gate": {"passed": passed},
+    }
+    classifications = package.classify_evidence(
+        _p2_core_evidence(),
+        _m5_pilot_evidence(),
+        _m3_offline_learned_risk_evidence(),
+        _online_learned_lookahead_evidence(),
+        {"primary_causal_gate": {"passed": False}},
+        {"benchmark_complete": False},
+        {"audit": {}},
+        {"audit": {}},
+        {"audit": {}},
+        {"audit": {}},
+        {"audit": {}},
+        {"audit": {}},
+        {"audit": {}},
+        {"audit": {}},
+        {"audit": {}},
+        p3_cross_family_adaptive_quota_longbench_v2=evidence,
+    )
+    assert classifications["p3_cross_family_adaptive_quota_longbench_v2"] == expected
 
 
 @pytest.mark.parametrize(

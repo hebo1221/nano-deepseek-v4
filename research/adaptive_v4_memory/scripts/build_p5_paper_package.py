@@ -71,6 +71,9 @@ REPRODUCTION_REQUIRED_MARKERS = [
     "summarize_p3_cross_family_ruler.py",
     "run_p3_cross_family_ruler.py --cohort adaptive-quota",
     "summarize_p3_cross_family_adaptive_quota_ruler.py",
+    "validate_p3_cross_family_adaptive_quota_longbench_v2_manifest.py",
+    "run_p3_longbench_v2.py --cohort cross-family-adaptive-quota",
+    "summarize_p3_cross_family_adaptive_quota_longbench_v2.py",
     "run_p3_scbench.py",
     "run_p3_longbench_v2.py",
     "run_p3_longmemeval.py",
@@ -99,6 +102,9 @@ BOUNDARY_EXPERIMENT_IDS = {
     "p3_ruler": "p3-ruler-qwen3-1.7b-v1",
     "cross_family": "p3-cross-family-ruler-transfer-v1",
     "cross_family_adaptive_quota": "p3-cross-family-adaptive-quota-ruler-v1",
+    "cross_family_adaptive_quota_longbench_v2": (
+        "p3-cross-family-adaptive-quota-longbench-v2-v1"
+    ),
     "natural_adaptive_quota": "p3-natural-adaptive-quota-ruler-v1",
     "natural_adaptive_quota_scbench": "p3-natural-adaptive-quota-scbench-v1",
     "natural_adaptive_quota_longbench_v2": (
@@ -133,6 +139,10 @@ SCALE_AUDIT_SOURCE_MANIFESTS = {
     "cross_family_adaptive_quota": Path(
         "research/adaptive_v4_memory/manifests/"
         "p3-cross-family-adaptive-quota-ruler-v1.json"
+    ),
+    "cross_family_adaptive_quota_longbench_v2": Path(
+        "research/adaptive_v4_memory/manifests/"
+        "p3-cross-family-adaptive-quota-longbench-v2-v1.json"
     ),
     "natural_adaptive_quota": Path(
         "research/adaptive_v4_memory/manifests/p3-natural-adaptive-quota-ruler-v1.json"
@@ -501,6 +511,48 @@ def _validate_experiment_scale_audit(payload: dict[str, Any]) -> None:
         planned.get("p3_cross_family_adaptive_quota_phi4_mini_ruler")
         == expected_cross_adaptive,
         "P3 cross-family adaptive-quota scale count drifted.",
+    )
+
+    cross_adaptive_longbench = sources["cross_family_adaptive_quota_longbench_v2"]
+    cross_adaptive_longbench_benchmark = cross_adaptive_longbench.get("benchmark", {})
+    cross_adaptive_longbench_lifecycle = cross_adaptive_longbench.get(
+        "cache_lifecycle_contract", {}
+    )
+    cross_adaptive_longbench_relationship = cross_adaptive_longbench.get(
+        "relationship_to_other_cohorts", {}
+    )
+    expected_cross_adaptive_longbench = {
+        "predictions": cross_adaptive_longbench_benchmark.get(
+            "paired_predictions_total"
+        ),
+        "predictions_per_arm": cross_adaptive_longbench_benchmark.get(
+            "predictions_per_arm"
+        ),
+        "paired_arms": len(cross_adaptive_longbench.get("arms", {})),
+        "categories": len(cross_adaptive_longbench_benchmark.get("categories", [])),
+        "maximum_supported_context_tokens": cross_adaptive_longbench.get("model", {}).get(
+            "maximum_supported_context_tokens"
+        ),
+        "same_initial_global_token_budget": cross_adaptive_longbench_lifecycle.get(
+            "same_initial_global_kept_tokens"
+        ),
+        "pooled_with_qwen": cross_adaptive_longbench_relationship.get(
+            "pooled_with_qwen_longbench_v2"
+        ),
+        "phi_specific_tuning_allowed": cross_adaptive_longbench_relationship.get(
+            "phi_specific_tuning_or_reselection_allowed"
+        ),
+        "continuous_refresh_claim_available": cross_adaptive_longbench_lifecycle.get(
+            "continuous_refresh_claim_available"
+        ),
+        "secondary_slices_are_descriptive": cross_adaptive_longbench.get(
+            "statistics", {}
+        ).get("secondary_slices_are_descriptive"),
+    }
+    _require(
+        planned.get("p3_cross_family_adaptive_quota_phi4_mini_longbench_v2")
+        == expected_cross_adaptive_longbench,
+        "P3 cross-family adaptive-quota LongBench-v2 scale count drifted.",
     )
 
     natural_adaptive = sources["natural_adaptive_quota"]
@@ -940,6 +992,38 @@ def _validate_boundary_manifest(name: str, path: Path) -> dict[str, Any]:
             and payload.get("statistics", {}).get("paired_bootstrap_seed") == 9_271_503
             and "not unchanged transfer" in payload.get("claim_boundary", ""),
             "P3 cross-family adaptive-quota boundary drifted.",
+        )
+    elif name == "cross_family_adaptive_quota_longbench_v2":
+        benchmark = payload.get("benchmark", {})
+        lifecycle = payload.get("cache_lifecycle_contract", {})
+        relationship = payload.get("relationship_to_other_cohorts", {})
+        model = payload.get("model", {})
+        scorer_selection = payload.get("scorer_selection", {})
+        statistics = payload.get("statistics", {})
+        _require(
+            payload.get("status")
+            == "frozen_before_any_phi_longbench_v2_prediction"
+            and benchmark.get("predictions_per_arm") == 503
+            and benchmark.get("paired_predictions_total") == 1_006
+            and len(benchmark.get("categories", [])) == 6
+            and model.get("revision") == "cfbefacb99257ffa30c83adab238a50856ac3083"
+            and model.get("num_hidden_layers") == 32
+            and model.get("maximum_supported_context_tokens") == 131_072
+            and lifecycle.get("adaptive_allocation_scope")
+            == "initial context prefill only"
+            and lifecycle.get("same_initial_global_kept_tokens") is True
+            and lifecycle.get("continuous_refresh_claim_available") is False
+            and relationship.get("pooled_with_qwen_longbench_v2") is False
+            and relationship.get("pooled_with_phi_ruler") is False
+            and relationship.get("phi_specific_tuning_or_reselection_allowed") is False
+            and scorer_selection.get("phi_specific_reselection_allowed") is False
+            and statistics.get("paired_bootstrap_seed") == 9_671_507
+            and statistics.get("paired_bootstrap_resamples") == 10_000
+            and statistics.get("holm_family_size") == 6
+            and statistics.get("secondary_slices_are_descriptive") is True
+            and "one held-out Phi-4-mini checkpoint"
+            in payload.get("claim_boundary", ""),
+            "P3 cross-family adaptive-quota LongBench-v2 boundary drifted.",
         )
     elif name == "natural_suite":
         baselines = payload.get("external_baselines", {})
@@ -1448,6 +1532,7 @@ def classify_evidence(
     p4_adaptive_production_systems: dict[str, Any] | None = None,
     p3_cross_family: dict[str, Any] | None = None,
     p3_cross_family_adaptive_quota: dict[str, Any] | None = None,
+    p3_cross_family_adaptive_quota_longbench_v2: dict[str, Any] | None = None,
     p3_natural_adaptive_quota: dict[str, Any] | None = None,
     p3_natural_adaptive_quota_scbench: dict[str, Any] | None = None,
     p3_natural_adaptive_quota_longbench_v2: dict[str, Any] | None = None,
@@ -1981,6 +2066,55 @@ def classify_evidence(
             if cross_adaptive_terminal and cross_adaptive_gate.get("passed") is True
             else "negative-result"
             if cross_adaptive_terminal and cross_adaptive_gate.get("passed") is False
+            else "unverified"
+        )
+    if isinstance(p3_cross_family_adaptive_quota_longbench_v2, dict):
+        phi_longbench_audit = p3_cross_family_adaptive_quota_longbench_v2.get(
+            "audit", {}
+        )
+        phi_longbench_terminal = (
+            p3_cross_family_adaptive_quota_longbench_v2.get("status") == "terminal"
+            and phi_longbench_audit.get("required_arms_terminal") is True
+            and phi_longbench_audit.get("terminal_arms") == 2
+            and phi_longbench_audit.get("predictions_per_arm") == 503
+            and phi_longbench_audit.get("total_predictions") == 1_006
+            and phi_longbench_audit.get("paired_examples") == 503
+            and phi_longbench_audit.get("all_raw_records_verified") is True
+            and phi_longbench_audit.get("all_scores_recomputed_from_raw_response") is True
+            and phi_longbench_audit.get("all_dependency_digests_verified") is True
+            and phi_longbench_audit.get("all_runtime_kvpress_bindings_verified") is True
+            and phi_longbench_audit.get("exact_input_pairing_verified") is True
+            and phi_longbench_audit.get("exact_token_id_pairing_verified") is True
+            and phi_longbench_audit.get("quota_physical_audits_verified") is True
+            and phi_longbench_audit.get("same_initial_global_token_budget_verified")
+            is True
+            and phi_longbench_audit.get("causal_layer_order_verified") is True
+            and phi_longbench_audit.get("failure_accounting_complete") is True
+            and phi_longbench_audit.get("operational_failure_vocabulary_verified")
+            is True
+            and phi_longbench_audit.get("record_revision_provenance_verified") is True
+            and phi_longbench_audit.get("model_snapshot_digest_set_verified") is True
+            and phi_longbench_audit.get("phi_specific_reselection") is False
+            and phi_longbench_audit.get("qwen_selection_reused_without_phi_tuning")
+            is True
+            and phi_longbench_audit.get("category_cells") == 6
+            and phi_longbench_audit.get("holm_family_size") == 6
+            and phi_longbench_audit.get("paired_bootstrap_resamples") == 10_000
+            and phi_longbench_audit.get("paired_bootstrap_seed") == 9_671_507
+            and phi_longbench_audit.get("adaptive_allocation_scope")
+            == "initial context prefill only"
+            and phi_longbench_audit.get("continuous_refresh_claim_available") is False
+            and phi_longbench_audit.get("secondary_slices_are_descriptive") is True
+            and phi_longbench_audit.get("outcome_dependent_execution") is False
+        )
+        phi_longbench_gate = p3_cross_family_adaptive_quota_longbench_v2.get(
+            "confirmation_gate", {}
+        )
+        result["p3_cross_family_adaptive_quota_longbench_v2"] = (
+            "success"
+            if phi_longbench_terminal and phi_longbench_gate.get("passed") is True
+            else "negative-result"
+            if phi_longbench_terminal and phi_longbench_gate.get("passed") is False
             else "unverified"
         )
     _require(set(result.values()).issubset(ALLOWED_CLASSES), "Unknown conclusion class.")
@@ -3042,6 +3176,7 @@ def _report(
     p3_ruler: dict[str, Any],
     p3_cross_family: dict[str, Any],
     p3_cross_family_adaptive_quota: dict[str, Any],
+    p3_cross_family_adaptive_quota_longbench_v2: dict[str, Any],
     p3_natural_adaptive_quota: dict[str, Any],
     p3_natural_adaptive_quota_scbench: dict[str, Any],
     p3_natural_adaptive_quota_longbench_v2: dict[str, Any],
@@ -3169,6 +3304,16 @@ user request, is outside the completion gate, and is never reported as passed.
   {p3_cross_adaptive["paired_examples"]:,} fixed+pins/adaptive pairs across the same
   3 lengths and 13 tasks. The Qwen-selected scorer is reused without Phi tuning and
   the result is not pooled with Qwen or interpreted as unchanged synthetic-controller transfer.
+- P3 Phi adaptive LongBench-v2 replication:
+  {p3_cross_family_adaptive_quota_longbench_v2["audit"]["total_predictions"]:,}
+  predictions form
+  {p3_cross_family_adaptive_quota_longbench_v2["audit"]["paired_examples"]:,}
+  fixed+pins/adaptive pairs over all six frozen reasoning categories. Its confirmation
+  gate passed:
+  **{p3_cross_family_adaptive_quota_longbench_v2["confirmation_gate"]["passed"]}**.
+  This held-out Phi checkpoint reuses the Qwen-selected scorer without Phi tuning,
+  is reported separately rather than pooled with Qwen or Phi RULER, and supports no
+  claim beyond 128K or continuous adaptive reallocation.
 - P3 real-model adaptive quota: {p3_natural_adaptive_quota["audit"]["total_predictions"]:,}
   Qwen3-4B RULER predictions pair fixed+pins with a causal adaptive layer-quota arm at
   exactly the same global KV-token budget; confirmation gate passed:
@@ -3405,6 +3550,9 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         p4_adaptive_production_systems=loaded["p4_adaptive_production_systems"],
         p3_cross_family=loaded["p3_cross_family"],
         p3_cross_family_adaptive_quota=loaded["p3_cross_family_adaptive_quota"],
+        p3_cross_family_adaptive_quota_longbench_v2=loaded[
+            "p3_cross_family_adaptive_quota_longbench_v2"
+        ],
         p3_natural_adaptive_quota=loaded["p3_natural_adaptive_quota"],
         p3_natural_adaptive_quota_scbench=loaded[
             "p3_natural_adaptive_quota_scbench"
@@ -3535,6 +3683,30 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         output_root / "table-p3-cross-family-adaptive-layer-distributions.csv",
         p3_cross_adaptive_layers,
         _field_union(p3_cross_adaptive_layers),
+    )
+    p3_cross_adaptive_longbench_summary = _p3_adaptive_longbench_summary_rows(
+        loaded["p3_cross_family_adaptive_quota_longbench_v2"]
+    )
+    _write_csv(
+        output_root / "table-p3-cross-family-adaptive-longbench-summary.csv",
+        p3_cross_adaptive_longbench_summary,
+        _field_union(p3_cross_adaptive_longbench_summary),
+    )
+    p3_cross_adaptive_longbench_categories = _p3_adaptive_longbench_category_rows(
+        loaded["p3_cross_family_adaptive_quota_longbench_v2"]
+    )
+    _write_csv(
+        output_root / "table-p3-cross-family-adaptive-longbench-categories.csv",
+        p3_cross_adaptive_longbench_categories,
+        _field_union(p3_cross_adaptive_longbench_categories),
+    )
+    p3_cross_adaptive_longbench_slices = _p3_adaptive_longbench_slice_rows(
+        loaded["p3_cross_family_adaptive_quota_longbench_v2"]
+    )
+    _write_csv(
+        output_root / "table-p3-cross-family-adaptive-longbench-slices.csv",
+        p3_cross_adaptive_longbench_slices,
+        _field_union(p3_cross_adaptive_longbench_slices),
     )
     p3_adaptive_task_length = _p3_natural_adaptive_task_length_rows(
         loaded["p3_natural_adaptive_quota"]
@@ -3828,6 +4000,9 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         p3_ruler=loaded["p3_ruler"],
         p3_cross_family=loaded["p3_cross_family"],
         p3_cross_family_adaptive_quota=loaded["p3_cross_family_adaptive_quota"],
+        p3_cross_family_adaptive_quota_longbench_v2=loaded[
+            "p3_cross_family_adaptive_quota_longbench_v2"
+        ],
         p3_natural_adaptive_quota=loaded["p3_natural_adaptive_quota"],
         p3_natural_adaptive_quota_scbench=loaded[
             "p3_natural_adaptive_quota_scbench"
