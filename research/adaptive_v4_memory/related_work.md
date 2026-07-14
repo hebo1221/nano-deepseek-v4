@@ -54,6 +54,9 @@ GPU entry as a cache miss, not permanent information loss.
 | [Ada-KV](https://arxiv.org/abs/2407.11550) | attention head | globally top-ranked attention mass under a total budget | prompt/query-aware head budgets | Its loss-bound idea is useful; primary KV-head allocation does not directly apply to MQA |
 | [DynamicKV](https://arxiv.org/abs/2412.14838) | layer/token | task-specific layer activation patterns | periodically updates earlier layer budgets | Closest baseline for time-varying layer budgets, though designed for conventional caches |
 | [ZigZagKV](https://arxiv.org/abs/2412.09036) | layer | layer uncertainty | dynamic layer allocation | Motivates uncertainty as a controller signal; uncertainty calibration must be validated |
+| [BaKLaVa](https://arxiv.org/abs/2502.13176) | head/layer | one-time per-cache importance profiling | profiled once, then fixed | Direct precedent for non-uniform calibrated quotas; its static profile is a baseline rather than evidence for later query shifts |
+| [ReFreeKV](https://arxiv.org/abs/2502.16886) | input/global budget | attention-derived full-cache preservation risk | threshold-free input-adaptive pruning | The closest conventional-cache analogue to a risk-triggered budget; irreversible pruning and V4 residency remain distinct action spaces |
+| [LAVa](https://arxiv.org/abs/2509.09754) | head/layer | attention-output and cross-layer residual-stream loss | training-free dynamic head and layer budgets | Makes cross-layer output loss a required comparator signal; head allocation does not transfer directly to V4 MQA |
 | [WindowKV](https://arxiv.org/abs/2503.17922) | group/layer/window | task-adaptive semantic windows | layer groups share indices | Contiguous semantic windows and group-wise reuse may reduce metadata and transfer fragmentation |
 | [RazorAttention](https://arxiv.org/abs/2407.15891) | head | retrieval-head identification | full cache only for retrieval heads | The retrieval/local specialization principle may apply to V4 indexer heads, not primary KV entries |
 | [DuoAttention](https://arxiv.org/abs/2410.10819) | head | optimization on synthetic retrieval data | full retrieval heads + constant streaming heads | Demonstrates data-driven hybrid layouts and the need for retrieval-focused calibration |
@@ -126,6 +129,9 @@ limited form.
 | Native V4 | Yes | Partial (prefix storage) | No | Fixed by layer type | No | Native full path | Partial | Partial |
 | Ada-KV | No | No | Partial | No | No | No | No | No |
 | SqueezeAttention | No | No | Prompt only | Yes | No | No | No | No |
+| BaKLaVa | No | No | Profile only | Yes | No | No | No | No |
+| ReFreeKV | No | No | Input-adaptive | Partial | No | Risk threshold | No | No |
+| LAVa | No | No | Query-adaptive | Yes | No | No | No | No |
 | IndexCache | Sparse-index model | N/A | No | Indexer on/off | Static/calibrated | No | No | No |
 | SP-KV | No | No | Per-token write gate | Yes | N/A | Threshold only | No | Kernel-aware |
 | FlashMemory-V4 | Yes | Yes | Fixed threshold/interval | Three fixed predictors | Periodic fixed | No | Limited | Yes |
