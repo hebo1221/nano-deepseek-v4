@@ -295,7 +295,16 @@
         "snapkv",
         "expected-attention",
         "critical-expected-attention"
-      ]
+      ],
+      "fixed_baseline_selection": {
+        "source": "artifacts/adaptive_v4_memory/paper_grade/p3/ruler-qwen3-1.7b.summary.json",
+        "runner": "research/adaptive_v4_memory/scripts/select_p3_fixed_baseline.py",
+        "output": "artifacts/adaptive_v4_memory/paper_grade/p3/fixed-baseline-selection.json",
+        "eligible_compression_ratio": 0.5,
+        "eligible_lengths_tokens": [8192, 16384, 32768],
+        "criterion": "maximum row-weighted mean RULER accuracy; lexicographic arm name breaks exact ties",
+        "freeze_rule": "selection occurs on the completed 1.7B matrix before any Qwen3-4B natural prediction"
+      }
     },
     "FlashMemory-DeepSeek-V4": {
       "manifest": "research/adaptive_v4_memory/manifests/p3-flashmemory-deepseek-v4-v1.json",

@@ -18,6 +18,7 @@ from p3_natural_metrics import (  # noqa: E402
     score_longbench_v2,
     score_mrcr,
 )
+from select_p3_fixed_baseline import ELIGIBLE_ARMS, ELIGIBLE_LENGTHS, select_fixed  # noqa: E402
 from summarize_p3_natural_benchmark import audit_arm  # noqa: E402
 from summarize_p3_natural_suite import BENCHMARK_IDS, summarize  # noqa: E402
 from validate_p3_natural_suite_manifest import validate_manifest  # noqa: E402
@@ -331,6 +332,38 @@ def test_natural_arm_audit_rejects_duplicate_examples(tmp_path: Path) -> None:
             manifest_digest="4" * 64,
             allowed_failures={"unsupported-context"},
         )
+
+
+def test_fixed_baseline_selection_is_frozen_on_small_model_ruler() -> None:
+    cell_summary = []
+    for arm in ELIGIBLE_ARMS:
+        for length in ELIGIBLE_LENGTHS:
+            cell_summary.append(
+                {
+                    "arm": arm,
+                    "length_tokens": length,
+                    "compression_ratio": 0.5,
+                    "rows": 6500,
+                    "accuracy": 0.8 if arm in {"snapkv", "streaming_llm"} else 0.7,
+                }
+            )
+    payload = {
+        "experiment_id": "p3-ruler-qwen3-1.7b-audit-v1",
+        "benchmark_complete": True,
+        "audit": {
+            "all_cells_verified": True,
+            "all_output_digests_verified": True,
+            "completed_cells": 39,
+            "total_predictions": 253_500,
+        },
+        "cell_summary": cell_summary,
+    }
+
+    result = select_fixed(payload)
+
+    assert result["selected_arm"] == "snapkv"
+    assert result["selected_compression_ratio"] == 0.5
+    assert all(row["observations"] == 19_500 for row in result["candidates"])
 
 
 def test_natural_suite_audit_rejects_wrong_model_snapshot(tmp_path: Path) -> None:

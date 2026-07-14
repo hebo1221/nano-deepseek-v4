@@ -179,6 +179,13 @@ def validate_manifest(payload: dict[str, Any]) -> dict[str, Any]:
         != payload["execution_totals"]["minimum_predictions_per_arm"]
     ):
         raise ValueError("Natural-suite audit totals do not close.")
+    selection = payload["external_baselines"]["kvpress"]["fixed_baseline_selection"]
+    if (
+        selection["eligible_compression_ratio"] != 0.5
+        or tuple(selection["eligible_lengths_tokens"]) != (8192, 16384, 32768)
+        or "before any Qwen3-4B natural prediction" not in selection["freeze_rule"]
+    ):
+        raise ValueError("Fixed-baseline transfer selection drifted or leaks 4B results.")
 
     return {
         "benchmarks": list(EXPECTED_ORDER),
