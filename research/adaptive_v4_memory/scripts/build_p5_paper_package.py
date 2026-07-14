@@ -628,6 +628,11 @@ def _validate_boundary_manifest(name: str, path: Path) -> dict[str, Any]:
             "P3 compatible-model baseline coverage drifted.",
         )
         _require(
+            "not a claim that the selected algorithm uses fixed allocation"
+            in kvpress.get("fixed_baseline_selection", {}).get("label_semantics", ""),
+            "P3 compatible baseline legacy-label boundary drifted.",
+        )
+        _require(
             flashmemory.get("manifest")
             == "research/adaptive_v4_memory/manifests/p3-flashmemory-deepseek-v4-v1.json"
             and flashmemory.get("compatible_with_primary_qwen3_model") is False

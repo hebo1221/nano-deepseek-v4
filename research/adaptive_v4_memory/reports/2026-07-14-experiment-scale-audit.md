@@ -2,9 +2,12 @@
 
 ## Decision
 
-The expanded protocol is no longer small by number of experimental units. It
-contains 4,500 core shards (630,000 policy-example evaluations), 9,000 causal
-shards (2.88 million policy-example evaluations across 16 arms), and a separate
+The expanded protocol is no longer small by number of experimental units. Its
+immutable five-seed primary cohort contains 4,500 core shards (630,000
+policy-example evaluations) and 9,000 causal shards (2.88 million
+policy-example evaluations across 16 arms). A disjoint four-seed extension adds
+3,600 core and 7,200 causal shards, yielding contract-audited nine-seed totals
+of 8,100 core and 16,200 causal shards. The study also contains a separate
 post-P2 online learned-lookahead study with 6,750 label shards, 20 fitted
 policies, and 9,000 held-out shards (1.08 million arm-conversations across six
 arms). It also contains 370,500 small-model RULER predictions across a 57-cell
@@ -21,14 +24,14 @@ misleading headline total.
 
 This density does not turn all examples into independent replications. The
 primary trained-model inference unit is the checkpoint seed, with five
-independent seeds per scale. A paired two-sided sign-flip test therefore has
-only 32 possible assignments and a minimum attainable p-value of 0.0625.
-The analysis enumerates those assignments exactly, reports multiplicity-adjusted
-p-values as resolution-limited descriptive evidence, and never treats the
-10,000 within-seed bootstrap draws as 10,000 independent models. The positive
-gate instead requires a corrected seed-cluster interval above zero, matched
-physical memory, and a positive effect in all five seeds. This is a real
-inferential limitation even though the within-seed sample count is large.
+independent seeds per scale. Its paired two-sided sign-flip test has only 32
+assignments and a minimum attainable p-value of 0.0625. The separately reported
+confirmatory analysis pools the four extension seeds only after an
+identical-contract audit, giving nine seeds, 512 assignments, and a minimum
+two-sided p-value of 0.00390625. Neither analysis treats the 10,000 within-seed
+bootstrap draws as independent models. The positive gate additionally requires
+a corrected seed-cluster interval above zero, matched physical memory, and a
+positive effect in every seed of the relevant cohort.
 
 Execution is scheduled with three disjoint same-accelerator workers for the
 remaining S151 core scale, the causal factorial, and the online learned

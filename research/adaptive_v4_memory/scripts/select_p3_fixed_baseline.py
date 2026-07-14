@@ -81,6 +81,9 @@ def select_fixed(payload: dict[str, Any]) -> dict[str, Any]:
     return {
         "selected_arm": selected["arm"],
         "selected_compression_ratio": ELIGIBLE_RATIO,
+        "selection_semantics": (
+            "frozen winner of compatible methods; candidates may use adaptive allocation"
+        ),
         "criterion": "maximum row-weighted mean RULER accuracy",
         "tie_break": "lexicographically smallest arm name",
         "candidates": candidates,
@@ -115,6 +118,11 @@ def main() -> None:
         contract["eligible_compression_ratio"] == ELIGIBLE_RATIO
         and tuple(contract["eligible_lengths_tokens"]) == ELIGIBLE_LENGTHS,
         "Fixed baseline selection contract drifted.",
+    )
+    _require(
+        "not a claim that the selected algorithm uses fixed allocation"
+        in contract.get("label_semantics", ""),
+        "Fixed baseline legacy-label boundary drifted.",
     )
     source_commit = subprocess.run(
         ["git", "rev-parse", "HEAD"], check=True, capture_output=True, text=True

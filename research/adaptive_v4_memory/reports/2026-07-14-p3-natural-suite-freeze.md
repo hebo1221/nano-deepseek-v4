@@ -42,10 +42,12 @@ the source inventory even though the primary Qwen comparison stops at its five
 bins through 128K.
 
 The internal arm label `strongest-memory-matched-fixed` means only the best of
-the four frozen KVPress candidates on the completed Qwen3-1.7B RULER selection
+the six frozen KVPress candidates on the completed Qwen3-1.7B RULER selection
 grid at 50% KV and 8K/16K/32K. It is selected before any Qwen3-4B prediction and
 then transferred unchanged. It does not assert that the selected method is
-globally strongest on Qwen3-4B or on each downstream natural benchmark.
+globally strongest on Qwen3-4B or on each downstream natural benchmark. The
+legacy word `fixed` describes the frozen post-screen selection, not the allocation
+rule: PyramidKV and AdaKV candidates are layer- and head-adaptive, respectively.
 
 ## Provenance and scoring boundaries
 

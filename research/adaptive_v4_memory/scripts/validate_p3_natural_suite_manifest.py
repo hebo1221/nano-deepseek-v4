@@ -356,6 +356,8 @@ def validate_manifest(payload: dict[str, Any]) -> dict[str, Any]:
         selection["eligible_compression_ratio"] != 0.5
         or tuple(selection["eligible_lengths_tokens"]) != (8192, 16384, 32768)
         or "before any Qwen3-4B natural prediction" not in selection["freeze_rule"]
+        or "not a claim that the selected algorithm uses fixed allocation"
+        not in selection.get("label_semantics", "")
     ):
         raise ValueError("Fixed-baseline transfer selection drifted or leaks 4B results.")
 

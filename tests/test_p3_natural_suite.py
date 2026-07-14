@@ -1561,6 +1561,7 @@ def test_fixed_baseline_selection_is_frozen_on_small_model_ruler() -> None:
 
     assert result["selected_arm"] == "snapkv"
     assert result["selected_compression_ratio"] == 0.5
+    assert "may use adaptive allocation" in result["selection_semantics"]
     assert set(ELIGIBLE_ARMS) >= {"pyramidkv", "adakv_snapkv"}
     assert all(row["observations"] == 19_500 for row in result["candidates"])
 
