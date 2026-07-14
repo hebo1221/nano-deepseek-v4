@@ -134,6 +134,7 @@ def test_p4_requires_full_natural_suite_not_ruler_only(tmp_path: Path) -> None:
                     "all_required_baseline_cells_terminal": True,
                     "all_failure_accounting_complete": True,
                     "all_run_identities_verified": True,
+                    "all_runtime_kvpress_bindings_verified": True,
                     "all_terminal_measurement_schema_verified": True,
                     "all_dataset_example_identities_verified": True,
                     "all_reported_scores_recomputed_from_raw_response": True,
@@ -159,6 +160,12 @@ def test_p4_requires_full_natural_suite_not_ruler_only(tmp_path: Path) -> None:
         )
     )
     assert systems.require_p3_audit(natural)["audit"]["benchmarks_terminal"] == 5
+
+    drifted = json.loads(natural.read_text())
+    drifted["audit"]["all_runtime_kvpress_bindings_verified"] = False
+    natural.write_text(json.dumps(drifted))
+    with pytest.raises(RuntimeError, match="five-benchmark and safety"):
+        systems.require_p3_audit(natural)
 
 
 def test_p4_latency_summary_retains_tail_values() -> None:
