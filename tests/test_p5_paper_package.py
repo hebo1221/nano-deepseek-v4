@@ -723,11 +723,13 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
         "table-p2-core-effects.csv",
         "table-p2-core-family-effects.csv",
         "table-p2-core-seed-effects.csv",
+        "table-p2-core-seed-variance.csv",
         "table-p2-core-worst-slices.csv",
         "table-p2-inference-resolution.csv",
         "table-p2-causal-contrasts.csv",
         "table-p2-causal-family-effects.csv",
         "table-p2-causal-seed-effects.csv",
+        "table-p2-causal-seed-variance.csv",
         "table-p2-causal-worst-slices.csv",
         "table-p2-causal-physical-memory.csv",
         "table-p2-causal-offline-oracle.csv",
@@ -2390,6 +2392,17 @@ def test_p5_p2_detailed_tables_retain_seed_family_worst_slice_and_memory() -> No
                 "mean_difference": 0.02,
             }
         ],
+        "seed_variance": [
+            {
+                "budget_multiplier": 2,
+                "scale": "s55",
+                "independent_training_seeds": 2,
+                "mean": 0.03,
+                "sample_standard_deviation": 0.01,
+                "range": [0.02, 0.04],
+                "all_seed_values": [0.02, 0.04],
+            }
+        ],
         "worst_slice": {
             "budget_multiplier": 2,
             "scale": "s55",
@@ -2421,6 +2434,10 @@ def test_p5_p2_detailed_tables_retain_seed_family_worst_slice_and_memory() -> No
     )
     assert package._p2_core_family_rows(core)[0]["holm_adjusted_p"] == 0.02
     assert package._p2_core_seed_rows(core)[0]["training_seed"] == 6071401
+    assert (
+        package._p2_core_seed_variance_rows(core)[0]["sample_standard_deviation"]
+        == 0.01
+    )
     assert {row["scope"] for row in package._p2_core_worst_slice_rows(core)} == {
         "global",
         "budget-scale",
@@ -2457,6 +2474,17 @@ def test_p5_p2_detailed_tables_retain_seed_family_worst_slice_and_memory() -> No
                 "budget": "2x",
                 "training_seed": 6071401,
                 "mean_difference": 0.02,
+            }
+        ],
+        "seed_variance": [
+            {
+                "scale": "s55",
+                "budget": "2x",
+                "independent_training_seeds": 2,
+                "mean": 0.03,
+                "sample_standard_deviation": 0.01,
+                "range": [0.02, 0.04],
+                "all_seed_values": [0.02, 0.04],
             }
         ],
         "worst_slice": {
@@ -2515,6 +2543,10 @@ def test_p5_p2_detailed_tables_retain_seed_family_worst_slice_and_memory() -> No
         == "exact-sign-flip-enumeration"
     )
     assert package._causal_seed_rows(causal)[0]["training_seed"] == 6071401
+    assert (
+        package._causal_seed_variance_rows(causal)[0]["sample_standard_deviation"]
+        == 0.01
+    )
     causal_worst = package._causal_worst_slice_rows(causal)
     assert causal_worst[0]["context"] == 1024
     assert {row["scope"] for row in causal_worst} == {"global", "budget-scale"}

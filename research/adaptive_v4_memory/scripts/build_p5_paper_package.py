@@ -2501,6 +2501,14 @@ def _p2_core_seed_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
     ]
 
 
+def _p2_core_seed_variance_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        _flatten_json_row({"comparison": comparison, **row})
+        for comparison, statistics in payload["paired_statistics"].items()
+        for row in statistics["seed_variance"]
+    ]
+
+
 def _p2_core_worst_slice_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
     rows = []
     for comparison, statistics in payload["paired_statistics"].items():
@@ -2562,6 +2570,21 @@ def _causal_seed_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
         )
         for contrast, statistics in payload["paired_statistics"].items()
         for row in statistics["by_seed"]
+    ]
+
+
+def _causal_seed_variance_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        _flatten_json_row(
+            {
+                "contrast": contrast,
+                "candidate": statistics["candidate"],
+                "comparator": statistics["comparator"],
+                **row,
+            }
+        )
+        for contrast, statistics in payload["paired_statistics"].items()
+        for row in statistics["seed_variance"]
     ]
 
 
@@ -3397,6 +3420,9 @@ user request, is outside the completion gate, and is never reported as passed.
   and a minimum attainable two-sided p-value of
   {p2_causal_confirmatory["audit"]["minimum_attainable_two_sided_seed_p"]:.6f}. Seed-level p-values
   accompany effect sizes and intervals; they are never the sole success criterion.
+- P2 between-seed variation is retained explicitly for every comparison or contrast,
+  scale, and memory budget. The seed-variance tables report all independent seed effects,
+  their mean, sample standard deviation, and range alongside the separate worst-slice tables.
 - P2 supplemental baselines: fixed top-p 0.5/0.8 are evaluated on the complete
   factorial, and the target-aware registered-arm oracle is reported only as a
   non-causal upper bound over {len(p2_causal_confirmatory["offline_oracle_upper_bound"]["registered_arms"])} arms.
@@ -3737,6 +3763,9 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         "table-p2-core-effects.csv": _p2_core_effect_rows(loaded["p2_core_confirmatory"]),
         "table-p2-core-family-effects.csv": _p2_core_family_rows(loaded["p2_core_confirmatory"]),
         "table-p2-core-seed-effects.csv": _p2_core_seed_rows(loaded["p2_core_confirmatory"]),
+        "table-p2-core-seed-variance.csv": _p2_core_seed_variance_rows(
+            loaded["p2_core_confirmatory"]
+        ),
         "table-p2-core-worst-slices.csv": _p2_core_worst_slice_rows(loaded["p2_core_confirmatory"]),
     }
     for name, rows in p2_core_tables.items():
@@ -3753,6 +3782,9 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         "table-p2-causal-contrasts.csv": _causal_contrast_rows(loaded["p2_causal_confirmatory"]),
         "table-p2-causal-family-effects.csv": _causal_family_rows(loaded["p2_causal_confirmatory"]),
         "table-p2-causal-seed-effects.csv": _causal_seed_rows(loaded["p2_causal_confirmatory"]),
+        "table-p2-causal-seed-variance.csv": _causal_seed_variance_rows(
+            loaded["p2_causal_confirmatory"]
+        ),
         "table-p2-causal-worst-slices.csv": _causal_worst_slice_rows(
             loaded["p2_causal_confirmatory"]
         ),

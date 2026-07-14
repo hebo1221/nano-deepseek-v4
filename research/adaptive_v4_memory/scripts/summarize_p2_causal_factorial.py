@@ -407,6 +407,35 @@ def worst_slices_by_budget_scale(
     return worst
 
 
+def seed_variance_statistics(seeds: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Summarize between-training-seed variation for every causal cell."""
+
+    rows: list[dict[str, Any]] = []
+    for scale in ("s55", "s151"):
+        for budget in shard.BUDGET_LABELS:
+            values = [
+                float(row["mean_difference"])
+                for row in seeds
+                if row["scale"] == scale and row["budget"] == budget
+            ]
+            _require(
+                len(values) == len(shard.TRAINING_SEEDS),
+                f"Causal seed variance coverage drifted for {scale}/{budget}.",
+            )
+            rows.append(
+                {
+                    "scale": scale,
+                    "budget": budget,
+                    "independent_training_seeds": len(values),
+                    "mean": float(np.mean(values)),
+                    "sample_standard_deviation": float(np.std(values, ddof=1)),
+                    "range": [float(min(values)), float(max(values))],
+                    "all_seed_values": values,
+                }
+            )
+    return rows
+
+
 def contrast_statistics(
     differences: dict[tuple[str, str, int, str, int], list[float]],
     *,
@@ -561,6 +590,7 @@ def contrast_statistics(
         "comparator": comparator,
         "cells": cells,
         "by_seed": seeds,
+        "seed_variance": seed_variance_statistics(seeds),
         "by_family_with_holm_bonferroni": families,
         "by_family_context": slices,
         "worst_slice": min(slices, key=lambda row: row["mean_difference"]),

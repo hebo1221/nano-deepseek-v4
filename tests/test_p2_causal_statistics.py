@@ -12,6 +12,30 @@ sys.path.insert(0, str(SCRIPTS))
 import summarize_p2_causal_factorial as causal  # noqa: E402
 
 
+def test_causal_seed_variance_is_reported_for_every_budget_scale_cell() -> None:
+    seeds = [
+        {
+            "scale": scale,
+            "budget": budget,
+            "training_seed": training_seed,
+            "mean_difference": 0.01 * (index + 1),
+        }
+        for scale in ("s55", "s151")
+        for budget in causal.shard.BUDGET_LABELS
+        for index, training_seed in enumerate(causal.shard.TRAINING_SEEDS)
+    ]
+
+    rows = causal.seed_variance_statistics(seeds)
+
+    assert len(rows) == 2 * len(causal.shard.BUDGET_LABELS)
+    assert all(
+        row["independent_training_seeds"] == len(causal.shard.TRAINING_SEEDS)
+        for row in rows
+    )
+    assert all(row["sample_standard_deviation"] > 0.0 for row in rows)
+    assert all(len(row["all_seed_values"]) == len(causal.shard.TRAINING_SEEDS) for row in rows)
+
+
 def test_causal_worst_slice_is_retained_for_every_budget_scale_cell() -> None:
     slices = [
         {

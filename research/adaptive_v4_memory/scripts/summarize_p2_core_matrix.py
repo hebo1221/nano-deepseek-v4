@@ -748,6 +748,7 @@ def _statistics(
                 {
                     "budget_multiplier": budget,
                     "scale": scale,
+                    "independent_training_seeds": len(values),
                     "mean": float(np.mean(values)),
                     "sample_standard_deviation": float(np.std(values, ddof=1)),
                     "range": [float(min(values)), float(max(values))],
