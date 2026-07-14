@@ -58,6 +58,8 @@ REPRODUCTION_REQUIRED_MARKERS = [
     "prepare_p3_cross_family_ruler_dataset.py",
     "run_p3_cross_family_ruler.py",
     "summarize_p3_cross_family_ruler.py",
+    "run_p3_cross_family_ruler.py --cohort adaptive-quota",
+    "summarize_p3_cross_family_adaptive_quota_ruler.py",
     "run_p3_scbench.py",
     "run_p3_longbench_v2.py",
     "run_p3_longmemeval.py",
@@ -85,6 +87,7 @@ BOUNDARY_EXPERIMENT_IDS = {
     "online_learned_lookahead": "p1-online-learned-lookahead-v1",
     "p3_ruler": "p3-ruler-qwen3-1.7b-v1",
     "cross_family": "p3-cross-family-ruler-transfer-v1",
+    "cross_family_adaptive_quota": "p3-cross-family-adaptive-quota-ruler-v1",
     "natural_adaptive_quota": "p3-natural-adaptive-quota-ruler-v1",
     "natural_suite": "p3-natural-language-suite-v1",
     "safety_stress": "p3-qwen3-4b-safety-stress-v1",
@@ -697,6 +700,21 @@ def _validate_boundary_manifest(name: str, path: Path) -> dict[str, Any]:
             and "not an unchanged transfer" in payload.get("claim_boundary", ""),
             "P3 natural adaptive-quota boundary drifted.",
         )
+    elif name == "cross_family_adaptive_quota":
+        benchmark = payload.get("benchmark", {})
+        relationship = payload.get("relationship_to_other_cohorts", {})
+        physical = payload.get("physical_contract", {})
+        _require(
+            payload.get("status") == "frozen_before_any_cross_family_adaptive_prediction"
+            and benchmark.get("predictions_per_arm") == 3_900
+            and benchmark.get("paired_predictions_total") == 7_800
+            and relationship.get("pooled_with_qwen") is False
+            and relationship.get("phi_specific_tuning_or_reselection_allowed") is False
+            and physical.get("same_global_kept_tokens") is True
+            and payload.get("statistics", {}).get("paired_bootstrap_seed") == 9_271_503
+            and "not unchanged transfer" in payload.get("claim_boundary", ""),
+            "P3 cross-family adaptive-quota boundary drifted.",
+        )
     elif name == "natural_suite":
         baselines = payload.get("external_baselines", {})
         kvpress = baselines.get("kvpress", {})
@@ -1203,6 +1221,7 @@ def classify_evidence(
     p4_adaptive_systems: dict[str, Any] | None = None,
     p4_adaptive_production_systems: dict[str, Any] | None = None,
     p3_cross_family: dict[str, Any] | None = None,
+    p3_cross_family_adaptive_quota: dict[str, Any] | None = None,
     p3_natural_adaptive_quota: dict[str, Any] | None = None,
 ) -> dict[str, str]:
     core_audit = p2_core.get("audit", {})
@@ -1588,6 +1607,31 @@ def classify_evidence(
             if adaptive_natural_terminal and adaptive_natural_gate.get("passed") is True
             else "negative-result"
             if adaptive_natural_terminal and adaptive_natural_gate.get("passed") is False
+            else "unverified"
+        )
+    if isinstance(p3_cross_family_adaptive_quota, dict):
+        cross_adaptive_audit = p3_cross_family_adaptive_quota.get("audit", {})
+        cross_adaptive_terminal = (
+            p3_cross_family_adaptive_quota.get("status") == "terminal"
+            and cross_adaptive_audit.get("terminal_arms") == 2
+            and cross_adaptive_audit.get("total_predictions") == 7_800
+            and cross_adaptive_audit.get("paired_examples") == 3_900
+            and cross_adaptive_audit.get("all_raw_records_verified") is True
+            and cross_adaptive_audit.get("all_scores_recomputed_from_raw_response") is True
+            and cross_adaptive_audit.get("all_dependency_digests_verified") is True
+            and cross_adaptive_audit.get("exact_input_pairing_verified") is True
+            and cross_adaptive_audit.get("quota_physical_audits_verified") is True
+            and cross_adaptive_audit.get("same_global_token_budget_verified") is True
+            and cross_adaptive_audit.get("phi_specific_reselection") is False
+            and cross_adaptive_audit.get("pooled_with_qwen") is False
+            and cross_adaptive_audit.get("outcome_dependent_execution") is False
+        )
+        cross_adaptive_gate = p3_cross_family_adaptive_quota.get("confirmation_gate", {})
+        result["p3_cross_family_adaptive_quota"] = (
+            "success"
+            if cross_adaptive_terminal and cross_adaptive_gate.get("passed") is True
+            else "negative-result"
+            if cross_adaptive_terminal and cross_adaptive_gate.get("passed") is False
             else "unverified"
         )
     _require(set(result.values()).issubset(ALLOWED_CLASSES), "Unknown conclusion class.")
@@ -2570,6 +2614,7 @@ def _report(
     p2_causal_confirmatory: dict[str, Any],
     p3_ruler: dict[str, Any],
     p3_cross_family: dict[str, Any],
+    p3_cross_family_adaptive_quota: dict[str, Any],
     p3_natural_adaptive_quota: dict[str, Any],
     p3_natural: dict[str, Any],
     p3_safety: dict[str, Any],
@@ -2590,6 +2635,7 @@ def _report(
     p4_adaptive = p4_adaptive_systems["audit"]
     p4_adaptive_production = p4_adaptive_production_systems["audit"]
     p4_production = p4_production_systems["audit"]
+    p3_cross_adaptive = p3_cross_family_adaptive_quota["audit"]
     evidence_lines = "\n".join(
         f"| {row['name']} | {classifications.get(row['name'], 'unverified')} | `{row['sha256']}` |"
         for row in inputs
@@ -2688,6 +2734,10 @@ user request, is outside the completion gate, and is never reported as passed.
   50%-KV operating point was transferred without Phi-specific tuning; its frozen
   transfer gate passed: **{p3_cross_family["transfer_gate"]["passed"]}**. This is a
   separately reported model-family transfer cohort, not a second full natural suite.
+- P3 Phi adaptive quota: {p3_cross_adaptive["total_predictions"]:,} predictions form
+  {p3_cross_adaptive["paired_examples"]:,} fixed+pins/adaptive pairs across the same
+  3 lengths and 13 tasks. The Qwen-selected scorer is reused without Phi tuning and
+  the result is not pooled with Qwen or interpreted as unchanged synthetic-controller transfer.
 - P3 real-model adaptive quota: {p3_natural_adaptive_quota["audit"]["total_predictions"]:,}
   Qwen3-4B RULER predictions pair fixed+pins with a causal adaptive layer-quota arm at
   exactly the same global KV-token budget; confirmation gate passed:
@@ -2894,6 +2944,7 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         loaded["p4_adaptive_systems"],
         p4_adaptive_production_systems=loaded["p4_adaptive_production_systems"],
         p3_cross_family=loaded["p3_cross_family"],
+        p3_cross_family_adaptive_quota=loaded["p3_cross_family_adaptive_quota"],
         p3_natural_adaptive_quota=loaded["p3_natural_adaptive_quota"],
     )
     classes["p2_core_confirmatory"] = _classify_validated_confirmatory_core(
@@ -2990,6 +3041,30 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         output_root / "table-p3-cross-family-length-inference.csv",
         p3_cross_length,
         _field_union(p3_cross_length),
+    )
+    p3_cross_adaptive_task_length = _p3_natural_adaptive_task_length_rows(
+        loaded["p3_cross_family_adaptive_quota"]
+    )
+    _write_csv(
+        output_root / "table-p3-cross-family-adaptive-task-length.csv",
+        p3_cross_adaptive_task_length,
+        _field_union(p3_cross_adaptive_task_length),
+    )
+    p3_cross_adaptive_length = _p3_natural_adaptive_length_rows(
+        loaded["p3_cross_family_adaptive_quota"]
+    )
+    _write_csv(
+        output_root / "table-p3-cross-family-adaptive-length-inference.csv",
+        p3_cross_adaptive_length,
+        _field_union(p3_cross_adaptive_length),
+    )
+    p3_cross_adaptive_layers = _p3_natural_adaptive_layer_rows(
+        loaded["p3_cross_family_adaptive_quota"]
+    )
+    _write_csv(
+        output_root / "table-p3-cross-family-adaptive-layer-distributions.csv",
+        p3_cross_adaptive_layers,
+        _field_union(p3_cross_adaptive_layers),
     )
     p3_adaptive_task_length = _p3_natural_adaptive_task_length_rows(
         loaded["p3_natural_adaptive_quota"]
@@ -3218,6 +3293,7 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         p2_causal_confirmatory=loaded["p2_causal_confirmatory"],
         p3_ruler=loaded["p3_ruler"],
         p3_cross_family=loaded["p3_cross_family"],
+        p3_cross_family_adaptive_quota=loaded["p3_cross_family_adaptive_quota"],
         p3_natural_adaptive_quota=loaded["p3_natural_adaptive_quota"],
         p3_natural=loaded["p3_natural"],
         p3_safety=loaded["p3_safety"],

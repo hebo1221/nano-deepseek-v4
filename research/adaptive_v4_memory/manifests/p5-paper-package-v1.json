@@ -290,6 +290,34 @@
         "paired_bootstrap_seed": 9171501
       }
     },
+    "p3_cross_family_adaptive_quota": {
+      "path": "artifacts/adaptive_v4_memory/paper_grade/p3/cross-family/phi4-mini-adaptive-quota-ruler.summary.json",
+      "experiment_id": "p3-cross-family-adaptive-quota-ruler-audit-v1",
+      "required_audit": {
+        "required_arms_terminal": true,
+        "terminal_arms": 2,
+        "predictions_per_arm": 3900,
+        "total_predictions": 7800,
+        "paired_examples": 3900,
+        "all_raw_records_verified": true,
+        "all_scores_recomputed_from_raw_response": true,
+        "all_dependency_digests_verified": true,
+        "exact_input_pairing_verified": true,
+        "quota_physical_audits_verified": true,
+        "same_global_token_budget_verified": true,
+        "causal_layer_order_verified": true,
+        "phi_specific_reselection": false,
+        "qwen_selection_reused_without_phi_tuning": true,
+        "pooled_with_qwen": false,
+        "outcome_dependent_execution": false,
+        "task_length_cells": 39,
+        "exact_task_sign_flip_assignments_per_length": 8192,
+        "paired_bootstrap_resamples": 10000,
+        "paired_bootstrap_seed": 9271503,
+        "natural_compatibility_controller": true,
+        "synthetic_controller_unchanged_transfer": false
+      }
+    },
     "p3_natural_adaptive_quota": {
       "path": "artifacts/adaptive_v4_memory/paper_grade/p3/natural-adaptive-quota/ruler-qwen3-4b.summary.json",
       "experiment_id": "p3-natural-adaptive-quota-ruler-audit-v1",
@@ -582,6 +610,7 @@
     "online_learned_lookahead": "research/adaptive_v4_memory/manifests/p1-online-learned-lookahead-v1.json",
     "p3_ruler": "research/adaptive_v4_memory/manifests/p3-ruler-qwen3-1.7b-v1.json",
     "cross_family": "research/adaptive_v4_memory/manifests/p3-cross-family-ruler-transfer-v1.json",
+    "cross_family_adaptive_quota": "research/adaptive_v4_memory/manifests/p3-cross-family-adaptive-quota-ruler-v1.json",
     "natural_adaptive_quota": "research/adaptive_v4_memory/manifests/p3-natural-adaptive-quota-ruler-v1.json",
     "natural_suite": "research/adaptive_v4_memory/manifests/p3-natural-suite-v1.json",
     "safety_stress": "research/adaptive_v4_memory/manifests/p3-safety-stress-v1.json",
@@ -616,6 +645,9 @@
     "table-p3-ruler-cells.csv",
     "table-p3-cross-family-task-length.csv",
     "table-p3-cross-family-length-inference.csv",
+    "table-p3-cross-family-adaptive-task-length.csv",
+    "table-p3-cross-family-adaptive-length-inference.csv",
+    "table-p3-cross-family-adaptive-layer-distributions.csv",
     "table-p3-natural-adaptive-task-length.csv",
     "table-p3-natural-adaptive-length-inference.csv",
     "table-p3-natural-adaptive-layer-distributions.csv",

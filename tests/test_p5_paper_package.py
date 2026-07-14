@@ -274,6 +274,7 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
         "p2_causal_confirmatory",
         "p3_ruler",
         "p3_cross_family",
+        "p3_cross_family_adaptive_quota",
         "p3_natural_adaptive_quota",
         "p3_natural",
         "p3_safety",

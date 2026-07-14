@@ -156,9 +156,11 @@
       "sources": [
         {"kind": "evidence", "name": "p3_ruler"},
         {"kind": "evidence", "name": "p3_cross_family"},
+        {"kind": "evidence", "name": "p3_cross_family_adaptive_quota"},
         {"kind": "evidence", "name": "p3_natural_adaptive_quota"},
         {"kind": "evidence", "name": "p3_natural"},
         {"kind": "boundary-manifest", "name": "cross_family"},
+        {"kind": "boundary-manifest", "name": "cross_family_adaptive_quota"},
         {"kind": "boundary-manifest", "name": "natural_adaptive_quota"},
         {"kind": "boundary-manifest", "name": "natural_suite"}
       ]
@@ -170,8 +172,10 @@
       "sources": [
         {"kind": "evidence", "name": "p3_natural"},
         {"kind": "evidence", "name": "p3_cross_family"},
+        {"kind": "evidence", "name": "p3_cross_family_adaptive_quota"},
         {"kind": "evidence", "name": "p3_natural_adaptive_quota"},
         {"kind": "boundary-manifest", "name": "cross_family"},
+        {"kind": "boundary-manifest", "name": "cross_family_adaptive_quota"},
         {"kind": "boundary-manifest", "name": "natural_adaptive_quota"}
       ]
     },

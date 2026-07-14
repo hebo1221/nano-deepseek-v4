@@ -127,6 +127,10 @@ export PHI_SNAPSHOT=artifacts/adaptive_v4_memory/paper_grade/p3/assets/models/cf
 .venv/bin/python research/adaptive_v4_memory/scripts/run_p3_cross_family_ruler.py \
   --kvpress-root "$KVPRESS_ROOT" --model-snapshot "$PHI_SNAPSHOT"
 .venv/bin/python research/adaptive_v4_memory/scripts/summarize_p3_cross_family_ruler.py
+.venv/bin/python research/adaptive_v4_memory/scripts/validate_p3_cross_family_adaptive_quota_manifest.py
+.venv/bin/python research/adaptive_v4_memory/scripts/run_p3_cross_family_ruler.py --cohort adaptive-quota \
+  --kvpress-root "$KVPRESS_ROOT" --model-snapshot "$PHI_SNAPSHOT"
+.venv/bin/python research/adaptive_v4_memory/scripts/summarize_p3_cross_family_adaptive_quota_ruler.py
 ```
 
 Summarize each benchmark with `summarize_p3_natural_benchmark.py`, binding the
