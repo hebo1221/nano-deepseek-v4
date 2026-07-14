@@ -56,6 +56,32 @@ def _m3_offline_learned_risk_evidence() -> dict[str, object]:
     }
 
 
+def _online_learned_lookahead_evidence(*, passed: bool = False) -> dict[str, object]:
+    return {
+        "audit": {
+            "label_shards_verified": 6_750,
+            "policies_verified": 20,
+            "test_shards_verified": 9_000,
+            "paired_conversations": 180_000,
+            "quality_arm_conversations": 1_080_000,
+            "training_seeds": 5,
+            "scales": 2,
+            "families": 9,
+            "contexts": 5,
+            "budgets": 2,
+            "all_raw_digests_verified": True,
+            "all_dependencies_verified": True,
+            "all_inputs_paired": True,
+            "zero_budget_violations": True,
+            "complete_failure_accounting": True,
+            "online_token_offset_verified": True,
+            "native_bootstrap_accounted": True,
+            "cache_replay_contract_tested": True,
+        },
+        "primary_gate": {"passed": passed},
+    }
+
+
 def _ifeval_evidence() -> dict[str, object]:
     return {
         "audit": {
@@ -123,6 +149,7 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
         "p2_core",
         "m5_one_token_pilot",
         "m3_offline_learned_risk_pilot",
+        "p1_online_learned_lookahead",
         "p2_causal",
         "p3_ruler",
         "p3_natural",
@@ -188,6 +215,7 @@ def test_p5_classification_preserves_claim_boundaries() -> None:
         {"quality_gate": [{"passes_fixed_baseline_component": False}]},
         _m5_pilot_evidence(),
         _m3_offline_learned_risk_evidence(),
+        _online_learned_lookahead_evidence(),
         {"primary_causal_gate": {"passed": False}},
         {"benchmark_complete": True},
         {
@@ -232,6 +260,7 @@ def test_p5_classification_preserves_claim_boundaries() -> None:
         "p2_core": "negative-result",
         "m5_one_token_pilot": "negative-result",
         "m3_offline_learned_risk_pilot": "negative-result",
+        "p1_online_learned_lookahead": "negative-result",
         "p2_causal": "bounded-result",
         "p3_ruler": "bounded-result",
         "p3_natural": "bounded-result",
@@ -252,6 +281,7 @@ def test_p5_success_requires_full_system_coverage() -> None:
         {"quality_gate": [{"passes_fixed_baseline_component": True}]},
         _m5_pilot_evidence(),
         _m3_offline_learned_risk_evidence(),
+        _online_learned_lookahead_evidence(passed=True),
         {"primary_causal_gate": {"passed": True}},
         {"benchmark_complete": True},
         {
@@ -294,6 +324,7 @@ def test_p5_success_requires_full_system_coverage() -> None:
 
     assert classifications["p2_core"] == "success"
     assert classifications["p2_causal"] == "success"
+    assert classifications["p1_online_learned_lookahead"] == "success"
     assert classifications["p4_500k_context"] == "bounded-result"
     assert classifications["p4_reference_systems"] == "bounded-result"
     assert classifications["p4_production_systems"] == "success"
@@ -304,6 +335,7 @@ def test_p5_marks_all_failed_production_coverage_unverified() -> None:
         {"quality_gate": [{"passes_fixed_baseline_component": True}]},
         _m5_pilot_evidence(),
         _m3_offline_learned_risk_evidence(),
+        _online_learned_lookahead_evidence(),
         {"primary_causal_gate": {"passed": True}},
         {"benchmark_complete": True},
         {
@@ -374,6 +406,39 @@ def test_p5_p4_table_retains_terminal_failure() -> None:
     assert rows[0]["active_requests"] == 1
     assert rows[0]["concurrency"] == 1
     assert "oom" in rows[0]["failure"]
+
+
+def test_p5_learned_lookahead_table_joins_quality_and_physical_gate() -> None:
+    rows = package._learned_lookahead_rows(
+        {
+            "primary_gate": {
+                "cells": [
+                    {
+                        "scale": "s55",
+                        "budget": "2x",
+                        "seed_cluster_bootstrap_ci": [0.01, 0.03],
+                        "passed": True,
+                    }
+                ],
+                "system_cells": [
+                    {
+                        "scale": "s55",
+                        "budget": "2x",
+                        "learned_peak_allocated_bytes_mean": 100,
+                        "fixed_peak_allocated_bytes_mean": 100,
+                        "relative_peak_allocated_difference": 0.0,
+                        "learned_h2d_bytes_mean": 20,
+                        "fixed_h2d_bytes_mean": 20,
+                        "passed": True,
+                    }
+                ],
+            }
+        }
+    )
+
+    assert rows[0]["seed_cluster_bootstrap_ci"] == "[0.01, 0.03]"
+    assert rows[0]["relative_peak_allocated_difference"] == 0.0
+    assert rows[0]["system_passed"] is True
 
 
 def test_p5_500k_table_reports_feasibility_without_latency() -> None:

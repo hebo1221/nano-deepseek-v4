@@ -1,13 +1,18 @@
 from __future__ import annotations
 
 import copy
+import hashlib
+import json
 import math
-from dataclasses import asdict, dataclass
+from collections import defaultdict
+from dataclasses import asdict, dataclass, replace
 from time import perf_counter_ns
 from typing import Any
 
 import torch
 
+from .learned_lookahead import LearnedLookaheadPolicy
+from .learned_memory_controller import extract_request_risk_features
 from .memory_controller import (
     ControllerAction,
     TrainingFreeControllerConfig,
@@ -51,6 +56,7 @@ class OnlineControllerStats:
     observed_queries: int
     finalized_control_points: int
     applied_queries: int
+    native_bootstrap_queries: int
     fallback_control_points: int
     controller_time_ns: int
     telemetry_time_ns: int
@@ -80,6 +86,8 @@ class OnlineTrainingFreeController:
         trace_id: str = "online-m2",
         request_id: str = "request-0",
         protected_end_positions: tuple[int, ...] = (),
+        learned_policy: LearnedLookaheadPolicy | None = None,
+        enable_learned_dense_fallback: bool = True,
     ) -> None:
         if not csa_layer_indices or len(set(csa_layer_indices)) != len(csa_layer_indices):
             raise ValueError("csa_layer_indices must be non-empty and unique.")
@@ -92,6 +100,19 @@ class OnlineTrainingFreeController:
         self.trace_id = trace_id
         self.request_id = request_id
         self.protected_end_positions = tuple(sorted(set(protected_end_positions)))
+        if learned_policy is not None:
+            if learned_policy.csa_layer_count != len(self.csa_layer_indices):
+                raise ValueError("Learned policy CSA layer count does not match the controller.")
+            if learned_policy.normal_global_budget != config.global_block_budget:
+                raise ValueError("Learned policy normal budget does not match the controller.")
+            if learned_policy.dense_global_budget != config.dense_fallback_block_budget:
+                raise ValueError("Learned policy dense budget does not match the controller.")
+        if not isinstance(enable_learned_dense_fallback, bool):
+            raise ValueError("enable_learned_dense_fallback must be boolean.")
+        if learned_policy is None and not enable_learned_dense_fallback:
+            raise ValueError("Dense-fallback ablation requires a learned policy.")
+        self.learned_policy = learned_policy
+        self.enable_learned_dense_fallback = enable_learned_dense_fallback
         self._queries: list[ReplayQuery] = []
         self._pending: list[ReplayQuery] = []
         self._next_selections: dict[tuple[int, int], tuple[int, ...]] = {}
@@ -100,10 +121,129 @@ class OnlineTrainingFreeController:
         self._observed_queries = 0
         self._finalized_control_points = 0
         self._applied_queries = 0
+        self._native_bootstrap_queries = 0
         self._fallback_control_points = 0
         self._controller_time_ns = 0
         self._telemetry_time_ns = 0
         self._peak_selected_blocks = 0
+
+    @property
+    def controller_kind(self) -> str:
+        return "learned-lookahead" if self.learned_policy is not None else "training-free-m2"
+
+    def _learned_replay(self) -> tuple[tuple[ControllerAction, ...], str]:
+        policy = self.learned_policy
+        if policy is None:
+            raise RuntimeError("Learned replay requires a learned policy.")
+        grouped: dict[tuple[int, int], list[ReplayQuery]] = defaultdict(list)
+        for query in self._queries:
+            grouped[(query.batch_index, query.query_position)].append(query)
+        actions: list[ControllerAction] = []
+        predictions: list[dict[str, object]] = []
+        for (batch_index, query_position), raw_group in sorted(grouped.items()):
+            group = tuple(sorted(raw_group, key=lambda query: query.layer_index))
+            prediction = policy.predict(extract_request_risk_features(group))
+            fallback = prediction.fallback and self.enable_learned_dense_fallback
+            dynamic = replace(
+                self.config,
+                global_block_budget=prediction.active_global_budget,
+                dense_fallback_block_budget=prediction.active_global_budget,
+                top_p=1.0 if fallback else self.config.top_p,
+                min_blocks_per_layer=1 if fallback else prediction.calibrated_topk,
+                max_extra_blocks_per_layer=0,
+                enable_dense_fallback=False,
+            )
+            protected_ids = tuple(
+                block.block_id
+                for query in group
+                for block in query.ranked_blocks
+                if _block_end(block.block_id) in self.protected_end_positions
+            )
+            result = run_training_free_controller(
+                group,
+                dynamic,
+                protected_block_ids=protected_ids,
+            )
+            if len(result.actions) != 1:
+                raise RuntimeError("Learned lookahead produced an invalid action count.")
+            action = result.actions[0]
+            if fallback:
+                action = replace(action, fallback_reason="learned_dense_risk")
+            actions.append(action)
+            predictions.append(
+                {
+                    "batch_index": batch_index,
+                    "query_position": query_position,
+                    **asdict(prediction),
+                }
+            )
+        payload = {
+            "algorithm": "online-learned-lookahead-v1",
+            "policy_digest": policy.policy_digest,
+            "config": asdict(self.config),
+            "queries": [asdict(query) for query in self._queries],
+            "predictions": predictions,
+            "actions": [asdict(action) for action in actions],
+        }
+        digest = hashlib.sha256(
+            json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+        return tuple(actions), digest
+
+    def _rebuild_learned_derived_state(self) -> None:
+        if self.learned_policy is None:
+            return
+        if not self._queries:
+            self._next_selections.clear()
+            self._last_actions = ()
+            self._observed_queries = 0
+            self._finalized_control_points = 0
+            self._fallback_control_points = 0
+            self._peak_selected_blocks = 0
+            self._replay_digest = None
+            return
+        actions, digest = self._learned_replay()
+        selections: dict[tuple[int, int], tuple[int, ...]] = {}
+        for action in actions:
+            for layer in action.layers:
+                selections[(layer.layer_index, action.batch_index)] = tuple(
+                    _block_end(block_id) for block_id in layer.selected_block_ids
+                )
+        self._next_selections = selections
+        self._last_actions = ()
+        self._observed_queries = len(self._queries)
+        self._finalized_control_points = len(actions)
+        self._fallback_control_points = sum(
+            action.fallback_reason is not None for action in actions
+        )
+        self._peak_selected_blocks = max((action.selected_blocks for action in actions), default=0)
+        self._replay_digest = digest
+
+    def replay_actions(self) -> tuple[ControllerAction, ...]:
+        """Recompute all finalized actions from immutable observations."""
+
+        if self._pending:
+            raise RuntimeError("Cannot replay online actions with pending observations.")
+        if not self._queries:
+            return ()
+        if self.learned_policy is not None:
+            actions, digest = self._learned_replay()
+        else:
+            protected_ids = tuple(
+                block.block_id
+                for query in self._queries
+                for block in query.ranked_blocks
+                if _block_end(block.block_id) in self.protected_end_positions
+            )
+            result = run_training_free_controller(
+                self._queries,
+                self.config,
+                protected_block_ids=protected_ids,
+            )
+            actions, digest = result.actions, result.replay_digest
+        if self._replay_digest is not None and digest != self._replay_digest:
+            raise RuntimeError("Online controller replay digest drifted.")
+        return actions
 
     def observe(
         self,
@@ -183,6 +323,7 @@ class OnlineTrainingFreeController:
     ) -> torch.Tensor:
         started = perf_counter_ns()
         if not self._next_selections:
+            self._native_bootstrap_queries += query_positions.numel()
             self._telemetry_time_ns += perf_counter_ns() - started
             return native_mask
         result = native_mask.clone()
@@ -202,8 +343,8 @@ class OnlineTrainingFreeController:
                 causal_selected = selected_tensor[
                     selected_tensor <= query_positions[batch_index, query_index]
                 ]
-                matches = block_end_positions[batch_index].unsqueeze(1).eq(
-                    causal_selected.unsqueeze(0)
+                matches = (
+                    block_end_positions[batch_index].unsqueeze(1).eq(causal_selected.unsqueeze(0))
                 )
                 result[batch_index, query_index] = matches.any(dim=1)
             self._applied_queries += query_positions.shape[1]
@@ -225,23 +366,28 @@ class OnlineTrainingFreeController:
 
         self._queries.extend(self._pending)
         self._pending.clear()
-        protected_ids = tuple(
-            block.block_id
-            for query in self._queries
-            for block in query.ranked_blocks
-            if _block_end(block.block_id) in self.protected_end_positions
-        )
         started = perf_counter_ns()
-        controller_result = run_training_free_controller(
-            self._queries,
-            self.config,
-            protected_block_ids=protected_ids,
-        )
+        if self.learned_policy is None:
+            protected_ids = tuple(
+                block.block_id
+                for query in self._queries
+                for block in query.ranked_blocks
+                if _block_end(block.block_id) in self.protected_end_positions
+            )
+            controller_result = run_training_free_controller(
+                self._queries,
+                self.config,
+                protected_block_ids=protected_ids,
+            )
+            replay_actions = controller_result.actions
+            replay_digest = controller_result.replay_digest
+        else:
+            replay_actions, replay_digest = self._learned_replay()
         self._controller_time_ns += perf_counter_ns() - started
         latest_positions = set(groups)
         actions = tuple(
             action
-            for action in controller_result.actions
+            for action in replay_actions
             if (action.batch_index, action.query_position) in latest_positions
         )
         self._last_actions = actions
@@ -252,10 +398,8 @@ class OnlineTrainingFreeController:
                 )
             if action.fallback_reason is not None:
                 self._fallback_control_points += 1
-            self._peak_selected_blocks = max(
-                self._peak_selected_blocks, action.selected_blocks
-            )
-        self._replay_digest = controller_result.replay_digest
+            self._peak_selected_blocks = max(self._peak_selected_blocks, action.selected_blocks)
+        self._replay_digest = replay_digest
         self._finalized_control_points += len(actions)
 
     def clone(self) -> OnlineTrainingFreeController:
@@ -277,12 +421,11 @@ class OnlineTrainingFreeController:
         }
         other._last_actions = ()
         other._replay_digest = None
+        other._rebuild_learned_derived_state()
         return other
 
     @classmethod
-    def stack(
-        cls, controllers: list[OnlineTrainingFreeController]
-    ) -> OnlineTrainingFreeController:
+    def stack(cls, controllers: list[OnlineTrainingFreeController]) -> OnlineTrainingFreeController:
         if not controllers:
             raise ValueError("Cannot stack an empty controller list.")
         first = controllers[0]
@@ -292,6 +435,8 @@ class OnlineTrainingFreeController:
             or controller.trace_id != first.trace_id
             or controller.request_id != first.request_id
             or controller.protected_end_positions != first.protected_end_positions
+            or controller.learned_policy != first.learned_policy
+            or controller.enable_learned_dense_fallback != first.enable_learned_dense_fallback
             for controller in controllers[1:]
         ):
             raise ValueError("Cannot stack incompatible online controllers.")
@@ -301,6 +446,8 @@ class OnlineTrainingFreeController:
             trace_id=first.trace_id,
             request_id=first.request_id,
             protected_end_positions=first.protected_end_positions,
+            learned_policy=first.learned_policy,
+            enable_learned_dense_fallback=first.enable_learned_dense_fallback,
         )
         batch_offset = 0
         for controller in controllers:
@@ -327,12 +474,14 @@ class OnlineTrainingFreeController:
             other._observed_queries += controller._observed_queries
             other._finalized_control_points += controller._finalized_control_points
             other._applied_queries += controller._applied_queries
+            other._native_bootstrap_queries += controller._native_bootstrap_queries
             other._fallback_control_points += controller._fallback_control_points
             other._controller_time_ns += controller._controller_time_ns
             other._telemetry_time_ns += controller._telemetry_time_ns
             other._peak_selected_blocks = max(
                 other._peak_selected_blocks, controller._peak_selected_blocks
             )
+        other._rebuild_learned_derived_state()
         return other
 
     def crop(self, max_length: int) -> None:
@@ -369,12 +518,14 @@ class OnlineTrainingFreeController:
             key: tuple(position for position in positions if position < max_length)
             for key, positions in self._next_selections.items()
         }
+        self._rebuild_learned_derived_state()
 
     def stats(self) -> OnlineControllerStats:
         return OnlineControllerStats(
             observed_queries=self._observed_queries,
             finalized_control_points=self._finalized_control_points,
             applied_queries=self._applied_queries,
+            native_bootstrap_queries=self._native_bootstrap_queries,
             fallback_control_points=self._fallback_control_points,
             controller_time_ns=self._controller_time_ns,
             telemetry_time_ns=self._telemetry_time_ns,
@@ -393,6 +544,11 @@ class OnlineTrainingFreeController:
             "trace_id": self.trace_id,
             "request_id": self.request_id,
             "protected_end_positions": list(self.protected_end_positions),
+            "controller_kind": self.controller_kind,
+            "learned_policy": (
+                self.learned_policy.to_dict() if self.learned_policy is not None else None
+            ),
+            "enable_learned_dense_fallback": self.enable_learned_dense_fallback,
             "queries": [asdict(query) for query in self._queries],
             "next_selections": {
                 f"{layer}:{batch}": list(positions)
@@ -403,19 +559,30 @@ class OnlineTrainingFreeController:
 
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> OnlineTrainingFreeController:
+        learned_payload = payload.get("learned_policy")
+        if learned_payload is not None and not isinstance(learned_payload, dict):
+            raise ValueError("Serialized learned-lookahead policy must be an object.")
+        learned_policy = (
+            LearnedLookaheadPolicy.from_dict(learned_payload)
+            if isinstance(learned_payload, dict)
+            else None
+        )
+        expected_kind = "learned-lookahead" if learned_policy is not None else "training-free-m2"
+        if payload.get("controller_kind", expected_kind) != expected_kind:
+            raise ValueError("Serialized online controller kind drifted.")
         controller = cls(
             TrainingFreeControllerConfig(**payload["config"]),
             tuple(payload["csa_layer_indices"]),
             trace_id=payload["trace_id"],
             request_id=payload["request_id"],
             protected_end_positions=tuple(payload["protected_end_positions"]),
+            learned_policy=learned_policy,
+            enable_learned_dense_fallback=bool(payload.get("enable_learned_dense_fallback", True)),
         )
         for raw in payload.get("queries", []):
             raw = dict(raw)
             raw["native_block_ids"] = tuple(raw["native_block_ids"])
-            raw["ranked_blocks"] = tuple(
-                RankedBlock(**block) for block in raw["ranked_blocks"]
-            )
+            raw["ranked_blocks"] = tuple(RankedBlock(**block) for block in raw["ranked_blocks"])
             controller._queries.append(ReplayQuery(**raw))
         next_selections: dict[tuple[int, int], tuple[int, ...]] = {}
         for key, positions in payload.get("next_selections", {}).items():
@@ -424,15 +591,43 @@ class OnlineTrainingFreeController:
         controller._next_selections = next_selections
         counters = payload.get("counters", {})
         controller._observed_queries = int(counters.get("observed_queries", 0))
-        controller._finalized_control_points = int(
-            counters.get("finalized_control_points", 0)
-        )
+        controller._finalized_control_points = int(counters.get("finalized_control_points", 0))
         controller._applied_queries = int(counters.get("applied_queries", 0))
-        controller._fallback_control_points = int(
-            counters.get("fallback_control_points", 0)
-        )
+        controller._native_bootstrap_queries = int(counters.get("native_bootstrap_queries", 0))
+        controller._fallback_control_points = int(counters.get("fallback_control_points", 0))
         controller._controller_time_ns = int(counters.get("controller_time_ns", 0))
         controller._telemetry_time_ns = int(counters.get("telemetry_time_ns", 0))
         controller._peak_selected_blocks = int(counters.get("peak_selected_blocks", 0))
         controller._replay_digest = counters.get("replay_digest")
+        if learned_policy is not None and controller._queries:
+            replayed = controller.clone()
+            replayed._rebuild_learned_derived_state()
+            if controller._replay_digest != replayed._replay_digest:
+                raise ValueError(
+                    "Serialized learned-lookahead replay digest failed integrity validation."
+                )
+            if controller._next_selections != replayed._next_selections:
+                raise ValueError(
+                    "Serialized learned-lookahead selections failed integrity validation."
+                )
+            for name in (
+                "_observed_queries",
+                "_finalized_control_points",
+                "_fallback_control_points",
+                "_peak_selected_blocks",
+            ):
+                if getattr(controller, name) != getattr(replayed, name):
+                    raise ValueError(
+                        f"Serialized learned-lookahead counter {name} failed integrity validation."
+                    )
+        if any(
+            value < 0
+            for value in (
+                controller._applied_queries,
+                controller._native_bootstrap_queries,
+                controller._controller_time_ns,
+                controller._telemetry_time_ns,
+            )
+        ):
+            raise ValueError("Serialized online controller counters must be non-negative.")
         return controller

@@ -261,6 +261,16 @@ checked P1 report and summary. Calibration-only non-uniform quotas, protected
 pinning, learned lookahead, and the preregistered five-seed matrix remain active
 work.
 
+The online learned-lookahead runtime is now implemented separately from that
+legacy pilot. A frozen 16-hidden two-head policy consumes only token-t CSA
+rankings, is applied at token t+1, uses native selection for bootstrap, and is
+serialized with its calibration, split digests, parameters, selections, and
+replay digest. Cache clone/select/stack/crop/persistence and physical tiering
+are covered by executable tests. Its full 5-seed × 2-scale × 9-family ×
+5-context × 2-budget protocol is frozen in
+`manifests/p1-online-learned-lookahead-v1.json`; it runs after, and cannot alter,
+the P2 primary causal gate.
+
 The follow-up calibration matrix fits checkpoint-specific same-token layer
 quotas from disjoint 707-series seeds using all nine P2 families and five context
 lengths. All 5 seeds × 2 scales completed at 256 conversations per family:

@@ -153,6 +153,13 @@ It constructed an offline replay plan from final-query probes collected by a ful
 native pass, so it is not evidence for deployable online learned lookahead. It
 remains a reproducible negative baseline rather than the M4 default.
 
+A separate online learned-lookahead path now freezes a small MLP into a
+JSON/digest-bound cache policy. It observes token-t CSA signals, applies its
+bounded selection only to token t+1, records native bootstrap use and controller
+overhead, and preserves replay across cache lifecycle operations. This is an
+implemented exploratory method; no positive result is claimed before its
+preregistered post-P2 matrix executes.
+
 M4's pinned-CPU/GPU-hot CSA value store preserved quality and reduced that
 component by about 91%, but reduced total cache allocation by only about 2% and
 did not improve speed. The M5 pilot connected M2 to actual cached decode; its

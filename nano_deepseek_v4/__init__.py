@@ -61,6 +61,12 @@ from .evaluation import (
     evaluate_multiple_choice,
     score_choice_loglikelihood,
 )
+from .learned_lookahead import (
+    LearnedLookaheadPolicy,
+    LearnedLookaheadPrediction,
+    freeze_learned_lookahead_policy,
+    train_learned_lookahead_policy,
+)
 from .learned_memory_controller import (
     RISK_FEATURE_NAMES,
     LearnedRiskController,
@@ -231,6 +237,11 @@ __all__ = [
     "compute_controller_layer_signal",
     "OnlineControllerStats",
     "OnlineTrainingFreeController",
+    # Adaptive V4 Memory online learned lookahead
+    "LearnedLookaheadPolicy",
+    "LearnedLookaheadPrediction",
+    "freeze_learned_lookahead_policy",
+    "train_learned_lookahead_policy",
     # Adaptive V4 Memory M3 learned risk controller
     "RISK_FEATURE_NAMES",
     "RiskExample",

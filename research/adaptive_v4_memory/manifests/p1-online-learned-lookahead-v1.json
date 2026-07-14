@@ -1,0 +1,126 @@
+{
+  "schema_version": 1,
+  "experiment_id": "p1-online-learned-lookahead-v1",
+  "status": "frozen_before_execution",
+  "frozen_date": "2026-07-14",
+  "role": "separate exploratory controller study; excluded from the preregistered P2 primary causal gate",
+  "claim_boundary": {
+    "eligible": "token-t CSA signals predict and select a bounded token-(t+1) hot set on held-out synthetic workloads",
+    "ineligible": [
+      "same-token causality",
+      "general adaptive-memory superiority",
+      "natural-language transfer before P3 execution",
+      "official DeepSeek-V4 evidence",
+      "replacement of a failed preregistered P2 primary arm"
+    ],
+    "legacy_m3": "the full-pass final-query replay pilot is a separate offline negative result and supplies no online-lookahead evidence"
+  },
+  "causal_contract": {
+    "features": "only CSA rankings and native selections observed while executing token t",
+    "decision_time": "after all token-t CSA layers finalize and before token-(t+1) sparse-value access",
+    "applied_time": "token t+1 only",
+    "bootstrap": "native selection until the first complete prior-token observation exists",
+    "future_information": "forbidden: token-(t+1) scores, hidden states, targets, answers, quality labels, or later layers from token t+1",
+    "predictor": "two-head MLP, hidden size 16; sufficient shared top-k plus dense-risk probability",
+    "runtime": "frozen pure-CPU inference parameters embedded in the cache manifest",
+    "normal_budget": "predicted shared top-k clipped by the preregistered global budget",
+    "dense_budget": "calibrated dense-risk fallback clipped by the preregistered dense global budget",
+    "protected_pins": "count inside the active physical hot-memory budget",
+    "determinism": "policy, queries, predictions, actions, and cache state are SHA-256 replay bound"
+  },
+  "splits": {
+    "unit": "conversation; all token pairs from a conversation remain in one split",
+    "training_seed_namespace": 110714000,
+    "calibration_seed_namespace": 120714000,
+    "test_seed_namespace": 130714000,
+    "training_model_seeds": [6071401, 6071402, 6071403, 6071404, 6071405],
+    "overlap_policy": "exact conversation IDs and generated token sequences must be disjoint across train, calibration, and test",
+    "test_access": "one terminal evaluation after model and thresholds are frozen; no retuning"
+  },
+  "matrix": {
+    "scales": ["s55", "s151"],
+    "workload_families": [
+      "single-remote-retrieval",
+      "multiple-independent-needles",
+      "associative-recall",
+      "multi-turn-query-shift",
+      "dense-global-aggregation",
+      "irrelevant-context-local-only",
+      "instruction-persistence",
+      "adversarial-lexical-distractors",
+      "long-generation-changing-evidence"
+    ],
+    "contexts": [80, 128, 256, 512, 1024],
+    "budgets": ["2x", "4x"],
+    "replicates_per_context": 10,
+    "examples_per_replicate": 20,
+    "test_examples_per_family_seed_scale_budget": 1000,
+    "test_examples_per_arm": 180000,
+    "minimum_training_examples_per_seed_scale": 9000,
+    "minimum_calibration_examples_per_seed_scale": 4500
+  },
+  "labels": {
+    "budget": "minimum shared per-layer top-k at token t+1 that preserves the dense next-token prediction under the registered sweep",
+    "dense": "no registered normal-budget top-k preserves the dense next-token prediction",
+    "registered_topk_sweep": [1, 2, 4, 8, "all_available"],
+    "label_generation": "training and calibration splits only; test labels are opened solely for terminal scoring"
+  },
+  "arms": [
+    "native-resident",
+    "memory-matched-fixed+pins",
+    "one-token-training-free+pins",
+    "online-learned-lookahead+pins",
+    "online-learned-lookahead-no-dense-fallback",
+    "online-learned-lookahead-no-protected-pins"
+  ],
+  "statistics": {
+    "pairing": "same checkpoint, conversation, token position, budget, and deterministic arm rotation",
+    "primary_unit": "conversation clustered within training seed",
+    "interval": "paired cluster bootstrap 95% CI with 10000 resamples",
+    "tests": "paired two-sided permutation; Holm correction across scale-budget primary cells",
+    "effect": "paired accuracy difference and selected-block/HBM ratios",
+    "required_reports": [
+      "seed variance",
+      "worst family-context slice",
+      "bootstrap native-fallback rate",
+      "dense-fallback rate",
+      "controller inference time",
+      "H2D/D2H and late-miss accounting",
+      "all failures and OOMs"
+    ]
+  },
+  "positive_gate": {
+    "scope": "all 5 seeds at both scales and both 2x/4x budgets",
+    "quality": "online-learned-lookahead+pins exceeds one-token-training-free+pins in all 5 seed means and has a positive seed-cluster bootstrap 95% CI in every scale-budget cell",
+    "pareto": "quality exceeds memory-matched-fixed+pins without higher measured hot HBM or useful transfer bytes",
+    "regression": "no family-context slice loses more than 2 percentage points versus memory-matched-fixed+pins",
+    "budget": "zero logical or physical budget violations",
+    "replay": "all cache lifecycle and replay digests verify",
+    "overhead": "report unconditionally; no post-hoc overhead threshold",
+    "five_seed_test_resolution": "report exact/sign-randomization p-values and Holm adjustments, but do not require p<0.05 because a two-sided 5-pair exact sign test has minimum attainable p=0.0625"
+  },
+  "failure_rules": {
+    "gate_failure": "bounded negative result for this predictor, feature set, scales, and budgets only",
+    "missing_scale_or_seed": "unverified, never success",
+    "test_tuning": "invalidate and rerun from a new preregistered seed namespace",
+    "budget_violation": "fail affected arm and retain the record",
+    "runtime_failure": "retain denominator and report by type; never silently drop"
+  },
+  "dependencies": {
+    "p2_primary_gate": "artifacts/adaptive_v4_memory/paper_grade/p2-causal-ablation.summary.json",
+    "legacy_m3_audit": "artifacts/adaptive_v4_memory/paper_grade/p1/m3-offline-learned-risk-pilot.summary.json",
+    "checkpoint_root": "artifacts/adaptive_v4_memory/paper_grade/training",
+    "physical_memory_match_root": "artifacts/adaptive_v4_memory/paper_grade/p2_causal_hot_memory"
+  },
+  "implementation": {
+    "policy": "nano_deepseek_v4/learned_lookahead.py",
+    "runtime": "nano_deepseek_v4/online_memory_controller.py",
+    "cache_integration": "nano_deepseek_v4/modeling.py",
+    "label_collector": "research/adaptive_v4_memory/scripts/collect_p1_online_lookahead_labels.py",
+    "policy_fitter": "research/adaptive_v4_memory/scripts/fit_p1_online_learned_lookahead_policy.py",
+    "shard_evaluator": "research/adaptive_v4_memory/scripts/evaluate_p1_online_learned_lookahead_shard.py",
+    "matrix_runner": "research/adaptive_v4_memory/scripts/run_p1_online_learned_lookahead.py",
+    "summary_runner": "research/adaptive_v4_memory/scripts/summarize_p1_online_learned_lookahead.py"
+  },
+  "execution_order": "only after the frozen P2 causal summary is terminal; never modify or delay P2 core/causal execution"
+}

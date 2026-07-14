@@ -38,6 +38,30 @@
         "implementation_sources_verified": true
       }
     },
+    "p1_online_learned_lookahead": {
+      "path": "artifacts/adaptive_v4_memory/paper_grade/p1-online-learned-lookahead.summary.json",
+      "experiment_id": "p1-online-learned-lookahead-audit-v1",
+      "required_audit": {
+        "label_shards_verified": 6750,
+        "policies_verified": 20,
+        "test_shards_verified": 9000,
+        "paired_conversations": 180000,
+        "quality_arm_conversations": 1080000,
+        "training_seeds": 5,
+        "scales": 2,
+        "families": 9,
+        "contexts": 5,
+        "budgets": 2,
+        "all_raw_digests_verified": true,
+        "all_dependencies_verified": true,
+        "all_inputs_paired": true,
+        "zero_budget_violations": true,
+        "complete_failure_accounting": true,
+        "online_token_offset_verified": true,
+        "native_bootstrap_accounted": true,
+        "cache_replay_contract_tested": true
+      }
+    },
     "p2_causal": {
       "path": "artifacts/adaptive_v4_memory/paper_grade/p2-causal-ablation.summary.json",
       "experiment_id": "p2-causal-ablation-audit-v1",
@@ -150,6 +174,7 @@
     "paper_grade_study": "research/adaptive_v4_memory/manifests/paper-grade-study-v1.json",
     "experiment_scale_audit": "research/adaptive_v4_memory/manifests/experiment-scale-audit-v1.json",
     "p2_causal_factorial": "research/adaptive_v4_memory/manifests/p2-causal-factorial-v1.json",
+    "online_learned_lookahead": "research/adaptive_v4_memory/manifests/p1-online-learned-lookahead-v1.json",
     "p3_ruler": "research/adaptive_v4_memory/manifests/p3-ruler-qwen3-1.7b-v1.json",
     "natural_suite": "research/adaptive_v4_memory/manifests/p3-natural-suite-v1.json",
     "safety_stress": "research/adaptive_v4_memory/manifests/p3-safety-stress-v1.json",
@@ -163,6 +188,7 @@
   "generated_files": [
     "table-evidence.csv",
     "table-p2-quality-gate.csv",
+    "table-p1-online-learned-lookahead-gate.csv",
     "table-p2-causal-gate.csv",
     "table-p3-ruler-cells.csv",
     "table-p3-safety-slices.csv",

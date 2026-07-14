@@ -58,6 +58,12 @@ lookahead must consume signals available no later than token *t*, choose the
 token *t+1* residency plan before its sparse-value access, define first-token
 fallback, and account for predictor/cache/transfer overhead.
 
+That online contract is frozen separately in
+`manifests/p1-online-learned-lookahead-v1.json`. It uses five checkpoint seeds,
+both Tier-S scales, all nine workload families, five contexts, and both 2x/4x
+budgets. Its conclusion is exploratory and mechanically excluded from the P2
+primary causal gate; running it cannot retroactively select or replace a P2 arm.
+
 The primary causal factorial contains, at every eligible budget point:
 
 1. fixed allocation without protected pins (`fixed`);

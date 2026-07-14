@@ -14,6 +14,7 @@ from .causal_memory_controller import (
     SameTokenTrainingFreeController,
 )
 from .config import DeepSeekV4Config
+from .learned_lookahead import LearnedLookaheadPolicy
 from .memory_controller import CSASelectionPlan, TrainingFreeControllerConfig
 from .memory_probe import CSASelectionProbe
 from .memory_trace import AdaptiveMemoryTraceCollector, measure_csa_block_bytes
@@ -680,6 +681,43 @@ class DeepSeekV4Cache:
         if self.online_memory_controller is None:
             return None
         return self.online_memory_controller.stats()
+
+    def enable_learned_lookahead_controller(
+        self,
+        config: TrainingFreeControllerConfig,
+        policy: LearnedLookaheadPolicy,
+        *,
+        protected_end_positions: tuple[int, ...] = (),
+        trace_id: str = "online-learned-lookahead",
+        request_id: str = "request-0",
+        enable_dense_fallback: bool = True,
+    ) -> None:
+        """Enable a frozen token-t to token-(t+1) learned allocation policy."""
+
+        if (
+            self.online_memory_controller is not None
+            or self.same_token_memory_controller is not None
+        ):
+            raise RuntimeError("A memory controller is already enabled.")
+        layer_types = self.config.layer_types
+        if layer_types is None:
+            raise RuntimeError("config.layer_types was not initialized.")
+        csa_layers = tuple(
+            index
+            for index, layer_type in enumerate(layer_types)
+            if layer_type == "compressed_sparse_attention"
+        )
+        self._attach_online_controller(
+            OnlineTrainingFreeController(
+                config,
+                csa_layers,
+                trace_id=trace_id,
+                request_id=request_id,
+                protected_end_positions=protected_end_positions,
+                learned_policy=policy,
+                enable_learned_dense_fallback=enable_dense_fallback,
+            )
+        )
 
     def enable_same_token_memory_controller(
         self,

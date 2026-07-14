@@ -85,6 +85,7 @@ def classify_evidence(
     p2_core: dict[str, Any],
     m5_one_token_pilot: dict[str, Any],
     m3_offline_learned_risk_pilot: dict[str, Any],
+    p1_online_learned_lookahead: dict[str, Any],
     p2_causal: dict[str, Any],
     p3_ruler: dict[str, Any],
     p3_natural: dict[str, Any],
@@ -123,6 +124,28 @@ def classify_evidence(
         and m3_audit.get("online_lookahead_evidence") is False
         and m3_audit.get("implementation_sources_verified") is True
     )
+    learned_audit = p1_online_learned_lookahead["audit"]
+    learned_complete = (
+        learned_audit.get("label_shards_verified") == 6_750
+        and learned_audit.get("policies_verified") == 20
+        and learned_audit.get("test_shards_verified") == 9_000
+        and learned_audit.get("paired_conversations") == 180_000
+        and learned_audit.get("quality_arm_conversations") == 1_080_000
+        and learned_audit.get("training_seeds") == 5
+        and learned_audit.get("scales") == 2
+        and learned_audit.get("families") == 9
+        and learned_audit.get("contexts") == 5
+        and learned_audit.get("budgets") == 2
+        and learned_audit.get("all_raw_digests_verified") is True
+        and learned_audit.get("all_dependencies_verified") is True
+        and learned_audit.get("all_inputs_paired") is True
+        and learned_audit.get("zero_budget_violations") is True
+        and learned_audit.get("complete_failure_accounting") is True
+        and learned_audit.get("online_token_offset_verified") is True
+        and learned_audit.get("native_bootstrap_accounted") is True
+        and learned_audit.get("cache_replay_contract_tested") is True
+    )
+    learned_passed = p1_online_learned_lookahead["primary_gate"].get("passed") is True
     causal_passed = p2_causal["primary_causal_gate"].get("passed") is True
     p3_complete = p3_ruler.get("benchmark_complete") is True
     natural_audit = p3_natural["audit"]
@@ -201,6 +224,13 @@ def classify_evidence(
         "p2_core": "success" if core_passed else "negative-result",
         "m5_one_token_pilot": "negative-result" if m5_complete else "unverified",
         "m3_offline_learned_risk_pilot": ("negative-result" if m3_complete else "unverified"),
+        "p1_online_learned_lookahead": (
+            "success"
+            if learned_complete and learned_passed
+            else "negative-result"
+            if learned_complete
+            else "unverified"
+        ),
         "p2_causal": "success" if causal_passed else "bounded-result",
         "p3_ruler": "bounded-result" if p3_complete else "unverified",
         "p3_natural": "bounded-result" if natural_complete else "unverified",
@@ -240,6 +270,28 @@ def _p2_quality_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
 
 def _causal_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return list(payload["primary_causal_gate"]["cells"])
+
+
+def _learned_lookahead_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    systems = {
+        (row["scale"], row["budget"]): row for row in payload["primary_gate"]["system_cells"]
+    }
+    rows = []
+    for cell in payload["primary_gate"]["cells"]:
+        system = systems[(cell["scale"], cell["budget"])]
+        rows.append(
+            {
+                **cell,
+                "seed_cluster_bootstrap_ci": json.dumps(cell["seed_cluster_bootstrap_ci"]),
+                "learned_peak_allocated_bytes_mean": system["learned_peak_allocated_bytes_mean"],
+                "fixed_peak_allocated_bytes_mean": system["fixed_peak_allocated_bytes_mean"],
+                "relative_peak_allocated_difference": system["relative_peak_allocated_difference"],
+                "learned_h2d_bytes_mean": system["learned_h2d_bytes_mean"],
+                "fixed_h2d_bytes_mean": system["fixed_h2d_bytes_mean"],
+                "system_passed": system["passed"],
+            }
+        )
+    return rows
 
 
 def _p3_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
@@ -344,6 +396,7 @@ def _report(
     p2_core: dict[str, Any],
     m5_one_token_pilot: dict[str, Any],
     m3_offline_learned_risk_pilot: dict[str, Any],
+    p1_online_learned_lookahead: dict[str, Any],
     p2_causal: dict[str, Any],
     p3_ruler: dict[str, Any],
     p3_natural: dict[str, Any],
@@ -389,6 +442,10 @@ mechanical and deliberately narrower than the motivating hypothesis.
   {m3_offline_learned_risk_pilot["audit"]["ablation_variants_verified"]} ablations; classified
   as a negative Pareto result. It used final-query probes from a full native pass to build an
   offline replay plan and is explicitly not evidence for deployable online learned lookahead.
+- P1 online learned lookahead: {p1_online_learned_lookahead["audit"]["test_shards_verified"]:,}
+  held-out shards, {p1_online_learned_lookahead["audit"]["paired_conversations"]:,} paired
+  conversations per arm, 5 seeds and 2 scales; the separate exploratory gate passed:
+  **{p1_online_learned_lookahead["primary_gate"]["passed"]}**.
 - P2 causal: {p2_causal["audit"]["unique_shards"]:,} verified factorial shards;
   {p2_causal["audit"]["quality_execution_counts"]["executed"]:,} quality forwards were
   executed and {p2_causal["audit"]["quality_execution_counts"]["reused_exact_config"]:,}
@@ -467,6 +524,7 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         loaded["p2_core"],
         loaded["m5_one_token_pilot"],
         loaded["m3_offline_learned_risk_pilot"],
+        loaded["p1_online_learned_lookahead"],
         loaded["p2_causal"],
         loaded["p3_ruler"],
         loaded["p3_natural"],
@@ -489,6 +547,12 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
     )
     quality = _p2_quality_rows(loaded["p2_core"])
     _write_csv(output_root / "table-p2-quality-gate.csv", quality, list(quality[0]))
+    learned = _learned_lookahead_rows(loaded["p1_online_learned_lookahead"])
+    _write_csv(
+        output_root / "table-p1-online-learned-lookahead-gate.csv",
+        learned,
+        list(learned[0]),
+    )
     causal = _causal_rows(loaded["p2_causal"])
     _write_csv(output_root / "table-p2-causal-gate.csv", causal, list(causal[0]))
     p3 = _p3_rows(loaded["p3_ruler"])
@@ -540,6 +604,7 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         p2_core=loaded["p2_core"],
         m5_one_token_pilot=loaded["m5_one_token_pilot"],
         m3_offline_learned_risk_pilot=loaded["m3_offline_learned_risk_pilot"],
+        p1_online_learned_lookahead=loaded["p1_online_learned_lookahead"],
         p2_causal=loaded["p2_causal"],
         p3_ruler=loaded["p3_ruler"],
         p3_natural=loaded["p3_natural"],
