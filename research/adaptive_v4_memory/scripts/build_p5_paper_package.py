@@ -44,9 +44,7 @@ def _clean_source() -> tuple[str, bool]:
     return commit, dirty
 
 
-def _validate_evidence(
-    name: str, path: Path, contract: dict[str, Any]
-) -> dict[str, Any]:
+def _validate_evidence(name: str, path: Path, contract: dict[str, Any]) -> dict[str, Any]:
     payload = _load(path)
     _require(
         payload.get("experiment_id") == contract["experiment_id"],
@@ -63,26 +61,42 @@ def classify_evidence(
     p2_core: dict[str, Any],
     p2_causal: dict[str, Any],
     p3_ruler: dict[str, Any],
-    p4_systems: dict[str, Any],
+    p3_natural: dict[str, Any],
+    p4_reference_systems: dict[str, Any],
+    p4_production_systems: dict[str, Any],
 ) -> dict[str, str]:
     core_passed = any(
-        row.get("passes_fixed_baseline_component") is True
-        for row in p2_core["quality_gate"]
+        row.get("passes_fixed_baseline_component") is True for row in p2_core["quality_gate"]
     )
     causal_passed = p2_causal["primary_causal_gate"].get("passed") is True
     p3_complete = p3_ruler.get("benchmark_complete") is True
-    p4_audit = p4_systems["audit"]
-    p4_full = (
-        p4_audit.get("terminal_cells") == 108
-        and p4_audit.get("partial_cells") == 0
-        and p4_audit.get("failed_cells") == 0
+    natural_audit = p3_natural["audit"]
+    natural_complete = (
+        natural_audit.get("all_required_artifacts_verified") is True
+        and natural_audit.get("all_required_baseline_cells_terminal") is True
+        and natural_audit.get("all_failure_accounting_complete") is True
+        and natural_audit.get("benchmarks_terminal") == 5
+        and natural_audit.get("minimum_protocol_examples_accounted_per_arm") == 45_289
+    )
+    reference_audit = p4_reference_systems["audit"]
+    reference_complete = reference_audit.get("terminal_cells") == 108
+    production_audit = p4_production_systems["audit"]
+    production_full = (
+        production_audit.get("terminal_cells") == 108
+        and production_audit.get("complete_cells") == 108
+        and production_audit.get("partial_cells") == 0
+        and production_audit.get("failed_cells") == 0
+        and production_audit.get("actual_concurrency_verified") is True
+        and production_audit.get("all_required_metrics_verified") is True
+        and production_audit.get("tail_failure_accounting_complete") is True
     )
     result = {
         "p2_core": "success" if core_passed else "negative-result",
         "p2_causal": "success" if causal_passed else "bounded-result",
         "p3_ruler": "bounded-result" if p3_complete else "unverified",
-        "p4_systems": "success" if p4_full else "bounded-result",
-        "p3_natural_remaining": "unverified",
+        "p3_natural": "bounded-result" if natural_complete else "unverified",
+        "p4_reference_systems": "bounded-result" if reference_complete else "unverified",
+        "p4_production_systems": "success" if production_full else "bounded-result",
         "official_deepseek_v4": "unverified",
     }
     _require(set(result.values()).issubset(ALLOWED_CLASSES), "Unknown conclusion class.")
@@ -144,24 +158,16 @@ def _p4_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
         row.update(
             {
                 "paired_repetitions": cell["paired_repetitions"],
-                "resident_ttft_p95_ms_mean": _metric_mean(
-                    cell, "ttft_p95_ms", "resident"
-                ),
-                "tiered_ttft_p95_ms_mean": _metric_mean(
-                    cell, "ttft_p95_ms", "tiered"
-                ),
+                "resident_ttft_p95_ms_mean": _metric_mean(cell, "ttft_p95_ms", "resident"),
+                "tiered_ttft_p95_ms_mean": _metric_mean(cell, "ttft_p95_ms", "tiered"),
                 "resident_throughput_mean": _metric_mean(
                     cell, "throughput_tokens_per_second", "resident"
                 ),
                 "tiered_throughput_mean": _metric_mean(
                     cell, "throughput_tokens_per_second", "tiered"
                 ),
-                "resident_peak_hbm_mean": _metric_mean(
-                    cell, "peak_allocated_bytes", "resident"
-                ),
-                "tiered_peak_hbm_mean": _metric_mean(
-                    cell, "peak_allocated_bytes", "tiered"
-                ),
+                "resident_peak_hbm_mean": _metric_mean(cell, "peak_allocated_bytes", "resident"),
+                "tiered_peak_hbm_mean": _metric_mean(cell, "peak_allocated_bytes", "tiered"),
                 "failure": "",
             }
         )
@@ -184,11 +190,14 @@ def _report(
     p2_core: dict[str, Any],
     p2_causal: dict[str, Any],
     p3_ruler: dict[str, Any],
-    p4_systems: dict[str, Any],
+    p3_natural: dict[str, Any],
+    p4_reference_systems: dict[str, Any],
+    p4_production_systems: dict[str, Any],
     inputs: list[dict[str, Any]],
 ) -> str:
     causal = p2_causal["primary_causal_gate"]
-    p4 = p4_systems["audit"]
+    p4_reference = p4_reference_systems["audit"]
+    p4_production = p4_production_systems["audit"]
     evidence_lines = "\n".join(
         f"| {row['name']} | {classifications[row['name']]} | `{row['sha256']}` |"
         for row in inputs
@@ -204,33 +213,38 @@ mechanical and deliberately narrower than the motivating hypothesis.
 | Evidence | Classification | SHA-256 |
 |---|---|---|
 {evidence_lines}
-| p3_natural_remaining | {classifications['p3_natural_remaining']} | see frozen manifest |
-| official_deepseek_v4 | {classifications['official_deepseek_v4']} | see blocker manifest |
 
 ## Experiment volume
 
-- P2 core: {p2_core['audit']['unique_shards']:,} verified shards, 5 training seeds,
+- P2 core: {p2_core["audit"]["unique_shards"]:,} verified shards, 5 training seeds,
   2 scales, 9 workload families, 5 contexts, and 1,000 examples per
   seed-scale-family.
-- P2 causal: {p2_causal['audit']['unique_shards']:,} verified factorial shards;
-  the calibrated+pins versus fixed+pins gate passed: **{causal['passed']}**.
-- P3 RULER: {p3_ruler['audit']['completed_cells']} cells and
-  {p3_ruler['audit']['total_predictions']:,} predictions on one pinned compatible model.
-- P4 systems: {p4['terminal_cells']} terminal cells, {p4['complete_cells']} complete,
-  {p4['partial_cells']} partial, and {p4['failed_cells']} failed.
+- P2 causal: {p2_causal["audit"]["unique_shards"]:,} verified factorial shards;
+  the calibrated+pins versus fixed+pins gate passed: **{causal["passed"]}**.
+- P3 RULER: {p3_ruler["audit"]["completed_cells"]} cells and
+  {p3_ruler["audit"]["total_predictions"]:,} predictions on one pinned compatible model.
+- P3 natural suite: {p3_natural["audit"]["benchmarks_terminal"]} terminal benchmarks and
+  at least {p3_natural["audit"]["minimum_protocol_examples_accounted_per_arm"]:,}
+  examples accounted per required arm.
+- P4 reference systems: {p4_reference["terminal_cells"]} terminal serial-interleaved cells,
+  {p4_reference["complete_cells"]} complete, {p4_reference["partial_cells"]} partial, and
+  {p4_reference["failed_cells"]} failed.
+- P4 production systems: {p4_production["terminal_cells"]} terminal actual-concurrency cells,
+  {p4_production["complete_cells"]} complete, {p4_production["partial_cells"]} partial, and
+  {p4_production["failed_cells"]} failed.
 
 ## Claim boundary
 
 The P2 result is synthetic Tier-S evidence. A failed causal gate bounds only the tested
-controller family. P3 RULER is transfer evidence for one Qwen3 snapshot, not official
-DeepSeek-V4 evidence or model-population inference. P4 is single-accelerator reference
-PyTorch evidence, not fused-kernel or production-serving evidence. The remaining natural
-suite and official DeepSeek-V4 run stay unverified until their frozen execution and resource
-contracts are satisfied.
+controller family. P3 is transfer evidence for pinned Qwen3 snapshots, not official
+DeepSeek-V4 evidence or model-population inference. P4 is single-accelerator,
+serial-interleaved reference PyTorch evidence, not actual concurrent serving, fused-kernel,
+or production-throughput evidence. The official DeepSeek-V4 run stays unverified until its
+frozen resource contract is satisfied.
 
 ## Reproduction
 
-The CSV tables next to this report are generated from the same four audits. Their digests,
+The CSV tables next to this report are generated from the same frozen audits. Their digests,
 the input digests, source commit, and protocol manifests are recorded in
 `artifact-index.json`; missing or incomplete evidence causes generation to fail rather than
 being imputed.
@@ -258,12 +272,13 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         loaded["p2_core"],
         loaded["p2_causal"],
         loaded["p3_ruler"],
-        loaded["p4_systems"],
+        loaded["p3_natural"],
+        loaded["p4_reference_systems"],
+        loaded["p4_production_systems"],
     )
     output_root.mkdir(parents=True, exist_ok=True)
     evidence_rows = [
-        {**row, "classification": classes.get(row["name"], "unverified")}
-        for row in inputs
+        {**row, "classification": classes.get(row["name"], "unverified")} for row in inputs
     ]
     _write_csv(
         output_root / "table-evidence.csv",
@@ -276,14 +291,15 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
     _write_csv(output_root / "table-p2-causal-gate.csv", causal, list(causal[0]))
     p3 = _p3_rows(loaded["p3_ruler"])
     _write_csv(output_root / "table-p3-ruler-cells.csv", p3, list(p3[0]))
-    p4 = _p4_rows(loaded["p4_systems"])
+    p4_reference = _p4_rows(loaded["p4_reference_systems"])
+    p4_production = _p4_rows(loaded["p4_production_systems"])
     p4_fields = [
         "scale",
         "context",
         "generation",
         "profile",
         "batch",
-        "concurrency",
+        "active_requests",
         "status",
         "paired_repetitions",
         "resident_ttft_p95_ms_mean",
@@ -294,20 +310,29 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         "tiered_peak_hbm_mean",
         "failure",
     ]
-    _write_csv(output_root / "table-p4-system-cells.csv", p4, p4_fields)
+    _write_csv(
+        output_root / "table-p4-reference-system-cells.csv",
+        p4_reference,
+        p4_fields,
+    )
+    _write_csv(
+        output_root / "table-p4-production-system-cells.csv",
+        p4_production,
+        p4_fields,
+    )
     report = _report(
         classifications=classes,
         p2_core=loaded["p2_core"],
         p2_causal=loaded["p2_causal"],
         p3_ruler=loaded["p3_ruler"],
-        p4_systems=loaded["p4_systems"],
+        p3_natural=loaded["p3_natural"],
+        p4_reference_systems=loaded["p4_reference_systems"],
+        p4_production_systems=loaded["p4_production_systems"],
         inputs=inputs,
     )
     (output_root / "paper-report.md").write_text(report)
     generated = [
-        output_root / name
-        for name in manifest["generated_files"]
-        if name != "artifact-index.json"
+        output_root / name for name in manifest["generated_files"] if name != "artifact-index.json"
     ]
     commit, dirty = _clean_source()
     _require(not dirty, "P5 package generation requires a clean source tree.")
@@ -321,9 +346,7 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         },
         "inputs": inputs,
         "classifications": classes,
-        "generated": [
-            {"path": str(path), "sha256": sha256(path)} for path in generated
-        ],
+        "generated": [{"path": str(path), "sha256": sha256(path)} for path in generated],
     }
     target = output_root / "artifact-index.json"
     target.write_text(json.dumps(index, indent=2, sort_keys=True) + "\n")

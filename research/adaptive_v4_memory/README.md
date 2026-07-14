@@ -153,6 +153,8 @@ The P4 reference systems matrix freezes 108 scale/context/generation/load cells,
 with five warmups and 30 measured repetitions for resident and tiered policies.
 Policy failures are isolated: if resident OOMs, the surviving tiered policy is
 still measured and the cell is reported as partial instead of being discarded.
+Its c8/c32 profiles are serial round-robin active-request probes, not actual
+concurrent serving; they remain bounded reference evidence even at 108/108.
 
 After all audits finish, the strict P5 package can be regenerated with:
 
@@ -161,8 +163,9 @@ After all audits finish, the strict P5 package can be regenerated with:
 ```
 
 The command requires a clean tree and complete 4,500-shard P2 core,
-9,000-shard causal, 253,500-prediction RULER, and 108-cell systems audits. It
-writes digest-indexed CSV tables and a paper-style report under
+9,000-shard causal, 253,500-prediction small-model RULER, five-benchmark natural,
+108-cell reference-system, and separate 108-cell actual-concurrency production
+audits. It writes digest-indexed CSV tables and a paper-style report under
 `artifacts/adaptive_v4_memory/paper_grade/p5/`; missing evidence is never
 imputed.
 

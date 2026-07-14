@@ -64,6 +64,18 @@ def validate_manifest(payload: dict[str, Any]) -> dict[str, Any]:
         "native-dense",
         "strongest-memory-matched-fixed",
     ):
+        raise ValueError("Natural compatible baseline arms drifted.")
+    if tuple(payload["common_protocol"]["p4_gate_baseline_arms"]) != (
+        "native-dense",
+        "strongest-memory-matched-fixed",
+    ):
+        raise ValueError("P4 must remain gated on both compatible natural baselines.")
+    if "judge-blocked" not in payload["common_protocol"]["failure_accounting"]:
+        raise ValueError("Natural failure accounting must retain blocked official judges.")
+    if tuple(payload["common_protocol"]["mandatory_compatible_arms"]) != (
+        "native-dense",
+        "strongest-memory-matched-fixed",
+    ):
         raise ValueError("The always-runnable Qwen baseline arms drifted.")
     conditional_rule = payload["common_protocol"]["conditional_arm_rule"]
     if (
@@ -143,6 +155,22 @@ def validate_manifest(payload: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("Dataset byte total drifted from the frozen inventory.")
     if payload["execution_totals"]["minimum_predictions_per_arm"] != 45289:
         raise ValueError("Natural-suite primary prediction total drifted.")
+    suite = payload["suite_audit"]
+    if tuple(suite["benchmark_summaries"]) != EXPECTED_ORDER:
+        raise ValueError("Natural-suite audit benchmark order drifted.")
+    expected_accounting = {
+        "RULER": 32500,
+        "SCBench": 10286,
+        "LongBench-v2": 503,
+        "LongMemEval": 500,
+        "MRCR": 1500,
+    }
+    if suite["per_arm_minimum_accounted_examples"] != expected_accounting:
+        raise ValueError("Natural-suite per-benchmark accounting drifted.")
+    if sum(expected_accounting.values()) != payload["execution_totals"][
+        "minimum_predictions_per_arm"
+    ]:
+        raise ValueError("Natural-suite audit totals do not close.")
 
     return {
         "benchmarks": list(EXPECTED_ORDER),

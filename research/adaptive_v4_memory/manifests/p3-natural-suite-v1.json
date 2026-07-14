@@ -63,6 +63,10 @@
       "native-dense",
       "strongest-memory-matched-fixed"
     ],
+    "p4_gate_baseline_arms": [
+      "native-dense",
+      "strongest-memory-matched-fixed"
+    ],
     "conditional_arms": ["fixed+pins", "synthetic-qualified-calibrated+pins"],
     "conditional_arm_rule": "fixed+pins and calibrated+pins require both a passed P2 causal gate and an architecture-preserving port with prediction/cache equivalence. Qwen3 has no DeepSeek sparse-attention pin/indexer contract, so these arms are recorded as incompatible unless such a port is separately validated; native and fixed Qwen baselines remain mandatory.",
     "quality_memory_pairing": "quality comparisons use the same example and measured hot-resident-byte target",
@@ -72,6 +76,7 @@
       "timeout",
       "empty-generation",
       "invalid-answer-format",
+      "judge-blocked",
       "runtime-error"
     ],
     "raw_record_required": [
@@ -321,6 +326,25 @@
     "minimum_predictions_per_arm": 45289,
     "dataset_files_to_verify": 20,
     "dataset_bytes_to_acquire": 2391718372
+  },
+  "suite_audit": {
+    "runner": "research/adaptive_v4_memory/scripts/summarize_p3_natural_suite.py",
+    "output": "artifacts/adaptive_v4_memory/paper_grade/p3/natural-suite.summary.json",
+    "benchmark_summaries": {
+      "RULER": "artifacts/adaptive_v4_memory/paper_grade/p3/natural/ruler.summary.json",
+      "SCBench": "artifacts/adaptive_v4_memory/paper_grade/p3/natural/scbench.summary.json",
+      "LongBench-v2": "artifacts/adaptive_v4_memory/paper_grade/p3/natural/longbench-v2.summary.json",
+      "LongMemEval": "artifacts/adaptive_v4_memory/paper_grade/p3/natural/longmemeval.summary.json",
+      "MRCR": "artifacts/adaptive_v4_memory/paper_grade/p3/natural/mrcr.summary.json"
+    },
+    "per_arm_minimum_accounted_examples": {
+      "RULER": 32500,
+      "SCBench": 10286,
+      "LongBench-v2": 503,
+      "LongMemEval": 500,
+      "MRCR": 1500
+    },
+    "terminal_definition": "every expected example is either scored or represented by one explicit unsupported-context, OOM, timeout, empty-generation, invalid-answer-format, judge-blocked, or runtime-error record"
   },
   "claim_boundary": "This suite tests transfer on a pinned compatible Qwen3 model. It is not official DeepSeek-V4 evidence, and unsupported or incompatible cells remain explicit rather than being imputed."
 }

@@ -323,10 +323,13 @@ analysis, tests, and reproduction instructions are committed and pushed.
 
 The executable final gate is `manifests/p5-paper-package-v1.json`, implemented
 by `scripts/build_p5_paper_package.py`. It requires the completed P2 core, P2
-causal, P3 RULER, and P4 systems audits at their frozen counts. It regenerates
+causal, complete five-benchmark P3 natural suite, P4 serial-interleaved reference,
+and a separate P4 production audit with actual concurrency 1/8/32 at their
+frozen counts. It regenerates
 every primary table and the paper report, records all input/output SHA-256
 digests in one artifact index, and classifies conclusions only as `success`,
 `bounded-result`, `negative-result`, or `unverified`. A failed causal gate is
 bounded to the tested controller, a single compatible-model result is not
-promoted to official V4 evidence, and failed or partial system cells remain in
-the primary table.
+promoted to official V4 evidence, reference interleaving cannot be classified
+as production success, and failed or partial system cells remain in the primary
+table.

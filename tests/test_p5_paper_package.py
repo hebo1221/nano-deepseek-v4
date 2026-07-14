@@ -20,12 +20,20 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
         "p2_core",
         "p2_causal",
         "p3_ruler",
-        "p4_systems",
+        "p3_natural",
+        "p4_reference_systems",
+        "p4_production_systems",
     }
     assert manifest["evidence"]["p2_core"]["required_audit"]["unique_shards"] == 4500
     assert manifest["evidence"]["p2_causal"]["required_audit"]["unique_shards"] == 9000
     assert manifest["evidence"]["p3_ruler"]["required_audit"]["total_predictions"] == 253500
-    assert manifest["evidence"]["p4_systems"]["required_audit"]["terminal_cells"] == 108
+    assert manifest["evidence"]["p4_reference_systems"]["required_audit"]["terminal_cells"] == 108
+    assert (
+        manifest["evidence"]["p4_production_systems"]["required_audit"][
+            "actual_concurrency_verified"
+        ]
+        is True
+    )
 
 
 def test_p5_classification_preserves_claim_boundaries() -> None:
@@ -35,9 +43,29 @@ def test_p5_classification_preserves_claim_boundaries() -> None:
         {"benchmark_complete": True},
         {
             "audit": {
+                "all_required_artifacts_verified": True,
+                "all_required_baseline_cells_terminal": True,
+                "all_failure_accounting_complete": True,
+                "benchmarks_terminal": 5,
+                "minimum_protocol_examples_accounted_per_arm": 45_289,
+            }
+        },
+        {
+            "audit": {
                 "terminal_cells": 108,
                 "partial_cells": 1,
                 "failed_cells": 2,
+            }
+        },
+        {
+            "audit": {
+                "terminal_cells": 108,
+                "complete_cells": 105,
+                "partial_cells": 1,
+                "failed_cells": 2,
+                "actual_concurrency_verified": True,
+                "all_required_metrics_verified": True,
+                "tail_failure_accounting_complete": True,
             }
         },
     )
@@ -46,8 +74,9 @@ def test_p5_classification_preserves_claim_boundaries() -> None:
         "p2_core": "negative-result",
         "p2_causal": "bounded-result",
         "p3_ruler": "bounded-result",
-        "p4_systems": "bounded-result",
-        "p3_natural_remaining": "unverified",
+        "p3_natural": "bounded-result",
+        "p4_reference_systems": "bounded-result",
+        "p4_production_systems": "bounded-result",
         "official_deepseek_v4": "unverified",
     }
 
@@ -59,16 +88,37 @@ def test_p5_success_requires_full_system_coverage() -> None:
         {"benchmark_complete": True},
         {
             "audit": {
+                "all_required_artifacts_verified": True,
+                "all_required_baseline_cells_terminal": True,
+                "all_failure_accounting_complete": True,
+                "benchmarks_terminal": 5,
+                "minimum_protocol_examples_accounted_per_arm": 45_289,
+            }
+        },
+        {
+            "audit": {
                 "terminal_cells": 108,
                 "partial_cells": 0,
                 "failed_cells": 0,
+            }
+        },
+        {
+            "audit": {
+                "terminal_cells": 108,
+                "complete_cells": 108,
+                "partial_cells": 0,
+                "failed_cells": 0,
+                "actual_concurrency_verified": True,
+                "all_required_metrics_verified": True,
+                "tail_failure_accounting_complete": True,
             }
         },
     )
 
     assert classifications["p2_core"] == "success"
     assert classifications["p2_causal"] == "success"
-    assert classifications["p4_systems"] == "success"
+    assert classifications["p4_reference_systems"] == "bounded-result"
+    assert classifications["p4_production_systems"] == "success"
 
 
 def test_p5_p4_table_retains_terminal_failure() -> None:
@@ -84,7 +134,7 @@ def test_p5_p4_table_retains_terminal_failure() -> None:
                         "generation": 2048,
                         "profile": "batch-b16",
                         "batch": 16,
-                        "concurrency": 1,
+                        "active_requests": 1,
                     },
                     "policy_status": {"resident-native": {"failure": "oom"}},
                 }

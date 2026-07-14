@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 import sys
@@ -17,6 +18,7 @@ from p3_natural_metrics import (  # noqa: E402
     score_longbench_v2,
     score_mrcr,
 )
+from summarize_p3_natural_suite import BENCHMARK_IDS, summarize  # noqa: E402
 from validate_p3_natural_suite_manifest import validate_manifest  # noqa: E402
 
 
@@ -58,6 +60,11 @@ def test_natural_suite_rejects_task_subselection_and_silent_truncation() -> None
     truncated["benchmarks"]["LongBench-v2"]["overflow_action"] = "head-tail-truncate"
     with pytest.raises(ValueError, match="head-tail truncation"):
         validate_manifest(truncated)
+
+    missing_fixed = deepcopy(manifest)
+    missing_fixed["common_protocol"]["p4_gate_baseline_arms"] = ["native-dense"]
+    with pytest.raises(ValueError, match="both compatible natural baselines"):
+        validate_manifest(missing_fixed)
 
 
 def test_external_dsa_baselines_cannot_be_claimed_on_qwen() -> None:
@@ -136,3 +143,83 @@ def test_dataset_acquisition_is_sequence_gated_before_network_access(tmp_path: P
     assert completed.returncode != 0
     assert "1/4500 shards" in completed.stderr
     assert not (tmp_path / "data").exists()
+
+
+def _digest(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _natural_benchmark_summaries(tmp_path: Path, manifest_path: Path) -> dict[str, Path]:
+    manifest = json.loads(manifest_path.read_text())
+    causal = tmp_path / "causal.json"
+    inventory = tmp_path / "inventory.json"
+    causal.write_text("{}")
+    inventory.write_text("{}")
+    expected = manifest["suite_audit"]["per_arm_minimum_accounted_examples"]
+    paths: dict[str, Path] = {}
+    for name, experiment_id in BENCHMARK_IDS.items():
+        payload = {
+            "experiment_id": experiment_id,
+            "benchmark": name,
+            "source": {"dirty": False},
+            "experiment_manifest": {"sha256": _digest(manifest_path)},
+            "audit": {
+                "all_raw_artifacts_verified": True,
+                "all_failure_accounting_complete": True,
+                "raw_record_digest_set_sha256": "0" * 64,
+            },
+            "arms": {
+                arm: {
+                    "terminal": True,
+                    "expected_examples": expected[name],
+                    "accounted_examples": expected[name],
+                    "scored_examples": expected[name] - 1,
+                    "failures_by_type": {"unsupported-context": 1},
+                }
+                for arm in manifest["common_protocol"]["p4_gate_baseline_arms"]
+            },
+            "conditional_arms": {
+                "fixed+pins": {"status": "incompatible"},
+                "synthetic-qualified-calibrated+pins": {
+                    "status": "withheld-by-causal-gate"
+                },
+            },
+            "causal_gate": {"path": str(causal), "sha256": _digest(causal)},
+            "dataset_inventory": {
+                "path": str(inventory),
+                "sha256": _digest(inventory),
+            },
+            "model_snapshot_digest_set_sha256": "1" * 64,
+        }
+        path = tmp_path / f"{name}.json"
+        path.write_text(json.dumps(payload))
+        paths[name] = path
+    return paths
+
+
+def test_natural_suite_audit_requires_all_examples_and_baselines(tmp_path: Path) -> None:
+    root = Path(__file__).resolve().parents[1]
+    manifest = root / "research/adaptive_v4_memory/manifests/p3-natural-suite-v1.json"
+    paths = _natural_benchmark_summaries(tmp_path, manifest)
+
+    payload = summarize(manifest, paths)
+
+    assert payload["audit"]["benchmarks_terminal"] == 5
+    assert payload["audit"]["minimum_protocol_examples_accounted_per_arm"] == 45_289
+    assert payload["audit"]["accounted_examples_by_required_arm"] == {
+        "native-dense": 45_289,
+        "strongest-memory-matched-fixed": 45_289,
+    }
+    assert all(row["native_and_fixed_terminal"] for row in payload["benchmarks"].values())
+
+
+def test_natural_suite_audit_rejects_unaccounted_failure(tmp_path: Path) -> None:
+    root = Path(__file__).resolve().parents[1]
+    manifest = root / "research/adaptive_v4_memory/manifests/p3-natural-suite-v1.json"
+    paths = _natural_benchmark_summaries(tmp_path, manifest)
+    payload = json.loads(paths["MRCR"].read_text())
+    payload["arms"]["native-dense"]["failures_by_type"] = {}
+    paths["MRCR"].write_text(json.dumps(payload))
+
+    with pytest.raises(ValueError, match="do not close"):
+        summarize(manifest, paths)
