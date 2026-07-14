@@ -60,6 +60,31 @@
     "causal_shards": 16200,
     "causal_policy_example_evaluations": 5184000
   },
+  "execution_contract": {
+    "primary_gate": {
+      "matrix": "artifacts/adaptive_v4_memory/paper_grade/p2-core-quality-matrix.json",
+      "strict_audit": "artifacts/adaptive_v4_memory/paper_grade/p2-core-quality-matrix.strict.summary.json",
+      "required_unique_shards": 4500,
+      "requires_exact_record_schema": true,
+      "requires_exact_execution_rotation": true,
+      "requires_exact_statistical_cell_coverage": true
+    },
+    "artifact_namespace": "artifacts/adaptive_v4_memory/paper_grade/p2_seed_extension",
+    "per_checkpoint_equivalence_required": true,
+    "commands": [
+      ".venv/bin/python research/adaptive_v4_memory/scripts/run_p2_seed_extension_prerequisites.py",
+      ".venv/bin/python research/adaptive_v4_memory/scripts/run_p2_seed_extension_core.py --scale s55 --workers 3",
+      ".venv/bin/python research/adaptive_v4_memory/scripts/run_p2_seed_extension_core.py --scale s151 --workers 3",
+      ".venv/bin/python research/adaptive_v4_memory/scripts/summarize_p2_seed_extension.py"
+    ],
+    "outputs": {
+      "prerequisites": "artifacts/adaptive_v4_memory/paper_grade/p2-seed-extension-prerequisites.json",
+      "extension_matrix": "artifacts/adaptive_v4_memory/paper_grade/p2-seed-extension-core-matrix.json",
+      "extension_audit": "artifacts/adaptive_v4_memory/paper_grade/p2-seed-extension-core.summary.json",
+      "combined_matrix": "artifacts/adaptive_v4_memory/paper_grade/p2-nine-seed-core-matrix.json",
+      "combined_audit": "artifacts/adaptive_v4_memory/paper_grade/p2-nine-seed-core.summary.json"
+    }
+  },
   "execution_order": [
     "finish and audit the immutable five-seed primary core cohort",
     "train and calibrate four additional checkpoints per scale",

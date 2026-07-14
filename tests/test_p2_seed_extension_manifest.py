@@ -17,6 +17,7 @@ def test_independent_seed_extension_removes_exact_test_resolution_floor() -> Non
     inference = manifest["combined_confirmatory_inference"]
     volume = manifest["planned_extension_volume"]
     combined = manifest["combined_p2_volume"]
+    execution = manifest["execution_contract"]
     scale_audit = json.loads(
         (
             root
@@ -75,4 +76,34 @@ def test_independent_seed_extension_removes_exact_test_resolution_floor() -> Non
         "primary_cohort_remains_independently_reportable": True,
         "pooling_requires_identical_frozen_contracts": True,
         "outcome_dependent_early_stopping": False,
+    }
+    assert execution["primary_gate"] == {
+        "matrix": "artifacts/adaptive_v4_memory/paper_grade/p2-core-quality-matrix.json",
+        "strict_audit": (
+            "artifacts/adaptive_v4_memory/paper_grade/"
+            "p2-core-quality-matrix.strict.summary.json"
+        ),
+        "required_unique_shards": 4_500,
+        "requires_exact_record_schema": True,
+        "requires_exact_execution_rotation": True,
+        "requires_exact_statistical_cell_coverage": True,
+    }
+    assert execution["per_checkpoint_equivalence_required"] is True
+    assert execution["artifact_namespace"].endswith("/p2_seed_extension")
+    assert execution["commands"] == [
+        ".venv/bin/python research/adaptive_v4_memory/scripts/"
+        "run_p2_seed_extension_prerequisites.py",
+        ".venv/bin/python research/adaptive_v4_memory/scripts/"
+        "run_p2_seed_extension_core.py --scale s55 --workers 3",
+        ".venv/bin/python research/adaptive_v4_memory/scripts/"
+        "run_p2_seed_extension_core.py --scale s151 --workers 3",
+        ".venv/bin/python research/adaptive_v4_memory/scripts/"
+        "summarize_p2_seed_extension.py",
+    ]
+    assert set(execution["outputs"]) == {
+        "prerequisites",
+        "extension_matrix",
+        "extension_audit",
+        "combined_matrix",
+        "combined_audit",
     }
