@@ -19,7 +19,7 @@ from p3_natural_metrics import (  # noqa: E402
     score_mrcr,
 )
 from select_p3_fixed_baseline import ELIGIBLE_ARMS, ELIGIBLE_LENGTHS, select_fixed  # noqa: E402
-from summarize_p3_natural_benchmark import audit_arm  # noqa: E402
+from summarize_p3_natural_benchmark import RUNNER_PATHS, audit_arm  # noqa: E402
 from summarize_p3_natural_suite import BENCHMARK_IDS, summarize  # noqa: E402
 from validate_p3_natural_suite_manifest import validate_manifest  # noqa: E402
 
@@ -170,6 +170,25 @@ def _digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _source_for(benchmark: str) -> dict[str, object]:
+    commit = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    blob = subprocess.run(
+        ["git", "show", f"{commit}:{RUNNER_PATHS[benchmark]}"],
+        check=True,
+        capture_output=True,
+    ).stdout
+    return {
+        "commit": commit,
+        "dirty": False,
+        "implementation_sha256": hashlib.sha256(blob).hexdigest(),
+    }
+
+
 def _natural_benchmark_summaries(tmp_path: Path, manifest_path: Path) -> dict[str, Path]:
     manifest = json.loads(manifest_path.read_text())
     causal = tmp_path / "causal.json"
@@ -211,6 +230,7 @@ def _natural_benchmark_summaries(tmp_path: Path, manifest_path: Path) -> dict[st
                 "all_raw_artifacts_verified": True,
                 "all_failure_accounting_complete": True,
                 "all_required_arms_input_paired": True,
+                "all_source_implementations_verified": True,
                 "raw_record_digest_set_sha256": "0" * 64,
             },
             "arms": {
@@ -465,7 +485,7 @@ def _raw_arm_cell(tmp_path: Path) -> tuple[Path, Path, Path]:
                 "benchmark": "LongBench-v2",
                 "arm": "native-dense",
                 "status": "terminal",
-                "source": {"dirty": False, "implementation_sha256": "6" * 64},
+                "source": _source_for("LongBench-v2"),
                 "experiment_manifest": {"sha256": "4" * 64},
                 "raw_records": {"path": str(raw), "sha256": _digest(raw)},
                 "causal_gate": {"path": str(causal), "sha256": _digest(causal)},
@@ -502,6 +522,25 @@ def test_natural_arm_audit_closes_scored_and_failed_records(tmp_path: Path) -> N
     assert result["mean_score_over_all_expected_failures_zero"] == 0.5
 
 
+def test_natural_arm_audit_rejects_runner_digest_not_bound_to_commit(
+    tmp_path: Path,
+) -> None:
+    cell, _raw, _causal = _raw_arm_cell(tmp_path)
+    payload = json.loads(cell.read_text())
+    payload["source"]["implementation_sha256"] = "0" * 64
+    cell.write_text(json.dumps(payload))
+
+    with pytest.raises(ValueError, match="does not match its source commit"):
+        audit_arm(
+            benchmark="LongBench-v2",
+            arm="native-dense",
+            artifact_path=cell,
+            expected_examples=2,
+            manifest_digest="4" * 64,
+            allowed_failures={"unsupported-context"},
+        )
+
+
 def test_ruler_arm_audit_requires_exact_tokens_scorer_and_dataset_set(tmp_path: Path) -> None:
     cell, raw, _causal = _raw_arm_cell(tmp_path)
     records = [json.loads(line) for line in raw.read_text().splitlines()]
@@ -513,6 +552,7 @@ def test_ruler_arm_audit_requires_exact_tokens_scorer_and_dataset_set(tmp_path: 
     raw.write_text("".join(json.dumps(row) + "\n" for row in records))
     payload = json.loads(cell.read_text())
     payload["benchmark"] = "RULER"
+    payload["source"] = _source_for("RULER")
     payload["raw_records"]["sha256"] = _digest(raw)
     payload["benchmark_dataset_digest_set_sha256"] = "9" * 64
     cell.write_text(json.dumps(payload))
@@ -577,6 +617,7 @@ def test_longmem_arm_audit_requires_official_or_blocked_judge_provenance(
     raw.write_text("".join(json.dumps(row) + "\n" for row in records))
     payload = json.loads(cell.read_text())
     payload["benchmark"] = "LongMemEval"
+    payload["source"] = _source_for("LongMemEval")
     payload["raw_records"]["sha256"] = _digest(raw)
     cell.write_text(json.dumps(payload))
 
@@ -627,6 +668,7 @@ def test_scbench_arm_audit_requires_turn_coordinates_tokens_and_scorer(
     raw.write_text("".join(json.dumps(row) + "\n" for row in records))
     payload = json.loads(cell.read_text())
     payload["benchmark"] = "SCBench"
+    payload["source"] = _source_for("SCBench")
     payload["raw_records"]["sha256"] = _digest(raw)
     cell.write_text(json.dumps(payload))
 

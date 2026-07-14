@@ -226,6 +226,7 @@ def test_p5_classification_preserves_claim_boundaries() -> None:
                 "all_required_artifacts_verified": True,
                 "all_required_baseline_cells_terminal": True,
                 "all_failure_accounting_complete": True,
+                "all_source_implementations_verified": True,
                 "safety_stress_terminal": True,
                 "natural_safety_terminal": True,
                 "benchmarks_terminal": 5,
@@ -292,6 +293,7 @@ def test_p5_success_requires_full_system_coverage() -> None:
                 "all_required_artifacts_verified": True,
                 "all_required_baseline_cells_terminal": True,
                 "all_failure_accounting_complete": True,
+                "all_source_implementations_verified": True,
                 "safety_stress_terminal": True,
                 "natural_safety_terminal": True,
                 "benchmarks_terminal": 5,
@@ -328,6 +330,7 @@ def test_p5_success_requires_full_system_coverage() -> None:
     assert classifications["p2_core"] == "success"
     assert classifications["p2_causal"] == "success"
     assert classifications["p1_online_learned_lookahead"] == "success"
+    assert classifications["p3_natural"] == "bounded-result"
     assert classifications["p4_500k_context"] == "bounded-result"
     assert classifications["p4_reference_systems"] == "bounded-result"
     assert classifications["p4_production_systems"] == "success"
@@ -346,6 +349,7 @@ def test_p5_marks_all_failed_production_coverage_unverified() -> None:
                 "all_required_artifacts_verified": True,
                 "all_required_baseline_cells_terminal": True,
                 "all_failure_accounting_complete": True,
+                "all_source_implementations_verified": True,
                 "safety_stress_terminal": True,
                 "natural_safety_terminal": True,
                 "benchmarks_terminal": 5,
@@ -430,8 +434,13 @@ def test_p5_learned_lookahead_table_joins_quality_and_physical_gate() -> None:
                         "learned_peak_allocated_bytes_mean": 100,
                         "fixed_peak_allocated_bytes_mean": 100,
                         "relative_peak_allocated_difference": 0.0,
+                        "learned_hot_resident_bytes_mean": 90,
+                        "fixed_hot_resident_bytes_mean": 100,
+                        "relative_hot_resident_difference": -0.1,
                         "learned_h2d_bytes_mean": 20,
                         "fixed_h2d_bytes_mean": 20,
+                        "learned_useful_h2d_bytes_mean": 10,
+                        "fixed_useful_h2d_bytes_mean": 11,
                         "passed": True,
                     }
                 ],
@@ -439,8 +448,10 @@ def test_p5_learned_lookahead_table_joins_quality_and_physical_gate() -> None:
         }
     )
 
-    assert rows[0]["seed_cluster_bootstrap_ci"] == "[0.01, 0.03]"
+    assert rows[0]["seed_cluster_bootstrap_ci"] == "[0.01,0.03]"
     assert rows[0]["relative_peak_allocated_difference"] == 0.0
+    assert rows[0]["learned_useful_h2d_bytes_mean"] == 10
+    assert rows[0]["quality_passed"] is True
     assert rows[0]["system_passed"] is True
 
 

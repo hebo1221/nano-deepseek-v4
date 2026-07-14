@@ -10,6 +10,13 @@ from typing import Any
 from summarize_p3_natural_suite import BENCHMARK_IDS, sha256
 
 STATUS_VALUES = {"scored", "failure"}
+RUNNER_PATHS = {
+    "RULER": "research/adaptive_v4_memory/scripts/run_p3_natural_ruler.py",
+    "SCBench": "research/adaptive_v4_memory/scripts/run_p3_scbench.py",
+    "LongBench-v2": "research/adaptive_v4_memory/scripts/run_p3_longbench_v2.py",
+    "LongMemEval": "research/adaptive_v4_memory/scripts/run_p3_longmemeval.py",
+    "MRCR": "research/adaptive_v4_memory/scripts/run_p3_mrcr.py",
+}
 
 
 def _require(condition: bool, message: str) -> None:
@@ -42,6 +49,40 @@ def _records(path: Path) -> list[dict[str, Any]]:
     return records
 
 
+def _verify_source_implementation(
+    artifact: dict[str, Any], benchmark: str
+) -> dict[str, str]:
+    source = artifact.get("source", {})
+    commit = source.get("commit")
+    _require(
+        isinstance(commit, str)
+        and len(commit) in {40, 64}
+        and all(character in "0123456789abcdef" for character in commit),
+        f"Invalid {benchmark} source commit.",
+    )
+    runner_path = RUNNER_PATHS[benchmark]
+    commit_check = subprocess.run(
+        ["git", "cat-file", "-e", f"{commit}^{{commit}}"],
+        capture_output=True,
+    )
+    _require(commit_check.returncode == 0, f"Unknown {benchmark} source commit: {commit}")
+    blob = subprocess.run(
+        ["git", "show", f"{commit}:{runner_path}"],
+        capture_output=True,
+    )
+    _require(blob.returncode == 0, f"Missing {benchmark} runner at source commit.")
+    observed_digest = hashlib.sha256(blob.stdout).hexdigest()
+    _require(
+        source.get("implementation_sha256") == observed_digest,
+        f"{benchmark} implementation does not match its source commit.",
+    )
+    return {
+        "commit": commit,
+        "runner_path": runner_path,
+        "implementation_sha256": observed_digest,
+    }
+
+
 def audit_arm(
     *,
     benchmark: str,
@@ -69,6 +110,7 @@ def audit_arm(
         artifact.get("source", {}).get("implementation_sha256"),
         f"{benchmark}/{arm} implementation",
     )
+    source_implementation = _verify_source_implementation(artifact, benchmark)
     _require(
         artifact.get("experiment_manifest", {}).get("sha256") == manifest_digest,
         f"{benchmark}/{arm} manifest drifted.",
@@ -246,6 +288,7 @@ def audit_arm(
             "raw_record_digest_set_sha256": hashlib.sha256(
                 "\n".join(sorted(record_digests)).encode()
             ).hexdigest(),
+            "source_implementation": source_implementation,
         },
         dependencies,
     )
@@ -293,6 +336,18 @@ def summarize_benchmark(
     )
     paired_inputs = {row["paired_example_prompt_digest_set_sha256"] for row in arms.values()}
     _require(len(paired_inputs) == 1, "Natural arms used different examples or prompts.")
+    source_implementations = {
+        (
+            row["source_implementation"]["commit"],
+            row["source_implementation"]["runner_path"],
+            row["source_implementation"]["implementation_sha256"],
+        )
+        for row in arms.values()
+    }
+    _require(
+        len(source_implementations) == 1,
+        "Natural arms used different source implementations.",
+    )
     allowed_conditional = {"complete", "incompatible", "withheld-by-causal-gate"}
     _require(
         set(conditional_arms) == set(manifest["common_protocol"]["conditional_arms"])
@@ -308,6 +363,7 @@ def summarize_benchmark(
             "all_raw_artifacts_verified": True,
             "all_failure_accounting_complete": True,
             "all_required_arms_input_paired": True,
+            "all_source_implementations_verified": True,
             "raw_record_digest_set_sha256": hashlib.sha256(
                 "\n".join(
                     sorted(row["raw_record_digest_set_sha256"] for row in arms.values())
@@ -321,6 +377,7 @@ def summarize_benchmark(
         "fixed_baseline_selection": dependencies[0]["fixed_baseline_selection"],
         "model_snapshot_digest_set_sha256": next(iter(models)),
         "benchmark_dataset_digest_set_sha256": next(iter(benchmark_datasets)),
+        "source_implementation": arms[required[0]]["source_implementation"],
     }
 
 

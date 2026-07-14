@@ -156,6 +156,7 @@ def classify_evidence(
         natural_audit.get("all_required_artifacts_verified") is True
         and natural_audit.get("all_required_baseline_cells_terminal") is True
         and natural_audit.get("all_failure_accounting_complete") is True
+        and natural_audit.get("all_source_implementations_verified") is True
         and natural_audit.get("safety_stress_terminal") is True
         and natural_audit.get("natural_safety_terminal") is True
         and natural_audit.get("benchmarks_terminal") == 5
@@ -285,12 +286,15 @@ def _learned_lookahead_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
         rows.append(
             {
                 **cell,
-                "seed_cluster_bootstrap_ci": json.dumps(cell["seed_cluster_bootstrap_ci"]),
-                "learned_peak_allocated_bytes_mean": system["learned_peak_allocated_bytes_mean"],
-                "fixed_peak_allocated_bytes_mean": system["fixed_peak_allocated_bytes_mean"],
-                "relative_peak_allocated_difference": system["relative_peak_allocated_difference"],
-                "learned_h2d_bytes_mean": system["learned_h2d_bytes_mean"],
-                "fixed_h2d_bytes_mean": system["fixed_h2d_bytes_mean"],
+                "seed_cluster_bootstrap_ci": json.dumps(
+                    cell["seed_cluster_bootstrap_ci"], separators=(",", ":")
+                ),
+                **{
+                    name: value
+                    for name, value in system.items()
+                    if name not in {"scale", "budget", "passed"}
+                },
+                "quality_passed": cell["passed"],
                 "system_passed": system["passed"],
             }
         )

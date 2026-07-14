@@ -61,6 +61,10 @@ def audit_benchmark(
     audit = payload.get("audit", {})
     _require(audit.get("all_raw_artifacts_verified") is True, f"{name} raw audit failed.")
     _require(
+        audit.get("all_source_implementations_verified") is True,
+        f"{name} source implementation audit failed.",
+    )
+    _require(
         audit.get("all_failure_accounting_complete") is True,
         f"{name} failure accounting is incomplete.",
     )
@@ -393,6 +397,7 @@ def summarize(
             "all_required_artifacts_verified": True,
             "all_required_baseline_cells_terminal": True,
             "all_failure_accounting_complete": True,
+            "all_source_implementations_verified": True,
             "safety_stress_terminal": True,
             "natural_safety_terminal": True,
             "benchmarks_terminal": len(benchmarks),

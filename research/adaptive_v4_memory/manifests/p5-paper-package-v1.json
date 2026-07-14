@@ -86,7 +86,8 @@
       "experiment_id": "p3-natural-language-suite-audit-v1",
       "required_audit": {
         "benchmarks_terminal": 5,
-        "minimum_protocol_examples_accounted_per_arm": 45289
+        "minimum_protocol_examples_accounted_per_arm": 45289,
+        "all_source_implementations_verified": true
       }
     },
     "p3_safety": {
