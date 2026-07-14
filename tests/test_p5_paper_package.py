@@ -360,10 +360,16 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
     manifest = json.loads(manifest_text, object_pairs_hook=reject_duplicate_keys)
 
     for name in (
+        "p1_online_learned_lookahead",
         "p2_core",
         "p2_core_confirmatory",
         "p2_causal",
         "p2_causal_confirmatory",
+        "p4_500k_context",
+        "p4_reference_systems",
+        "p4_adaptive_systems",
+        "p4_adaptive_production_systems",
+        "p4_production_systems",
     ):
         assert manifest["evidence"][name]["required_artifacts"] == ["raw_matrix"]
 
@@ -1212,6 +1218,109 @@ def test_official_v4_boundary_validation_fails_closed(tmp_path: Path) -> None:
     tampered.write_text(json.dumps(payload))
     with pytest.raises(ValueError, match="preconditions or failure policy drifted"):
         package._validate_boundary_manifest("official_deepseek_v4", tampered)
+
+
+@pytest.mark.parametrize(
+    ("name", "manifest_name", "mutate", "message"),
+    [
+        (
+            "paper_grade_study",
+            "paper-grade-study-v1.json",
+            lambda payload: payload["controller_early_stop"].update(
+                {"outcome_dependent": True}
+            ),
+            "completion or primary causal gate",
+        ),
+        (
+            "paper_grade_study",
+            "paper-grade-study-v1.json",
+            lambda payload: payload.update(
+                {"claim_boundary": "general impossibility result"}
+            ),
+            "pilot claim boundary",
+        ),
+        (
+            "p2_seed_extension",
+            "p2-independent-seed-extension-v1.json",
+            lambda payload: payload["extension_cohort"].update(
+                {"training_seeds": [6071401, 6071407, 6071408, 6071409]}
+            ),
+            "cohort boundary",
+        ),
+        (
+            "p2_seed_extension",
+            "p2-independent-seed-extension-v1.json",
+            lambda payload: payload["planned_extension_volume"].update(
+                {"causal_shards": 1}
+            ),
+            "completion or inference boundary",
+        ),
+        (
+            "p2_causal_factorial",
+            "p2-causal-factorial-v1.json",
+            lambda payload: payload["component_contrasts"].pop("protected_pins"),
+            "matrix boundary",
+        ),
+        (
+            "p2_causal_factorial",
+            "p2-causal-factorial-v1.json",
+            lambda payload: payload["memory_matching"].update(
+                {"maximum_relative_difference": 0.1}
+            ),
+            "physical or completion boundary",
+        ),
+        (
+            "online_learned_lookahead",
+            "p1-online-learned-lookahead-v1.json",
+            lambda payload: payload["splits"].update(
+                {"test_seed_namespace": 110714000}
+            ),
+            "split or matrix boundary",
+        ),
+        (
+            "online_learned_lookahead",
+            "p1-online-learned-lookahead-v1.json",
+            lambda payload: payload["positive_gate"].update(
+                {"budget": "allow physical overcommit"}
+            ),
+            "Pareto, replay, or sequence boundary",
+        ),
+        (
+            "cross_family",
+            "p3-cross-family-ruler-transfer-v1.json",
+            lambda payload: payload["relationship_to_primary"].update(
+                {"phi_specific_tuning_allowed": True}
+            ),
+            "sequence or transfer boundary",
+        ),
+        (
+            "cross_family",
+            "p3-cross-family-ruler-transfer-v1.json",
+            lambda payload: payload["benchmark"].update(
+                {"paired_predictions_total": 100}
+            ),
+            "matrix or claim boundary",
+        ),
+    ],
+)
+def test_primary_design_boundary_manifests_fail_closed(
+    tmp_path: Path,
+    name: str,
+    manifest_name: str,
+    mutate: object,
+    message: str,
+) -> None:
+    root = Path(__file__).resolve().parents[1]
+    source = root / "research/adaptive_v4_memory/manifests" / manifest_name
+    payload = json.loads(source.read_text())
+    package._validate_boundary_manifest(name, source)
+
+    assert callable(mutate)
+    mutate(payload)
+    tampered = tmp_path / manifest_name
+    tampered.write_text(json.dumps(payload))
+    with pytest.raises(ValueError, match=message):
+        package._validate_boundary_manifest(name, tampered)
 
 
 def test_natural_suite_boundary_rejects_projected_dsa_baselines(tmp_path: Path) -> None:

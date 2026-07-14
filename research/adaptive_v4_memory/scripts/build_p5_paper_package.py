@@ -921,7 +921,249 @@ def _validate_boundary_manifest(name: str, path: Path) -> dict[str, Any]:
         payload.get("experiment_id") == BOUNDARY_EXPERIMENT_IDS[name],
         f"Wrong {name} boundary experiment id.",
     )
-    if name == "p3_ruler":
+    if name == "paper_grade_study":
+        causal = payload.get("causal_ablation_matrix", {})
+        hot_memory = causal.get("hot_memory_match", {})
+        early_stop = payload.get("controller_early_stop", {})
+        gate = payload.get("primary_causal_gate", {})
+        extension = payload.get("confirmatory_seed_extension", {})
+        _require(
+            payload.get("protocol_version") == "2.1"
+            and payload.get("scales") == ["s55", "s151"]
+            and payload.get("training_seeds")
+            == [6071401, 6071402, 6071403, 6071404, 6071405]
+            and payload.get("evaluation_seeds")
+            == [8071401, 8071402, 8071403, 8071404, 8071405]
+            and payload.get("controller_calibration_seeds")
+            == [7071401, 7071402, 7071403, 7071404, 7071405]
+            and len(payload.get("workload_families", [])) == 9
+            and payload.get("context_lengths") == [80, 128, 256, 512, 1024]
+            and payload.get("minimum_examples_per_seed_scale_family") == 1_000,
+            "Paper-grade primary matrix boundary drifted.",
+        )
+        _require(
+            payload.get("required_ablations")
+            == [
+                "no-score-concentration",
+                "no-temporal-reuse",
+                "no-cross-layer-prior",
+                "no-refresh-reuse",
+                "no-protected-pins",
+                "no-dense-fallback",
+            ]
+            and len(causal.get("arms", [])) == 10
+            and hot_memory.get("maximum_relative_difference") == 0.01
+            and hot_memory.get("retune_on") == "calibration-traces-only"
+            and hot_memory.get("posthoc_accuracy_interpolation") is False,
+            "Paper-grade causal-ablation boundary drifted.",
+        )
+        _require(
+            early_stop.get("enabled") is False
+            and early_stop.get("outcome_dependent") is False
+            and early_stop.get("required_primary_seeds_per_scale") == 5
+            and early_stop.get("required_extension_seeds_per_scale") == 4
+            and early_stop.get("required_primary_causal_shards") == 9_000
+            and early_stop.get("required_extension_causal_shards") == 7_200
+            and gate.get("candidate") == "calibrated+pins"
+            and gate.get("comparator") == "fixed+pins"
+            and gate.get("same_measured_hot_memory_required") is True
+            and gate.get("positive_seed_effects_required_per_scale") == 5
+            and extension.get("combined_independent_seeds_per_scale") == 9
+            and extension.get("outcome_dependent_early_stopping") is False,
+            "Paper-grade completion or primary causal gate drifted.",
+        )
+        _require(
+            "evidence only against the tested" in payload.get("claim_boundary", "")
+            and "pilot Tier-S workloads" in payload.get("claim_boundary", ""),
+            "Paper-grade pilot claim boundary drifted.",
+        )
+    elif name == "p2_seed_extension":
+        blinding = payload.get("outcome_blinding", {})
+        primary = payload.get("primary_cohort", {})
+        extension = payload.get("extension_cohort", {})
+        inference = payload.get("combined_confirmatory_inference", {})
+        volume = payload.get("planned_extension_volume", {})
+        execution = payload.get("execution_contract", {})
+        _require(
+            payload.get("status") == "preregistered_before_primary_outcome_inspection"
+            and blinding.get("primary_outcome_summary_inspected") is False
+            and primary.get("training_seeds")
+            == [6071401, 6071402, 6071403, 6071404, 6071405]
+            and primary.get("artifacts_are_immutable") is True
+            and extension.get("training_seeds") == [6071406, 6071407, 6071408, 6071409]
+            and extension.get("calibration_seeds")
+            == [7071406, 7071407, 7071408, 7071409]
+            and extension.get("evaluation_seeds")
+            == [8071406, 8071407, 8071408, 8071409]
+            and set(primary.get("training_seeds", ())).isdisjoint(
+                extension.get("training_seeds", ())
+            )
+            and extension.get("scales") == ["s55", "s151"]
+            and extension.get("outcome_dependent_early_stopping") is False
+            and extension.get("separate_artifact_namespace_required") is True,
+            "P2 seed-extension cohort boundary drifted.",
+        )
+        _require(
+            inference.get("independent_training_seeds_per_scale") == 9
+            and inference.get("exact_sign_assignments") == 512
+            and inference.get("minimum_attainable_two_sided_seed_p") == 0.00390625
+            and inference.get("minimum_attainable_holm_adjusted_family_p") == 0.03515625
+            and volume.get("core_shards") == 3_600
+            and volume.get("causal_shards") == 7_200
+            and execution.get("primary_gate", {}).get("required_unique_shards") == 4_500
+            and execution.get("primary_causal_gate", {}).get("required_unique_shards")
+            == 9_000
+            and execution.get("per_checkpoint_equivalence_required") is True
+            and len(execution.get("commands", [])) == 8,
+            "P2 seed-extension completion or inference boundary drifted.",
+        )
+        failure_rules = payload.get("failure_rules", [])
+        _require(
+            any("Do not stop the extension" in rule for rule in failure_rules)
+            and any("Do not replace a failed primary seed" in rule for rule in failure_rules),
+            "P2 seed-extension outcome-independent stopping boundary drifted.",
+        )
+    elif name == "p2_causal_factorial":
+        primary_arms = payload.get("primary_arms", {})
+        supplemental = payload.get("supplemental_baseline_arms", {})
+        components = payload.get("component_contrasts", {})
+        registered_arms = set(primary_arms) | set(supplemental)
+        for pair in components.values():
+            if isinstance(pair, list):
+                registered_arms.update(pair)
+        memory = payload.get("memory_matching", {})
+        execution = payload.get("execution", {})
+        completion = payload.get("completion_contract", {})
+        gate = payload.get("central_gate", {})
+        _require(
+            payload.get("status") == "amended_and_frozen_before_execution"
+            and payload.get("scales") == ["s55", "s151"]
+            and len(payload.get("training_seeds", [])) == 5
+            and len(payload.get("families", [])) == 9
+            and payload.get("contexts") == [80, 128, 256, 512, 1024]
+            and payload.get("primary_budget_points") == ["2x", "4x"]
+            and len(registered_arms) == 16
+            and set(components)
+            == {
+                "score_concentration",
+                "temporal_reuse",
+                "cross_layer_prior",
+                "refresh_reuse",
+                "protected_pins",
+                "dense_fallback",
+            },
+            "P2 causal-factorial matrix boundary drifted.",
+        )
+        _require(
+            memory.get("primary_candidate") == "calibrated+pins"
+            and memory.get("primary_comparator") == "fixed+pins"
+            and memory.get("maximum_relative_difference") == 0.01
+            and memory.get("posthoc_accuracy_interpolation") is False
+            and execution.get("total_expected_shards") == 9_000
+            and execution.get("equivalence_validation", {}).get(
+                "required_exact_records_total"
+            )
+            == 57_600
+            and execution.get("component_arms_use_full_sample") is True
+            and completion.get("outcome_dependent_early_stopping") is False
+            and completion.get("required_primary_training_seeds_per_scale") == 5
+            and completion.get("required_primary_shards") == 9_000
+            and completion.get("required_extension_training_seeds_per_scale") == 4
+            and completion.get("required_extension_shards") == 7_200
+            and completion.get("all_registered_arms_complete_every_cell") is True,
+            "P2 causal-factorial physical or completion boundary drifted.",
+        )
+        _require(
+            payload.get("statistics", {}).get("contrast_correction", "").startswith(
+                "Holm-Bonferroni over all 15 preregistered contrasts"
+            )
+            and gate.get("contrast") == "calibrated+pins - fixed+pins"
+            and gate.get("required_budget_points") == ["2x", "4x"]
+            and "all five strictly positive" in gate.get("seed_effects", "")
+            and "within 1 percent" in gate.get("memory_match", "")
+            and "Tier-S synthetic workloads only" in payload.get("claim_boundary", ""),
+            "P2 causal-factorial central claim boundary drifted.",
+        )
+    elif name == "online_learned_lookahead":
+        claim = payload.get("claim_boundary", {})
+        causal = payload.get("causal_contract", {})
+        splits = payload.get("splits", {})
+        matrix = payload.get("matrix", {})
+        gate = payload.get("positive_gate", {})
+        failures = payload.get("failure_rules", {})
+        _require(
+            payload.get("status") == "frozen_before_execution"
+            and "separate exploratory controller study" in payload.get("role", "")
+            and "excluded from the preregistered P2 primary causal gate"
+            in payload.get("role", "")
+            and "same-token causality" in claim.get("ineligible", [])
+            and "replacement of a failed preregistered P2 primary arm"
+            in claim.get("ineligible", [])
+            and causal.get("applied_time") == "token t+1 only"
+            and "forbidden" in causal.get("future_information", "")
+            and "inside the active physical hot-memory budget"
+            in causal.get("protected_pins", ""),
+            "P1 online-lookahead causal boundary drifted.",
+        )
+        _require(
+            splits.get("training_seed_namespace") == 110714000
+            and splits.get("calibration_seed_namespace") == 120714000
+            and splits.get("test_seed_namespace") == 130714000
+            and "disjoint" in splits.get("overlap_policy", "")
+            and "no retuning" in splits.get("test_access", "")
+            and matrix.get("scales") == ["s55", "s151"]
+            and matrix.get("budgets") == ["2x", "4x"]
+            and len(matrix.get("workload_families", [])) == 9
+            and len(payload.get("arms", [])) == 6,
+            "P1 online-lookahead split or matrix boundary drifted.",
+        )
+        _require(
+            "without higher measured hot HBM or useful transfer bytes"
+            in gate.get("pareto", "")
+            and gate.get("budget") == "zero logical or physical budget violations"
+            and "all cache lifecycle and replay digests verify" in gate.get("replay", "")
+            and failures.get("missing_scale_or_seed") == "unverified, never success"
+            and payload.get("execution_equivalence", {}).get(
+                "required_scale_seed_probes"
+            )
+            == 10
+            and "only after the frozen P2 causal summary is terminal"
+            in payload.get("execution_order", ""),
+            "P1 online-lookahead Pareto, replay, or sequence boundary drifted.",
+        )
+    elif name == "cross_family":
+        relationship = payload.get("relationship_to_primary", {})
+        sequence = payload.get("sequence_gate", {})
+        benchmark = payload.get("benchmark", {})
+        statistics = payload.get("statistics", {})
+        gate = payload.get("transfer_gate", {})
+        model = payload.get("model", {})
+        _require(
+            payload.get("status") == "frozen_before_any_p3_model_prediction"
+            and relationship.get("transfer_model_family") == "Phi-4"
+            and relationship.get("pooled_with_primary") is False
+            and relationship.get("outcome_dependent_execution") is False
+            and relationship.get("phi_specific_tuning_allowed") is False
+            and model.get("repo_id") == "microsoft/Phi-4-mini-instruct"
+            and model.get("revision") == "cfbefacb99257ffa30c83adab238a50856ac3083"
+            and "terminal nine-seed P2 evidence" in sequence.get("policy", ""),
+            "P3 cross-family sequence or transfer boundary drifted.",
+        )
+        _require(
+            benchmark.get("lengths_tokens") == [8192, 32768, 131072]
+            and benchmark.get("tasks_per_length") == 13
+            and benchmark.get("samples_per_task_length") == 100
+            and benchmark.get("predictions_per_arm") == 3_900
+            and benchmark.get("paired_predictions_total") == 7_800
+            and statistics.get("paired_bootstrap_seed") == 9_171_501
+            and gate.get("maximum_realized_kv_fraction") == 0.51
+            and "cannot trigger Phi-specific method selection"
+            in gate.get("interpretation", "")
+            and "not a second full natural-language suite"
+            in payload.get("claim_boundary", ""),
+            "P3 cross-family matrix or claim boundary drifted.",
+        )
+    elif name == "p3_ruler":
         amendments = payload.get("amendments", [])
         observed = payload.get("sequence_gate", {}).get("observed_before_gate", {})
         _require(

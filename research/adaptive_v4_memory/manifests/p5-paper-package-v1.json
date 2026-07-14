@@ -127,6 +127,7 @@
     "p1_online_learned_lookahead": {
       "path": "artifacts/adaptive_v4_memory/paper_grade/p1-online-learned-lookahead.summary.json",
       "experiment_id": "p1-online-learned-lookahead-audit-v1",
+      "required_artifacts": ["raw_matrix"],
       "required_audit": {
         "label_shards_verified": 6750,
         "policies_verified": 20,
@@ -686,6 +687,7 @@
     "p4_500k_context": {
       "path": "artifacts/adaptive_v4_memory/paper_grade/p4/500k-context-preflight.summary.json",
       "experiment_id": "p4-500k-context-preflight-audit-v1",
+      "required_artifacts": ["raw_matrix"],
       "required_audit": {
         "all_terminal_cells_verified": true,
         "all_artifact_digests_verified": true,
@@ -700,6 +702,7 @@
     "p4_reference_systems": {
       "path": "artifacts/adaptive_v4_memory/paper_grade/p4/reference-systems.summary.json",
       "experiment_id": "p4-reference-systems-matrix-audit-v1",
+      "required_artifacts": ["raw_matrix"],
       "required_audit": {
         "terminal_cells": 216,
         "all_terminal_cells_verified": true,
@@ -717,6 +720,7 @@
     "p4_adaptive_systems": {
       "path": "artifacts/adaptive_v4_memory/paper_grade/p4/adaptive-systems.summary.json",
       "experiment_id": "p4-adaptive-systems-matrix-audit-v1",
+      "required_artifacts": ["raw_matrix"],
       "required_audit": {
         "terminal_cells": 432,
         "all_terminal_cells_verified": true,
@@ -735,6 +739,7 @@
     "p4_adaptive_production_systems": {
       "path": "artifacts/adaptive_v4_memory/paper_grade/p4/adaptive-production-systems.summary.json",
       "experiment_id": "p4-adaptive-production-systems-matrix-audit-v1",
+      "required_artifacts": ["raw_matrix"],
       "required_audit": {
         "terminal_cells": 432,
         "all_terminal_cells_verified": true,
@@ -761,6 +766,7 @@
     "p4_production_systems": {
       "path": "artifacts/adaptive_v4_memory/paper_grade/p4/production-systems.summary.json",
       "experiment_id": "p4-production-systems-matrix-audit-v1",
+      "required_artifacts": ["raw_matrix"],
       "required_audit": {
         "terminal_cells": 216,
         "all_terminal_cells_verified": true,
