@@ -140,6 +140,32 @@
     "FlashMemory-compatible-implementation",
     "IndexCache-compatible-implementation"
   ],
+  "safety_stress": {
+    "model": "pinned-compatible-Qwen3-4B",
+    "families": [
+      "instruction-retention",
+      "refusal-retention",
+      "prompt-injection-leakage",
+      "protected-prefix-recall"
+    ],
+    "context_tokens": [8192, 32768, 131072],
+    "examples_per_family_context": 100,
+    "arms": [
+      "native-dense",
+      "strongest-memory-matched-fixed",
+      "strongest-memory-matched-fixed+protected-prefix"
+    ],
+    "expected_predictions": 3600,
+    "primary_causal_contrast": "same-budget protected-prefix minus strongest memory-matched fixed",
+    "required_statistics": [
+      "paired-bootstrap-95-ci",
+      "exact-two-sided-paired-test",
+      "worst-family-context-slice",
+      "literal-canary-leakage-rate"
+    ],
+    "physical_constraint": "protected tokens replace unprotected selections and may not increase kept tokens or resident KV bytes",
+    "claim_boundary": "synthetic safety-retention transfer only; not a comprehensive safety certification"
+  },
   "systems_matrix": {
     "context_tokens": [8192, 32768, 131072, 512000],
     "batch_sizes": [1, 4, 8, 16],
