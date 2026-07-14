@@ -77,6 +77,7 @@ def _completed(
         or payload.get("context") != context
         or payload.get("replicate") != replicate
         or payload.get("examples") != shard.EXAMPLES_PER_SHARD
+        or payload.get("batch_size") != shard.BATCH_SIZE
         or payload.get("chunk_size") != shard.CHUNK_SIZE_BY_SCALE[scale]
         or tuple(payload.get("policies", ())) != shard.CORE_POLICIES
     ):
@@ -126,6 +127,7 @@ def _write_matrix(path: Path, source_commit: str, runs: list[dict[str, Any]]) ->
             "contexts": shard.CONTEXTS,
             "replicates": shard.REPLICATES,
             "examples_per_shard": shard.EXAMPLES_PER_SHARD,
+            "batch_size": shard.BATCH_SIZE,
             "examples_per_family_checkpoint": (
                 len(shard.CONTEXTS) * len(shard.REPLICATES) * shard.EXAMPLES_PER_SHARD
             ),
@@ -153,7 +155,9 @@ def main() -> None:
     parser.add_argument("--family", action="append", choices=PAPER_GRADE_WORKLOAD_FAMILIES)
     parser.add_argument("--context", type=int, action="append", choices=shard.CONTEXTS)
     parser.add_argument("--replicate", type=int, action="append", choices=shard.REPLICATES)
-    parser.add_argument("--batch-size", type=int, default=4)
+    parser.add_argument(
+        "--batch-size", type=int, choices=(shard.BATCH_SIZE,), default=shard.BATCH_SIZE
+    )
     parser.add_argument("--max-new-shards", type=int)
     parser.add_argument(
         "--training-root",

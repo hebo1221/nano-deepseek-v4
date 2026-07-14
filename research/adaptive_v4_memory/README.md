@@ -188,6 +188,12 @@ chunks showed at least one mismatch and are rejected. This optimization applies
 only to quality; physical tier, transfer, and latency claims remain on the
 sequential runtime path.
 
+The quality matrix is also frozen at batch 4. A direct S55 comparison rejected
+batch 20 after a prediction changed on `fixed-2x` at context 128, despite its
+short-prefix speedup. The checked counterexample is in
+`results/p2-batch20-equivalence-s55.summary.json`; the matrix runner rejects
+larger batch sizes and validates this field when resuming shards.
+
 The S151 paired pilot is also complete. Hierarchical versus fixed was +5.89 pp
 at 1x, +2.68 pp at 2x, and 0 pp at 4x; the 1x difference again came from
 protected instruction retention. Exact no-pin predictions matched fixed 1x

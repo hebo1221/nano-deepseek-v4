@@ -36,6 +36,7 @@ CORE_POLICIES = (
     "calibrated-hierarchical-4x",
 )
 EXAMPLES_PER_SHARD = 20
+BATCH_SIZE = 4
 REPLICATES = tuple(range(10))
 CHUNK_SIZE_BY_SCALE = {"s55": 2, "s151": 1}
 
@@ -332,7 +333,7 @@ def main() -> None:
     parser.add_argument("--family", choices=PAPER_GRADE_WORKLOAD_FAMILIES, required=True)
     parser.add_argument("--context", type=int, choices=CONTEXTS, required=True)
     parser.add_argument("--replicate", type=int, choices=REPLICATES, required=True)
-    parser.add_argument("--batch-size", type=int, default=4)
+    parser.add_argument("--batch-size", type=int, choices=(BATCH_SIZE,), default=BATCH_SIZE)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     if not torch.cuda.is_available():

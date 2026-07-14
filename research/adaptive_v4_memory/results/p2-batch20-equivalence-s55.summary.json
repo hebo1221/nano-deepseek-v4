@@ -1,0 +1,89 @@
+{
+  "audit": {
+    "all_dependency_digests_verified": true,
+    "batch_20_accepted": false,
+    "clean_source_verified": true,
+    "counterexample_verified": true,
+    "frozen_p2_batch_size": 4
+  },
+  "calibration_artifact": {
+    "path": "artifacts/adaptive_v4_memory/paper_grade/calibration_matrix/s55/seed-6071401/p1-layer-quotas.json",
+    "seed": 7071401,
+    "sha256": "202fc912cbf625701c2ec47d92d221da2a826c0a1a6b7527a3a86c473e09a716"
+  },
+  "checkpoint": {
+    "bytes": 222269497,
+    "path": "artifacts/adaptive_v4_memory/paper_grade/training/s55/seed-6071401/s55-step-1000.pt",
+    "sha256": "0a8330ed5c2bec8372eb32b575414e9b65509d9a597f8911b546bc31be8c360d"
+  },
+  "decision": "reject-batch-20-freeze-batch-4",
+  "equivalence_artifact": {
+    "experiment_id": "p1-chunked-cache-equivalence-audit-v1",
+    "path": "research/adaptive_v4_memory/results/p1-chunked-cache-equivalence.summary.json",
+    "sha256": "703a66c9ec6f1efe8b39278d25406fcbeef037f9c6a57c15f0f67e26ef86c82c"
+  },
+  "experiment_id": "p2-batch-equivalence-audit-v1",
+  "interpretation": "S55 quality predictions are not invariant between batch 20 and batch 4; the P2 matrix remains frozen at batch 4.",
+  "raw_artifact": {
+    "path": "artifacts/adaptive_v4_memory/paper_grade/validation/p2-batch20-equivalence-s55.json",
+    "sha256": "02ef7f1f477bb737c49ad2fa371fd065955589d6879bb85283e961e56fb32290"
+  },
+  "schema_version": 1,
+  "source": {
+    "commit": "ecdbfda50a5973f5b6a8b9d4150faa0458e42318",
+    "dirty": false
+  },
+  "validation": {
+    "all_predictions_identical": false,
+    "checked_policy_conversation_records": 180,
+    "checked_predictions": 180,
+    "chunk_size": 2,
+    "contexts": [
+      80,
+      128,
+      256,
+      512,
+      1024
+    ],
+    "core_policies": [
+      "native",
+      "fixed-1x",
+      "fixed-2x",
+      "fixed-4x",
+      "calibrated-hierarchical-1x",
+      "calibrated-hierarchical-2x",
+      "calibrated-hierarchical-4x"
+    ],
+    "families": [
+      "single-remote-retrieval",
+      "multiple-independent-needles",
+      "associative-recall",
+      "multi-turn-query-shift",
+      "dense-global-aggregation",
+      "irrelevant-context-local-only",
+      "instruction-persistence",
+      "adversarial-lexical-distractors",
+      "long-generation-changing-evidence"
+    ],
+    "first_mismatch": {
+      "context": 128,
+      "family": "single-remote-retrieval",
+      "policy": "fixed-2x",
+      "reference_predictions": [
+        108
+      ],
+      "row": 0,
+      "scale": "s55",
+      "target_predictions": [
+        112
+      ]
+    },
+    "observed_reference_to_target_wall_ratio": 2.051265852383864,
+    "reference_batch_size": 4,
+    "reference_wall_ms_sum": 8960.232168,
+    "scale": "s55",
+    "target_batch_size": 20,
+    "target_wall_ms_sum": 4368.147677,
+    "wall_seconds": 13.370221705175936
+  }
+}
