@@ -147,9 +147,11 @@ emits digest-replayable actions. At memory-matched operating points it improved
 associative-recall accuracy over fixed top-k at both tested scales. This remains
 offline logical-selection evidence: physical GPU residency does not change.
 
-The M3 learned risk controller reduced some prediction errors but used 57–63%
+The legacy M3 learned risk pilot reduced some prediction errors but used 57–63%
 dense fallback and failed to improve the M2 quality/block Pareto at both scales.
-It remains a reproducible negative baseline rather than the M4 default.
+It constructed an offline replay plan from final-query probes collected by a full
+native pass, so it is not evidence for deployable online learned lookahead. It
+remains a reproducible negative baseline rather than the M4 default.
 
 M4's pinned-CPU/GPU-hot CSA value store preserved quality and reduced that
 component by about 91%, but reduced total cache allocation by only about 2% and

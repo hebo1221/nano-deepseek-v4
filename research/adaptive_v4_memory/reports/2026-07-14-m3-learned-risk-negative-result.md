@@ -1,4 +1,4 @@
-# M3 learned risk controller — negative result
+# Legacy M3 offline learned risk pilot — negative result
 
 Status: M3 failed its positive gate at both Tier-S scales. M4 will retain the
 M2 training-free controller.
@@ -11,6 +11,11 @@ test examples per scale. A two-head MLP predicts sufficient top-k with a 4x
 under-allocation penalty and dense-memory risk with binary cross entropy.
 Budget offset and fallback threshold were fixed on calibration data before the
 test split.
+
+This pilot is offline: it first collects the final-query native probe from a
+complete model pass, derives the learned allocation, and replays a selection
+plan. It therefore does not implement or evaluate a deployable token-t to
+token-(t+1) learned lookahead controller.
 
 The checked [`summary`](../results/m3-tier-s-learned-risk-controller.summary.json)
 references ignored raw results by SHA-256. No tokens or model weights are
@@ -35,8 +40,9 @@ blocking a positive M3 claim.
 
 ## Decision
 
-The learned model detects hard cases but its calibrated fallback is too broad;
+The offline learned model detects hard cases but its calibrated fallback is too broad;
 the modest quality gain is purchased with roughly 6–11x more selected blocks.
 The simpler M2 rule remains the supported research path. M4 may proceed with
-that controller, and this M3 implementation remains as a reproducible negative
-baseline rather than being tuned on the test set.
+that controller, and this M3 implementation remains as a reproducible offline
+negative baseline rather than being tuned on the test set. The separate online
+learned-lookahead question remains open under the paper-grade protocol.

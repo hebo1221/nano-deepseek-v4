@@ -51,6 +51,13 @@ A learned lookahead predictor is exploratory until the training-free arms are
 frozen. It must use disjoint train, calibration, and test traces and may not be
 substituted for a failed primary arm after test results are observed.
 
+The legacy M3 learned-risk pilot is not this predictor: it observes final-query
+native probes from a completed full pass and constructs an offline replay plan.
+It is retained only as a digest-bound negative pilot. A qualifying online
+lookahead must consume signals available no later than token *t*, choose the
+token *t+1* residency plan before its sparse-value access, define first-token
+fallback, and account for predictor/cache/transfer overhead.
+
 The primary causal factorial contains, at every eligible budget point:
 
 1. fixed allocation without protected pins (`fixed`);

@@ -37,7 +37,7 @@ def _m5_pilot_evidence() -> dict[str, object]:
     }
 
 
-def _m3_learned_evidence() -> dict[str, object]:
+def _m3_offline_learned_risk_evidence() -> dict[str, object]:
     return {
         "audit": {
             "raw_summaries_verified": True,
@@ -48,6 +48,10 @@ def _m3_learned_evidence() -> dict[str, object]:
             "test_examples_per_scale": 768,
             "ablation_variants_verified": 4,
             "pareto_failure_verified": True,
+            "refresh_ablation_available": False,
+            "offline_native_probe_semantics_verified": True,
+            "online_lookahead_evidence": False,
+            "implementation_sources_verified": True,
         }
     }
 
@@ -102,7 +106,7 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
     assert set(manifest["evidence"]) == {
         "p2_core",
         "m5_one_token_pilot",
-        "m3_learned_lookahead",
+        "m3_offline_learned_risk_pilot",
         "p2_causal",
         "p3_ruler",
         "p3_natural",
@@ -157,7 +161,7 @@ def test_p5_classification_preserves_claim_boundaries() -> None:
     classifications = package.classify_evidence(
         {"quality_gate": [{"passes_fixed_baseline_component": False}]},
         _m5_pilot_evidence(),
-        _m3_learned_evidence(),
+        _m3_offline_learned_risk_evidence(),
         {"primary_causal_gate": {"passed": False}},
         {"benchmark_complete": True},
         {
@@ -200,7 +204,7 @@ def test_p5_classification_preserves_claim_boundaries() -> None:
     assert classifications == {
         "p2_core": "negative-result",
         "m5_one_token_pilot": "negative-result",
-        "m3_learned_lookahead": "negative-result",
+        "m3_offline_learned_risk_pilot": "negative-result",
         "p2_causal": "bounded-result",
         "p3_ruler": "bounded-result",
         "p3_natural": "bounded-result",
@@ -219,7 +223,7 @@ def test_p5_success_requires_full_system_coverage() -> None:
     classifications = package.classify_evidence(
         {"quality_gate": [{"passes_fixed_baseline_component": True}]},
         _m5_pilot_evidence(),
-        _m3_learned_evidence(),
+        _m3_offline_learned_risk_evidence(),
         {"primary_causal_gate": {"passed": True}},
         {"benchmark_complete": True},
         {
@@ -269,7 +273,7 @@ def test_p5_marks_all_failed_production_coverage_unverified() -> None:
     classifications = package.classify_evidence(
         {"quality_gate": [{"passes_fixed_baseline_component": True}]},
         _m5_pilot_evidence(),
-        _m3_learned_evidence(),
+        _m3_offline_learned_risk_evidence(),
         {"primary_causal_gate": {"passed": True}},
         {"benchmark_complete": True},
         {

@@ -92,14 +92,17 @@ report records calibration/test isolation, memory-matched fixed baselines, a
 forced fallback stress arm, and the first overhead-gate failure. M3 learned-risk
 work may proceed, but actual hot/cold allocation remains an M4 requirement.
 
-## M3 decision
+## Legacy M3 offline pilot decision
 
-The learned risk controller used disjoint train/calibration/test examples,
+The learned risk pilot used disjoint train/calibration/test examples,
 asymmetric budget loss, calibrated dense fallback, and feature/loss/size
 ablations. At both scales it improved some predictive metrics but required
 57–63% fallback and failed to improve the M2 quality/block Pareto. The checked
-negative-result report freezes that outcome; M2 remains the controller
-candidate rather than the learned controller.
+negative-result report freezes that outcome. Its features came from final-query
+native probes collected in a full pass and were then used to construct an
+offline replay selection plan; this is not an online lookahead execution path.
+M2 remains the controller candidate, while a deployable token-t to token-(t+1)
+learned lookahead stays a separate P1 experiment.
 
 ## M4 implementation and evidence
 

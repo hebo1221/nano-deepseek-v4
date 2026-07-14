@@ -15,6 +15,8 @@ VARIANTS = {
     "small-h8",
     "symmetric-loss",
 }
+EVALUATOR = Path("research/adaptive_v4_memory/scripts/evaluate_m3_learned_risk_controller.py")
+CONTROLLER = Path("nano_deepseek_v4/learned_memory_controller.py")
 
 
 def sha256(path: Path) -> str:
@@ -36,7 +38,7 @@ def audit(summary_path: Path, raw_root: Path) -> dict[str, Any]:
         summary.get("experiment_id") == "m3-tier-s-learned-risk-controller-v1"
         and summary.get("m3_gate") == "failed_on_both_scales"
         and summary.get("claim_eligible") is False,
-        "M3 learned-lookahead conclusion drifted.",
+        "M3 offline learned-risk conclusion drifted.",
     )
     protocol = summary.get("protocol", {})
     _require(
@@ -44,7 +46,13 @@ def audit(summary_path: Path, raw_root: Path) -> dict[str, Any]:
         and protocol.get("calibration_examples_per_scale") == SPLITS["calibration"]
         and protocol.get("test_examples_per_scale") == SPLITS["test"]
         and len(set(protocol.get("split_seeds", {}).values())) == len(SPLITS),
-        "M3 learned-lookahead split protocol drifted.",
+        "M3 offline learned-risk split protocol drifted.",
+    )
+    _require(
+        summary.get("decision") == "retain M2 training-free controller for M4"
+        and summary.get("ablations", {}).get("refresh")
+        == "not available on the single-answer-control-point dataset",
+        "M3 negative-result decision or refresh boundary drifted.",
     )
     scales: dict[str, Any] = {}
     for scale in SCALES:
@@ -64,13 +72,13 @@ def audit(summary_path: Path, raw_root: Path) -> dict[str, Any]:
         )
         checked = summary["scales"][scale]
         _require(
-            checked["learned_actual"] == {
+            checked["learned_actual"]
+            == {
                 "accuracy": raw["actual_quality"]["learned"]["accuracy"],
-                "mean_selected_blocks": raw["actual_quality"]["learned"][
-                    "mean_selected_blocks"
-                ],
+                "mean_selected_blocks": raw["actual_quality"]["learned"]["mean_selected_blocks"],
             }
-            and checked["m2_actual"] == {
+            and checked["m2_actual"]
+            == {
                 "accuracy": raw["actual_quality"]["m2_training_free"]["accuracy"],
                 "mean_selected_blocks": raw["actual_quality"]["m2_training_free"][
                     "mean_selected_blocks"
@@ -78,16 +86,38 @@ def audit(summary_path: Path, raw_root: Path) -> dict[str, Any]:
             },
             f"M3 {scale} checked metrics drifted.",
         )
+        _require(
+            raw.get("checks")
+            == {
+                "pareto_improved_over_m2": False,
+                "calibration_improved_over_context_layer": False,
+                "refresh_ablation_available": False,
+            },
+            f"M3 {scale} negative gate checks drifted.",
+        )
         scales[scale] = {
             "raw_summary": {"path": str(path), "sha256": expected_digest},
             "split_examples": raw["split_examples"],
             "actual_quality": raw["actual_quality"],
             "decision": raw["decision"],
         }
+    evaluator_source = EVALUATOR.read_text()
+    _require(
+        "queries = build_probe_replay_queries(" in evaluator_source
+        and "test, test_records = collect_split(" in evaluator_source
+        and "hidden, _, _ = model.model(input_ids, selection_plan=learned_plan)"
+        in evaluator_source,
+        "M3 offline native-probe/replay semantics drifted.",
+    )
+    implementations = {
+        "evaluator": {"path": str(EVALUATOR), "sha256": sha256(EVALUATOR)},
+        "learned_controller": {"path": str(CONTROLLER), "sha256": sha256(CONTROLLER)},
+    }
     return {
         "schema_version": 1,
-        "experiment_id": "m3-learned-lookahead-baseline-audit-v1",
+        "experiment_id": "m3-offline-learned-risk-pilot-audit-v1",
         "legacy_summary": {"path": str(summary_path), "sha256": sha256(summary_path)},
+        "implementations": implementations,
         "audit": {
             "raw_summaries_verified": True,
             "scales_verified": len(SCALES),
@@ -97,18 +127,24 @@ def audit(summary_path: Path, raw_root: Path) -> dict[str, Any]:
             "test_examples_per_scale": SPLITS["test"],
             "ablation_variants_verified": len(VARIANTS),
             "pareto_failure_verified": True,
+            "refresh_ablation_available": False,
+            "offline_native_probe_semantics_verified": True,
+            "online_lookahead_evidence": False,
+            "implementation_sources_verified": True,
         },
         "scales": scales,
         "decision": "negative-result",
         "claim_boundary": (
-            "Two-scale synthetic learned-lookahead pilot only; its modest quality gain "
-            "required 6-11x more selected blocks and was not a Pareto improvement."
+            "Two-scale synthetic offline native-probe-conditioned selection-plan pilot only. "
+            "The same full-pass final-query probe used to construct the replay plan is not a "
+            "deployable online learned-lookahead controller. Its modest quality gain required "
+            "6-11x more selected blocks and was not a Pareto improvement."
         ),
     }
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Audit the M3 learned-lookahead baseline.")
+    parser = argparse.ArgumentParser(description="Audit the M3 offline learned-risk pilot.")
     parser.add_argument(
         "--summary",
         type=Path,
@@ -125,7 +161,7 @@ def main() -> None:
         "--output",
         type=Path,
         default=Path(
-            "artifacts/adaptive_v4_memory/paper_grade/p1/m3-learned-baseline.summary.json"
+            "artifacts/adaptive_v4_memory/paper_grade/p1/m3-offline-learned-risk-pilot.summary.json"
         ),
     )
     args = parser.parse_args()
@@ -134,7 +170,7 @@ def main() -> None:
             ["git", "status", "--porcelain"], check=True, capture_output=True, text=True
         ).stdout.strip()
     )
-    _require(not dirty, "M3 learned-lookahead audit requires a clean source tree.")
+    _require(not dirty, "M3 offline learned-risk audit requires a clean source tree.")
     payload = audit(args.summary, args.raw_root)
     payload["source"] = {
         "commit": subprocess.run(

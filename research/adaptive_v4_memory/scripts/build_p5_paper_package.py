@@ -61,7 +61,7 @@ def _validate_evidence(name: str, path: Path, contract: dict[str, Any]) -> dict[
 def classify_evidence(
     p2_core: dict[str, Any],
     m5_one_token_pilot: dict[str, Any],
-    m3_learned_lookahead: dict[str, Any],
+    m3_offline_learned_risk_pilot: dict[str, Any],
     p2_causal: dict[str, Any],
     p3_ruler: dict[str, Any],
     p3_natural: dict[str, Any],
@@ -84,7 +84,7 @@ def classify_evidence(
         and m5_audit.get("one_token_semantics_verified") is True
         and m5_audit.get("pilot_negative_result_verified") is True
     )
-    m3_audit = m3_learned_lookahead["audit"]
+    m3_audit = m3_offline_learned_risk_pilot["audit"]
     m3_complete = (
         m3_audit.get("raw_summaries_verified") is True
         and m3_audit.get("scales_verified") == 2
@@ -94,6 +94,10 @@ def classify_evidence(
         and m3_audit.get("test_examples_per_scale") == 768
         and m3_audit.get("ablation_variants_verified") == 4
         and m3_audit.get("pareto_failure_verified") is True
+        and m3_audit.get("refresh_ablation_available") is False
+        and m3_audit.get("offline_native_probe_semantics_verified") is True
+        and m3_audit.get("online_lookahead_evidence") is False
+        and m3_audit.get("implementation_sources_verified") is True
     )
     causal_passed = p2_causal["primary_causal_gate"].get("passed") is True
     p3_complete = p3_ruler.get("benchmark_complete") is True
@@ -171,7 +175,7 @@ def classify_evidence(
     result = {
         "p2_core": "success" if core_passed else "negative-result",
         "m5_one_token_pilot": "negative-result" if m5_complete else "unverified",
-        "m3_learned_lookahead": "negative-result" if m3_complete else "unverified",
+        "m3_offline_learned_risk_pilot": ("negative-result" if m3_complete else "unverified"),
         "p2_causal": "success" if causal_passed else "bounded-result",
         "p3_ruler": "bounded-result" if p3_complete else "unverified",
         "p3_natural": "bounded-result" if natural_complete else "unverified",
@@ -294,7 +298,7 @@ def _report(
     classifications: dict[str, str],
     p2_core: dict[str, Any],
     m5_one_token_pilot: dict[str, Any],
-    m3_learned_lookahead: dict[str, Any],
+    m3_offline_learned_risk_pilot: dict[str, Any],
     p2_causal: dict[str, Any],
     p3_ruler: dict[str, Any],
     p3_natural: dict[str, Any],
@@ -332,10 +336,11 @@ mechanical and deliberately narrower than the motivating hypothesis.
 - M5 one-token baseline: {m5_one_token_pilot["audit"]["scales_verified"]} scales,
   {m5_one_token_pilot["audit"]["workloads_per_scale"]} synthetic workloads per scale,
   classified only as a pilot negative result for the tested interface.
-- M3 learned lookahead: {m3_learned_lookahead["audit"]["scales_verified"]} scales with
+- M3 offline learned-risk pilot: {m3_offline_learned_risk_pilot["audit"]["scales_verified"]} scales with
   disjoint train/calibration/test splits and
-  {m3_learned_lookahead["audit"]["ablation_variants_verified"]} ablations; classified
-  as a bounded negative Pareto result rather than merged with hierarchical control.
+  {m3_offline_learned_risk_pilot["audit"]["ablation_variants_verified"]} ablations; classified
+  as a negative Pareto result. It used final-query probes from a full native pass to build an
+  offline replay plan and is explicitly not evidence for deployable online learned lookahead.
 - P2 causal: {p2_causal["audit"]["unique_shards"]:,} verified factorial shards;
   {p2_causal["audit"]["quality_execution_counts"]["executed"]:,} quality forwards were
   executed and {p2_causal["audit"]["quality_execution_counts"]["reused_exact_config"]:,}
@@ -406,7 +411,7 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
     classes = classify_evidence(
         loaded["p2_core"],
         loaded["m5_one_token_pilot"],
-        loaded["m3_learned_lookahead"],
+        loaded["m3_offline_learned_risk_pilot"],
         loaded["p2_causal"],
         loaded["p3_ruler"],
         loaded["p3_natural"],
@@ -472,7 +477,7 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         classifications=classes,
         p2_core=loaded["p2_core"],
         m5_one_token_pilot=loaded["m5_one_token_pilot"],
-        m3_learned_lookahead=loaded["m3_learned_lookahead"],
+        m3_offline_learned_risk_pilot=loaded["m3_offline_learned_risk_pilot"],
         p2_causal=loaded["p2_causal"],
         p3_ruler=loaded["p3_ruler"],
         p3_natural=loaded["p3_natural"],

@@ -20,9 +20,9 @@
         "pilot_negative_result_verified": true
       }
     },
-    "m3_learned_lookahead": {
-      "path": "artifacts/adaptive_v4_memory/paper_grade/p1/m3-learned-baseline.summary.json",
-      "experiment_id": "m3-learned-lookahead-baseline-audit-v1",
+    "m3_offline_learned_risk_pilot": {
+      "path": "artifacts/adaptive_v4_memory/paper_grade/p1/m3-offline-learned-risk-pilot.summary.json",
+      "experiment_id": "m3-offline-learned-risk-pilot-audit-v1",
       "required_audit": {
         "raw_summaries_verified": true,
         "scales_verified": 2,
@@ -31,7 +31,11 @@
         "calibration_examples_per_scale": 384,
         "test_examples_per_scale": 768,
         "ablation_variants_verified": 4,
-        "pareto_failure_verified": true
+        "pareto_failure_verified": true,
+        "refresh_ablation_available": false,
+        "offline_native_probe_semantics_verified": true,
+        "online_lookahead_evidence": false,
+        "implementation_sources_verified": true
       }
     },
     "p2_causal": {
@@ -163,6 +167,7 @@
     "missing_required_evidence": "fail generation; never impute",
     "causal_gate_failure": "bounded-result for the tested causal controller, not a general impossibility claim",
     "offline_oracle": "descriptive target-aware upper bound only; never a causal or deployable method result",
+    "legacy_m3_offline_pilot": "negative pilot only; full-pass native probes and replay plans are not online learned-lookahead evidence",
     "single_compatible_model": "bounded-result; require all five natural benchmarks and never relabel as official DeepSeek-V4 evidence",
     "reference_system_matrix": "always bounded-result; serial interleave is not actual concurrency",
     "failed_system_cell": "retain in the primary table and classify production systems coverage as bounded-result",
