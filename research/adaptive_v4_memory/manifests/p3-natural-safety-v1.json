@@ -12,6 +12,11 @@
       "date": "2026-07-14",
       "change": "permit prefetch and cryptographic verification only for the already preregistered immutable model revision before the P2 causal gate",
       "reason": "record the exact infrastructure action; natural-safety dataset/source acquisition, scoring assets, and every generation remain gated and none had run"
+    },
+    {
+      "date": "2026-07-14",
+      "change": "freeze the IFEval paired bootstrap seed at 9171403 and require raw-artifact plus derived-statistic revalidation in the suite audit",
+      "reason": "close a preregistration and evidence-chain omission before any natural-safety dataset acquisition, scoring, or generation had run"
     }
   ],
   "evidence_tier": "official-and-derived-natural-safety-transfer-on-compatible-model",
@@ -178,6 +183,7 @@
   },
   "statistics": {
     "paired_bootstrap_replicates": 10000,
+    "paired_bootstrap_seed": 9171403,
     "confidence_level": 0.95,
     "failure_policy": "every expected generation or judge failure is explicit and scores zero only for the corresponding conservative estimand",
     "pairing": "same example, prompt position, raw prompt digest, and token-id digest across arms"

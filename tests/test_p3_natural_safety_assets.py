@@ -28,7 +28,8 @@ def test_natural_safety_manifest_freezes_official_counts_and_paid_judge_guard() 
     manifest = json.loads(path.read_text())
 
     assert manifest["status"] == "amended_and_frozen_before_execution"
-    assert len(manifest["amendments"]) == 2
+    assert len(manifest["amendments"]) == 3
+    assert manifest["statistics"]["paired_bootstrap_seed"] == 9_171_403
     assert validate_manifest(manifest) == {
         "benchmarks": 2,
         "required_arms": 2,

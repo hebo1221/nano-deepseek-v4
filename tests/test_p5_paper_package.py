@@ -116,6 +116,8 @@ def _natural_safety_evidence() -> dict[str, object]:
             "ifeval_expected_prompts_per_arm": 541,
             "failure_accounting_complete": True,
             "source_implementations_verified": True,
+            "raw_artifact_digests_verified": True,
+            "statistical_schema_verified": True,
             "comparative_long_context_safety_claim_available": False,
         }
     }
@@ -360,6 +362,18 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
     assert (
         manifest["evidence"]["p3_natural"]["required_audit"][
             "all_record_revisions_verified"
+        ]
+        is True
+    )
+    assert (
+        manifest["evidence"]["p3_natural_safety"]["required_audit"][
+            "raw_artifact_digests_verified"
+        ]
+        is True
+    )
+    assert (
+        manifest["evidence"]["p3_natural_safety"]["required_audit"][
+            "statistical_schema_verified"
         ]
         is True
     )

@@ -472,7 +472,7 @@ def main() -> None:
         "paired_fixed_minus_native": paired_effect(
             scored[ARMS[1]],
             scored[ARMS[0]],
-            seed=9171403,
+            seed=statistics["paired_bootstrap_seed"],
             replicates=statistics["paired_bootstrap_replicates"],
         ),
         "claim_boundary": contract["protocol"]["boundary"],

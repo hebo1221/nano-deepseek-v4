@@ -977,6 +977,8 @@ def classify_evidence(
         and natural_safety_audit.get("ifeval_expected_prompts_per_arm") == 541
         and natural_safety_audit.get("failure_accounting_complete") is True
         and natural_safety_audit.get("source_implementations_verified") is True
+        and natural_safety_audit.get("raw_artifact_digests_verified") is True
+        and natural_safety_audit.get("statistical_schema_verified") is True
         and natural_safety_audit.get("comparative_long_context_safety_claim_available") is False
     )
     ifeval_audit = p3_ifeval["audit"]

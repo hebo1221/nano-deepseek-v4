@@ -166,6 +166,8 @@
         "ifeval_expected_prompts_per_arm": 541,
         "failure_accounting_complete": true,
         "source_implementations_verified": true,
+        "raw_artifact_digests_verified": true,
+        "statistical_schema_verified": true,
         "comparative_long_context_safety_claim_available": false
       }
     },
