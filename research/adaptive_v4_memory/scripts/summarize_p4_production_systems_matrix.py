@@ -142,8 +142,16 @@ def summarize(matrix_path: Path) -> dict[str, Any]:
     _require(adapter_path.is_file(), "Production adapter executable is missing.")
     adapter_digest = systems.sha256(adapter_path)
     _require(matrix["adapter"].get("sha256") == adapter_digest, "Adapter digest drifted.")
-    manifest_digest = matrix.get("manifest", {}).get("sha256")
-    p3_digest = matrix.get("p3_audit", {}).get("sha256")
+    for dependency_name in ("manifest", "p3_audit"):
+        dependency = matrix.get(dependency_name, {})
+        dependency_path = Path(dependency.get("path", ""))
+        _require(dependency_path.is_file(), f"Missing production {dependency_name} dependency.")
+        _require(
+            dependency.get("sha256") == systems.sha256(dependency_path),
+            f"Production {dependency_name} dependency drifted.",
+        )
+    manifest_digest = matrix["manifest"]["sha256"]
+    p3_digest = matrix["p3_audit"]["sha256"]
     runs = matrix.get("runs", [])
     _require(len(runs) == systems.EXPECTED_CELLS, "Production run count drifted.")
     expected = set(systems.frozen_cells())
@@ -155,6 +163,7 @@ def summarize(matrix_path: Path) -> dict[str, Any]:
     all_concurrency = True
     all_metrics = True
     all_tail_accounted = True
+    all_predictions_identical = True
     backend_provenance: set[str] = set()
     for run in runs:
         cell = tuple(
@@ -183,6 +192,11 @@ def summarize(matrix_path: Path) -> dict[str, Any]:
         )
         adapter = payload["adapter_payload"]
         _require(adapter["status"] == run["status"], "Production status drifted.")
+        _require(
+            payload.get("source", {}).get("dirty") is False
+            and payload.get("source", {}).get("commit") == matrix.get("source_commit"),
+            "Production cell source provenance drifted.",
+        )
         if adapter["status"] == "failed":
             all_concurrency = False
             all_metrics = False
@@ -211,6 +225,10 @@ def summarize(matrix_path: Path) -> dict[str, Any]:
         for repetition in adapter["repetitions"]:
             for policy_run in repetition.get("policies", {}).values():
                 all_tail_accounted &= policy_run.get("tail_failure_accounting_complete") is True
+            if set(repetition.get("policies", {})) == set(systems.POLICIES):
+                all_predictions_identical &= repetition.get(
+                    "greedy_predictions_identical"
+                ) is True
     _require(seen == expected, "Production Cartesian coverage drifted.")
     all_complete = len(complete) == systems.EXPECTED_CELLS
     backend_consistent = all_complete and len(backend_provenance) == 1
@@ -230,6 +248,8 @@ def summarize(matrix_path: Path) -> dict[str, Any]:
             "actual_concurrency_verified": all_complete and all_concurrency,
             "all_required_metrics_verified": all_complete and all_metrics,
             "tail_failure_accounting_complete": all_tail_accounted,
+            "all_paired_predictions_identical": all_complete
+            and all_predictions_identical,
             "backend_provenance_consistent": backend_consistent,
             "raw_cell_digest_set_sha256": hashlib.sha256(
                 "\n".join(sorted(raw_digests)).encode()

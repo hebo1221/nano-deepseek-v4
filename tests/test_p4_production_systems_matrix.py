@@ -42,6 +42,7 @@ def _policy_run(cell: tuple[str, int, int, str, int, int], policy: str) -> dict[
         "request_records": requests,
         "decode_step_latency_ms": [1.0] * (concurrency * generation),
         "generated_token_throughput_per_second": 100.0,
+        "prediction_digest": "3" * 64,
         "cuda": {key: 1 for key in production.CUDA_KEYS},
         "cache": {key: 1 for key in production.CACHE_KEYS},
         "transfer": {key: 1 for key in production.TRANSFER_KEYS},
@@ -60,6 +61,12 @@ def _adapter_payload(
             {
                 "repetition": index,
                 "input_digest": "1" * 64,
+                "execution_order": list(
+                    production.POLICIES
+                    if index % 2 == 0
+                    else tuple(reversed(production.POLICIES))
+                ),
+                "greedy_predictions_identical": True,
                 "policies": {policy: _policy_run(cell, policy) for policy in production.POLICIES},
             }
         )
@@ -68,6 +75,8 @@ def _adapter_payload(
         "cell": production.cell_dict(cell),
         "status": "complete",
         "warmups": production.WARMUPS,
+        "warmup_repetitions_completed": production.WARMUPS,
+        "warmup_failures": [],
         "measured_repetitions": production.MEASURED_REPETITIONS,
         "backend": {
             "runtime_name": "test-serving",

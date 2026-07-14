@@ -45,7 +45,8 @@
         "actual_concurrency_verified": true,
         "all_required_metrics_verified": true,
         "backend_provenance_consistent": true,
-        "tail_failure_accounting_complete": true
+        "tail_failure_accounting_complete": true,
+        "all_paired_predictions_identical": true
       }
     }
   },

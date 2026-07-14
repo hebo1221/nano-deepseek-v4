@@ -79,6 +79,7 @@ def test_p5_classification_preserves_claim_boundaries() -> None:
                 "all_required_metrics_verified": True,
                 "backend_provenance_consistent": True,
                 "tail_failure_accounting_complete": True,
+                "all_paired_predictions_identical": True,
             }
         },
     )
@@ -125,6 +126,7 @@ def test_p5_success_requires_full_system_coverage() -> None:
                 "all_required_metrics_verified": True,
                 "backend_provenance_consistent": True,
                 "tail_failure_accounting_complete": True,
+                "all_paired_predictions_identical": True,
             }
         },
     )

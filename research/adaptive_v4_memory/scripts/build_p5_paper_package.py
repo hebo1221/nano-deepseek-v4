@@ -90,6 +90,7 @@ def classify_evidence(
         and production_audit.get("all_required_metrics_verified") is True
         and production_audit.get("backend_provenance_consistent") is True
         and production_audit.get("tail_failure_accounting_complete") is True
+        and production_audit.get("all_paired_predictions_identical") is True
     )
     result = {
         "p2_core": "success" if core_passed else "negative-result",

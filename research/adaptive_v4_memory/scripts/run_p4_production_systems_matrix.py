@@ -392,6 +392,7 @@ def _run_adapter(
     raw_output: Path,
     timeout_seconds: float,
 ) -> dict[str, Any]:
+    raw_output.unlink(missing_ok=True)
     completed = subprocess.run(
         [str(adapter), "--spec", str(spec_path), "--output", str(raw_output)],
         capture_output=True,
@@ -401,6 +402,8 @@ def _run_adapter(
     )
     if completed.returncode != 0:
         raise RuntimeError(f"Adapter exited {completed.returncode}: {completed.stderr[-2000:]}")
+    if not raw_output.is_file():
+        raise RuntimeError("Adapter exited successfully without writing its output artifact.")
     return json.loads(raw_output.read_text())
 
 
@@ -471,8 +474,9 @@ def main() -> None:
         default=Path("artifacts/adaptive_v4_memory/paper_grade/p4/production-systems-matrix.json"),
     )
     args = parser.parse_args()
-    _require(args.adapter_executable.is_file(), "Serving adapter executable is missing.")
-    _require(os.access(args.adapter_executable, os.X_OK), "Serving adapter is not executable.")
+    adapter_executable = args.adapter_executable.resolve()
+    _require(adapter_executable.is_file(), "Serving adapter executable is missing.")
+    _require(os.access(adapter_executable, os.X_OK), "Serving adapter is not executable.")
     _require(args.cell_timeout_seconds > 0, "Cell timeout must be positive.")
     _require(
         args.max_new_cells is None or args.max_new_cells > 0, "max-new-cells must be positive."
@@ -490,7 +494,7 @@ def main() -> None:
     implementation = implementation_digest()
     manifest_digest = sha256(args.manifest)
     p3_digest = sha256(args.p3_audit)
-    adapter_digest = sha256(args.adapter_executable)
+    adapter_digest = sha256(adapter_executable)
     selected = [
         cell
         for cell in frozen_cells()
@@ -544,7 +548,7 @@ def main() -> None:
         _write_json(spec_path, spec)
         try:
             adapter_payload = _run_adapter(
-                adapter=args.adapter_executable,
+                adapter=adapter_executable,
                 spec_path=spec_path,
                 raw_output=raw_output,
                 timeout_seconds=args.cell_timeout_seconds,
@@ -564,7 +568,7 @@ def main() -> None:
             },
             "manifest": {"path": str(args.manifest), "sha256": manifest_digest},
             "p3_audit": {"path": str(args.p3_audit), "sha256": p3_digest},
-            "adapter": {"path": str(args.adapter_executable), "sha256": adapter_digest},
+            "adapter": {"path": str(adapter_executable), "sha256": adapter_digest},
             "adapter_spec": {"path": str(spec_path), "sha256": sha256(spec_path)},
             "adapter_payload": adapter_payload,
         }
@@ -581,7 +585,7 @@ def main() -> None:
             implementation=implementation,
             manifest=args.manifest,
             p3_audit=args.p3_audit,
-            adapter=args.adapter_executable,
+            adapter=adapter_executable,
         )
     lock.close()
 
