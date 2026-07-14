@@ -1,0 +1,84 @@
+{
+  "design": {
+    "contexts": [
+      80,
+      128,
+      256,
+      512,
+      1024
+    ],
+    "conversations": 20,
+    "evaluation_seed": 8071401,
+    "family": "instruction-persistence",
+    "queries": 80,
+    "scale": "s151"
+  },
+  "experiment_id": "p1-protected-pin-diagnostic-audit-v1",
+  "interpretation": "single-checkpoint causal diagnostic; pin effect isolated on exact examples",
+  "pilot_artifact": {
+    "path": "artifacts/adaptive_v4_memory/paper_grade/heldout_pilot/s151/seed-6071401/p1-heldout-policy-pilot.json",
+    "sha256": "d7580aef918fd7f7b7ee16b6797fa19c61842b2656bf2114988c609c7b9ff939"
+  },
+  "raw_artifact": {
+    "path": "artifacts/adaptive_v4_memory/paper_grade/diagnostics/s151/seed-6071401/p1-protected-pin.json",
+    "sha256": "caa522e55b3c2e52c1ae21d51bed35619720bb9ffbe4a59a5a8ffda118546d1d"
+  },
+  "result": {
+    "by_context": [
+      {
+        "calibrated-hierarchical-1x": 16,
+        "calibrated-hierarchical-no-pins-1x": 10,
+        "context": 80,
+        "fixed-1x": 10,
+        "total": 16
+      },
+      {
+        "calibrated-hierarchical-1x": 14,
+        "calibrated-hierarchical-no-pins-1x": 9,
+        "context": 128,
+        "fixed-1x": 9,
+        "total": 16
+      },
+      {
+        "calibrated-hierarchical-1x": 16,
+        "calibrated-hierarchical-no-pins-1x": 8,
+        "context": 256,
+        "fixed-1x": 8,
+        "total": 16
+      },
+      {
+        "calibrated-hierarchical-1x": 12,
+        "calibrated-hierarchical-no-pins-1x": 0,
+        "context": 512,
+        "fixed-1x": 0,
+        "total": 16
+      },
+      {
+        "calibrated-hierarchical-1x": 5,
+        "calibrated-hierarchical-no-pins-1x": 3,
+        "context": 1024,
+        "fixed-1x": 3,
+        "total": 16
+      }
+    ],
+    "fixed_1x_correct": 30,
+    "no_pins_correct": 30,
+    "pin_query_recoveries": 34,
+    "pin_query_regressions": 1,
+    "pinned_correct": 63,
+    "total": 80
+  },
+  "schema_version": 1,
+  "source": {
+    "commit": "2bfdb68282e71f1cf3463b6692827e2516b7ad7c",
+    "dirty": false
+  },
+  "validation": {
+    "all_correctness_recomputed": true,
+    "clean_source_verified": true,
+    "exact_pilot_examples_regenerated": true,
+    "no_pins_predictions_identical_to_fixed_1x": true,
+    "raw_and_record_digests_verified": true,
+    "zero_budget_violations": true
+  }
+}

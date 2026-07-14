@@ -123,8 +123,8 @@ def main() -> None:
     args = parser.parse_args()
     if not torch.cuda.is_available():
         raise RuntimeError("Chunked equivalence validation requires CUDA.")
-    if args.chunk_size <= 1:
-        raise ValueError("Use a chunk size greater than one for acceleration validation.")
+    if args.chunk_size <= 0:
+        raise ValueError("chunk-size must be positive.")
     pilot_payload = json.loads(args.pilot.read_text())
     if pilot_payload.get("experiment_id") != "p1-heldout-policy-pilot-v1":
         raise ValueError("A P1 held-out pilot is required.")

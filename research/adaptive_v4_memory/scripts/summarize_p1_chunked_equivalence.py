@@ -37,9 +37,10 @@ def _verify_artifact(metadata: dict[str, Any], name: str) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Audit chunk=2 cache equivalence.")
+    parser = argparse.ArgumentParser(description="Audit causal cache-path equivalence.")
     parser.add_argument("--input", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--expected-chunk-size", type=int, default=2)
     args = parser.parse_args()
     raw = json.loads(args.input.read_text())
     _require(
@@ -48,7 +49,10 @@ def main() -> None:
     )
     _require(raw.get("source", {}).get("dirty") is False, "Dirty equivalence source.")
     validation = raw.get("validation", {})
-    _require(validation.get("chunk_size") == 2, "Only chunk=2 was accepted.")
+    _require(
+        validation.get("chunk_size") == args.expected_chunk_size,
+        "Validated chunk size drifted.",
+    )
     _require(validation.get("all_predictions_identical") is True, "Predictions differ.")
     _require(
         tuple(validation.get("core_policies", ())) == EXPECTED_POLICIES,
@@ -69,7 +73,10 @@ def main() -> None:
     output = {
         "schema_version": 1,
         "experiment_id": "p1-chunked-cache-equivalence-audit-v1",
-        "interpretation": "chunk=2 accepted for quality only; no systems-performance claim",
+        "interpretation": (
+            f"chunk={args.expected_chunk_size} accepted for quality only; "
+            "no systems-performance claim"
+        ),
         "raw_artifact": {"path": str(args.input), "sha256": _sha256(args.input)},
         "source": raw["source"],
         "pilot_artifact": raw["pilot_artifact"],
