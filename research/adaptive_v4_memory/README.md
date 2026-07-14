@@ -181,6 +181,13 @@ forward also reproduced the irrelevant-local 0/20 result, and strengthened
 generator invariants verified the local target/key construction; that slice is
 a checkpoint generalization failure.
 
+For the large quality matrix, chunk=2 causal-cache evaluation has been accepted
+after exact comparison with the token-by-token pilot: all 1,260 core-policy
+conversation records and 3,920 predictions matched. Full-sequence and larger
+chunks showed at least one mismatch and are rejected. This optimization applies
+only to quality; physical tier, transfer, and latency claims remain on the
+sequential runtime path.
+
 ## P2 training matrix
 
 The preregistered 5-seed × 2-scale Tier-S training matrix is complete. All ten
