@@ -63,6 +63,33 @@ def render_chat_split_last_user(
     return parts[0], parts[1]
 
 
+def render_chat_split_generation_suffix(
+    tokenizer: ChatTokenizer, messages: list[dict[str, str]]
+) -> tuple[str, str]:
+    """Split after all user content while preserving the exact chat template.
+
+    This lets a press consume the complete benchmark prompt during prefill; the
+    second segment contains only the stable boundary retreat plus the assistant
+    generation suffix emitted by the tokenizer template.
+    """
+    if not messages or messages[-1].get("role") != "user":
+        raise ValueError("Generation-suffix rendering requires a final user message.")
+    payload = deepcopy(messages)
+    content = payload[-1].get("content")
+    if not isinstance(content, str) or not content:
+        raise ValueError("Final user message content must be non-empty text.")
+    digest = hashlib.sha256(json.dumps(messages, sort_keys=True).encode()).hexdigest()
+    separator = f"<adaptive-v4-memory-generation-{digest}>"
+    if any(separator in str(message.get("content", "")) for message in messages):
+        raise ValueError("Generation suffix separator collides with message content.")
+    payload[-1]["content"] = content + separator
+    rendered = render_chat(tokenizer, payload)
+    parts = rendered.split(separator)
+    if len(parts) != 2 or not parts[0] or not parts[1]:
+        raise ValueError("Chat template did not preserve the generation separator exactly once.")
+    return parts[0], parts[1]
+
+
 def render_chat_split_user_content(
     tokenizer: Any,
     context: str,

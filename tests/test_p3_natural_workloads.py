@@ -20,6 +20,7 @@ from p3_natural_workloads import (  # noqa: E402
     mrcr_official_token_count,
     parse_mrcr_messages,
     render_chat,
+    render_chat_split_generation_suffix,
     render_chat_split_last_user,
     render_chat_split_user_content,
     select_mrcr_primary_rows,
@@ -107,6 +108,11 @@ def test_mrcr_messages_and_prefix_are_fail_closed() -> None:
     context, query = render_chat_split_user_content(FakeTokenizer(), "long context", "final query")
     assert context.endswith("long context")
     assert query == "final query|assistant:"
+    context, suffix = render_chat_split_generation_suffix(
+        FakeTokenizer(), [{"role": "user", "content": "complete official prompt"}]
+    )
+    assert context == "user:complete official prompt"
+    assert suffix == "|assistant:"
 
     row["answer"] = "wrong"
     with pytest.raises(ValueError, match="must start"):
