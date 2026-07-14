@@ -16,9 +16,7 @@ METRICS = {
     "ttft_p95_ms": lambda run: run["ttft_ms"]["p95_ms"],
     "decode_step_p95_ms": lambda run: run["decode_step_ms"]["p95_ms"],
     "decode_step_p99_ms": lambda run: run["decode_step_ms"]["p99_ms"],
-    "throughput_tokens_per_second": lambda run: run[
-        "generated_token_throughput_per_second"
-    ],
+    "throughput_tokens_per_second": lambda run: run["generated_token_throughput_per_second"],
     "end_to_end_ms": lambda run: run["end_to_end_ms"],
     "peak_allocated_bytes": lambda run: run["cuda"]["peak_allocated_bytes"],
     "peak_reserved_bytes": lambda run: run["cuda"]["peak_reserved_bytes"],
@@ -55,8 +53,7 @@ def distribution(values: list[float]) -> dict[str, Any]:
 def summarize_terminal_cell(payload: dict[str, Any]) -> dict[str, Any]:
     repetitions = payload.get("repetitions", [])
     _require(
-        isinstance(repetitions, list)
-        and len(repetitions) <= systems.MEASURED_REPETITIONS,
+        isinstance(repetitions, list) and len(repetitions) <= systems.MEASURED_REPETITIONS,
         "P4 measured repetition coverage is invalid.",
     )
     paired_rows = [
@@ -90,15 +87,10 @@ def summarize_terminal_cell(payload: dict[str, Any]) -> dict[str, Any]:
             ]
             for policy in systems.POLICIES
         }
-        resident = [
-            float(getter(row["policies"]["resident-native"])) for row in paired_rows
-        ]
-        tiered = [
-            float(getter(row["policies"]["tiered-native"])) for row in paired_rows
-        ]
+        resident = [float(getter(row["policies"]["resident-native"])) for row in paired_rows]
+        tiered = [float(getter(row["policies"]["tiered-native"])) for row in paired_rows]
         differences = [
-            candidate - baseline
-            for candidate, baseline in zip(tiered, resident, strict=True)
+            candidate - baseline for candidate, baseline in zip(tiered, resident, strict=True)
         ]
         result["metrics"][metric] = {
             "resident": distribution(policy_values["resident-native"])
@@ -134,9 +126,7 @@ def main() -> None:
     parser.add_argument(
         "--matrix",
         type=Path,
-        default=Path(
-            "artifacts/adaptive_v4_memory/paper_grade/p4/reference-systems-matrix.json"
-        ),
+        default=Path("artifacts/adaptive_v4_memory/paper_grade/p4/reference-systems-matrix.json"),
     )
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
@@ -162,7 +152,14 @@ def main() -> None:
     for run in runs:
         identity = tuple(
             run[name]
-            for name in ("scale", "context", "generation", "profile", "batch", "concurrency")
+            for name in (
+                "scale",
+                "context",
+                "generation",
+                "profile",
+                "batch",
+                "active_requests",
+            )
         )
         _require(identity in expected and identity not in seen, f"Invalid P4 cell: {identity}")
         seen.add(identity)
@@ -229,8 +226,7 @@ def main() -> None:
         "failure_table": failures,
         "correctness": {
             "all_available_paired_predictions_identical": all(
-                cell["all_available_paired_predictions_identical"]
-                for cell in [*complete, *partial]
+                cell["all_available_paired_predictions_identical"] for cell in [*complete, *partial]
             ),
             "cells_with_prediction_mismatch": [
                 cell["cell"]
@@ -240,8 +236,9 @@ def main() -> None:
         },
         "environment": {"python": platform.python_version(), "numpy": np.__version__},
         "claim_boundary": (
-            "Single-accelerator reference PyTorch measurements. Failed cells remain results; "
-            "no fused-kernel or production-serving claim is made."
+            "Single-accelerator serial-interleaved reference PyTorch measurements. Failed "
+            "cells remain results; no actual-concurrency, fused-kernel, or production-serving "
+            "claim is made."
         ),
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)

@@ -27,10 +27,11 @@ LOAD_PROFILES = (
     ("batch-b4", 4, 1),
     ("batch-b8", 8, 1),
     ("batch-b16", 16, 1),
-    ("serving-c8", 1, 8),
-    ("serving-c32", 1, 32),
+    ("interleaved-c8", 1, 8),
+    ("interleaved-c32", 1, 32),
 )
 POLICIES = ("resident-native", "tiered-native")
+P3_BENCHMARKS = ("RULER", "SCBench", "LongBench-v2", "LongMemEval", "MRCR")
 TERMINAL_STATUSES = ("complete", "partial", "failed")
 WARMUPS = 5
 MEASURED_REPETITIONS = 30
@@ -96,22 +97,31 @@ def _head() -> str:
 def require_p3_audit(path: Path) -> dict[str, Any]:
     payload = json.loads(path.read_text())
     audit = payload.get("audit", {})
+    benchmarks = payload.get("benchmarks", {})
     if (
-        payload.get("experiment_id") != "p3-ruler-qwen3-1.7b-audit-v1"
-        or payload.get("benchmark_complete") is not True
-        or audit.get("all_cells_verified") is not True
-        or audit.get("all_output_digests_verified") is not True
-        or audit.get("completed_cells") != 39
-        or audit.get("total_predictions") != 253_500
+        payload.get("experiment_id") != "p3-natural-language-suite-audit-v1"
+        or audit.get("all_required_artifacts_verified") is not True
+        or audit.get("all_required_baseline_cells_terminal") is not True
+        or audit.get("all_failure_accounting_complete") is not True
+        or audit.get("benchmarks_terminal") != len(P3_BENCHMARKS)
+        or audit.get("minimum_protocol_examples_accounted_per_arm") != 45_289
+        or set(benchmarks) != set(P3_BENCHMARKS)
+        or any(
+            benchmarks[name].get("terminal") is not True
+            or benchmarks[name].get("native_and_fixed_terminal") is not True
+            for name in P3_BENCHMARKS
+        )
     ):
-        raise RuntimeError("P4 is deferred until the complete digest-bound P3 RULER audit.")
+        raise RuntimeError(
+            "P4 is deferred until the complete digest-bound five-benchmark P3 natural audit."
+        )
     return payload
 
 
 def frozen_cells() -> tuple[tuple[str, int, int, str, int, int], ...]:
     return tuple(
-        (scale, context, generation, name, batch, concurrency)
-        for scale, context, generation, (name, batch, concurrency) in product(
+        (scale, context, generation, name, batch, active_requests)
+        for scale, context, generation, (name, batch, active_requests) in product(
             SCALES, CONTEXTS, GENERATIONS, LOAD_PROFILES
         )
     )
@@ -166,17 +176,17 @@ def generate_inputs(
     context: int,
     generation: int,
     batch: int,
-    concurrency: int,
+    active_requests: int,
     seed: int,
 ) -> tuple[list[torch.Tensor], list[torch.Tensor], str]:
     generator = torch.Generator().manual_seed(seed)
     prompts = [
         torch.randint(0, model.config.vocab_size, (batch, context), generator=generator)
-        for _ in range(concurrency)
+        for _ in range(active_requests)
     ]
     decode = [
         torch.randint(0, model.config.vocab_size, (batch, generation), generator=generator)
-        for _ in range(concurrency)
+        for _ in range(active_requests)
     ]
     return prompts, decode, _tensor_digest([*prompts, *decode])
 
@@ -277,6 +287,11 @@ def run_policy(
         "batch": prompts[0].shape[0],
         "context_tokens": prompts[0].shape[1],
         "generation_tokens": generation,
+        "load_execution": {
+            "model": "serial-round-robin-interleave",
+            "active_requests": len(caches),
+            "actual_concurrent_serving": False,
+        },
         "request_prefill_ms": latency_summary(request_prefill_ms),
         "aggregate_prefill_ms": (prefill_finished - cell_started) / 1_000_000.0,
         "ttft_ms": latency_summary(first_token_completion_ms),
@@ -287,9 +302,7 @@ def run_policy(
             "cache_allocated_delta_bytes": allocated_after_prefill - baseline_allocated,
             "allocated_after_prefill_bytes": allocated_after_prefill,
             "reserved_after_prefill_bytes": reserved_after_prefill,
-            "fragmentation_after_prefill_bytes": (
-                reserved_after_prefill - allocated_after_prefill
-            ),
+            "fragmentation_after_prefill_bytes": (reserved_after_prefill - allocated_after_prefill),
             "peak_allocated_bytes": torch.cuda.max_memory_allocated(device),
             "peak_reserved_bytes": torch.cuda.max_memory_reserved(device),
         },
@@ -306,7 +319,7 @@ def run_policy(
 
 
 def cell_path(root: Path, cell: tuple[str, int, int, str, int, int]) -> Path:
-    scale, context, generation, profile, _batch, _concurrency = cell
+    scale, context, generation, profile, _batch, _active_requests = cell
     return root / scale / f"context-{context}" / f"generation-{generation}" / profile
 
 
@@ -323,9 +336,10 @@ def _artifact_valid(
     payload = json.loads(path.read_text())
     identity_ok = (
         payload.get("experiment_id") == "p4-reference-systems-cell-v1"
-        and tuple(payload.get("cell", {}).get(name) for name in (
-            "scale", "context", "generation", "profile", "batch", "concurrency"
-        ))
+        and tuple(
+            payload.get("cell", {}).get(name)
+            for name in ("scale", "context", "generation", "profile", "batch", "active_requests")
+        )
         == cell
         and payload.get("source", {}).get("implementation_digest") == digest
         and payload.get("manifest", {}).get("sha256") == manifest_digest
@@ -354,10 +368,11 @@ def _artifact_valid(
     if set(policy_status) != set(POLICIES):
         return False
     counts = {
-        policy: sum(policy in row.get("policies", {}) for row in repetitions)
-        for policy in POLICIES
+        policy: sum(policy in row.get("policies", {}) for row in repetitions) for policy in POLICIES
     }
-    if any(policy_status[policy].get("measured_repetitions") != counts[policy] for policy in POLICIES):
+    if any(
+        policy_status[policy].get("measured_repetitions") != counts[policy] for policy in POLICIES
+    ):
         return False
     complete = {policy for policy in POLICIES if counts[policy] == MEASURED_REPETITIONS}
     expected_status = (
@@ -374,8 +389,12 @@ def _run_row(
     cell: tuple[str, int, int, str, int, int], artifact: Path, payload: dict[str, Any]
 ) -> dict[str, Any]:
     return {
-        "scale": cell[0], "context": cell[1], "generation": cell[2],
-        "profile": cell[3], "batch": cell[4], "concurrency": cell[5],
+        "scale": cell[0],
+        "context": cell[1],
+        "generation": cell[2],
+        "profile": cell[3],
+        "batch": cell[4],
+        "active_requests": cell[5],
         "status": payload["status"],
         "artifact": {"path": str(artifact), "sha256": sha256(artifact)},
     }
@@ -396,9 +415,9 @@ def _write_matrix(
     manifest: Path,
     p3_audit: Path,
 ) -> None:
-    runs.sort(key=lambda row: tuple(row[name] for name in (
-        "scale", "context", "generation", "profile"
-    )))
+    runs.sort(
+        key=lambda row: tuple(row[name] for name in ("scale", "context", "generation", "profile"))
+    )
     _write_json(
         path,
         {
@@ -423,32 +442,35 @@ def main() -> None:
     parser.add_argument("--scale", action="append", choices=SCALES)
     parser.add_argument("--context", type=int, action="append", choices=CONTEXTS)
     parser.add_argument("--generation", type=int, action="append", choices=GENERATIONS)
-    parser.add_argument("--profile", action="append", choices=tuple(row[0] for row in LOAD_PROFILES))
+    parser.add_argument(
+        "--profile", action="append", choices=tuple(row[0] for row in LOAD_PROFILES)
+    )
     parser.add_argument("--max-new-cells", type=int)
     parser.add_argument("--cell-timeout-seconds", type=float, default=21_600.0)
     parser.add_argument(
-        "--training-root", type=Path,
+        "--training-root",
+        type=Path,
         default=Path("artifacts/adaptive_v4_memory/paper_grade/training"),
     )
     parser.add_argument(
-        "--manifest", type=Path,
+        "--manifest",
+        type=Path,
         default=Path("research/adaptive_v4_memory/manifests/p4-reference-systems-matrix-v1.json"),
     )
     parser.add_argument(
-        "--p3-audit", type=Path,
-        default=Path(
-            "artifacts/adaptive_v4_memory/paper_grade/p3/ruler-qwen3-1.7b.summary.json"
-        ),
+        "--p3-audit",
+        type=Path,
+        default=Path("artifacts/adaptive_v4_memory/paper_grade/p3/natural-suite.summary.json"),
     )
     parser.add_argument(
-        "--output-root", type=Path,
+        "--output-root",
+        type=Path,
         default=Path("artifacts/adaptive_v4_memory/paper_grade/p4/reference-systems"),
     )
     parser.add_argument(
-        "--matrix-progress", type=Path,
-        default=Path(
-            "artifacts/adaptive_v4_memory/paper_grade/p4/reference-systems-matrix.json"
-        ),
+        "--matrix-progress",
+        type=Path,
+        default=Path("artifacts/adaptive_v4_memory/paper_grade/p4/reference-systems-matrix.json"),
     )
     args = parser.parse_args()
     if args.max_new_cells is not None and args.max_new_cells <= 0:
@@ -471,7 +493,8 @@ def main() -> None:
     manifest_digest = sha256(args.manifest)
     p3_digest = sha256(args.p3_audit)
     selected = [
-        cell for cell in frozen_cells()
+        cell
+        for cell in frozen_cells()
         if (not args.scale or cell[0] in args.scale)
         and (not args.context or cell[1] in args.context)
         and (not args.generation or cell[2] in args.generation)
@@ -498,18 +521,19 @@ def main() -> None:
         root = cell_path(args.output_root, cell)
         artifact = root / "cell.json"
         if _artifact_valid(
-            artifact, cell=cell, digest=implementation,
-            manifest_digest=manifest_digest, p3_digest=p3_digest,
+            artifact,
+            cell=cell,
+            digest=implementation,
+            manifest_digest=manifest_digest,
+            p3_digest=p3_digest,
         ):
             payload = json.loads(artifact.read_text())
         else:
             if args.max_new_cells is not None and new_cells >= args.max_new_cells:
                 break
-            scale, context, generation, profile, batch, concurrency = cell
+            scale, context, generation, profile, batch, active_requests = cell
             if scale not in models:
-                checkpoint = (
-                    args.training_root / scale / "seed-6071401" / f"{scale}-step-1000.pt"
-                )
+                checkpoint = args.training_root / scale / "seed-6071401" / f"{scale}-step-1000.pt"
                 models[scale] = _load_model(checkpoint, device)
             model = models[scale]
             started = time.monotonic()
@@ -524,9 +548,7 @@ def main() -> None:
                                     "failure_type": "timeout",
                                     "error_type": "TimeoutError",
                                     "error": "P4 paired cell exceeded its frozen wall-time limit.",
-                                    "phase": (
-                                        "warmup" if repetition < WARMUPS else "measured"
-                                    ),
+                                    "phase": ("warmup" if repetition < WARMUPS else "measured"),
                                     "repetition": repetition,
                                 }
                         break
@@ -535,7 +557,7 @@ def main() -> None:
                         context=context,
                         generation=generation,
                         batch=batch,
-                        concurrency=concurrency,
+                        active_requests=active_requests,
                         seed=9_071_400 + repetition,
                     )
                     order = POLICIES if repetition % 2 == 0 else tuple(reversed(POLICIES))
@@ -562,9 +584,7 @@ def main() -> None:
                                 ),
                                 "error_type": type(error).__name__,
                                 "error": str(error),
-                                "phase": (
-                                    "warmup" if repetition < WARMUPS else "measured"
-                                ),
+                                "phase": ("warmup" if repetition < WARMUPS else "measured"),
                                 "repetition": repetition,
                             }
                             policy_failures[policy] = failure
@@ -621,23 +641,28 @@ def main() -> None:
                     "experiment_id": "p4-reference-systems-cell-v1",
                     "status": status,
                     "cell": {
-                        "scale": scale, "context": context, "generation": generation,
-                        "profile": profile, "batch": batch, "concurrency": concurrency,
+                        "scale": scale,
+                        "context": context,
+                        "generation": generation,
+                        "profile": profile,
+                        "batch": batch,
+                        "active_requests": active_requests,
                     },
                     "warmups": WARMUPS,
                     "measured_repetitions": MEASURED_REPETITIONS,
                     "repetitions": repetitions,
                     "policy_status": policy_status,
                     "all_available_paired_predictions_identical": all(
-                        row["greedy_predictions_identical"] is not False
-                        for row in repetitions
+                        row["greedy_predictions_identical"] is not False for row in repetitions
                     ),
                     "elapsed_seconds": time.monotonic() - started,
                 }
             except Exception as error:
                 failure_type = (
-                    "oom" if isinstance(error, torch.cuda.OutOfMemoryError)
-                    else "timeout" if isinstance(error, TimeoutError)
+                    "oom"
+                    if isinstance(error, torch.cuda.OutOfMemoryError)
+                    else "timeout"
+                    if isinstance(error, TimeoutError)
                     else "error"
                 )
                 payload = {
@@ -648,8 +673,12 @@ def main() -> None:
                     "error_type": type(error).__name__,
                     "error": str(error),
                     "cell": {
-                        "scale": scale, "context": context, "generation": generation,
-                        "profile": profile, "batch": batch, "concurrency": concurrency,
+                        "scale": scale,
+                        "context": context,
+                        "generation": generation,
+                        "profile": profile,
+                        "batch": batch,
+                        "active_requests": active_requests,
                     },
                     "warmups": WARMUPS,
                     "measured_repetitions": MEASURED_REPETITIONS,
@@ -676,14 +705,17 @@ def main() -> None:
             payload.update(
                 {
                     "source": {
-                        "commit": _head(), "dirty": False,
+                        "commit": _head(),
+                        "dirty": False,
                         "implementation_digest": implementation,
                     },
                     "manifest": {"path": str(args.manifest), "sha256": manifest_digest},
                     "p3_audit": {"path": str(args.p3_audit), "sha256": p3_digest},
                     "environment": {
-                        "python": platform.python_version(), "torch": torch.__version__,
-                        "cuda": torch.version.cuda, "device": torch.cuda.get_device_name(device),
+                        "python": platform.python_version(),
+                        "torch": torch.__version__,
+                        "cuda": torch.version.cuda,
+                        "device": torch.cuda.get_device_name(device),
                     },
                     "command": [sys.executable, *sys.argv],
                 }
@@ -692,8 +724,11 @@ def main() -> None:
             new_cells += 1
         runs_by_cell[cell] = _run_row(cell, artifact, payload)
         _write_matrix(
-            args.matrix_progress, runs=list(runs_by_cell.values()), implementation=implementation,
-            manifest=args.manifest, p3_audit=args.p3_audit,
+            args.matrix_progress,
+            runs=list(runs_by_cell.values()),
+            implementation=implementation,
+            manifest=args.manifest,
+            p3_audit=args.p3_audit,
         )
         print(json.dumps({"cell": payload["cell"], "status": payload["status"]}), flush=True)
     lock.close()

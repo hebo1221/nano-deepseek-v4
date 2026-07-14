@@ -19,6 +19,49 @@ def test_p4_frozen_matrix_has_108_paired_cells() -> None:
     assert len(cells) == systems.EXPECTED_CELLS == 108
     assert len(set(cells)) == len(cells)
     assert {cell[3] for cell in cells} == {row[0] for row in systems.LOAD_PROFILES}
+    assert "interleaved-c8" in {cell[3] for cell in cells}
+    assert not any("serving" in cell[3] for cell in cells)
+
+
+def test_p4_requires_full_natural_suite_not_ruler_only(tmp_path: Path) -> None:
+    ruler_only = tmp_path / "ruler.json"
+    ruler_only.write_text(
+        json.dumps(
+            {
+                "experiment_id": "p3-ruler-qwen3-1.7b-audit-v1",
+                "benchmark_complete": True,
+                "audit": {
+                    "all_cells_verified": True,
+                    "all_output_digests_verified": True,
+                    "completed_cells": 39,
+                    "total_predictions": 253_500,
+                },
+            }
+        )
+    )
+    with pytest.raises(RuntimeError, match="five-benchmark"):
+        systems.require_p3_audit(ruler_only)
+
+    natural = tmp_path / "natural.json"
+    natural.write_text(
+        json.dumps(
+            {
+                "experiment_id": "p3-natural-language-suite-audit-v1",
+                "audit": {
+                    "all_required_artifacts_verified": True,
+                    "all_required_baseline_cells_terminal": True,
+                    "all_failure_accounting_complete": True,
+                    "benchmarks_terminal": 5,
+                    "minimum_protocol_examples_accounted_per_arm": 45_289,
+                },
+                "benchmarks": {
+                    name: {"terminal": True, "native_and_fixed_terminal": True}
+                    for name in systems.P3_BENCHMARKS
+                },
+            }
+        )
+    )
+    assert systems.require_p3_audit(natural)["audit"]["benchmarks_terminal"] == 5
 
 
 def test_p4_latency_summary_retains_tail_values() -> None:
@@ -57,7 +100,14 @@ def test_p4_partial_artifact_preserves_surviving_policy(tmp_path: Path) -> None:
         "status": "partial",
         "cell": dict(
             zip(
-                ("scale", "context", "generation", "profile", "batch", "concurrency"),
+                (
+                    "scale",
+                    "context",
+                    "generation",
+                    "profile",
+                    "batch",
+                    "active_requests",
+                ),
                 cell,
                 strict=True,
             )

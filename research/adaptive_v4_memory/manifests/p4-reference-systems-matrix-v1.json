@@ -2,24 +2,25 @@
   "schema_version": 1,
   "experiment_id": "p4-reference-systems-matrix-v1",
   "status": "frozen_before_execution",
-  "evidence_tier": "single-accelerator-reference-pytorch-runtime",
-  "prerequisite": "complete digest-bound P3 RULER audit; P4 baselines run even if the adaptive causal arm is withheld",
+  "evidence_tier": "single-accelerator-serial-interleaved-reference-pytorch-runtime",
+  "prerequisite": "complete digest-bound five-benchmark P3 natural-suite audit; P4 baselines run even if the adaptive causal arm is withheld",
   "scales": ["s55", "s151"],
   "checkpoint_training_seed": 6071401,
   "policies": ["resident-native", "tiered-native"],
   "contexts_tokens": [8192, 32768, 131072],
   "optional_context_tokens": 500000,
-  "optional_context_gate": "run only after both policies complete 131072 tokens at batch 1, concurrency 1",
+  "optional_context_gate": "not in this reference matrix; support must be established by a separate preflight after 131072 tokens",
   "generation_tokens": [128, 512, 2048],
   "load_profiles": [
-    {"name": "batch-b1", "batch": 1, "concurrency": 1},
-    {"name": "batch-b4", "batch": 4, "concurrency": 1},
-    {"name": "batch-b8", "batch": 8, "concurrency": 1},
-    {"name": "batch-b16", "batch": 16, "concurrency": 1},
-    {"name": "serving-c8", "batch": 1, "concurrency": 8},
-    {"name": "serving-c32", "batch": 1, "concurrency": 32}
+    {"name": "batch-b1", "batch": 1, "active_requests": 1},
+    {"name": "batch-b4", "batch": 4, "active_requests": 1},
+    {"name": "batch-b8", "batch": 8, "active_requests": 1},
+    {"name": "batch-b16", "batch": 16, "active_requests": 1},
+    {"name": "interleaved-c8", "batch": 1, "active_requests": 8},
+    {"name": "interleaved-c32", "batch": 1, "active_requests": 32}
   ],
-  "matrix_interpretation": "batch and serving-concurrency sweeps are separate profiles; their Cartesian product is not treated as a realistic serving configuration",
+  "matrix_interpretation": "batch and serial round-robin active-request sweeps are separate reference profiles. The active-request profiles are not simultaneous serving concurrency and do not satisfy the production concurrency gate.",
+  "production_concurrency_requirement": "A later fused or serving-runtime matrix must independently measure actual concurrency 1/8/32 with request overlap and scheduler timestamps.",
   "prefill_chunk_tokens": 256,
   "warmups_per_paired_cell": 5,
   "measured_repetitions_per_paired_cell": 30,
@@ -49,5 +50,5 @@
     "policy_failure_isolated": "if either resident or tiered fails, continue all 30 measured repetitions for the surviving policy and report the cell as partial",
     "failure_is_terminal_and_reported": true
   },
-  "claim_boundary": "Reference PyTorch evidence only. It is not a fused-kernel, multi-GPU, or production-serving throughput claim."
+  "claim_boundary": "Serial-interleaved reference PyTorch evidence only. It is not actual concurrent serving, a fused-kernel, multi-GPU, or production-throughput claim."
 }
