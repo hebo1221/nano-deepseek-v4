@@ -18,6 +18,7 @@
       "held-out-evaluation-example"
     ],
     "minimum_per_layer": "memory-matched-fixed-top-k",
+    "max_extra_blocks_per_layer": "minimum-per-layer-times-budget-multiplier-minus-one",
     "uniform_budget_points": ["1x-minimum-per-csa-layer"],
     "non_uniform_budget_points": [
       "2x-minimum-per-csa-layer",

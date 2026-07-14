@@ -143,15 +143,20 @@ def main() -> None:
             pilot._controller_config(args.scale),
             global_block_budget=normal_budget,
             dense_fallback_block_budget=dense_budget,
+            min_blocks_per_layer=minimum,
+            max_extra_blocks_per_layer=minimum * (multiplier - 1),
         )
-        calibrations[f"{multiplier}x"] = asdict(
-            calibrate_same_token_layer_quotas(
-                queries,
-                signal,
-                quantile=args.quantile,
-                min_blocks_per_layer=minimum,
-            )
-        )
+        calibrations[f"{multiplier}x"] = {
+            "signal_config": asdict(signal),
+            "quota": asdict(
+                calibrate_same_token_layer_quotas(
+                    queries,
+                    signal,
+                    quantile=args.quantile,
+                    min_blocks_per_layer=minimum,
+                )
+            ),
+        }
     payload = {
         "schema_version": 1,
         "experiment_id": "p1-layer-quota-calibration-pilot-v1",

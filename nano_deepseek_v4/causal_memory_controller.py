@@ -230,10 +230,15 @@ def calibrate_same_token_layer_quotas(
         demand=candidate_demand,
     )
     digest_payload = {
+        "algorithm": "same-token-layer-quotas-v2-requested-blocks",
         "signal_config": asdict(signal_config),
         "quantile": quantile,
         "min_blocks_per_layer": min_blocks_per_layer,
         "queries": [asdict(query) for query in queries],
+        "score_demand_quantiles": score_demand,
+        "candidate_demand_quantiles": candidate_demand,
+        "layer_budgets": normal,
+        "dense_layer_budgets": dense,
     }
     calibration_digest = hashlib.sha256(
         json.dumps(digest_payload, sort_keys=True, separators=(",", ":")).encode()

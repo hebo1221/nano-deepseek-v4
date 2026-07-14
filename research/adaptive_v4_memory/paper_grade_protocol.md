@@ -79,6 +79,9 @@ use targets, native correctness, or the 807-series held-out examples. Layer
 quotas use the nearest-rank 95th percentile and retain the fixed-policy minimum
 in every CSA layer. The 1x point remains uniform; non-uniform allocation is
 tested only when 2x or 4x capacity leaves room above that floor.
+The score-derived uncertainty allowance is fixed to
+`minimum_per_layer * (budget_multiplier - 1)`, so 1x, 2x, and 4x cannot collapse
+to the same effective method merely because of a constant request cap.
 
 ## 4. Tier-S workloads and sample size
 
