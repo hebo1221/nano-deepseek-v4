@@ -91,6 +91,19 @@ def _commit_is_ancestor(commit: str, descendant: str) -> bool:
     )
 
 
+@cache
+def file_sha256_at_commit(commit: str, path: str) -> str:
+    """Hash a file exactly as stored in a committed Git tree."""
+
+    _require(COMMIT_PATTERN.fullmatch(commit) is not None, "Invalid P2 execution commit.")
+    content = subprocess.run(
+        ["git", "show", f"{commit}:{path}"],
+        check=True,
+        capture_output=True,
+    ).stdout
+    return hashlib.sha256(content).hexdigest()
+
+
 def verify_execution_provenance(
     raw: dict[str, Any], implementation_digest: str, analysis_commit: str
 ) -> tuple[str, str]:
@@ -112,7 +125,9 @@ def verify_execution_provenance(
         f"P2 committed implementation digest drifted: {execution_commit}",
     )
     orchestration = raw.get("orchestration", {})
-    expected_orchestrator_sha256 = sha256(Path(PARALLEL_ORCHESTRATOR_PATH))
+    expected_orchestrator_sha256 = file_sha256_at_commit(
+        execution_commit, PARALLEL_ORCHESTRATOR_PATH
+    )
     worker = orchestration.get("worker")
     workers = orchestration.get("workers")
     _require(
