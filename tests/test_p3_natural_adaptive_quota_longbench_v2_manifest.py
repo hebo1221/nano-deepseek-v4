@@ -24,14 +24,14 @@ def _manifest() -> dict[str, object]:
     )
 
 
-def test_adaptive_longbench_v2_freezes_all_503_pairs() -> None:
+def test_adaptive_longbench_v2_freezes_complete_paired_grid() -> None:
     payload = _manifest()
 
     adaptive.validate_manifest(payload)
 
-    assert payload["benchmark"]["examples_per_arm"] == 503
+    assert payload["benchmark"]["predictions_per_arm"] == 503
     assert payload["benchmark"]["paired_predictions_total"] == 1_006
-    assert payload["statistics"]["paired_bootstrap_resamples"] == 10_000
+    assert payload["statistics"]["holm_family_size"] == 6
 
 
 def test_adaptive_longbench_v2_rejects_outcome_dependent_selection() -> None:
@@ -42,13 +42,17 @@ def test_adaptive_longbench_v2_rejects_outcome_dependent_selection() -> None:
         adaptive.validate_manifest(payload)
 
 
-def test_adaptive_longbench_v2_rejects_budget_or_failure_vocab_drift() -> None:
+def test_adaptive_longbench_v2_rejects_continuous_refresh_claim() -> None:
     payload = deepcopy(_manifest())
-    payload["physical_contract"]["same_global_kept_tokens"] = False
-    with pytest.raises(ValueError, match="physical contract drifted"):
+    payload["cache_lifecycle_contract"]["continuous_refresh_claim_available"] = True
+
+    with pytest.raises(ValueError, match="lifecycle boundary drifted"):
         adaptive.validate_manifest(payload)
 
+
+def test_adaptive_longbench_v2_freezes_failure_vocabulary() -> None:
     payload = deepcopy(_manifest())
     payload["failure_reporting"]["allowed_failure_types"].append("driver-reset")
+
     with pytest.raises(ValueError, match="failure reporting drifted"):
         adaptive.validate_manifest(payload)
