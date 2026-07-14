@@ -100,6 +100,15 @@ def test_p3_gate_requires_each_budget_scale_causal_cell(tmp_path: Path) -> None:
             "all_physical_predictions_identical": True,
             "outcome_dependent_early_stopping": False,
             "required_scale_seed_completion_verified": True,
+            "no_budget_violations": True,
+            "exact_config_reuse_verified": True,
+            "exact_seed_randomization_verified": True,
+            "physical_controller_budget_verified": True,
+            "exact_statistical_cell_coverage_verified": True,
+            "family_holm_bonferroni_verified": True,
+            "contrast_holm_bonferroni_verified": True,
+            "primary_four_cell_bonferroni_verified": True,
+            "seed_p_values_used_as_success_gate": False,
         },
         "primary_causal_gate": {
             "candidate": "calibrated+pins",
@@ -117,6 +126,7 @@ def test_p3_gate_requires_each_budget_scale_causal_cell(tmp_path: Path) -> None:
     decision = require_p3_sequence_gate(matrix, causal)
     assert decision["causal_candidate_qualified"] is True
     assert decision["baseline_evaluation_required"] is True
+    assert decision["causal_statistical_audit_verified"] is True
 
     payload["primary_causal_gate"]["cells"][0]["passed"] = False
     payload["primary_causal_gate"]["passed"] = False
@@ -126,6 +136,14 @@ def test_p3_gate_requires_each_budget_scale_causal_cell(tmp_path: Path) -> None:
     assert decision["baseline_evaluation_required"] is True
 
     payload["audit"]["outcome_dependent_early_stopping"] = True
+    causal.write_text(json.dumps(payload))
+    with pytest.raises(
+        RuntimeError, match="complete preregistered 5-seed, 2-scale causal audit"
+    ):
+        require_p3_sequence_gate(matrix, causal)
+
+    payload["audit"]["outcome_dependent_early_stopping"] = False
+    payload["audit"]["family_holm_bonferroni_verified"] = False
     causal.write_text(json.dumps(payload))
     with pytest.raises(
         RuntimeError, match="complete preregistered 5-seed, 2-scale causal audit"

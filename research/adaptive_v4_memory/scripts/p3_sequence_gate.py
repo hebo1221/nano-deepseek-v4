@@ -9,6 +9,17 @@ EXPECTED_SCALES = ("s55", "s151")
 EXPECTED_TRAINING_SEEDS = (6071401, 6071402, 6071403, 6071404, 6071405)
 EXPECTED_BUDGETS = ("2x", "4x")
 EXPECTED_CAUSAL_SHARDS = 9_000
+REQUIRED_CAUSAL_TRUE_AUDITS = (
+    "no_budget_violations",
+    "exact_config_reuse_verified",
+    "exact_seed_randomization_verified",
+    "physical_controller_budget_verified",
+    "exact_statistical_cell_coverage_verified",
+    "family_holm_bonferroni_verified",
+    "contrast_holm_bonferroni_verified",
+    "primary_four_cell_bonferroni_verified",
+    "required_scale_seed_completion_verified",
+)
 
 
 def _load(path: Path, name: str) -> dict[str, Any]:
@@ -48,7 +59,8 @@ def require_p3_sequence_gate(p2_matrix: Path, causal_gate: Path) -> dict[str, An
         or audit.get("all_record_digests_verified") is not True
         or audit.get("all_physical_predictions_identical") is not True
         or audit.get("outcome_dependent_early_stopping") is not False
-        or audit.get("required_scale_seed_completion_verified") is not True
+        or audit.get("seed_p_values_used_as_success_gate") is not False
+        or any(audit.get(name) is not True for name in REQUIRED_CAUSAL_TRUE_AUDITS)
         or gate.get("candidate") != "calibrated+pins"
         or gate.get("comparator") != "fixed+pins"
         or tuple(gate.get("scales", ())) != EXPECTED_SCALES
@@ -80,6 +92,9 @@ def require_p3_sequence_gate(p2_matrix: Path, causal_gate: Path) -> dict[str, An
         "causal_candidate": "calibrated+pins",
         "causal_candidate_qualified": qualified,
         "baseline_evaluation_required": True,
+        "outcome_dependent_early_stopping": False,
+        "required_scale_seed_completion_verified": True,
+        "causal_statistical_audit_verified": True,
         "interpretation": (
             "qualified for transfer"
             if qualified
