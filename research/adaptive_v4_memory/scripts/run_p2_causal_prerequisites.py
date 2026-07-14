@@ -13,6 +13,32 @@ SCALES = ("s55", "s151")
 SCRIPT_ROOT = Path(__file__).resolve().parent
 
 
+def _cell_paths(
+    *,
+    scale: str,
+    training_seed: int,
+    training_root: Path,
+    calibration_root: Path,
+    memory_match_root: Path,
+    equivalence_root: Path,
+) -> dict[str, Path]:
+    memory_dir = memory_match_root / scale / f"seed-{training_seed}"
+    return {
+        "checkpoint": (
+            training_root / scale / f"seed-{training_seed}" / f"{scale}-step-1000.pt"
+        ),
+        "calibration": (
+            calibration_root / scale / f"seed-{training_seed}" / "p1-layer-quotas.json"
+        ),
+        "memory_raw": memory_dir / "p2-causal-hot-memory-match.raw.json",
+        "memory_summary": memory_dir / "p2-causal-hot-memory-match.summary.json",
+        "equivalence_raw": equivalence_root / scale / f"seed-{training_seed}.raw.json",
+        "equivalence_summary": (
+            equivalence_root / scale / f"seed-{training_seed}.summary.json"
+        ),
+    }
+
+
 def _run(command: list[str]) -> None:
     subprocess.run(command, check=True)
 
@@ -81,7 +107,9 @@ def main() -> None:
     parser.add_argument(
         "--p2-audit",
         type=Path,
-        default=Path("research/adaptive_v4_memory/results/p2-core-quality-matrix.summary.json"),
+        default=Path(
+            "artifacts/adaptive_v4_memory/paper_grade/p2-core-quality-matrix.summary.json"
+        ),
     )
     args = parser.parse_args()
     if args.max_new_stages is not None and args.max_new_stages <= 0:
@@ -94,20 +122,19 @@ def main() -> None:
     new_stages = 0
     for scale in scales:
         for training_seed in seeds:
-            checkpoint = (
-                args.training_root / scale / f"seed-{training_seed}" / f"{scale}-step-1000.pt"
-            )
-            calibration = (
-                args.calibration_root / scale / f"seed-{training_seed}" / "p1-layer-quotas.json"
-            )
-            match_dir = args.memory_match_root / scale / f"seed-{training_seed}"
-            match_raw = match_dir / "p2-causal-hot-memory-match.raw.json"
-            match_summary = match_dir / "p2-causal-hot-memory-match.summary.json"
-            if not _valid_memory_match(
-                match_summary,
+            paths = _cell_paths(
                 scale=scale,
                 training_seed=training_seed,
-                calibration=calibration,
+                training_root=args.training_root,
+                calibration_root=args.calibration_root,
+                memory_match_root=args.memory_match_root,
+                equivalence_root=args.equivalence_root,
+            )
+            if not _valid_memory_match(
+                paths["memory_summary"],
+                scale=scale,
+                training_seed=training_seed,
+                calibration=paths["calibration"],
             ):
                 if args.max_new_stages is not None and new_stages >= args.max_new_stages:
                     return
@@ -116,15 +143,15 @@ def main() -> None:
                         sys.executable,
                         str(SCRIPT_ROOT / "calibrate_p2_causal_hot_memory.py"),
                         "--checkpoint",
-                        str(checkpoint),
+                        str(paths["checkpoint"]),
                         "--calibration",
-                        str(calibration),
+                        str(paths["calibration"]),
                         "--scale",
                         scale,
                         "--raw-output",
-                        str(match_raw),
+                        str(paths["memory_raw"]),
                         "--summary-output",
-                        str(match_summary),
+                        str(paths["memory_summary"]),
                         "--p2-matrix",
                         str(args.p2_matrix),
                         "--p2-audit",
@@ -132,11 +159,15 @@ def main() -> None:
                     ]
                 )
                 new_stages += 1
-            equivalence_dir = args.equivalence_root / scale
-            equivalence_raw = equivalence_dir / f"seed-{training_seed}.raw.json"
-            equivalence_summary = equivalence_dir / f"seed-{training_seed}.summary.json"
+                if not _valid_memory_match(
+                    paths["memory_summary"],
+                    scale=scale,
+                    training_seed=training_seed,
+                    calibration=paths["calibration"],
+                ):
+                    raise RuntimeError("Physical-memory calibration did not pass its audit.")
             if not _valid_equivalence(
-                equivalence_summary, scale=scale, training_seed=training_seed
+                paths["equivalence_summary"], scale=scale, training_seed=training_seed
             ):
                 if args.max_new_stages is not None and new_stages >= args.max_new_stages:
                     return
@@ -145,17 +176,17 @@ def main() -> None:
                         sys.executable,
                         str(SCRIPT_ROOT / "validate_p2_causal_factorial_equivalence.py"),
                         "--checkpoint",
-                        str(checkpoint),
+                        str(paths["checkpoint"]),
                         "--calibration",
-                        str(calibration),
+                        str(paths["calibration"]),
                         "--memory-match",
-                        str(match_summary),
+                        str(paths["memory_summary"]),
                         "--scale",
                         scale,
                         "--raw-output",
-                        str(equivalence_raw),
+                        str(paths["equivalence_raw"]),
                         "--summary-output",
-                        str(equivalence_summary),
+                        str(paths["equivalence_summary"]),
                         "--p2-matrix",
                         str(args.p2_matrix),
                         "--p2-audit",
@@ -163,13 +194,19 @@ def main() -> None:
                     ]
                 )
                 new_stages += 1
+                if not _valid_equivalence(
+                    paths["equivalence_summary"],
+                    scale=scale,
+                    training_seed=training_seed,
+                ):
+                    raise RuntimeError("Sequential/chunked equivalence did not pass its audit.")
             print(
                 json.dumps(
                     {
                         "scale": scale,
                         "training_seed": training_seed,
-                        "memory_match": str(match_summary),
-                        "equivalence": str(equivalence_summary),
+                        "memory_match": str(paths["memory_summary"]),
+                        "equivalence": str(paths["equivalence_summary"]),
                         "new_stages": new_stages,
                     },
                     sort_keys=True,

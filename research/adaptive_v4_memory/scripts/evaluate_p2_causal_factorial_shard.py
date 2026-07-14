@@ -74,7 +74,6 @@ IMPLEMENTATION_PATHS = (
     "research/adaptive_v4_memory/scripts/evaluate_p2_causal_factorial_shard.py",
     "research/adaptive_v4_memory/scripts/run_p2_causal_prerequisites.py",
     "research/adaptive_v4_memory/scripts/run_p2_causal_factorial_matrix.py",
-    "research/adaptive_v4_memory/scripts/run_p2_causal_prerequisites.py",
     "research/adaptive_v4_memory/scripts/validate_p2_causal_factorial_equivalence.py",
 )
 
@@ -359,11 +358,12 @@ def run_sequential_physical(
     output = model(workload.input_ids[:, :prefix_length], past_key_values=cache, use_cache=True)
     if output.past_key_values is not cache:
         raise RuntimeError("Sequential causal prefill replaced the configured cache.")
-    max_layer_budget = max(value for _, value in config.layer_budgets)
-    physical_hot_budget_blocks_per_store = (
-        max_layer_budget * workload.input_ids.shape[0]
-    )
-    cache.enable_csa_tiering(physical_hot_budget_blocks_per_store)
+    batch_size = workload.input_ids.shape[0]
+    physical_hot_budget_blocks_by_layer = {
+        layer: blocks_per_conversation * batch_size
+        for layer, blocks_per_conversation in config.layer_budgets
+    }
+    cache.enable_csa_tiering(physical_hot_budget_blocks_by_layer)
     predictions = torch.full_like(workload.targets, -1) if capture_predictions else None
     for position in range(prefix_length, workload.input_ids.shape[1]):
         output = model(
@@ -399,7 +399,7 @@ def run_sequential_physical(
             "evictions": sum(item.evictions for item in tier),
         },
         "controller_rows": _controller_rows(cache, workload.input_ids.shape[0]),
-        "physical_hot_budget_blocks_per_store": physical_hot_budget_blocks_per_store,
+        "physical_hot_budget_blocks_by_layer": physical_hot_budget_blocks_by_layer,
     }
 
 
