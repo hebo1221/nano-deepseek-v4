@@ -19,6 +19,10 @@ class ChatTokenizer(Protocol):
     ) -> str: ...
 
 
+class TextEncoder(Protocol):
+    def encode(self, text: str) -> list[int]: ...
+
+
 def sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -121,6 +125,70 @@ def parse_mrcr_messages(row: dict[str, Any]) -> list[dict[str, str]]:
     if not isinstance(answer, str) or not answer.startswith(prefix):
         raise ValueError("MRCR answer must start with its registered prefix.")
     return normalized
+
+
+def mrcr_official_token_count(
+    row: dict[str, Any], messages: list[dict[str, str]], encoder: TextEncoder
+) -> int:
+    answer = row.get("answer")
+    if not isinstance(answer, str):
+        raise ValueError("MRCR answer must be text.")
+    return sum(len(encoder.encode(message["content"])) for message in messages) + len(
+        encoder.encode(answer)
+    )
+
+
+def mrcr_bin_index(total_tokens: int, boundaries: list[list[int]]) -> int:
+    if total_tokens < 0:
+        raise ValueError("MRCR token count must be non-negative.")
+    for index, boundary in enumerate(boundaries):
+        if len(boundary) != 2:
+            raise ValueError("Every MRCR bin boundary must contain two integers.")
+        lower, upper = boundary
+        if not isinstance(lower, int) or not isinstance(upper, int) or lower > upper:
+            raise ValueError("MRCR bin boundary is invalid.")
+        if lower <= total_tokens <= upper:
+            return index
+    raise ValueError(f"MRCR example with {total_tokens} tokens is outside all frozen bins.")
+
+
+def select_mrcr_primary_rows(
+    *,
+    rows: list[dict[str, Any]],
+    encoder: TextEncoder,
+    boundaries: list[list[int]],
+    primary_bins: int,
+    samples_per_bin: int,
+) -> list[dict[str, Any]]:
+    if primary_bins <= 0 or primary_bins > len(boundaries) or samples_per_bin <= 0:
+        raise ValueError("MRCR primary-bin selection contract is invalid.")
+    grouped: dict[int, list[dict[str, Any]]] = {index: [] for index in range(primary_bins)}
+    for row in rows:
+        messages = parse_mrcr_messages(row)
+        count = mrcr_official_token_count(row, messages, encoder)
+        index = mrcr_bin_index(count, boundaries)
+        if index < primary_bins:
+            grouped[index].append(
+                {
+                    **row,
+                    "official_o200k_prompt_plus_answer_tokens": count,
+                    "official_bin_index": index,
+                    "messages": messages,
+                }
+            )
+    observed = {index: len(grouped[index]) for index in grouped}
+    if any(count != samples_per_bin for count in observed.values()):
+        raise ValueError(
+            f"MRCR primary bins do not contain exactly {samples_per_bin} samples: {observed}."
+        )
+    return [row for index in range(primary_bins) for row in grouped[index]]
+
+
+def mrcr_generation_reserve(row: dict[str, Any], model_tokenizer: TextEncoder) -> int:
+    answer = row.get("answer")
+    if not isinstance(answer, str) or not answer:
+        raise ValueError("MRCR answer must be non-empty text.")
+    return len(model_tokenizer.encode(answer)) + 32
 
 
 def load_official_scbench_module(source_root: Path, expected_sha256: str) -> Any:

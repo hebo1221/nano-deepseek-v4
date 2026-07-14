@@ -14,8 +14,12 @@ from p3_natural_workloads import (  # noqa: E402
     build_longbench_v2_prompt,
     build_longmem_full_history_prompt,
     build_scbench_workload,
+    mrcr_bin_index,
+    mrcr_generation_reserve,
+    mrcr_official_token_count,
     parse_mrcr_messages,
     render_chat,
+    select_mrcr_primary_rows,
 )
 
 
@@ -30,6 +34,9 @@ class FakeTokenizer:
         assert add_generation_prompt is True
         assert tokenize is False
         return "|".join(f"{row['role']}:{row['content']}" for row in conversation) + "|assistant:"
+
+    def encode(self, text: str) -> list[int]:
+        return list(range(len(text.split())))
 
 
 def test_longbench_prompt_matches_pinned_direct_template_substitution() -> None:
@@ -84,6 +91,51 @@ def test_mrcr_messages_and_prefix_are_fail_closed() -> None:
     row["answer"] = "wrong"
     with pytest.raises(ValueError, match="must start"):
         parse_mrcr_messages(row)
+
+
+def test_mrcr_official_bins_include_answer_and_preserve_every_primary_cell() -> None:
+    encoder = FakeTokenizer()
+    boundaries = [[1, 3], [4, 6], [7, 9]]
+    rows = []
+    for ordinal, words in enumerate((1, 1, 2, 3)):
+        prefix = f"p{ordinal}"
+        rows.append(
+            {
+                "prompt": json.dumps([{"role": "user", "content": "x " * words}]),
+                "answer": f"{prefix} answer",
+                "random_string_to_prepend": prefix,
+            }
+        )
+
+    assert mrcr_bin_index(3, boundaries) == 0
+    assert mrcr_bin_index(4, boundaries) == 1
+    messages = parse_mrcr_messages(rows[0])
+    assert mrcr_official_token_count(rows[0], messages, encoder) == 3
+    selected = select_mrcr_primary_rows(
+        rows=rows,
+        encoder=encoder,
+        boundaries=boundaries,
+        primary_bins=2,
+        samples_per_bin=2,
+    )
+    assert [row["official_bin_index"] for row in selected] == [0, 0, 1, 1]
+    assert mrcr_generation_reserve(rows[0], encoder) == 34
+
+
+def test_mrcr_primary_selection_rejects_missing_samples() -> None:
+    row = {
+        "prompt": json.dumps([{"role": "user", "content": "one"}]),
+        "answer": "prefix answer",
+        "random_string_to_prepend": "prefix",
+    }
+    with pytest.raises(ValueError, match="exactly 2 samples"):
+        select_mrcr_primary_rows(
+            rows=[row],
+            encoder=FakeTokenizer(),
+            boundaries=[[1, 10]],
+            primary_bins=1,
+            samples_per_bin=2,
+        )
 
 
 def test_scbench_uses_official_builders_and_preserves_shared_context_semantics() -> None:
