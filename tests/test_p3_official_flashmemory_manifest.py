@@ -85,3 +85,18 @@ def test_resolution_and_execution_contract_is_complete() -> None:
     assert len(systems["required_metrics"]) >= 10
     assert len(protocol["paired_invariants"]) >= 5
     assert len(protocol["artifact_contract"]) >= 4
+
+
+def test_resource_and_acquisition_contract_is_complete() -> None:
+    manifest = _manifest()
+    resources = manifest["local_resource_audit"]
+    base_bytes = manifest["upstream"]["base_model"]["safetensors_bytes"]
+
+    assert resources["physical_memory_bytes"] < base_bytes
+    assert resources["available_memory_plus_swap_bytes"] < base_bytes
+    assert resources["disk_free_bytes"] > base_bytes
+    assert resources["base_weights_fit_physical_memory"] is False
+    assert resources["base_weights_fit_available_memory_plus_swap"] is False
+    assert resources["base_weights_fit_disk"] is True
+    assert len(manifest["frozen_acquisition_commands"]) == 4
+    assert all("revision" in command or "checkout" in command or "git clone" in command for command in manifest["frozen_acquisition_commands"])

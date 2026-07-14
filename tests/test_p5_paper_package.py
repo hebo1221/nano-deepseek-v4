@@ -504,6 +504,18 @@ def test_official_v4_boundary_validation_fails_closed(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="no longer fails closed"):
         package._validate_boundary_manifest("official_deepseek_v4", tampered)
 
+    payload = json.loads(source.read_text())
+    payload["cost_proxy"]["mode_b"]["estimated_usd_for_24_hours"] = 0
+    tampered.write_text(json.dumps(payload))
+    with pytest.raises(ValueError, match="cost contract drifted"):
+        package._validate_boundary_manifest("official_deepseek_v4", tampered)
+
+    payload = json.loads(source.read_text())
+    payload["frozen_acquisition_commands"].pop()
+    tampered.write_text(json.dumps(payload))
+    with pytest.raises(ValueError, match="acquisition contract drifted"):
+        package._validate_boundary_manifest("official_deepseek_v4", tampered)
+
 
 def test_experiment_scale_audit_recomputes_headline_counts(tmp_path: Path) -> None:
     root = Path(__file__).resolve().parents[1]

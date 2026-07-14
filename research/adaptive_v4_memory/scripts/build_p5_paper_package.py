@@ -492,6 +492,13 @@ def _validate_boundary_manifest(name: str, path: Path) -> dict[str, Any]:
         audit = payload.get("public_release_contract_audit", {})
         verification = payload.get("post_acquisition_verification", {})
         protocol = payload.get("execution_protocol", {})
+        upstream = payload.get("upstream", {})
+        base_model = upstream.get("base_model", {})
+        resources = payload.get("local_resource_audit", {})
+        cost = payload.get("cost_proxy", {})
+        mode_a_cost = cost.get("mode_a", {})
+        mode_b_cost = cost.get("mode_b", {})
+        acquisition = payload.get("frozen_acquisition_commands")
         _require(
             payload.get("status") == "blocked_before_execution",
             "Official DeepSeek-V4 boundary no longer fails closed.",
@@ -507,6 +514,54 @@ def _validate_boundary_manifest(name: str, path: Path) -> dict[str, Any]:
         _require(
             modes.get("mode_b_pd_disaggregated", {}).get("total_accelerator_slots") == 16,
             "Official DeepSeek-V4 Mode B topology boundary drifted.",
+        )
+        _require(
+            base_model.get("revision") == "60d8d70770c6776ff598c94bb586a859a38244f1"
+            and base_model.get("safetensors_files") == 46
+            and base_model.get("safetensors_bytes") == 159_617_149_040,
+            "Official DeepSeek-V4 base-weight storage contract drifted.",
+        )
+        _require(
+            type(resources.get("physical_memory_bytes")) is int
+            and type(resources.get("available_memory_plus_swap_bytes")) is int
+            and type(resources.get("disk_free_bytes")) is int
+            and resources["physical_memory_bytes"] < base_model["safetensors_bytes"]
+            and resources["available_memory_plus_swap_bytes"]
+            < base_model["safetensors_bytes"]
+            and resources["disk_free_bytes"] > base_model["safetensors_bytes"]
+            and resources.get("base_weights_fit_physical_memory") is False
+            and resources.get("base_weights_fit_available_memory_plus_swap") is False
+            and resources.get("base_weights_fit_disk") is True
+            and resources.get("mode_a_accelerator_topology_available") is False
+            and resources.get("mode_b_accelerator_topology_available") is False,
+            "Official DeepSeek-V4 local resource audit drifted.",
+        )
+        _require(
+            cost.get("currency") == "USD"
+            and cost.get("provider") == "Lambda"
+            and "planning proxy" in cost.get("warning", "")
+            and mode_a_cost.get("accelerator_slots") == 4
+            and mode_b_cost.get("accelerator_slots") == 16
+            and mode_a_cost.get("estimated_usd_per_hour")
+            == 4 * cost.get("h100_sxm_price_per_gpu_hour", {}).get("four_gpu_instance", 0)
+            and mode_b_cost.get("estimated_usd_per_hour")
+            == 16 * cost.get("h100_sxm_price_per_gpu_hour", {}).get("eight_gpu_instance", 0)
+            and mode_a_cost.get("estimated_usd_for_24_hours")
+            == 24 * mode_a_cost.get("estimated_usd_per_hour", 0)
+            and mode_b_cost.get("estimated_usd_for_24_hours")
+            == 24 * mode_b_cost.get("estimated_usd_per_hour", 0)
+            and mode_b_cost.get("network_and_storage_surcharges_included") is False,
+            "Official DeepSeek-V4 cost contract drifted.",
+        )
+        _require(
+            acquisition
+            == [
+                "git clone https://github.com/libertywing/FlashMemory-Deepseek-V4.git",
+                "git -C FlashMemory-Deepseek-V4 checkout 39fe54def633496cb2b1bd44898135e3547058b3",
+                "hf download deepseek-ai/DeepSeek-V4-Flash --revision 60d8d70770c6776ff598c94bb586a859a38244f1 --local-dir /models/deepseek-v4-flash",
+                "hf download libertywing/FlashMemory-Deepseek-V4 --revision 70431ba57bfcce00ffd9d0174aed1b8ca5c32a2e --local-dir /weights/flashmemory-public",
+            ],
+            "Official DeepSeek-V4 acquisition contract drifted.",
         )
         _require(
             audit.get("pt_checkpoint_present_in_published_hf_snapshot") is False
