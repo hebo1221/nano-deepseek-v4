@@ -15,6 +15,69 @@ import run_p4_systems_matrix as systems  # noqa: E402
 import summarize_p4_systems_matrix as summary  # noqa: E402
 
 
+def _latency(observations: int) -> dict[str, float | int]:
+    return {
+        "observations": observations,
+        "mean_ms": 1.0,
+        "p50_ms": 1.0,
+        "p95_ms": 1.0,
+        "p99_ms": 1.0,
+        "maximum_ms": 1.0,
+    }
+
+
+def _reference_policy_run(
+    cell: tuple[str, int, int, str, int, int], policy: str, input_digest: str
+) -> dict[str, object]:
+    _scale, context, generation, _profile, batch, active_requests = cell
+    return {
+        "policy": policy,
+        "input_digest": input_digest,
+        "prediction_digest": "a" * 64,
+        "requests": active_requests,
+        "batch": batch,
+        "context_tokens": context,
+        "generation_tokens": generation,
+        "load_execution": {
+            "model": "serial-round-robin-interleave",
+            "active_requests": active_requests,
+            "actual_concurrent_serving": False,
+        },
+        "request_prefill_ms": _latency(active_requests),
+        "aggregate_prefill_ms": 1.0,
+        "ttft_ms": _latency(active_requests),
+        "decode_step_ms": _latency(active_requests * generation),
+        "end_to_end_ms": 1.0,
+        "generated_token_throughput_per_second": 1.0,
+        "cuda": {
+            "cache_allocated_delta_bytes": 1,
+            "allocated_after_prefill_bytes": 1,
+            "reserved_after_prefill_bytes": 2,
+            "fragmentation_after_prefill_bytes": 1,
+            "peak_allocated_bytes": 2,
+            "peak_reserved_bytes": 2,
+        },
+        "cache": {
+            "logical_cache_bytes": 1,
+            "hot_resident_bytes": 1,
+            "cold_resident_bytes": 0,
+            "pinned_host_bytes": 1,
+            "tier_hot_bytes": 1,
+            "h2d_bytes": 1,
+            "d2h_bytes": 1,
+            "h2d_count": 1,
+            "d2h_count": 1,
+            "useful_h2d_bytes": 1,
+            "late_misses": 0,
+            "prefetches": 1,
+            "evictions": 1,
+        },
+        "transfer": {"useful_h2d_ratio": 1.0},
+        "untimed_indexer_probe": {"indexer_time_ns": 1, "selection_calls": 1},
+        "controller_time_ns": 0,
+    }
+
+
 def test_p4_frozen_matrix_has_full_batch_load_factorial() -> None:
     cells = systems.frozen_cells()
 
@@ -200,7 +263,9 @@ def test_p4_partial_artifact_preserves_surviving_policy(tmp_path: Path) -> None:
                 else tuple(reversed(systems.POLICIES))
             ),
             "policies": {
-                "tiered-native": {"input_digest": f"{index:064x}"},
+                "tiered-native": _reference_policy_run(
+                    cell, "tiered-native", f"{index:064x}"
+                ),
             },
         }
         for index in range(systems.MEASURED_REPETITIONS)
@@ -223,7 +288,7 @@ def test_p4_partial_artifact_preserves_surviving_policy(tmp_path: Path) -> None:
                 strict=True,
             )
         ),
-        "source": {"implementation_digest": "implementation"},
+        "source": {"dirty": False, "implementation_digest": "implementation"},
         "manifest": {"sha256": "manifest"},
         "p3_audit": {"sha256": "p3"},
         "warmups": systems.WARMUPS,
@@ -269,6 +334,21 @@ def test_p4_partial_artifact_preserves_surviving_policy(tmp_path: Path) -> None:
         manifest_digest="manifest",
         p3_digest="p3",
     )
+
+    missing_metric = json.loads(payload_json := json.dumps(payload))
+    missing_metric["repetitions"][0]["policies"]["tiered-native"]["cuda"].pop(
+        "peak_allocated_bytes"
+    )
+    artifact.write_text(json.dumps(missing_metric))
+    assert not systems._artifact_valid(
+        artifact,
+        cell=cell,
+        digest="implementation",
+        manifest_digest="manifest",
+        p3_digest="p3",
+    )
+
+    artifact.write_text(payload_json)
 
     false_warmups = json.loads(artifact.read_text())
     false_warmups["warmup_policy_runs_completed"]["resident-native"] = 0

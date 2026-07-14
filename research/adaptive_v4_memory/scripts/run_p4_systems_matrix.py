@@ -14,7 +14,7 @@ from dataclasses import asdict, dataclass
 from itertools import product
 from pathlib import Path
 from types import FrameType
-from typing import Any
+from typing import Any, TypeGuard
 
 import torch
 from adaptive_v4_gpu_lock import acquire_gpu_lock
@@ -393,6 +393,7 @@ def _artifact_valid(
             for name in ("scale", "context", "generation", "profile", "batch", "active_requests")
         )
         == cell
+        and payload.get("source", {}).get("dirty") is False
         and payload.get("source", {}).get("implementation_digest") == digest
         and payload.get("manifest", {}).get("sha256") == manifest_digest
         and payload.get("p3_audit", {}).get("sha256") == p3_digest
@@ -426,7 +427,10 @@ def _artifact_valid(
         and payload.get("measured_repetitions") == MEASURED_REPETITIONS
         and isinstance(repetitions, list)
         and len(repetitions) <= MEASURED_REPETITIONS
-        and all(_valid_repetition(row, index) for index, row in enumerate(repetitions))
+        and all(
+            _valid_repetition(row, index, cell=cell)
+            for index, row in enumerate(repetitions)
+        )
     ):
         return False
     policy_status = payload.get("policy_status", {})
@@ -467,7 +471,118 @@ def _artifact_valid(
     )
 
 
-def _valid_repetition(row: dict[str, Any], index: int) -> bool:
+def _finite_nonnegative(value: Any) -> TypeGuard[int | float]:
+    return type(value) in (int, float) and math.isfinite(value) and value >= 0
+
+
+def _valid_latency_summary(value: Any, *, observations: int) -> bool:
+    if not isinstance(value, dict) or value.get("observations") != observations:
+        return False
+    metrics = tuple(value.get(name) for name in ("mean_ms", "p50_ms", "p95_ms", "p99_ms", "maximum_ms"))
+    numeric: list[float] = []
+    for metric in metrics:
+        if not _finite_nonnegative(metric):
+            return False
+        numeric.append(float(metric))
+    return numeric[1] <= numeric[2] <= numeric[3] <= numeric[4]
+
+
+def _valid_policy_run(
+    run: Any,
+    *,
+    policy: str,
+    input_digest: str,
+    cell: tuple[str, int, int, str, int, int],
+) -> bool:
+    if not isinstance(run, dict):
+        return False
+    _scale, context, generation, _profile, batch, active_requests = cell
+    prediction_digest = run.get("prediction_digest")
+    load = run.get("load_execution", {})
+    cuda = run.get("cuda", {})
+    cache = run.get("cache", {})
+    transfer = run.get("transfer", {})
+    trace = run.get("untimed_indexer_probe", {})
+    cuda_keys = (
+        "cache_allocated_delta_bytes",
+        "allocated_after_prefill_bytes",
+        "reserved_after_prefill_bytes",
+        "fragmentation_after_prefill_bytes",
+        "peak_allocated_bytes",
+        "peak_reserved_bytes",
+    )
+    cache_keys = (
+        "logical_cache_bytes",
+        "hot_resident_bytes",
+        "cold_resident_bytes",
+        "pinned_host_bytes",
+        "tier_hot_bytes",
+        "h2d_bytes",
+        "d2h_bytes",
+        "h2d_count",
+        "d2h_count",
+        "useful_h2d_bytes",
+        "late_misses",
+        "prefetches",
+        "evictions",
+    )
+    if not (
+        run.get("policy") == policy
+        and run.get("input_digest") == input_digest
+        and isinstance(prediction_digest, str)
+        and len(prediction_digest) == 64
+        and set(prediction_digest) <= set("0123456789abcdef")
+        and run.get("requests") == active_requests
+        and run.get("batch") == batch
+        and run.get("context_tokens") == context
+        and run.get("generation_tokens") == generation
+        and load
+        == {
+            "model": "serial-round-robin-interleave",
+            "active_requests": active_requests,
+            "actual_concurrent_serving": False,
+        }
+        and _valid_latency_summary(
+            run.get("request_prefill_ms"), observations=active_requests
+        )
+        and _valid_latency_summary(run.get("ttft_ms"), observations=active_requests)
+        and _valid_latency_summary(
+            run.get("decode_step_ms"), observations=active_requests * generation
+        )
+        and _finite_nonnegative(run.get("aggregate_prefill_ms"))
+        and _finite_nonnegative(run.get("end_to_end_ms"))
+        and _finite_nonnegative(run.get("generated_token_throughput_per_second"))
+        and isinstance(cuda, dict)
+        and all(type(cuda.get(name)) is int and cuda[name] >= 0 for name in cuda_keys)
+        and cuda["fragmentation_after_prefill_bytes"]
+        == cuda["reserved_after_prefill_bytes"] - cuda["allocated_after_prefill_bytes"]
+        and isinstance(cache, dict)
+        and all(type(cache.get(name)) is int and cache[name] >= 0 for name in cache_keys)
+        and isinstance(transfer, dict)
+        and _finite_nonnegative(transfer.get("useful_h2d_ratio"))
+        and transfer["useful_h2d_ratio"] <= 1.0
+        and math.isclose(
+            transfer["useful_h2d_ratio"],
+            cache["useful_h2d_bytes"] / max(cache["h2d_bytes"], 1),
+        )
+        and isinstance(trace, dict)
+        and type(trace.get("indexer_time_ns")) is int
+        and trace["indexer_time_ns"] >= 0
+        and type(trace.get("selection_calls")) is int
+        and trace["selection_calls"] >= 0
+        and type(run.get("controller_time_ns")) is int
+        and run["controller_time_ns"] >= 0
+    ):
+        return False
+    return True
+
+
+def _valid_repetition(
+    row: dict[str, Any],
+    index: int,
+    *,
+    cell: tuple[str, int, int, str, int, int],
+) -> bool:
     policies = row.get("policies", {})
     input_digest = row.get("input_digest")
     expected_order = POLICIES if index % 2 == 0 else tuple(reversed(POLICIES))
@@ -479,7 +594,15 @@ def _valid_repetition(row: dict[str, Any], index: int) -> bool:
         and tuple(row.get("execution_order", ())) == expected_order
         and isinstance(policies, dict)
         and set(policies).issubset(POLICIES)
-        and all(input_digest == policy_run.get("input_digest") for policy_run in policies.values())
+        and all(
+            _valid_policy_run(
+                policy_run,
+                policy=policy,
+                input_digest=input_digest,
+                cell=cell,
+            )
+            for policy, policy_run in policies.items()
+        )
     ):
         return False
     if set(policies) != set(POLICIES):

@@ -365,7 +365,7 @@ def test_orchestrator_failure_is_terminal_and_resumable(tmp_path: Path) -> None:
         "experiment_id": "p4-production-systems-cell-v1",
         "cell": production.cell_dict(cell),
         "cell_timeout_seconds": production.CELL_TIMEOUT_SECONDS,
-        "source": {"implementation_digest": "implementation"},
+        "source": {"dirty": False, "implementation_digest": "implementation"},
         "manifest": {"sha256": "manifest"},
         "p3_audit": {"sha256": "p3"},
         "adapter": {"sha256": adapter_digest},

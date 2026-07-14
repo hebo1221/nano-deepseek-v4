@@ -528,6 +528,7 @@ def _artifact_valid(
         if (
             payload.get("experiment_id") != "p4-production-systems-cell-v1"
             or payload.get("cell") != cell_dict(cell)
+            or payload.get("source", {}).get("dirty") is not False
             or payload.get("source", {}).get("implementation_digest") != implementation
             or payload.get("manifest", {}).get("sha256") != manifest_digest
             or payload.get("p3_audit", {}).get("sha256") != p3_digest

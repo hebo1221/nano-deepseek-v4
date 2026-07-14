@@ -117,6 +117,7 @@ def _artifact_valid(
             row.get("status") in {"success", "oom", "timeout", "error"} for row in attempts.values()
         )
         and payload.get("status") == _status(attempts)
+        and payload.get("source", {}).get("dirty") is False
         and payload.get("source", {}).get("implementation_digest") == digest
         and payload.get("manifest", {}).get("sha256") == manifest_digest
         and payload.get("p3_audit", {}).get("sha256") == p3_digest
