@@ -77,7 +77,7 @@ def validate_manifest(payload: dict[str, Any]) -> dict[str, Any]:
         or len(amendments) != 3
         or "RULER scorer SHA-256" not in amendments[0].get("change", "")
         or "tokenizer.json SHA-256" not in amendments[1].get("change", "")
-        or "immutable model revision" not in amendments[2].get("change", "")
+        or "pinned public code dependencies" not in amendments[2].get("change", "")
         or "no model inference" not in amendments[2].get("reason", "")
     ):
         raise ValueError("Natural-suite pre-execution correction record drifted.")
@@ -121,8 +121,8 @@ def validate_manifest(payload: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("Natural failure accounting must retain blocked official judges.")
     sequence_policy = payload.get("sequence_gate", {}).get("policy", "")
     if (
-        "prefetched and cryptographically verified without inference" not in sequence_policy
-        or "before benchmark dataset/source acquisition" not in sequence_policy
+        "pinned public code dependencies may be prefetched" not in sequence_policy
+        or "before natural-suite benchmark payload acquisition" not in sequence_policy
         or "any prediction" not in sequence_policy
     ):
         raise ValueError("Natural prefetch and execution sequence boundary drifted.")

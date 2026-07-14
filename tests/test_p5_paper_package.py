@@ -472,6 +472,21 @@ def test_experiment_scale_audit_recomputes_headline_counts(tmp_path: Path) -> No
         package._validate_boundary_manifest("experiment_scale_audit", tampered)
 
 
+def test_p3_ruler_boundary_records_pre_gate_orphan_without_outcomes(
+    tmp_path: Path,
+) -> None:
+    root = Path(__file__).resolve().parents[1]
+    source = root / "research/adaptive_v4_memory/manifests/p3-ruler-qwen3-1.7b-v1.json"
+    payload = json.loads(source.read_text())
+    package._validate_boundary_manifest("p3_ruler", source)
+
+    payload["sequence_gate"]["observed_before_gate"]["model_predictions"] = 1
+    tampered = tmp_path / "p3-ruler.json"
+    tampered.write_text(json.dumps(payload))
+    with pytest.raises(ValueError, match="pre-gate artifact accounting drifted"):
+        package._validate_boundary_manifest("p3_ruler", tampered)
+
+
 def test_experiment_scale_audit_requires_nonaggregation_rule(tmp_path: Path) -> None:
     root = Path(__file__).resolve().parents[1]
     source = root / "research/adaptive_v4_memory/manifests/experiment-scale-audit-v1.json"

@@ -46,7 +46,8 @@ def test_natural_suite_freezes_full_scale_and_sample_contract() -> None:
 
     assert manifest["status"] == "amended_and_frozen_before_execution"
     assert len(manifest["amendments"]) == 3
-    assert "before benchmark dataset/source acquisition" in manifest["sequence_gate"]["policy"]
+    assert "pinned public code dependencies may be prefetched" in manifest["sequence_gate"]["policy"]
+    assert "before natural-suite benchmark payload acquisition" in manifest["sequence_gate"]["policy"]
     assert manifest["benchmarks"]["RULER"]["lengths_tokens"] == [
         8192,
         16384,

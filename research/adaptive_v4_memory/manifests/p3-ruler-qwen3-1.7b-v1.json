@@ -1,7 +1,34 @@
 {
   "schema_version": 1,
   "experiment_id": "p3-ruler-qwen3-1.7b-v1",
-  "status": "frozen_before_execution",
+  "status": "amended_and_frozen_before_execution",
+  "amendments": [
+    {
+      "date": "2026-07-14",
+      "timing": "before any RULER model prediction",
+      "change": "record prefetch and cryptographic verification of the preregistered Qwen3-1.7B snapshot plus pinned RULER and KVPress public code dependencies",
+      "reason": "immutable infrastructure assets were present before the P2 causal gate; no model inference or outcome inspection occurred"
+    },
+    {
+      "date": "2026-07-14",
+      "timing": "before any RULER model prediction and before a complete dataset manifest existed",
+      "change": "record one interrupted deterministic preparation artifact containing 500 rows for the 8K niah_single_1 task; require the final generator to report every preexisting valid task file it reuses",
+      "reason": "the orphan file was generated from the frozen task, tokenizer, seed 42, and sample count before the sequence gate; there were zero result cells and it supplies no model outcome"
+    }
+  ],
+  "sequence_gate": {
+    "implementation": "research/adaptive_v4_memory/scripts/p3_sequence_gate.py",
+    "p2_matrix": "artifacts/adaptive_v4_memory/paper_grade/p2-core-quality-matrix.json",
+    "causal_gate": "artifacts/adaptive_v4_memory/paper_grade/p2-causal-ablation.summary.json",
+    "policy": "immutable model and public code prefetch is allowed without inference; complete dataset preparation and every model prediction require the terminal P2 core and causal audits",
+    "observed_before_gate": {
+      "complete_dataset_manifests": 0,
+      "orphan_deterministic_task_files": 1,
+      "orphan_rows": 500,
+      "result_cells": 0,
+      "model_predictions": 0
+    }
+  },
   "evidence_tier": "compatible_conventional_model_not_deepseek_v4",
   "model": {
     "repo_id": "Qwen/Qwen3-1.7B",

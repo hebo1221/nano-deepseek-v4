@@ -412,7 +412,32 @@ def _validate_boundary_manifest(name: str, path: Path) -> dict[str, Any]:
         payload.get("experiment_id") == BOUNDARY_EXPERIMENT_IDS[name],
         f"Wrong {name} boundary experiment id.",
     )
-    if name == "experiment_scale_audit":
+    if name == "p3_ruler":
+        amendments = payload.get("amendments", [])
+        observed = payload.get("sequence_gate", {}).get("observed_before_gate", {})
+        _require(
+            payload.get("status") == "amended_and_frozen_before_execution"
+            and isinstance(amendments, list)
+            and len(amendments) == 2,
+            "P3 RULER pre-execution amendment record drifted.",
+        )
+        _require(
+            observed
+            == {
+                "complete_dataset_manifests": 0,
+                "orphan_deterministic_task_files": 1,
+                "orphan_rows": 500,
+                "result_cells": 0,
+                "model_predictions": 0,
+            },
+            "P3 RULER pre-gate artifact accounting drifted.",
+        )
+        _require(
+            "every model prediction require" in payload.get("sequence_gate", {}).get("policy", "")
+            and "zero result cells" in amendments[1].get("reason", ""),
+            "P3 RULER sequence boundary drifted.",
+        )
+    elif name == "experiment_scale_audit":
         _validate_experiment_scale_audit(payload)
     elif name == "official_deepseek_v4":
         blockers = payload.get("blockers")

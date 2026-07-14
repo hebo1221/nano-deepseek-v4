@@ -141,15 +141,19 @@ def prepare_length(
 ) -> None:
     output = output_root / str(length)
     artifacts: dict[str, dict[str, Any]] = {}
+    reused_existing_tasks = 0
     observed_min: int | None = None
     observed_max = 0
     for task in TASKS:
         path = output / task / "validation.jsonl"
         try:
             rows = load_rows(path, samples)
+            reused_existing = True
         except (FileNotFoundError, ValueError):
             run_upstream_task(ruler_root, tokenizer_path, output, length, task, samples, seed)
             rows = load_rows(path, samples)
+            reused_existing = False
+        reused_existing_tasks += int(reused_existing)
         counts = [len(tokenizer.tokenize(row["input"])) for row in rows]
         task_min, task_max = min(counts), max(counts)
         if task_max > length:
@@ -162,6 +166,7 @@ def prepare_length(
             "rows": len(rows),
             "token_count_min": task_min,
             "token_count_max": task_max,
+            "preexisting_valid_file_reused": reused_existing,
         }
         print(json.dumps({"length": length, "task": task, "max_tokens": task_max}), flush=True)
     manifest = {
@@ -182,6 +187,8 @@ def prepare_length(
             "total_rows": samples * len(TASKS),
             "observed_token_count_min": observed_min,
             "observed_token_count_max": observed_max,
+            "preexisting_valid_task_files_reused": reused_existing_tasks,
+            "task_files_generated_or_regenerated": len(TASKS) - reused_existing_tasks,
         },
         "source_files": source_files,
         "task_artifacts": artifacts,
