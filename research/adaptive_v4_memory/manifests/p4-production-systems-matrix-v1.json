@@ -19,7 +19,7 @@
       "date": "2026-07-14",
       "timing": "before any P4 production cell was generated",
       "change": "make process-total HBM conditional on nvidia-smi availability while keeping allocator allocated, reserved, peak, and device-total HBM mandatory",
-      "reason": "the GB10 driver reports process memory as N/A; null plus an explicit availability status preserves the observation without inventing zero or a proxy measurement"
+      "reason": "nvidia-smi process accounting can be absent, return N/A, or omit a process under some driver and runtime states; null plus an explicit availability status preserves that observation without inventing zero or a proxy measurement"
     }
   ],
   "evidence_tier": "checked-static-full-request-batching-adapter",
