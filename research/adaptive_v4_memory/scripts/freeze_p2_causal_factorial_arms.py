@@ -6,7 +6,7 @@ import json
 import subprocess
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from nano_deepseek_v4 import SameTokenControllerConfig, TrainingFreeControllerConfig
 
@@ -130,7 +130,10 @@ def shuffled_layer_budgets(
 
 
 def build_arm_configs(
-    calibration: dict[str, Any], budget_label: str
+    calibration: dict[str, Any],
+    budget_label: str,
+    *,
+    fixed_match: dict[str, Any] | None = None,
 ) -> tuple[dict[str, BuiltCausalArm], dict[str, Any]]:
     if budget_label not in {"2x", "4x"}:
         raise ValueError("The primary causal factorial is frozen to 2x and 4x.")
@@ -145,11 +148,51 @@ def build_arm_configs(
     calibrated_total = sum(value for _, value in calibrated)
     if calibrated_total > signal.global_block_budget:
         raise ValueError("Calibrated layer budgets exceed the global budget.")
-    uniform_low_value, fixed_high_numerator = divmod(calibrated_total, len(calibrated))
+    logical_uniform_low, logical_remainder = divmod(calibrated_total, len(calibrated))
+    if fixed_match is None:
+        uniform_low_value = logical_uniform_low
+        uniform_high_value = logical_uniform_low + int(logical_remainder > 0)
+        fixed_high_numerator = logical_remainder
+        fixed_mixture_denominator = len(calibrated)
+        fixed_match_source = "configured-total-default"
+    else:
+        match = fixed_match.get("matches", {}).get(budget_label)
+        if not isinstance(match, dict):
+            raise ValueError(f"Physical hot-memory match is missing {budget_label}.")
+        if match.get("calibration_digest") != quota.get("calibration_digest"):
+            raise ValueError("Physical hot-memory match calibration digest drifted.")
+        if match.get("passed") is not True:
+            raise ValueError("Physical hot-memory match did not pass its calibration gate.")
+        raw_uniform_low = match.get("uniform_low_blocks_per_layer")
+        raw_uniform_high = match.get("uniform_high_blocks_per_layer")
+        raw_high_numerator = match.get("mixture_high_numerator")
+        raw_mixture_denominator = match.get("mixture_denominator")
+        values = (
+            raw_uniform_low,
+            raw_uniform_high,
+            raw_high_numerator,
+            raw_mixture_denominator,
+        )
+        if any(isinstance(value, bool) or not isinstance(value, int) for value in values):
+            raise ValueError("Physical hot-memory match contains non-integer schedule values.")
+        uniform_low_value = cast(int, raw_uniform_low)
+        uniform_high_value = cast(int, raw_uniform_high)
+        fixed_high_numerator = cast(int, raw_high_numerator)
+        fixed_mixture_denominator = cast(int, raw_mixture_denominator)
+        if (
+            uniform_low_value <= 0
+            or uniform_high_value < uniform_low_value
+            or fixed_mixture_denominator <= 0
+            or not 0 <= fixed_high_numerator < fixed_mixture_denominator
+            or (uniform_high_value == uniform_low_value and fixed_high_numerator != 0)
+            or (uniform_high_value > uniform_low_value and fixed_high_numerator == 0)
+        ):
+            raise ValueError("Physical hot-memory match contains an invalid fixed schedule.")
+        fixed_match_source = "calibration-physical-hot-bytes"
     if uniform_low_value <= 0:
         raise ValueError("The calibrated total cannot preserve one fixed block per layer.")
     uniform_low = tuple((layer, uniform_low_value) for layer, _ in calibrated)
-    uniform_high = tuple((layer, uniform_low_value + 1) for layer, _ in calibrated)
+    uniform_high = tuple((layer, uniform_high_value) for layer, _ in calibrated)
     uniform_high_total = sum(value for _, value in uniform_high)
     fixed_signal = replace(
         signal,
@@ -193,7 +236,7 @@ def build_arm_configs(
                         make_config(arm, uniform_high, signal_config=fixed_signal),
                     ),
                     mixture_high_numerator=fixed_high_numerator,
-                    mixture_denominator=len(calibrated),
+                    mixture_denominator=fixed_mixture_denominator,
                 )
             else:
                 configs[arm.name] = BuiltCausalArm(spec=arm, configs=(low,))
@@ -209,7 +252,8 @@ def build_arm_configs(
         "fixed_uniform_low_layer_budgets": uniform_low,
         "fixed_uniform_high_layer_budgets": (uniform_high if fixed_high_numerator else uniform_low),
         "fixed_mixture_high_numerator": fixed_high_numerator,
-        "fixed_mixture_denominator": len(calibrated),
+        "fixed_mixture_denominator": fixed_mixture_denominator,
+        "fixed_match_source": fixed_match_source,
         "fixed_controller_validation_ceiling": fixed_signal.global_block_budget,
         "fixed_controller_validation_ceiling_adjusted": (
             fixed_signal.global_block_budget != signal.global_block_budget
@@ -224,7 +268,14 @@ def build_arm_configs(
             for arm in PRIMARY_ARMS
             if arm.quota_source != "uniform"
         ),
-        "fixed_mixture_mean_configured_total": calibrated_total,
+        "fixed_mixture_mean_configured_total": (
+            (
+                (fixed_mixture_denominator - fixed_high_numerator)
+                * sum(value for _, value in uniform_low)
+                + fixed_high_numerator * sum(value for _, value in uniform_high)
+            )
+            / fixed_mixture_denominator
+        ),
     }
     return configs, metadata
 

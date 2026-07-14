@@ -61,6 +61,22 @@ cross-layer prior, refresh reuse, protected pins, and dense fallback. Every arm
 uses the same model checkpoint, generated examples, dtype, execution order, and
 paired conversations.
 
+The enforced causal execution chain is:
+
+1. validate all 4,500 P2 core shards and their dependency/record digests;
+2. on 707-series data only, measure 20 conversations per family and context and
+   freeze a fixed low/high schedule whose mean physical hot-resident bytes are
+   within 1% of `calibrated+pins` for both 2x and 4x at every seed and scale;
+3. for every one of the 10 seed-scale checkpoints, require exact prediction and
+   budget equivalence between chunked-quality and sequential physical-tier
+   paths across all 14 arms, 2 budgets, 9 families, and 5 contexts; and
+4. run the 9,000 held-out factorial shards (2,520,000 quality arm-conversations
+   plus 360,000 direct physical arm-conversations).
+
+No stage may consume 807-series quality to tune the fixed mixture. A failed
+calibration-memory cell or equivalence audit blocks held-out execution for that
+cell instead of permitting a post-hoc repair.
+
 ## 3. Models and seeds
 
 Tier-S scales: S55 and S151.
@@ -177,7 +193,9 @@ hot-memory footprint, `calibrated+pins` must beat `fixed+pins` on both S55 and
 S151: the pooled paired effect must be positive, its 95% cluster-bootstrap lower
 bound must be greater than zero after the preregistered family correction, and
 all five seed-level effects must be positive at each scale. Any failed clause is
-reported as a failed or bounded causal claim rather than averaged away. The
+reported as a failed or bounded causal claim rather than averaged away. Every
+clause is required separately at both 2x and 4x; one budget cannot rescue the
+other. The
 contrasts `fixed+pins - fixed` and `calibrated+pins - calibrated-no-pins`
 estimate the pin contribution; `calibrated-no-pins - fixed` and
 `calibrated+pins - fixed+pins` estimate adaptive-quota contribution; shuffled
