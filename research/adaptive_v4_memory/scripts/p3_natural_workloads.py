@@ -42,6 +42,27 @@ def render_chat(tokenizer: ChatTokenizer, messages: list[dict[str, str]]) -> str
     return rendered
 
 
+def render_chat_split_last_user(
+    tokenizer: ChatTokenizer, messages: list[dict[str, str]]
+) -> tuple[str, str]:
+    if not messages or messages[-1].get("role") != "user":
+        raise ValueError("Split chat rendering requires a final user message.")
+    payload = deepcopy(messages)
+    content = payload[-1].get("content")
+    if not isinstance(content, str):
+        raise ValueError("Final user message content must be text.")
+    digest = hashlib.sha256(json.dumps(messages, sort_keys=True).encode()).hexdigest()
+    separator = f"<adaptive-v4-memory-query-{digest}>"
+    if any(separator in str(message.get("content", "")) for message in messages):
+        raise ValueError("Chat split separator collides with message content.")
+    payload[-1]["content"] = separator + content
+    rendered = render_chat(tokenizer, payload)
+    parts = rendered.split(separator)
+    if len(parts) != 2 or not parts[0] or not parts[1]:
+        raise ValueError("Chat template did not preserve the final-query separator exactly once.")
+    return parts[0], parts[1]
+
+
 def build_longbench_v2_prompt(row: dict[str, Any], template: str) -> str:
     fields = {
         "$DOC$": "context",

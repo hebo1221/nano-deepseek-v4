@@ -19,6 +19,7 @@ from p3_natural_workloads import (  # noqa: E402
     mrcr_official_token_count,
     parse_mrcr_messages,
     render_chat,
+    render_chat_split_last_user,
     select_mrcr_primary_rows,
 )
 
@@ -87,6 +88,16 @@ def test_mrcr_messages_and_prefix_are_fail_closed() -> None:
     }
     messages = parse_mrcr_messages(row)
     assert render_chat(FakeTokenizer(), messages).endswith("assistant:")
+    context, query = render_chat_split_last_user(
+        FakeTokenizer(),
+        [
+            {"role": "user", "content": "old question"},
+            {"role": "assistant", "content": "old answer"},
+            {"role": "user", "content": "final query"},
+        ],
+    )
+    assert context.endswith("user:")
+    assert query == "final query|assistant:"
 
     row["answer"] = "wrong"
     with pytest.raises(ValueError, match="must start"):
