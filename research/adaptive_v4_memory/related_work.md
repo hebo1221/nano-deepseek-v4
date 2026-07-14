@@ -49,6 +49,7 @@ GPU entry as a cache miss, not permanent information loss.
 
 | Work | Budget axis | Decision signal | Online behavior | Transfer to V4 |
 | --- | --- | --- | --- | --- |
+| [FastGen](https://arxiv.org/abs/2310.01801) | head/policy | lightweight profiling of local, special-token, and global attention structure | one profiled policy per attention module | Foundational adaptive-policy baseline; V4 MQA removes ordinary per-KV-head storage freedom, so its profiling idea transfers more directly to layer/block policy selection than to cache allocation itself |
 | [PyramidKV](https://arxiv.org/abs/2406.02069) | layer | pyramidal information funneling | fixed layer schedule after profiling | Supports non-uniform layer budgets; V4 CSA/HCA types need separate policies |
 | [SqueezeAttention](https://arxiv.org/abs/2404.04793) | layer | prompt-time input/output cosine similarity + clustering | task/prompt adaptive, then fixed during decode | Provides a training-free layer allocator baseline, but does not react to later turns |
 | [Ada-KV](https://arxiv.org/abs/2407.11550) | attention head | globally top-ranked attention mass under a total budget | prompt/query-aware head budgets | Its loss-bound idea is useful; primary KV-head allocation does not directly apply to MQA |
@@ -112,6 +113,7 @@ source of gains.
 | [SCBench](https://arxiv.org/abs/2412.10319) | Single-query compression can collapse in later turns; importance distributions shift during long generation | Evaluate shared-prefix multi-turn and multi-request workloads; preserve cold logical memory |
 | [The Pitfalls of KV Cache Compression](https://arxiv.org/abs/2510.00231) | Compression can selectively erase instructions and increase system-prompt leakage | Pin and separately score instructions; report worst instruction and leakage results |
 | [Key, Value, Compress](https://arxiv.org/abs/2503.11816) | Existing comparisons mix models, data, batch sizes, hardware, and incomplete latency metrics | Run all core policies in one harness and report memory, throughput, and quality together |
+| [Benchmarking KV-Cache Optimizations across Task Quality and System Performance](https://arxiv.org/abs/2607.05399) | Realized compression, quality, TTFT, and throughput vary by workload and method; compression ratio alone poorly predicts serving performance | Preserve per-workload results and jointly report realized memory, quality, TTFT, and throughput rather than ranking methods by nominal compression |
 | [The Risk of KV Cache Compression](https://arxiv.org/abs/2607.01520) | Causal masking creates workload-dependent intrinsic compressibility and minimax risk | State bounded or negative claims and report worst slices instead of assuming universal safe compression |
 
 For conventional-model baselines, the official
@@ -174,6 +176,10 @@ The final row is a research specification, not an achieved feature list.
     equal resident bytes can produce different latency when retained blocks are
     non-contiguous or misses trigger position-dependent recomputation. Keep
     reference PyTorch, production adapter, and fused/kernel claims separate.
+12. **Do not optimize or rank by nominal compression alone.** Preserve
+    workload-conditioned quality and realized memory alongside TTFT, TPOT, and
+    throughput; a method may compress more yet lose on either quality or the
+    serving frontier.
 
 ## 10. Reading queue
 
