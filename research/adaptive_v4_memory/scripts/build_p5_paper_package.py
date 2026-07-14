@@ -433,6 +433,35 @@ def _canonical_digest(payload: Any) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
+def _flatten_json_row(row: dict[str, Any]) -> dict[str, Any]:
+    flattened: dict[str, Any] = {}
+    for key, value in row.items():
+        if isinstance(value, dict):
+            for child_key, child_value in value.items():
+                flattened[f"{key}.{child_key}"] = (
+                    json.dumps(child_value, sort_keys=True, separators=(",", ":"))
+                    if isinstance(child_value, (dict, list))
+                    else child_value
+                )
+        elif isinstance(value, list):
+            flattened[key] = json.dumps(value, sort_keys=True, separators=(",", ":"))
+        else:
+            flattened[key] = value
+    return flattened
+
+
+def _field_union(rows: list[dict[str, Any]]) -> list[str]:
+    fields: list[str] = []
+    seen: set[str] = set()
+    for row in rows:
+        for field in row:
+            if field not in seen:
+                fields.append(field)
+                seen.add(field)
+    _require(bool(fields), "Cannot write a table without fields.")
+    return fields
+
+
 def _write_interval_svg(
     path: Path,
     *,
@@ -653,8 +682,103 @@ def _p2_quality_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
     ]
 
 
+def _p2_core_effect_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        _flatten_json_row({"comparison": comparison, **row})
+        for comparison, statistics in payload["paired_statistics"].items()
+        for row in statistics["pooled_by_scale"]
+    ]
+
+
+def _p2_core_family_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        _flatten_json_row({"comparison": comparison, **row})
+        for comparison, statistics in payload["paired_statistics"].items()
+        for row in statistics["by_scale_family"]
+    ]
+
+
+def _p2_core_seed_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        _flatten_json_row({"comparison": comparison, **row})
+        for comparison, statistics in payload["paired_statistics"].items()
+        for row in statistics["by_seed"]
+    ]
+
+
+def _p2_core_worst_slice_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    rows = []
+    for comparison, statistics in payload["paired_statistics"].items():
+        rows.append(
+            _flatten_json_row(
+                {"comparison": comparison, "scope": "global", **statistics["worst_slice"]}
+            )
+        )
+        rows.extend(
+            _flatten_json_row({"comparison": comparison, "scope": "budget-scale", **row})
+            for row in statistics["worst_slice_by_budget_scale"]
+        )
+    return rows
+
+
 def _causal_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return list(payload["primary_causal_gate"]["cells"])
+
+
+def _causal_contrast_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        _flatten_json_row(
+            {
+                "contrast": contrast,
+                "candidate": statistics["candidate"],
+                "comparator": statistics["comparator"],
+                **row,
+            }
+        )
+        for contrast, statistics in payload["paired_statistics"].items()
+        for row in statistics["cells"]
+    ]
+
+
+def _causal_worst_slice_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        _flatten_json_row(
+            {
+                "contrast": contrast,
+                "candidate": statistics["candidate"],
+                "comparator": statistics["comparator"],
+                **statistics["worst_slice"],
+            }
+        )
+        for contrast, statistics in payload["paired_statistics"].items()
+    ]
+
+
+def _causal_physical_memory_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    physical = payload["physical_hot_memory"]
+    return (
+        [_flatten_json_row({"scope": "seed-match", **row}) for row in physical["by_seed"]]
+        + [_flatten_json_row({"scope": "aggregate-match", **row}) for row in physical["aggregate"]]
+        + [
+            _flatten_json_row({"scope": "all-physical-arms", **row})
+            for row in physical["all_physical_arms_by_seed"]
+        ]
+    )
+
+
+def _causal_oracle_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    oracle = payload["offline_oracle_upper_bound"]
+    return [
+        _flatten_json_row(
+            {
+                "role": oracle["inference_role"],
+                "selection_unit": oracle["selection_unit"],
+                "used_for_primary_gate": oracle["used_for_primary_gate"],
+                **row,
+            }
+        )
+        for row in oracle["cells"]
+    ]
 
 
 def _learned_lookahead_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
@@ -1071,7 +1195,9 @@ They validate execution semantics and do not receive a scientific conclusion cla
 
 The causal figure reports the four preregistered scale-budget cells without pooling them
 into a single favorable average. Its interval and point data are embedded in the SVG
-metadata and bound to the audited causal matrix.
+metadata and bound to the audited causal matrix. The accompanying P2 tables expose both
+core comparisons, every seed, every scale-family effect, worst slices, all preregistered
+causal contrasts, measured physical-memory matching, and the target-aware oracle separately.
 
 ![Natural benchmark paired quality](figure-p3-natural-quality.svg)
 
@@ -1166,6 +1292,17 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
     )
     quality = _p2_quality_rows(loaded["p2_core"])
     _write_csv(output_root / "table-p2-quality-gate.csv", quality, list(quality[0]))
+    p2_core_tables = {
+        "table-p2-core-policy-summary.csv": [
+            _flatten_json_row(row) for row in loaded["p2_core"]["policy_summary"]
+        ],
+        "table-p2-core-effects.csv": _p2_core_effect_rows(loaded["p2_core"]),
+        "table-p2-core-family-effects.csv": _p2_core_family_rows(loaded["p2_core"]),
+        "table-p2-core-seed-effects.csv": _p2_core_seed_rows(loaded["p2_core"]),
+        "table-p2-core-worst-slices.csv": _p2_core_worst_slice_rows(loaded["p2_core"]),
+    }
+    for name, rows in p2_core_tables.items():
+        _write_csv(output_root / name, rows, _field_union(rows))
     learned = _learned_lookahead_rows(loaded["p1_online_learned_lookahead"])
     _write_csv(
         output_root / "table-p1-online-learned-lookahead-gate.csv",
@@ -1174,6 +1311,14 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
     )
     causal = _causal_rows(loaded["p2_causal"])
     _write_csv(output_root / "table-p2-causal-gate.csv", causal, list(causal[0]))
+    p2_causal_tables = {
+        "table-p2-causal-contrasts.csv": _causal_contrast_rows(loaded["p2_causal"]),
+        "table-p2-causal-worst-slices.csv": _causal_worst_slice_rows(loaded["p2_causal"]),
+        "table-p2-causal-physical-memory.csv": _causal_physical_memory_rows(loaded["p2_causal"]),
+        "table-p2-causal-offline-oracle.csv": _causal_oracle_rows(loaded["p2_causal"]),
+    }
+    for name, rows in p2_causal_tables.items():
+        _write_csv(output_root / name, rows, _field_union(rows))
     p3 = _p3_rows(loaded["p3_ruler"])
     _write_csv(output_root / "table-p3-ruler-cells.csv", p3, list(p3[0]))
     p3_safety = _p3_safety_rows(loaded["p3_safety"])
