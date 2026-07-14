@@ -2441,6 +2441,102 @@ def _p4_adaptive_metric_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return rows
 
 
+def _p4_adaptive_production_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for cell in payload["cells"]:
+        rows.append(
+            {
+                **cell["cell"],
+                "status": cell["status"],
+                "paired_repetitions": cell["paired_repetitions"],
+                "cell_timeout_seconds": cell["cell_timeout_seconds"],
+                "warmup_accounting_available": cell["warmup_accounting_available"],
+                "warmup_repetitions_attempted": cell["warmup_repetitions_attempted"],
+                "warmup_paired_repetitions_completed": cell[
+                    "warmup_paired_repetitions_completed"
+                ],
+                "warmup_failures": json.dumps(
+                    cell["warmup_failures"], sort_keys=True, separators=(",", ":")
+                ),
+                "fixed_ttft_p95_ms_mean": _metric_mean(
+                    cell, "ttft_p95_ms", "fixed+pins"
+                ),
+                "calibrated_ttft_p95_ms_mean": _metric_mean(
+                    cell, "ttft_p95_ms", "calibrated+pins"
+                ),
+                "fixed_throughput_mean": _metric_mean(
+                    cell, "throughput_tokens_per_second", "fixed+pins"
+                ),
+                "calibrated_throughput_mean": _metric_mean(
+                    cell, "throughput_tokens_per_second", "calibrated+pins"
+                ),
+                "fixed_peak_hbm_mean": _metric_mean(
+                    cell, "peak_allocated_bytes", "fixed+pins"
+                ),
+                "calibrated_peak_hbm_mean": _metric_mean(
+                    cell, "peak_allocated_bytes", "calibrated+pins"
+                ),
+                "fixed_controller_time_ns_mean": _metric_mean(
+                    cell, "controller_time_ns", "fixed+pins"
+                ),
+                "calibrated_controller_time_ns_mean": _metric_mean(
+                    cell, "controller_time_ns", "calibrated+pins"
+                ),
+                "failure": (
+                    ""
+                    if cell["status"] == "complete"
+                    else json.dumps(
+                        cell["policy_status"], sort_keys=True, separators=(",", ":")
+                    )
+                ),
+            }
+        )
+    for failure in payload["failure_table"]:
+        rows.append(
+            {
+                **failure["cell"],
+                "status": "failed",
+                "paired_repetitions": 0,
+                "cell_timeout_seconds": failure["cell_timeout_seconds"],
+                "warmup_accounting_available": False,
+                "warmup_repetitions_attempted": None,
+                "warmup_paired_repetitions_completed": None,
+                "warmup_failures": "[]",
+                "failure": json.dumps(
+                    failure["policy_status"], sort_keys=True, separators=(",", ":")
+                ),
+            }
+        )
+    return rows
+
+
+def _p4_adaptive_production_metric_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for cell in payload["cells"]:
+        for metric, metric_payload in sorted(cell["metrics"].items()):
+            paired = metric_payload.get("calibrated_minus_fixed")
+            for policy in ("fixed+pins", "calibrated+pins"):
+                distribution_payload = metric_payload.get(policy)
+                if distribution_payload is None:
+                    continue
+                rows.append(
+                    {
+                        **cell["cell"],
+                        "status": cell["status"],
+                        "metric": metric,
+                        "policy": policy,
+                        **distribution_payload,
+                        "paired_repetitions": cell["paired_repetitions"],
+                        "paired_calibrated_minus_fixed": (
+                            json.dumps(paired, sort_keys=True, separators=(",", ":"))
+                            if paired is not None
+                            else ""
+                        ),
+                    }
+                )
+    return rows
+
+
 def _p4_500k_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return [
         {
@@ -2941,6 +3037,9 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
     )
     p4_reference = _p4_rows(loaded["p4_reference_systems"])
     p4_adaptive = _p4_adaptive_rows(loaded["p4_adaptive_systems"])
+    p4_adaptive_production = _p4_adaptive_production_rows(
+        loaded["p4_adaptive_production_systems"]
+    )
     p4_production = _p4_rows(loaded["p4_production_systems"])
     p4_fields = [
         "scale",
@@ -3004,6 +3103,11 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
             "failure",
         ],
     )
+    _write_csv(
+        output_root / "table-p4-adaptive-production-system-cells.csv",
+        p4_adaptive_production,
+        _field_union(p4_adaptive_production),
+    )
     p4_metric_fields = [
         "scale",
         "context",
@@ -3063,6 +3167,14 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
             "mean_ratio_calibrated_over_fixed",
             "paired_calibrated_minus_fixed",
         ],
+    )
+    p4_adaptive_production_metrics = _p4_adaptive_production_metric_rows(
+        loaded["p4_adaptive_production_systems"]
+    )
+    _write_csv(
+        output_root / "table-p4-adaptive-production-system-metrics.csv",
+        p4_adaptive_production_metrics,
+        _field_union(p4_adaptive_production_metrics),
     )
     _write_p2_causal_figure(
         output_root / "figure-p2-causal-effect.svg",

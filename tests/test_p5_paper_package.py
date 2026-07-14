@@ -2068,3 +2068,85 @@ def test_p2_inference_resolution_table_separates_examples_from_seed_clusters() -
     assert all(row["exact_sign_flip_assignments"] == 32 for row in rows)
     assert all(row["p_value_used_as_success_gate"] is False for row in rows)
     assert all("do not add independent" in row["interpretation"] for row in rows)
+
+
+def test_adaptive_production_tables_preserve_holm_effects_and_terminal_failures() -> None:
+    distribution = {
+        "observations": 30,
+        "mean": 1.0,
+        "sample_standard_deviation": 0.1,
+        "p50": 1.0,
+        "p95": 1.1,
+        "p99": 1.2,
+        "minimum": 0.8,
+        "maximum": 1.3,
+    }
+    effect = {
+        "paired_repetitions": 30,
+        "mean_calibrated_minus_fixed": -0.1,
+        "paired_bootstrap_95_ci": [-0.2, 0.0],
+        "two_sided_bootstrap_p": 0.02,
+        "holm_adjusted_p": 0.04,
+        "holm_family_size": 432,
+    }
+    metrics = {
+        name: {
+            "fixed+pins": distribution,
+            "calibrated+pins": {**distribution, "mean": 0.9},
+            "calibrated_minus_fixed": effect,
+        }
+        for name in (
+            "ttft_p95_ms",
+            "throughput_tokens_per_second",
+            "peak_allocated_bytes",
+            "controller_time_ns",
+        )
+    }
+    payload = {
+        "cells": [
+            {
+                "cell": {
+                    "scale": "s55",
+                    "budget": "2x",
+                    "context": 8192,
+                    "generation": 128,
+                    "profile": "serving-b1-c1",
+                    "batch": 1,
+                    "concurrency": 1,
+                },
+                "status": "complete",
+                "policy_status": {},
+                "cell_timeout_seconds": 21600,
+                "paired_repetitions": 30,
+                "warmup_accounting_available": True,
+                "warmup_repetitions_attempted": 5,
+                "warmup_paired_repetitions_completed": 5,
+                "warmup_failures": [],
+                "metrics": metrics,
+            }
+        ],
+        "failure_table": [
+            {
+                "cell": {
+                    "scale": "s151",
+                    "budget": "4x",
+                    "context": 131072,
+                    "generation": 2048,
+                    "profile": "serving-b16-c32",
+                    "batch": 16,
+                    "concurrency": 32,
+                },
+                "cell_timeout_seconds": 21600,
+                "policy_status": {"fixed+pins": {"status": "failed"}},
+            }
+        ],
+    }
+
+    cells = package._p4_adaptive_production_rows(payload)
+    metric_rows = package._p4_adaptive_production_metric_rows(payload)
+
+    assert [row["status"] for row in cells] == ["complete", "failed"]
+    assert cells[0]["calibrated_throughput_mean"] == 0.9
+    paired = json.loads(metric_rows[0]["paired_calibrated_minus_fixed"])
+    assert paired["holm_adjusted_p"] == 0.04
+    assert paired["holm_family_size"] == 432

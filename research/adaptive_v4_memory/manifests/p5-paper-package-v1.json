@@ -627,6 +627,8 @@
     "table-p4-reference-system-metrics.csv",
     "table-p4-adaptive-system-cells.csv",
     "table-p4-adaptive-system-metrics.csv",
+    "table-p4-adaptive-production-system-cells.csv",
+    "table-p4-adaptive-production-system-metrics.csv",
     "table-p4-production-system-cells.csv",
     "table-p4-production-system-metrics.csv",
     "figure-p2-causal-effect.svg",

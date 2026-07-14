@@ -55,8 +55,14 @@ def summarize_cell(payload: dict[str, Any]) -> dict[str, Any]:
         "cell": payload["cell"],
         "status": adapter["status"],
         "policy_status": adapter["policy_status"],
+        "cell_timeout_seconds": payload["cell_timeout_seconds"],
         "paired_repetitions": len(paired),
         "warmup_accounting_available": adapter["warmup_accounting_available"],
+        "warmup_repetitions_attempted": adapter["warmup_repetitions_attempted"],
+        "warmup_paired_repetitions_completed": adapter[
+            "warmup_paired_repetitions_completed"
+        ],
+        "warmup_failures": adapter["warmup_failures"],
         "metrics": {},
     }
     for name, getter in production_summary.METRICS.items():
@@ -141,6 +147,7 @@ def summarize(matrix_path: Path) -> dict[str, Any]:
     process_hbm_unavailable = 0
     prediction_equal = 0
     prediction_different = 0
+    failure_table: list[dict[str, Any]] = []
     for row in matrix.get("runs", []):
         cell = tuple(row.get(name) for name in systems.cell_dict(systems.frozen_cells()[0]))
         _require(
@@ -173,6 +180,19 @@ def summarize(matrix_path: Path) -> dict[str, Any]:
         adapter = payload["adapter_payload"]
         if systems.valid_terminal_adapter_failure(adapter, cell=cell):
             failed += 1
+            failure_table.append(
+                {
+                    "cell": systems.cell_dict(cell),
+                    "status": "failed",
+                    "orchestrator_failure": True,
+                    "cell_timeout_seconds": payload["cell_timeout_seconds"],
+                    "warmup_accounting_available": False,
+                    "warmup_repetitions_attempted": None,
+                    "warmup_paired_repetitions_completed": None,
+                    "warmup_failures": [],
+                    "policy_status": adapter["policy_status"],
+                }
+            )
             continue
         systems.validate_adapter_payload(adapter, cell=cell, spec=spec)
         status = adapter["status"]
@@ -235,6 +255,7 @@ def summarize(matrix_path: Path) -> dict[str, Any]:
             ).hexdigest(),
         },
         "cells": cells,
+        "failure_table": failure_table,
         "claim_boundary": "Simultaneous static full-request GPU batching only; no dynamic-arrival, continuous-admission, fused-kernel, multi-GPU, Qwen-runtime, official DeepSeek-V4, FlashMemory, or IndexCache serving claim.",
     }
 
