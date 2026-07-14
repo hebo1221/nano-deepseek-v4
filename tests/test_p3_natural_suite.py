@@ -155,6 +155,7 @@ def _natural_benchmark_summaries(tmp_path: Path, manifest_path: Path) -> dict[st
     manifest = json.loads(manifest_path.read_text())
     causal = tmp_path / "causal.json"
     inventory = tmp_path / "inventory.json"
+    selection = tmp_path / "selection.json"
     causal.write_text(
         json.dumps(
             {
@@ -171,6 +172,14 @@ def _natural_benchmark_summaries(tmp_path: Path, manifest_path: Path) -> dict[st
             }
         )
     )
+    selection.write_text(
+        json.dumps(
+            {
+                "experiment_id": "p3-fixed-baseline-selection-v1",
+                "source": {"dirty": False},
+            }
+        )
+    )
     expected = manifest["suite_audit"]["per_arm_minimum_accounted_examples"]
     paths: dict[str, Path] = {}
     for name, experiment_id in BENCHMARK_IDS.items():
@@ -182,6 +191,7 @@ def _natural_benchmark_summaries(tmp_path: Path, manifest_path: Path) -> dict[st
             "audit": {
                 "all_raw_artifacts_verified": True,
                 "all_failure_accounting_complete": True,
+                "all_required_arms_input_paired": True,
                 "raw_record_digest_set_sha256": "0" * 64,
             },
             "arms": {
@@ -191,6 +201,8 @@ def _natural_benchmark_summaries(tmp_path: Path, manifest_path: Path) -> dict[st
                     "accounted_examples": expected[name],
                     "scored_examples": expected[name] - 1,
                     "failures_by_type": {"unsupported-context": 1},
+                    "mean_score_over_scored": 0.5,
+                    "mean_score_over_all_expected_failures_zero": 0.5,
                 }
                 for arm in manifest["common_protocol"]["p4_gate_baseline_arms"]
             },
@@ -202,6 +214,10 @@ def _natural_benchmark_summaries(tmp_path: Path, manifest_path: Path) -> dict[st
             "dataset_inventory": {
                 "path": str(inventory),
                 "sha256": _digest(inventory),
+            },
+            "fixed_baseline_selection": {
+                "path": str(selection),
+                "sha256": _digest(selection),
             },
             "model_snapshot_digest_set_sha256": manifest["model"]["snapshot_digest_set_sha256"],
         }
@@ -224,6 +240,10 @@ def test_natural_suite_audit_requires_all_examples_and_baselines(tmp_path: Path)
         "native-dense": 45_289,
         "strongest-memory-matched-fixed": 45_289,
     }
+    assert payload["audit"]["weighted_conservative_quality_by_required_arm"] == {
+        "native-dense": 0.5,
+        "strongest-memory-matched-fixed": 0.5,
+    }
     assert all(row["native_and_fixed_terminal"] for row in payload["benchmarks"].values())
 
 
@@ -242,8 +262,10 @@ def test_natural_suite_audit_rejects_unaccounted_failure(tmp_path: Path) -> None
 def _raw_arm_cell(tmp_path: Path) -> tuple[Path, Path, Path]:
     causal = tmp_path / "causal.json"
     inventory = tmp_path / "inventory.json"
+    selection = tmp_path / "selection.json"
     causal.write_text("{}")
     inventory.write_text("{}")
+    selection.write_text("{}")
     raw = tmp_path / "records.jsonl"
     records = [
         {
@@ -256,6 +278,17 @@ def _raw_arm_cell(tmp_path: Path) -> tuple[Path, Path, Path]:
             "raw_prompt_sha256": "2" * 64,
             "latency_ms": 10.0,
             "peak_hbm_bytes": 100,
+            "hot_resident_bytes": 80,
+            "raw_response": "The correct answer is (A)",
+            "parsed_response": "A",
+            "stop_reason": "eos",
+            "revisions": {
+                "model_revision": "model",
+                "dataset_revision": "dataset",
+                "code_revision": "code",
+                "scorer_sha256": "scorer",
+            },
+            "arm_config": {"method": "native"},
             "score": 1.0,
             "failure_type": None,
         },
@@ -269,6 +302,17 @@ def _raw_arm_cell(tmp_path: Path) -> tuple[Path, Path, Path]:
             "raw_prompt_sha256": "3" * 64,
             "latency_ms": 0.0,
             "peak_hbm_bytes": 0,
+            "hot_resident_bytes": 0,
+            "raw_response": "",
+            "parsed_response": None,
+            "stop_reason": "unsupported-context",
+            "revisions": {
+                "model_revision": "model",
+                "dataset_revision": "dataset",
+                "code_revision": "code",
+                "scorer_sha256": "scorer",
+            },
+            "arm_config": {"method": "native"},
             "score": None,
             "failure_type": "unsupported-context",
         },
@@ -282,13 +326,17 @@ def _raw_arm_cell(tmp_path: Path) -> tuple[Path, Path, Path]:
                 "benchmark": "LongBench-v2",
                 "arm": "native-dense",
                 "status": "terminal",
-                "source": {"dirty": False},
+                "source": {"dirty": False, "implementation_sha256": "6" * 64},
                 "experiment_manifest": {"sha256": "4" * 64},
                 "raw_records": {"path": str(raw), "sha256": _digest(raw)},
                 "causal_gate": {"path": str(causal), "sha256": _digest(causal)},
                 "dataset_inventory": {
                     "path": str(inventory),
                     "sha256": _digest(inventory),
+                },
+                "fixed_baseline_selection": {
+                    "path": str(selection),
+                    "sha256": _digest(selection),
                 },
                 "model_snapshot_digest_set_sha256": "5" * 64,
             }
@@ -312,6 +360,7 @@ def test_natural_arm_audit_closes_scored_and_failed_records(tmp_path: Path) -> N
     assert result["scored_examples"] == 1
     assert result["failures_by_type"] == {"unsupported-context": 1}
     assert result["mean_score_over_scored"] == 1.0
+    assert result["mean_score_over_all_expected_failures_zero"] == 0.5
 
 
 def test_natural_arm_audit_rejects_duplicate_examples(tmp_path: Path) -> None:
@@ -375,4 +424,31 @@ def test_natural_suite_audit_rejects_wrong_model_snapshot(tmp_path: Path) -> Non
     paths["SCBench"].write_text(json.dumps(payload))
 
     with pytest.raises(ValueError, match="does not match the frozen manifest"):
+        summarize(manifest, paths)
+
+
+def test_natural_suite_audit_rejects_mixed_fixed_baseline_selection(
+    tmp_path: Path,
+) -> None:
+    root = Path(__file__).resolve().parents[1]
+    manifest = root / "research/adaptive_v4_memory/manifests/p3-natural-suite-v1.json"
+    paths = _natural_benchmark_summaries(tmp_path, manifest)
+    alternate = tmp_path / "alternate-selection.json"
+    alternate.write_text(
+        json.dumps(
+            {
+                "experiment_id": "p3-fixed-baseline-selection-v1",
+                "source": {"dirty": False},
+                "selected_arm": "snapkv",
+            }
+        )
+    )
+    payload = json.loads(paths["MRCR"].read_text())
+    payload["fixed_baseline_selection"] = {
+        "path": str(alternate),
+        "sha256": _digest(alternate),
+    }
+    paths["MRCR"].write_text(json.dumps(payload))
+
+    with pytest.raises(ValueError, match="different fixed baseline selections"):
         summarize(manifest, paths)

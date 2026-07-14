@@ -63,6 +63,61 @@ def render_chat_split_last_user(
     return parts[0], parts[1]
 
 
+def render_chat_split_user_content(
+    tokenizer: ChatTokenizer, context: str, query: str
+) -> tuple[str, str]:
+    if not context or not query:
+        raise ValueError("Chat context and query segments must both be non-empty.")
+    digest = hashlib.sha256((context + "\0" + query).encode()).hexdigest()
+    separator = f"<adaptive-v4-memory-segment-{digest}>"
+    if separator in context or separator in query:
+        raise ValueError("Chat content separator collides with prompt text.")
+    rendered = render_chat(
+        tokenizer,
+        [{"role": "user", "content": context + separator + query}],
+    )
+    parts = rendered.split(separator)
+    if len(parts) != 2 or not parts[0] or not parts[1]:
+        raise ValueError("Chat template did not preserve the content separator exactly once.")
+    return parts[0], parts[1]
+
+
+def encode_rendered_segments_exact(
+    tokenizer: Any, rendered_context: str, rendered_query: str
+) -> tuple[Any, Any, int]:
+    """Return context/query slices of one exact full-prompt tokenization.
+
+    Independent BPE tokenization can merge across the string boundary.  We
+    therefore split the full token tensor at its stable prefix with the
+    context-only tokenization and report any boundary retreat explicitly.
+    """
+    if not rendered_context or not rendered_query:
+        raise ValueError("Rendered context and query must both be non-empty.")
+    full_ids = tokenizer.encode(
+        rendered_context + rendered_query,
+        return_tensors="pt",
+        add_special_tokens=False,
+    )
+    context_only_ids = tokenizer.encode(
+        rendered_context,
+        return_tensors="pt",
+        add_special_tokens=False,
+    )
+    if getattr(full_ids, "ndim", None) != 2 or getattr(context_only_ids, "ndim", None) != 2:
+        raise ValueError("Tokenizer must return rank-two token tensors.")
+    if full_ids.shape[0] != 1 or context_only_ids.shape[0] != 1:
+        raise ValueError("Natural prompt tokenization requires batch size one.")
+
+    stable = 0
+    maximum = min(int(full_ids.shape[1]), int(context_only_ids.shape[1]))
+    while stable < maximum and int(full_ids[0, stable]) == int(context_only_ids[0, stable]):
+        stable += 1
+    if stable <= 0 or stable >= int(full_ids.shape[1]):
+        raise ValueError("Could not form non-empty exact context/query token slices.")
+    retreat = int(context_only_ids.shape[1]) - stable
+    return full_ids[:, :stable], full_ids[:, stable:], retreat
+
+
 def build_longbench_v2_prompt(row: dict[str, Any], template: str) -> str:
     fields = {
         "$DOC$": "context",
@@ -81,6 +136,20 @@ def build_longbench_v2_prompt(row: dict[str, Any], template: str) -> str:
     if any(placeholder in prompt for placeholder in fields):
         raise ValueError("LongBench v2 prompt retains an unresolved placeholder.")
     return prompt
+
+
+def build_longbench_v2_segments(row: dict[str, Any], template: str) -> tuple[str, str]:
+    if template.count("$DOC$") != 1:
+        raise ValueError("LongBench v2 template must contain one document placeholder.")
+    before, after = template.split("$DOC$")
+    context = row.get("context")
+    if not isinstance(context, str):
+        raise ValueError("LongBench v2 field context must be text.")
+    query = build_longbench_v2_prompt({**row, "context": ""}, after)
+    context_segment = before + context.strip()
+    if context_segment + query != build_longbench_v2_prompt(row, template):
+        raise ValueError("LongBench v2 segmented prompt does not reconstruct exactly.")
+    return context_segment, query
 
 
 def build_longmem_full_history_prompt(row: dict[str, Any]) -> str:
@@ -110,8 +179,7 @@ def build_longmem_full_history_prompt(row: dict[str, Any]) -> str:
                 raise ValueError("LongMemEval turn role and content must be text.")
             session_text += f"\n\n{role}: {content.strip()}"
         history += (
-            f"\n### Session {index}:\nSession Date: {date}\n"
-            f"Session Content:\n{session_text}\n"
+            f"\n### Session {index}:\nSession Date: {date}\nSession Content:\n{session_text}\n"
         )
     if not history:
         raise ValueError("LongMemEval full-history protocol requires at least one session.")
@@ -260,7 +328,11 @@ def build_scbench_workload(
 
     prompts, answers = built.get("prompts"), built.get("ground_truth")
     turns = row.get("multi_turns")
-    if not isinstance(prompts, list) or not isinstance(answers, list) or not isinstance(turns, list):
+    if (
+        not isinstance(prompts, list)
+        or not isinstance(answers, list)
+        or not isinstance(turns, list)
+    ):
         raise ValueError("Official SCBench prompt builder returned an invalid structure.")
     if len(prompts) != len(answers) or len(prompts) != len(turns):
         raise ValueError("Official SCBench prompt, answer, and turn counts diverged.")

@@ -149,6 +149,12 @@ pins the Qwen3-4B 262K transfer model, all five natural benchmark revisions,
 minimum, and the sequence-gated acquisition path. Oversized examples are
 reported as unsupported and are never head-tail truncated.
 
+LongBench v2 has an executable Qwen3-4B native/frozen-fixed runner with
+example-level resume. It renders the pinned direct 0-shot prompt, scores invalid
+answer formats as zero instead of excluding them, records every operational
+failure, and measures exact post-prefill key/value cache bytes before question
+decoding. Both arms must use identical example and prompt digests.
+
 The P4 reference systems matrix freezes 108 scale/context/generation/load cells,
 with five warmups and 30 measured repetitions for resident and tiered policies.
 Policy failures are isolated: if resident OOMs, the surviving tiered policy is

@@ -46,9 +46,7 @@ def acquire_source(destination: Path, contract: dict[str, Any]) -> None:
 def verify_source(source: Path, contract: dict[str, Any]) -> dict[str, Any]:
     observed_revision = _git("rev-parse", "HEAD", cwd=source)
     if observed_revision != contract["revision"]:
-        raise ValueError(
-            f"Source revision drifted: {observed_revision} != {contract['revision']}."
-        )
+        raise ValueError(f"Source revision drifted: {observed_revision} != {contract['revision']}.")
     if _git("status", "--porcelain", "--untracked-files=no", cwd=source):
         raise ValueError("Pinned source checkout contains tracked modifications.")
 
@@ -61,9 +59,7 @@ def verify_source(source: Path, contract: dict[str, Any]) -> dict[str, Any]:
         observed_digest = sha256(path)
         if observed_digest != expected_digest:
             raise ValueError(f"Pinned source SHA-256 drifted: {relative}.")
-        files.append(
-            {"path": relative, "bytes": path.stat().st_size, "sha256": observed_digest}
-        )
+        files.append({"path": relative, "bytes": path.stat().st_size, "sha256": observed_digest})
 
     license_path = source / "LICENSE"
     if not license_path.is_file():
@@ -89,6 +85,12 @@ def atomic_json(path: Path, payload: dict[str, Any]) -> None:
     temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
     temporary.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
     temporary.replace(path)
+
+
+def workspace_source() -> dict[str, Any]:
+    commit = _git("rev-parse", "HEAD")
+    dirty = bool(_git("status", "--porcelain"))
+    return {"commit": commit, "dirty": dirty}
 
 
 def main() -> None:
@@ -122,6 +124,9 @@ def main() -> None:
     manifest = json.loads(manifest_bytes)
     validation = validate_manifest(manifest)
     sequence_gate = require_p3_sequence_gate(args.p2_matrix, args.causal_gate)
+    source = workspace_source()
+    if source["dirty"]:
+        raise RuntimeError("Natural source acquisition requires a clean experiment source tree.")
     selected = tuple(args.benchmark or BENCHMARKS)
 
     inventories: dict[str, Any] = {}
@@ -135,6 +140,7 @@ def main() -> None:
         "schema_version": 1,
         "experiment_id": "p3-natural-source-inventory-v1",
         "status": "verified",
+        "source": source,
         "manifest": {
             "path": str(args.manifest.resolve()),
             "sha256": hashlib.sha256(manifest_bytes).hexdigest(),

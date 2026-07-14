@@ -17,6 +17,7 @@ BENCHMARK_IDS = {
 DEPENDENCY_IDS = {
     "causal_gate": "p2-causal-ablation-audit-v1",
     "dataset_inventory": "p3-natural-dataset-inventory-v1",
+    "fixed_baseline_selection": "p3-fixed-baseline-selection-v1",
 }
 
 
@@ -63,6 +64,10 @@ def audit_benchmark(
         audit.get("all_failure_accounting_complete") is True,
         f"{name} failure accounting is incomplete.",
     )
+    _require(
+        audit.get("all_required_arms_input_paired") is True,
+        f"{name} required arms are not input-paired.",
+    )
     _sha256_value(audit.get("raw_record_digest_set_sha256"), f"{name} raw-record set")
     arms = payload.get("arms", {})
     _require(set(required_arms).issubset(arms), f"{name} is missing a required baseline arm.")
@@ -91,12 +96,19 @@ def audit_benchmark(
             and row.get("terminal") is True,
             f"{name}/{arm} does not account for every frozen example.",
         )
+        conservative_mean = row.get("mean_score_over_all_expected_failures_zero")
+        _require(
+            isinstance(conservative_mean, (int, float)) and 0.0 <= conservative_mean <= 1.0,
+            f"{name}/{arm} conservative quality is missing.",
+        )
         arm_rows[arm] = {
             "terminal": True,
             "expected_examples": expected_examples,
             "scored_examples": scored,
             "failed_examples": sum(failures.values()),
             "failures_by_type": failures,
+            "mean_score_over_scored": row.get("mean_score_over_scored"),
+            "mean_score_over_all_expected_failures_zero": conservative_mean,
         }
     conditional = payload.get("conditional_arms", {})
     _require(
@@ -117,6 +129,7 @@ def audit_benchmark(
     dependencies = {
         "causal_gate": payload.get("causal_gate"),
         "dataset_inventory": payload.get("dataset_inventory"),
+        "fixed_baseline_selection": payload.get("fixed_baseline_selection"),
         "model_snapshot_digest_set_sha256": payload.get("model_snapshot_digest_set_sha256"),
     }
     _sha256_value(dependencies["model_snapshot_digest_set_sha256"], f"{name} model set")
@@ -124,7 +137,11 @@ def audit_benchmark(
         dependencies["model_snapshot_digest_set_sha256"] == model_snapshot_digest,
         f"{name} model snapshot does not match the frozen manifest.",
     )
-    for dependency_name in ("causal_gate", "dataset_inventory"):
+    for dependency_name in (
+        "causal_gate",
+        "dataset_inventory",
+        "fixed_baseline_selection",
+    ):
         metadata = dependencies[dependency_name]
         _require(isinstance(metadata, dict), f"Missing {name} {dependency_name} dependency.")
         dependency_path = Path(metadata.get("path", ""))
@@ -174,9 +191,14 @@ def summarize(manifest_path: Path, summary_paths: dict[str, Path]) -> dict[str, 
         dependency_sets.append(dependencies)
     causal_digests = {row["causal_gate"]["sha256"] for row in dependency_sets}
     inventory_digests = {row["dataset_inventory"]["sha256"] for row in dependency_sets}
+    fixed_selection_digests = {row["fixed_baseline_selection"]["sha256"] for row in dependency_sets}
     model_digests = {row["model_snapshot_digest_set_sha256"] for row in dependency_sets}
     _require(len(causal_digests) == 1, "Natural benchmarks used different causal gates.")
     _require(len(inventory_digests) == 1, "Natural benchmarks used different datasets.")
+    _require(
+        len(fixed_selection_digests) == 1,
+        "Natural benchmarks used different fixed baseline selections.",
+    )
     _require(len(model_digests) == 1, "Natural benchmarks used different model snapshots.")
     totals = {
         arm: sum(
@@ -187,6 +209,15 @@ def summarize(manifest_path: Path, summary_paths: dict[str, Path]) -> dict[str, 
     }
     minimum = manifest["execution_totals"]["minimum_predictions_per_arm"]
     _require(all(total == minimum for total in totals.values()), "Natural arm total drifted.")
+    conservative_quality = {
+        arm: sum(
+            benchmarks[name]["required_arms"][arm]["mean_score_over_all_expected_failures_zero"]
+            * benchmarks[name]["required_arms"][arm]["expected_examples"]
+            for name in manifest["execution_order"]
+        )
+        / minimum
+        for arm in required_arms
+    }
     return {
         "schema_version": 1,
         "experiment_id": "p3-natural-language-suite-audit-v1",
@@ -201,14 +232,17 @@ def summarize(manifest_path: Path, summary_paths: dict[str, Path]) -> dict[str, 
             "benchmarks_terminal": len(benchmarks),
             "minimum_protocol_examples_accounted_per_arm": minimum,
             "accounted_examples_by_required_arm": totals,
+            "weighted_conservative_quality_by_required_arm": conservative_quality,
             "causal_gate_sha256": next(iter(causal_digests)),
             "dataset_inventory_sha256": next(iter(inventory_digests)),
+            "fixed_baseline_selection_sha256": next(iter(fixed_selection_digests)),
             "model_snapshot_digest_set_sha256": next(iter(model_digests)),
         },
         "benchmarks": benchmarks,
         "claim_boundary": (
-            "Five-benchmark evidence on one pinned compatible Qwen3 model. Explicit "
-            "failures count toward coverage but not quality; this is not official DeepSeek-V4 evidence."
+            "Five-benchmark evidence on one pinned compatible Qwen3 model. The primary "
+            "conservative quality aggregate scores every operational failure as zero; this "
+            "is not official DeepSeek-V4 evidence."
         ),
     }
 

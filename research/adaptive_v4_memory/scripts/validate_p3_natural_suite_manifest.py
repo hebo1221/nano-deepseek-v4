@@ -123,6 +123,15 @@ def validate_manifest(payload: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("LongBench v2 must retain all 503 examples.")
     if longbench["overflow_action"] != "report_unsupported_without_truncation":
         raise ValueError("LongBench v2 cannot use the upstream head-tail truncation path.")
+    longbench_execution = longbench["execution"]
+    if (
+        longbench_execution["runner"]
+        != "research/adaptive_v4_memory/scripts/run_p3_longbench_v2.py"
+        or longbench_execution["resume_unit"] != "one example within one arm"
+        or "score zero" not in longbench_execution["invalid_answer_policy"]
+        or "exact bytes" not in longbench_execution["hot_memory_measurement"]
+    ):
+        raise ValueError("LongBench v2 execution or physical-memory contract drifted.")
 
     longmem = _benchmark(payload, "LongMemEval")
     if longmem["dataset"]["revision"] != EXPECTED_REVISIONS["LongMemEval-data"]:
@@ -147,6 +156,14 @@ def validate_manifest(payload: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("MRCR all-bin total must be 2,400.")
     if mrcr["expected_examples_through_128k"] != 1500:
         raise ValueError("MRCR <=128K total must be 1,500.")
+    mrcr_execution = mrcr["execution"]
+    if (
+        mrcr_execution["runner"] != "research/adaptive_v4_memory/scripts/run_p3_mrcr.py"
+        or mrcr_execution["resume_unit"] != "one example within one arm"
+        or "exact bytes" not in mrcr_execution["hot_memory_measurement"]
+        or "full rendered chat once" not in mrcr_execution["tokenization_boundary"]
+    ):
+        raise ValueError("MRCR execution or exact-token contract drifted.")
 
     all_data_files: list[dict[str, Any]] = []
     for benchmark in (scbench, longbench, longmem, mrcr):

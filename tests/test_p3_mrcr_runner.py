@@ -7,16 +7,29 @@ from pathlib import Path
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
+import torch
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "research/adaptive_v4_memory/scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-from run_p3_mrcr import arm_config, failure_record, load_rows  # noqa: E402
+from run_p3_mrcr import arm_config, failure_record, load_rows, rendered_input  # noqa: E402
 
 
 class WordEncoder:
     def encode(self, text: str) -> list[int]:
         return list(range(len(text.split())))
+
+
+class BoundaryTokenizer:
+    def apply_chat_template(self, messages: list[dict[str, str]], **_kwargs: object) -> str:
+        rendered = "|".join(f"{row['role']}:{row['content']}" for row in messages)
+        return rendered + "|assistant:"
+
+    def encode(self, text: str, **_kwargs: object) -> torch.Tensor:
+        values = [
+            sum(ord(char) for char in text[index : index + 3]) for index in range(0, len(text), 3)
+        ]
+        return torch.tensor(values, dtype=torch.long).unsqueeze(0)
 
 
 def _row(needle: int, bin_index: int, ordinal: int) -> dict:
@@ -82,3 +95,20 @@ def test_mrcr_arm_and_failure_records_are_audit_compatible() -> None:
     assert record["status"] == "failure"
     assert record["score"] is None
     assert record["hot_resident_bytes"] == 0
+
+
+def test_mrcr_split_is_a_slice_of_one_exact_chat_tokenization() -> None:
+    tokenizer = BoundaryTokenizer()
+    messages = [
+        {"role": "user", "content": "remember this long context"},
+        {"role": "assistant", "content": "acknowledged"},
+        {"role": "user", "content": "what should I remember?"},
+    ]
+    rendered = rendered_input(tokenizer, messages)
+    full = tokenizer.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
+    full_ids = tokenizer.encode(full, return_tensors="pt", add_special_tokens=False)
+
+    assert torch.equal(
+        torch.cat((rendered["context_ids"], rendered["question_ids"]), dim=1), full_ids
+    )
+    assert rendered["exact_input_tokens"] == full_ids.shape[1]

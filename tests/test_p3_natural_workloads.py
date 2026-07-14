@@ -12,6 +12,7 @@ sys.path.insert(0, str(SCRIPTS))
 
 from p3_natural_workloads import (  # noqa: E402
     build_longbench_v2_prompt,
+    build_longbench_v2_segments,
     build_longmem_full_history_prompt,
     build_scbench_workload,
     mrcr_bin_index,
@@ -20,6 +21,7 @@ from p3_natural_workloads import (  # noqa: E402
     parse_mrcr_messages,
     render_chat,
     render_chat_split_last_user,
+    render_chat_split_user_content,
     select_mrcr_primary_rows,
 )
 
@@ -54,6 +56,10 @@ def test_longbench_prompt_matches_pinned_direct_template_substitution() -> None:
     assert build_longbench_v2_prompt(row, template) == (
         "context\nquestion\n(A) alpha (B) beta (C) gamma (D) delta"
     )
+    context, query = build_longbench_v2_segments(row, template)
+    assert context == "context"
+    assert query == "\nquestion\n(A) alpha (B) beta (C) gamma (D) delta"
+    assert context + query == build_longbench_v2_prompt(row, template)
 
 
 def test_longmem_prompt_uses_all_sessions_in_date_order_without_mutation() -> None:
@@ -97,6 +103,9 @@ def test_mrcr_messages_and_prefix_are_fail_closed() -> None:
         ],
     )
     assert context.endswith("user:")
+    assert query == "final query|assistant:"
+    context, query = render_chat_split_user_content(FakeTokenizer(), "long context", "final query")
+    assert context.endswith("long context")
     assert query == "final query|assistant:"
 
     row["answer"] = "wrong"
