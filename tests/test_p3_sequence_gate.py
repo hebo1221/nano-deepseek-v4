@@ -82,6 +82,7 @@ def test_p3_gate_requires_each_budget_scale_causal_cell(tmp_path: Path) -> None:
             "scale": scale,
             "budget": budget,
             "passed": True,
+            "pooled_effect_positive": True,
             "all_seed_effects_positive": True,
             "four_cell_corrected_lower_bound_positive": True,
             "all_seed_memory_cells_within_one_percent": True,
@@ -122,16 +123,35 @@ def test_p3_gate_requires_each_budget_scale_causal_cell(tmp_path: Path) -> None:
         },
     }
     causal.write_text(json.dumps(payload))
+    nine_seed = tmp_path / "nine-seed-causal.json"
+    confirmatory = json.loads(json.dumps(payload))
+    confirmatory["experiment_id"] = "p2-nine-seed-causal-ablation-audit-v1"
+    confirmatory["audit"]["unique_shards"] = 16_200
+    confirmatory["audit"]["independent_seed_clusters_per_cell"] = 9
+    confirmatory["pooling_audit"] = {
+        "identical_frozen_contracts": True,
+        "disjoint_training_seeds": True,
+    }
+    confirmatory["confirmatory_inference"] = {"exact_sign_assignments": 512}
+    confirmatory["primary_causal_gate"]["seeds_per_scale"] = 9
+    nine_seed.write_text(json.dumps(confirmatory))
 
-    decision = require_p3_sequence_gate(matrix, causal)
+    decision = require_p3_sequence_gate(matrix, causal, nine_seed)
     assert decision["causal_candidate_qualified"] is True
     assert decision["baseline_evaluation_required"] is True
     assert decision["causal_statistical_audit_verified"] is True
+    assert decision["confirmatory_seed_clusters_per_cell"] == 9
+    assert set(decision["dependencies"]) == {
+        "p2_matrix",
+        "primary_causal",
+        "nine_seed_causal",
+    }
 
     payload["primary_causal_gate"]["cells"][0]["passed"] = False
+    payload["primary_causal_gate"]["cells"][0]["pooled_effect_positive"] = False
     payload["primary_causal_gate"]["passed"] = False
     causal.write_text(json.dumps(payload))
-    decision = require_p3_sequence_gate(matrix, causal)
+    decision = require_p3_sequence_gate(matrix, causal, nine_seed)
     assert decision["causal_candidate_qualified"] is False
     assert decision["baseline_evaluation_required"] is True
 
@@ -140,7 +160,7 @@ def test_p3_gate_requires_each_budget_scale_causal_cell(tmp_path: Path) -> None:
     with pytest.raises(
         RuntimeError, match="complete preregistered 5-seed, 2-scale causal audit"
     ):
-        require_p3_sequence_gate(matrix, causal)
+        require_p3_sequence_gate(matrix, causal, nine_seed)
 
     payload["audit"]["outcome_dependent_early_stopping"] = False
     payload["audit"]["family_holm_bonferroni_verified"] = False
@@ -148,4 +168,19 @@ def test_p3_gate_requires_each_budget_scale_causal_cell(tmp_path: Path) -> None:
     with pytest.raises(
         RuntimeError, match="complete preregistered 5-seed, 2-scale causal audit"
     ):
-        require_p3_sequence_gate(matrix, causal)
+        require_p3_sequence_gate(matrix, causal, nine_seed)
+
+    payload["audit"]["family_holm_bonferroni_verified"] = True
+    causal.write_text(json.dumps(payload))
+    confirmatory["pooling_audit"]["disjoint_training_seeds"] = False
+    nine_seed.write_text(json.dumps(confirmatory))
+    with pytest.raises(RuntimeError, match="nine-seed, two-scale confirmatory causal audit"):
+        require_p3_sequence_gate(matrix, causal, nine_seed)
+
+    confirmatory["pooling_audit"]["disjoint_training_seeds"] = True
+    confirmatory["primary_causal_gate"]["cells"][0][
+        "all_seed_effects_positive"
+    ] = False
+    nine_seed.write_text(json.dumps(confirmatory))
+    with pytest.raises(RuntimeError, match="nine-seed, two-scale confirmatory causal audit"):
+        require_p3_sequence_gate(matrix, causal, nine_seed)

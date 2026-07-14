@@ -40,7 +40,8 @@
     "implementation": "research/adaptive_v4_memory/scripts/p3_sequence_gate.py",
     "p2_matrix": "artifacts/adaptive_v4_memory/paper_grade/p2-core-quality-matrix.json",
     "causal_gate": "artifacts/adaptive_v4_memory/paper_grade/p2-causal-ablation.summary.json",
-    "policy": "The exact preregistered immutable model snapshot and pinned public code dependencies may be prefetched and cryptographically verified without inference. P2 and the full causal audit must finish before natural-suite benchmark payload acquisition, baseline selection, dataset generation, or any prediction. Native and fixed external baselines still run if the calibrated candidate does not qualify."
+    "nine_seed_causal_gate": "artifacts/adaptive_v4_memory/paper_grade/p2-nine-seed-causal.summary.json",
+    "policy": "The exact preregistered immutable model snapshot and pinned public code dependencies may be prefetched and cryptographically verified without inference. P2 core plus the five-seed and nine-seed confirmatory causal audits must finish before natural-suite benchmark payload acquisition, baseline selection, dataset generation, or any prediction. Native and fixed external baselines still run if the calibrated candidate does not qualify."
   },
   "execution_order": [
     "RULER",

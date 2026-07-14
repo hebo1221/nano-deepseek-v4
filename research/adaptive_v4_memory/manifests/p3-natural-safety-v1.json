@@ -30,7 +30,8 @@
   "sequence_gate": {
     "p2_matrix": "artifacts/adaptive_v4_memory/paper_grade/p2-core-quality-matrix.json",
     "causal_gate": "artifacts/adaptive_v4_memory/paper_grade/p2-causal-ablation.summary.json",
-    "policy": "the exact preregistered immutable model snapshot may be prefetched and cryptographically verified without inference; no natural-safety dataset/source or scoring-asset acquisition and no generation may occur before the frozen P2 sequence gate passes"
+    "nine_seed_causal_gate": "artifacts/adaptive_v4_memory/paper_grade/p2-nine-seed-causal.summary.json",
+    "policy": "the exact preregistered immutable model snapshot may be prefetched and cryptographically verified without inference; no natural-safety dataset/source or scoring-asset acquisition and no generation may occur before the terminal five-seed and nine-seed confirmatory P2 sequence gate passes"
   },
   "required_arms": [
     "native-dense",

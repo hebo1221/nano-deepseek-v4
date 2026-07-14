@@ -32,7 +32,8 @@
     "implementation": "research/adaptive_v4_memory/scripts/p3_sequence_gate.py",
     "p2_matrix": "artifacts/adaptive_v4_memory/paper_grade/p2-core-quality-matrix.json",
     "causal_gate": "artifacts/adaptive_v4_memory/paper_grade/p2-causal-ablation.summary.json",
-    "policy": "immutable model and public code prefetch is allowed without inference; complete dataset preparation and every model prediction require the terminal P2 core and causal audits",
+    "nine_seed_causal_gate": "artifacts/adaptive_v4_memory/paper_grade/p2-nine-seed-causal.summary.json",
+    "policy": "immutable model and public code prefetch is allowed without inference; complete dataset preparation and every model prediction require the terminal P2 core, five-seed causal, and nine-seed confirmatory causal audits",
     "observed_before_gate": {
       "complete_dataset_manifests": 0,
       "orphan_deterministic_task_files": 1,
