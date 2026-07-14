@@ -154,18 +154,26 @@ def test_final_source_inventory_verifies_gate_before_reusing_prefetch(
     (prefetch_root / "scbench").mkdir(parents=True)
     events: list[str] = []
     written: dict[str, object] = {}
+
+    def record_gate(_matrix: Path, _causal: Path) -> dict[str, bool]:
+        events.append("gate")
+        return {"passed": True}
+
+    def record_verification(destination: Path, _contract: object) -> dict[str, str]:
+        events.append("verify")
+        return {"path": str(destination), "revision": "a" * 40}
+
     monkeypatch.setattr(sources, "validate_manifest", lambda _manifest: {"valid": True})
     monkeypatch.setattr(sources, "workspace_source", lambda: {"commit": "b" * 40, "dirty": False})
     monkeypatch.setattr(
         sources,
         "require_p3_sequence_gate",
-        lambda _matrix, _causal: events.append("gate") or {"passed": True},
+        record_gate,
     )
     monkeypatch.setattr(
         sources,
         "acquire_or_verify_source",
-        lambda destination, _contract: events.append("verify")
-        or {"path": str(destination), "revision": "a" * 40},
+        record_verification,
     )
     monkeypatch.setattr(
         sources,
