@@ -139,17 +139,49 @@ def audit_arm(
         )
         assert isinstance(revisions, dict)
         _require(isinstance(row.get("arm_config"), dict), f"Missing arm config: {identifier}")
+        if benchmark in {"RULER", "LongBench-v2", "LongMemEval", "MRCR"}:
+            _require(
+                isinstance(row.get("token_boundary_retreat"), int)
+                and row["token_boundary_retreat"] >= 0,
+                f"Invalid exact-token boundary accounting: {identifier}",
+            )
         if benchmark == "RULER":
             _sha256_value(row.get("input_token_ids_sha256"), f"{identifier} token ids")
             _sha256_value(
                 revisions.get("official_scorer_sha256"),
                 f"{identifier} official scorer",
             )
-            _require(
-                isinstance(row.get("token_boundary_retreat"), int)
-                and row["token_boundary_retreat"] >= 0,
-                f"Invalid exact-token boundary accounting: {identifier}",
-            )
+        if benchmark == "LongMemEval":
+            judge = row.get("judge")
+            if row["status"] == "scored":
+                _require(
+                    isinstance(judge, dict)
+                    and judge.get("model") == "gpt-4o-2024-08-06"
+                    and judge.get("status") == "scored"
+                    and isinstance(judge.get("returned_model"), str)
+                    and bool(judge["returned_model"])
+                    and isinstance(judge.get("response_id"), str)
+                    and bool(judge["response_id"])
+                    and isinstance(judge.get("created"), int)
+                    and isinstance(judge.get("prompt"), str)
+                    and bool(judge["prompt"])
+                    and isinstance(judge.get("raw_response"), str)
+                    and bool(judge["raw_response"])
+                    and isinstance(judge.get("latency_ms"), (int, float))
+                    and judge["latency_ms"] >= 0,
+                    f"Incomplete official judge provenance: {identifier}",
+                )
+            elif row.get("failure_type") == "judge-blocked":
+                _require(
+                    isinstance(judge, dict)
+                    and judge.get("model") == "gpt-4o-2024-08-06"
+                    and judge.get("status") == "blocked"
+                    and isinstance(judge.get("reason"), str)
+                    and bool(judge["reason"])
+                    and isinstance(row.get("generated_tokens_observed"), int)
+                    and row["generated_tokens_observed"] >= 0,
+                    f"Incomplete blocked-judge provenance: {identifier}",
+                )
         if row["status"] == "scored":
             score = row.get("score")
             if not isinstance(score, (int, float)) or not 0.0 <= score <= 1.0:

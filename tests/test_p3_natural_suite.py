@@ -55,6 +55,15 @@ def test_natural_suite_freezes_full_scale_and_sample_contract() -> None:
     assert "full rendered prompt once" in ruler_execution["tokenization_boundary"]
     assert "all five" in ruler_execution["dataset_binding"]
     assert "pinned KVPress RULER scorer" in ruler_execution["scorer_binding"]
+    longmem_execution = manifest["benchmarks"]["LongMemEval"]["execution"]
+    assert longmem_execution["runner"].endswith("run_p3_longmemeval.py")
+    assert longmem_execution["judge_modes"] == ["blocked", "openai-explicit"]
+    assert "do not substitute" in longmem_execution["blocked_judge_policy"]
+    assert "raw judge prompt and response" in longmem_execution["judge_provenance"]
+    assert (
+        "full rendered history-plus-question prompt once"
+        in longmem_execution["tokenization_boundary"]
+    )
 
 
 def test_natural_suite_rejects_task_subselection_and_silent_truncation() -> None:
@@ -284,6 +293,7 @@ def _raw_arm_cell(tmp_path: Path) -> tuple[Path, Path, Path]:
             "exact_input_tokens": 8192,
             "generation_reserve_tokens": 128,
             "raw_prompt_sha256": "2" * 64,
+            "token_boundary_retreat": 0,
             "latency_ms": 10.0,
             "peak_hbm_bytes": 100,
             "hot_resident_bytes": 80,
@@ -308,6 +318,7 @@ def _raw_arm_cell(tmp_path: Path) -> tuple[Path, Path, Path]:
             "exact_input_tokens": 300000,
             "generation_reserve_tokens": 128,
             "raw_prompt_sha256": "3" * 64,
+            "token_boundary_retreat": 0,
             "latency_ms": 0.0,
             "peak_hbm_bytes": 0,
             "hot_resident_bytes": 0,
@@ -408,6 +419,71 @@ def test_ruler_arm_audit_requires_exact_tokens_scorer_and_dataset_set(tmp_path: 
             expected_examples=2,
             manifest_digest="4" * 64,
             allowed_failures={"unsupported-context"},
+        )
+
+
+def test_longmem_arm_audit_requires_official_or_blocked_judge_provenance(
+    tmp_path: Path,
+) -> None:
+    cell, raw, _causal = _raw_arm_cell(tmp_path)
+    records = [json.loads(line) for line in raw.read_text().splitlines()]
+    for row in records:
+        row["benchmark"] = "LongMemEval"
+    records[0]["judge"] = {
+        "model": "gpt-4o-2024-08-06",
+        "returned_model": "gpt-4o-2024-08-06",
+        "response_id": "response-1",
+        "created": 123,
+        "status": "scored",
+        "prompt": "judge prompt",
+        "raw_response": "yes",
+        "latency_ms": 4.5,
+    }
+    records[1].update(
+        {
+            "raw_response": "generated answer",
+            "parsed_response": "generated answer",
+            "failure_type": "judge-blocked",
+            "stop_reason": "eos-or-special-token",
+            "generated_tokens_observed": 7,
+            "judge": {
+                "model": "gpt-4o-2024-08-06",
+                "status": "blocked",
+                "reason": "explicit-no-paid-judge-mode",
+                "latency_ms": 0.0,
+            },
+        }
+    )
+    raw.write_text("".join(json.dumps(row) + "\n" for row in records))
+    payload = json.loads(cell.read_text())
+    payload["benchmark"] = "LongMemEval"
+    payload["raw_records"]["sha256"] = _digest(raw)
+    cell.write_text(json.dumps(payload))
+
+    result, _dependencies = audit_arm(
+        benchmark="LongMemEval",
+        arm="native-dense",
+        artifact_path=cell,
+        expected_examples=2,
+        manifest_digest="4" * 64,
+        allowed_failures={"judge-blocked"},
+    )
+
+    assert result["scored_examples"] == 1
+    assert result["failures_by_type"] == {"judge-blocked": 1}
+
+    records[0]["judge"].pop("response_id")
+    raw.write_text("".join(json.dumps(row) + "\n" for row in records))
+    payload["raw_records"]["sha256"] = _digest(raw)
+    cell.write_text(json.dumps(payload))
+    with pytest.raises(ValueError, match="official judge provenance"):
+        audit_arm(
+            benchmark="LongMemEval",
+            arm="native-dense",
+            artifact_path=cell,
+            expected_examples=2,
+            manifest_digest="4" * 64,
+            allowed_failures={"judge-blocked"},
         )
 
 

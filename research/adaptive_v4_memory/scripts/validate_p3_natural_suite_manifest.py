@@ -155,6 +155,21 @@ def validate_manifest(payload: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("LongMemEval_S must retain all 500 questions.")
     if longmem["official_judge"]["model"] != "gpt-4o-2024-08-06":
         raise ValueError("LongMemEval official judge revision must be explicit.")
+    longmem_execution = longmem["execution"]
+    if (
+        longmem_execution["runner"] != "research/adaptive_v4_memory/scripts/run_p3_longmemeval.py"
+        or longmem_execution["resume_unit"] != "one example within one arm"
+        or "no retrieval, compression, or truncation" not in longmem_execution["history_boundary"]
+        or longmem_execution["judge_modes"] != ["blocked", "openai-explicit"]
+        or "never invoke" not in longmem_execution["paid_judge_policy"]
+        or "do not substitute" not in longmem_execution["blocked_judge_policy"]
+        or "raw judge prompt and response" not in longmem_execution["judge_provenance"]
+        or "full rendered history-plus-question prompt once"
+        not in longmem_execution["tokenization_boundary"]
+        or "include as zero" not in longmem_execution["operational_failure_policy"]
+        or "exact bytes" not in longmem_execution["hot_memory_measurement"]
+    ):
+        raise ValueError("LongMemEval execution, judge, or physical-memory contract drifted.")
 
     mrcr = _benchmark(payload, "MRCR")
     if mrcr["dataset"]["revision"] != EXPECTED_REVISIONS["MRCR-data"]:

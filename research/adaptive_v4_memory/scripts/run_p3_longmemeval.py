@@ -79,6 +79,12 @@ def load_rows(path: Path) -> list[dict[str, Any]]:
             "LongMemEval question id is missing or duplicated.",
         )
         identifiers.add(identifier)
+        _require(
+            isinstance(row["question_type"], str)
+            and bool(row["question_type"])
+            and isinstance(row["answer"], str),
+            "LongMemEval question type and answer must be text.",
+        )
         prompt_parts(row)
     return payload
 
@@ -97,7 +103,7 @@ def _load_official_judge_module(source_root: Path, expected_sha256: str) -> Any:
 
 def judge_response(
     *, module: Any, client: Any, row: dict[str, Any], response: str
-) -> tuple[float, str, str]:
+) -> tuple[float, dict[str, Any]]:
     prompt = module.get_anscheck_prompt(
         row["question_type"],
         row["question"],
@@ -105,6 +111,7 @@ def judge_response(
         response,
         abstention="_abs" in row["question_id"],
     )
+    started = time.perf_counter_ns()
     completion = module.chat_completions_with_backoff(
         client,
         model=JUDGE_MODEL,
@@ -113,8 +120,18 @@ def judge_response(
         temperature=0,
         max_tokens=10,
     )
+    latency_ms = (time.perf_counter_ns() - started) / 1_000_000.0
     raw = completion.choices[0].message.content.strip()
-    return float("yes" in raw.lower()), prompt, raw
+    return float("yes" in raw.lower()), {
+        "model": JUDGE_MODEL,
+        "returned_model": getattr(completion, "model", None),
+        "response_id": getattr(completion, "id", None),
+        "created": getattr(completion, "created", None),
+        "status": "scored",
+        "prompt": prompt,
+        "raw_response": raw,
+        "latency_ms": latency_ms,
+    }
 
 
 def judge_blocked_record(
@@ -125,6 +142,8 @@ def judge_blocked_record(
     peak_hbm_bytes: int,
     hot_resident_bytes: int,
     reason: str,
+    generated_tokens: int,
+    generation_stop_reason: str,
 ) -> dict[str, Any]:
     return {
         **base,
@@ -133,11 +152,17 @@ def judge_blocked_record(
         "parsed_response": response,
         "score": None,
         "failure_type": "judge-blocked",
-        "stop_reason": "judge-blocked",
+        "stop_reason": generation_stop_reason,
+        "generated_tokens_observed": generated_tokens,
         "latency_ms": latency_ms,
         "peak_hbm_bytes": peak_hbm_bytes,
         "hot_resident_bytes": hot_resident_bytes,
-        "judge": {"model": JUDGE_MODEL, "status": "blocked", "reason": reason},
+        "judge": {
+            "model": JUDGE_MODEL,
+            "status": "blocked",
+            "reason": reason,
+            "latency_ms": 0.0,
+        },
     }
 
 
@@ -181,7 +206,11 @@ def load_dependencies(
         "Natural source inventory is not a clean verified artifact.",
     )
     source_entry = source_inventory["benchmarks"][BENCHMARK]
-    _require(source_entry["revision"] == CODE_REVISION, "LongMemEval source revision drifted.")
+    _require(
+        source_entry["revision"] == CODE_REVISION
+        and source_entry.get("clean_tracked_tree") is True,
+        "LongMemEval source revision drifted.",
+    )
     source_root = Path(source_entry["path"])
     expected_source_files = contract["upstream_code"]["files_sha256"]
     observed_source_files = {row["path"]: row["sha256"] for row in source_entry["files"]}
@@ -207,12 +236,21 @@ def load_dependencies(
     return manifest, selection, data_path, source_root
 
 
-def _existing_records(progress: Path, partial: Path, identity: dict[str, Any]) -> list[dict[str, Any]]:
+def _existing_records(
+    progress: Path, partial: Path, identity: dict[str, Any]
+) -> list[dict[str, Any]]:
     if not progress.exists() and not partial.exists():
         atomic_json(progress, identity)
+        partial.touch()
         return []
+    if progress.is_file() and not partial.exists():
+        partial.touch()
+    if partial.is_file() and partial.stat().st_size == 0 and not progress.exists():
+        atomic_json(progress, identity)
     _require(progress.is_file() and partial.is_file(), "Partial LongMemEval state is incomplete.")
-    _require(json.loads(progress.read_text()) == identity, "Partial LongMemEval provenance drifted.")
+    _require(
+        json.loads(progress.read_text()) == identity, "Partial LongMemEval provenance drifted."
+    )
     records = [json.loads(line) for line in partial.read_text().splitlines() if line]
     _require(len(records) <= EXPECTED_EXAMPLES, "Partial LongMemEval has too many records.")
     return records
@@ -311,9 +349,9 @@ def main() -> None:
     if args.judge_mode == "openai":
         api_key = os.environ.get("OPENAI_API_KEY")
         _require(bool(api_key), "OPENAI_API_KEY is required for explicit OpenAI judge mode.")
-        judge_source_digest = manifest["benchmarks"][BENCHMARK]["upstream_code"][
-            "files_sha256"
-        ]["src/evaluation/evaluate_qa.py"]
+        judge_source_digest = manifest["benchmarks"][BENCHMARK]["upstream_code"]["files_sha256"][
+            "src/evaluation/evaluate_qa.py"
+        ]
         judge_module = _load_official_judge_module(source_root, judge_source_digest)
         judge_client = judge_module.OpenAI(api_key=api_key)
 
@@ -337,9 +375,7 @@ def main() -> None:
             "source_inventory_sha256": source_inventory_digest,
             "causal_gate_sha256": causal_digest,
             "fixed_selection_sha256": selection_digest,
-            "model_snapshot_digest_set_sha256": manifest["model"][
-                "snapshot_digest_set_sha256"
-            ],
+            "model_snapshot_digest_set_sha256": manifest["model"]["snapshot_digest_set_sha256"],
             "arm_config": arm_config(arm, selection, selection_digest),
             "judge_mode": args.judge_mode,
             "seed": args.seed,
@@ -412,6 +448,7 @@ def main() -> None:
                         "exact_input_tokens": rendered["exact_input_tokens"],
                         "generation_reserve_tokens": GENERATION_RESERVE,
                         "raw_prompt_sha256": rendered["raw_prompt_sha256"],
+                        "token_boundary_retreat": rendered["token_boundary_retreat"],
                         "arm_config": settings,
                         "revisions": {
                             "model_revision": MODEL_REVISION,
@@ -454,6 +491,14 @@ def main() -> None:
                                     peak_hbm_bytes=peak_hbm,
                                 )
                             elif args.judge_mode == "blocked":
+                                generated = len(
+                                    tokenizer.encode(response, add_special_tokens=False)
+                                )
+                                generation_stop = (
+                                    "max-new-tokens"
+                                    if generated >= GENERATION_RESERVE
+                                    else "eos-or-special-token"
+                                )
                                 record = judge_blocked_record(
                                     base,
                                     response=response,
@@ -461,15 +506,19 @@ def main() -> None:
                                     peak_hbm_bytes=peak_hbm,
                                     hot_resident_bytes=resident_bytes,
                                     reason="explicit-no-paid-judge-mode",
+                                    generated_tokens=generated,
+                                    generation_stop_reason=generation_stop,
                                 )
                             else:
-                                score, judge_prompt, judge_raw = judge_response(
+                                score, judge = judge_response(
                                     module=judge_module,
                                     client=judge_client,
                                     row=row,
                                     response=response,
                                 )
-                                generated = len(tokenizer.encode(response, add_special_tokens=False))
+                                generated = len(
+                                    tokenizer.encode(response, add_special_tokens=False)
+                                )
                                 record = {
                                     **base,
                                     "status": "scored",
@@ -486,12 +535,7 @@ def main() -> None:
                                     "latency_ms": latency_ms,
                                     "peak_hbm_bytes": peak_hbm,
                                     "hot_resident_bytes": resident_bytes,
-                                    "judge": {
-                                        "model": JUDGE_MODEL,
-                                        "status": "scored",
-                                        "prompt": judge_prompt,
-                                        "raw_response": judge_raw,
-                                    },
+                                    "judge": judge,
                                 }
                         except torch.cuda.OutOfMemoryError as error:
                             record = failure_record(
@@ -509,6 +553,14 @@ def main() -> None:
                                 else "runtime-error"
                             )
                             if failure_type == "judge-blocked":
+                                generated = len(
+                                    tokenizer.encode(response or "", add_special_tokens=False)
+                                )
+                                generation_stop = (
+                                    "max-new-tokens"
+                                    if generated >= GENERATION_RESERVE
+                                    else "eos-or-special-token"
+                                )
                                 record = judge_blocked_record(
                                     base,
                                     response=response or "",
@@ -516,6 +568,8 @@ def main() -> None:
                                     peak_hbm_bytes=torch.cuda.max_memory_allocated(),
                                     hot_resident_bytes=resident_bytes,
                                     reason=f"{type(error).__name__}: {error}",
+                                    generated_tokens=generated,
+                                    generation_stop_reason=generation_stop,
                                 )
                             else:
                                 record = failure_record(
@@ -565,9 +619,7 @@ def main() -> None:
                     "path": str(args.fixed_selection),
                     "sha256": selection_digest,
                 },
-                "model_snapshot_digest_set_sha256": manifest["model"][
-                    "snapshot_digest_set_sha256"
-                ],
+                "model_snapshot_digest_set_sha256": manifest["model"]["snapshot_digest_set_sha256"],
                 "p3_sequence_decision": sequence_decision,
                 "environment": environment,
                 "raw_records": {"path": str(records), "sha256": sha256(records)},

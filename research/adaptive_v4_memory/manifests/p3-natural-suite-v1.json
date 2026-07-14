@@ -267,7 +267,22 @@
         "record_raw_judge_prompt_and_response": true,
         "unavailable_action": "report_official_metric_blocked; auxiliary deterministic metrics may not replace it"
       },
-      "primary_metric": "official LLM-judge accuracy overall and by question type"
+      "primary_metric": "official LLM-judge accuracy overall and by question type",
+      "execution": {
+        "runner": "research/adaptive_v4_memory/scripts/run_p3_longmemeval.py",
+        "raw_output_root": "artifacts/adaptive_v4_memory/paper_grade/p3/natural/longmemeval",
+        "native_arm_artifact": "artifacts/adaptive_v4_memory/paper_grade/p3/natural/longmemeval/native-dense/cell.json",
+        "fixed_arm_artifact": "artifacts/adaptive_v4_memory/paper_grade/p3/natural/longmemeval/strongest-memory-matched-fixed/cell.json",
+        "resume_unit": "one example within one arm",
+        "history_boundary": "all orig-session natural-language history is retained; no retrieval, compression, or truncation before model context-fit classification",
+        "judge_modes": ["blocked", "openai-explicit"],
+        "paid_judge_policy": "never invoke the paid official judge implicitly; explicit openai mode requires OPENAI_API_KEY",
+        "blocked_judge_policy": "retain the local model response, generation stop reason, generated-token count, and physical measurements as a judge-blocked terminal failure scored as zero in the conservative mean; do not substitute an auxiliary score",
+        "judge_provenance": "for an official score retain the raw judge prompt and response, requested and returned model, response id, created timestamp, and judge latency",
+        "tokenization_boundary": "tokenize the full rendered history-plus-question prompt once and slice only at its stable context-token prefix",
+        "operational_failure_policy": "retain explicit failure and include as zero in the conservative all-expected quality mean",
+        "hot_memory_measurement": "exact bytes in DynamicCache key/value tensors immediately after prefill compression and before current-question decoding"
+      }
     },
     "MRCR": {
       "dataset": {

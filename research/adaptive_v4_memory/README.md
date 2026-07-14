@@ -166,6 +166,11 @@ tensors, so a BPE merge at the boundary cannot change the evaluated input.
 RULER additionally binds all five generated dataset manifests and the pinned
 official scorer digest into each terminal arm artifact.
 
+LongMemEval runs all 500 cleaned full-history questions for both required arms.
+Without an explicitly enabled `gpt-4o-2024-08-06` judge, generations and
+physical measurements are retained as `judge-blocked` terminal records and no
+auxiliary score is substituted for the official metric.
+
 The P4 reference systems matrix freezes 108 scale/context/generation/load cells,
 with five warmups and 30 measured repetitions for resident and tiered policies.
 Policy failures are isolated: if resident OOMs, the surviving tiered policy is
