@@ -59,3 +59,29 @@ def test_cost_proxy_arithmetic_is_reproducible() -> None:
     assert mode_b["estimated_usd_for_24_hours"] == (
         24 * mode_b["estimated_usd_per_hour"]
     )
+
+
+def test_resolution_and_execution_contract_is_complete() -> None:
+    manifest = _manifest()
+    verification = manifest["post_acquisition_verification"]
+    protocol = manifest["execution_protocol"]
+    systems = protocol["mode_b_physical_systems"]
+
+    assert verification["serving_checkpoint"]["current_status"] == "unavailable"
+    assert len(verification["serving_checkpoint"]["required_before_execution"]) >= 4
+    assert protocol["mode_a_quality_only"]["benchmarks"] == [
+        "RULER",
+        "SCBench",
+        "LongBench-v2",
+        "LongMemEval",
+        "MRCR",
+    ]
+    assert systems["context_tokens"] == [8192, 32768, 131072, 512000]
+    assert systems["batch_sizes"] == [1, 4, 8, 16]
+    assert systems["concurrency"] == [1, 8, 32]
+    assert systems["generation_tokens"] == [128, 512, 2048]
+    assert systems["warmups_per_cell"] == 5
+    assert systems["timed_repetitions_per_cell"] == 30
+    assert len(systems["required_metrics"]) >= 10
+    assert len(protocol["paired_invariants"]) >= 5
+    assert len(protocol["artifact_contract"]) >= 4

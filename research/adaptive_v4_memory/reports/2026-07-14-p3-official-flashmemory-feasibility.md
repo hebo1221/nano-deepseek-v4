@@ -61,8 +61,12 @@ compatibility has not been established, so these numbers are not an executable q
 ## Execution boundary
 
 Once the checkpoint contract is resolved and suitable hardware is provisioned, use
-the pinned acquisition and launch commands in the manifest. Record native and
-FlashMemory runs with identical prompts, decoding, admission limits, concurrency,
-warmup, and measurement windows. Until then, the Qwen3 RULER experiment remains a
-separate compatible-model transfer result and must never be labeled official
-DeepSeek-V4 evidence.
+the pinned acquisition, post-download verification, and launch contracts in the
+manifest. Mode A covers quality only across RULER, SCBench, LongBench-v2,
+LongMemEval, and MRCR. Mode B freezes the physical systems matrix at contexts
+8K/32K/128K/512K, batch 1/4/8/16, concurrency 1/8/32, generation
+128/512/2048, five warmups, and 30 paired measurements per cell. Record native and
+FlashMemory runs with identical prompts, decoding, admission limits, load order,
+warmup, and measurement windows, retaining every partial or failed cell. Until
+then, the Qwen3 experiments remain separate compatible-model transfer results and
+must never be labeled official DeepSeek-V4 evidence.

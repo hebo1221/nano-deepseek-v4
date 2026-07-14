@@ -11,6 +11,21 @@ from typing import Any
 
 ALLOWED_CLASSES = {"success", "bounded-result", "negative-result", "unverified"}
 P4_EXPECTED_CELLS = 216
+BOUNDARY_EXPERIMENT_IDS = {
+    "paper_grade_study": "adaptive-v4-memory-paper-grade-v1",
+    "experiment_scale_audit": "adaptive-v4-memory-experiment-scale-audit-v1",
+    "p2_causal_factorial": "p2-causal-factorial-v1",
+    "online_learned_lookahead": "p1-online-learned-lookahead-v1",
+    "p3_ruler": "p3-ruler-qwen3-1.7b-v1",
+    "natural_suite": "p3-natural-language-suite-v1",
+    "safety_stress": "p3-qwen3-4b-safety-stress-v1",
+    "natural_safety": "p3-qwen3-4b-natural-safety-v1",
+    "p4_500k_context": "p4-500k-context-preflight-v1",
+    "p4_reference_systems": "p4-reference-systems-matrix-v1",
+    "p4_production_systems": "p4-production-systems-matrix-v1",
+    "official_deepseek_v4": "p3-official-flashmemory-deepseek-v4-v1",
+    "production_runtime_blocker": "p4-production-resource-blocker-v1",
+}
 
 
 def sha256(path: Path) -> str:
@@ -30,6 +45,97 @@ def _load(path: Path) -> dict[str, Any]:
     _require(path.is_file(), f"Missing required P5 input: {path}")
     payload = json.loads(path.read_text())
     _require(isinstance(payload, dict), f"P5 input is not a JSON object: {path}")
+    return payload
+
+
+def _validate_boundary_manifest(name: str, path: Path) -> dict[str, Any]:
+    payload = _load(path)
+    _require(name in BOUNDARY_EXPERIMENT_IDS, f"Unknown boundary manifest: {name}")
+    _require(
+        payload.get("experiment_id") == BOUNDARY_EXPERIMENT_IDS[name],
+        f"Wrong {name} boundary experiment id.",
+    )
+    if name == "official_deepseek_v4":
+        blockers = payload.get("blockers")
+        blocker_ids = (
+            {row.get("id") for row in blockers if isinstance(row, dict)}
+            if isinstance(blockers, list)
+            else set()
+        )
+        modes = payload.get("runtime_modes", {})
+        audit = payload.get("public_release_contract_audit", {})
+        verification = payload.get("post_acquisition_verification", {})
+        protocol = payload.get("execution_protocol", {})
+        _require(
+            payload.get("status") == "blocked_before_execution",
+            "Official DeepSeek-V4 boundary no longer fails closed.",
+        )
+        _require(
+            "not_an_executed_result" in payload.get("evidence_tier", ""),
+            "Official DeepSeek-V4 boundary could be misread as executed evidence.",
+        )
+        _require(
+            modes.get("mode_a_score_masking", {}).get("full_kv_remains_on_gpu") is True,
+            "Official DeepSeek-V4 Mode A memory boundary drifted.",
+        )
+        _require(
+            modes.get("mode_b_pd_disaggregated", {}).get("total_accelerator_slots") == 16,
+            "Official DeepSeek-V4 Mode B topology boundary drifted.",
+        )
+        _require(
+            audit.get("pt_checkpoint_present_in_published_hf_snapshot") is False
+            and audit.get("documented_safetensors_to_serving_conversion_present") is False,
+            "Official DeepSeek-V4 checkpoint blocker drifted.",
+        )
+        _require(
+            blocker_ids
+            >= {
+                "checkpoint-runtime-contract",
+                "local-memory-capacity",
+                "accelerator-topology",
+            },
+            "Official DeepSeek-V4 hard blockers are incomplete.",
+        )
+        _require(
+            verification.get("serving_checkpoint", {}).get("current_status")
+            == "unavailable"
+            and len(
+                verification.get("serving_checkpoint", {}).get(
+                    "required_before_execution", []
+                )
+            )
+            >= 4,
+            "Official DeepSeek-V4 checkpoint verification contract is incomplete.",
+        )
+        systems = protocol.get("mode_b_physical_systems", {})
+        _require(
+            systems.get("context_tokens") == [8192, 32768, 131072, 512000]
+            and systems.get("batch_sizes") == [1, 4, 8, 16]
+            and systems.get("concurrency") == [1, 8, 32]
+            and systems.get("generation_tokens") == [128, 512, 2048]
+            and systems.get("warmups_per_cell") == 5
+            and systems.get("timed_repetitions_per_cell") == 30,
+            "Official DeepSeek-V4 systems execution matrix drifted.",
+        )
+        _require(
+            len(systems.get("required_metrics", [])) >= 10
+            and len(protocol.get("paired_invariants", [])) >= 5
+            and len(protocol.get("artifact_contract", [])) >= 4,
+            "Official DeepSeek-V4 execution evidence contract is incomplete.",
+        )
+    elif name == "production_runtime_blocker":
+        _require(
+            payload.get("status") == "external-fused-dynamic-runtime-unavailable",
+            "External production runtime boundary no longer fails closed.",
+        )
+        _require(
+            "never relabel" in payload.get("failure_policy", ""),
+            "External production runtime anti-relabel policy is missing.",
+        )
+        _require(
+            "multi-GPU" in payload.get("claim_boundary", ""),
+            "External production runtime claim boundary is incomplete.",
+        )
     return payload
 
 
@@ -567,9 +673,13 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         path = Path(contract["path"])
         loaded[name] = _validate_evidence(name, path, contract)
         inputs.append({"name": name, "path": str(path), "sha256": sha256(path)})
+    _require(
+        set(manifest["boundary_manifests"]) == set(BOUNDARY_EXPERIMENT_IDS),
+        "P5 boundary manifest set drifted.",
+    )
     for name, raw_path in manifest["boundary_manifests"].items():
         path = Path(raw_path)
-        _load(path)
+        _validate_boundary_manifest(name, path)
         inputs.append({"name": name, "path": str(path), "sha256": sha256(path)})
 
     classes = classify_evidence(

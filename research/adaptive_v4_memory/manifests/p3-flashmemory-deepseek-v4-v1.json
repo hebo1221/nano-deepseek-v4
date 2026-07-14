@@ -133,6 +133,114 @@
     "hf download deepseek-ai/DeepSeek-V4-Flash --revision 60d8d70770c6776ff598c94bb586a859a38244f1 --local-dir /models/deepseek-v4-flash",
     "hf download libertywing/FlashMemory-Deepseek-V4 --revision 70431ba57bfcce00ffd9d0174aed1b8ca5c32a2e --local-dir /weights/flashmemory-public"
   ],
+  "post_acquisition_verification": {
+    "code": {
+      "required_revision": "39fe54def633496cb2b1bd44898135e3547058b3",
+      "verify_every_tracked_file_sha256": true
+    },
+    "base_model": {
+      "required_revision": "60d8d70770c6776ff598c94bb586a859a38244f1",
+      "required_safetensors_files": 46,
+      "required_safetensors_bytes": 159617149040
+    },
+    "public_retriever": {
+      "required_revision": "70431ba57bfcce00ffd9d0174aed1b8ca5c32a2e",
+      "required_weight_path": "weights/flashmemory_ds_v4.safetensors",
+      "required_weight_bytes": 509633992,
+      "required_weight_sha256": "ba20d264c309246f824d4471ccc637061b3b0268fe8e4eecc121474a1e5cd02a"
+    },
+    "serving_checkpoint": {
+      "required_path": "checkpoints/top3_R930_joint.pt",
+      "current_status": "unavailable",
+      "required_before_execution": [
+        "immutable artifact digest and provenance",
+        "successful weights-only load through the pinned serving loader",
+        "architecture-shape validation against the pinned serving implementation",
+        "golden logit and selected-chunk parity against an upstream fixture"
+      ]
+    }
+  },
+  "execution_protocol": {
+    "mode_a_quality_only": {
+      "comparison_arms": [
+        "official-deepseek-v4-native-dense",
+        "official-flashmemory-score-masking"
+      ],
+      "benchmarks": [
+        "RULER",
+        "SCBench",
+        "LongBench-v2",
+        "LongMemEval",
+        "MRCR"
+      ],
+      "ruler_context_tokens": [
+        8192,
+        16384,
+        32768,
+        65536,
+        131072
+      ],
+      "claim_boundary": "Selection-quality transfer only; full KV residency prevents any physical-memory or concurrency claim."
+    },
+    "mode_b_physical_systems": {
+      "comparison_arms": [
+        "official-deepseek-v4-resident-native",
+        "official-flashmemory-pd-disaggregated"
+      ],
+      "context_tokens": [
+        8192,
+        32768,
+        131072,
+        512000
+      ],
+      "batch_sizes": [
+        1,
+        4,
+        8,
+        16
+      ],
+      "concurrency": [
+        1,
+        8,
+        32
+      ],
+      "generation_tokens": [
+        128,
+        512,
+        2048
+      ],
+      "warmups_per_cell": 5,
+      "timed_repetitions_per_cell": 30,
+      "required_metrics": [
+        "TTFT p50/p95/p99/max",
+        "TPOT p50/p95/p99/max",
+        "end-to-end latency p50/p95/p99/max",
+        "generated-token throughput",
+        "allocated/reserved/peak/process/device HBM",
+        "fragmentation bytes and ratio",
+        "logical/hot/cold/pinned-host cache bytes",
+        "H2D/D2H/useful-transfer bytes and counts",
+        "useful-transfer ratio",
+        "misses/late-misses/prefetches/evictions",
+        "controller and indexer time",
+        "terminal and tail failures"
+      ]
+    },
+    "paired_invariants": [
+      "identical prompt bytes and token IDs",
+      "identical decoding parameters and random seeds",
+      "identical admission limits, load order, warmup count, and measurement windows",
+      "prediction equality or task-score deltas retained for every paired request",
+      "native and FlashMemory runs executed on the same pinned software and hardware allocation"
+    ],
+    "failure_policy": "Every requested cell is terminal as complete, partial, or failed; failed and unsupported cells remain in denominators and may not be silently retried into a selected result.",
+    "artifact_contract": [
+      "raw per-request timestamps, token counts, predictions, scores, and failure records",
+      "raw per-repetition physical memory, transfer, cache, miss, and controller counters",
+      "host, accelerator, network, container, driver, CUDA, dependency, model, retriever, and dataset provenance",
+      "SHA-256 digests for every raw artifact, implementation, checkpoint, dataset, summary, and generated table"
+    ]
+  },
   "execution_preconditions": [
     "Obtain the exact top3_R930_joint.pt expected by the released SGLang integration, or a maintainer-supplied deterministic conversion from the published safetensors file.",
     "Verify converted/public checkpoint logits and selected chunk IDs against an upstream golden fixture before serving.",

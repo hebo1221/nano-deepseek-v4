@@ -4,6 +4,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 SCRIPTS = Path(__file__).resolve().parents[1] / "research/adaptive_v4_memory/scripts"
 sys.path.insert(0, str(SCRIPTS))
 
@@ -215,6 +217,41 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
     assert manifest["boundary_manifests"]["experiment_scale_audit"].endswith(
         "experiment-scale-audit-v1.json"
     )
+    assert set(manifest["boundary_manifests"]) == set(package.BOUNDARY_EXPERIMENT_IDS)
+
+
+def test_official_v4_boundary_validation_fails_closed(tmp_path: Path) -> None:
+    root = Path(__file__).resolve().parents[1]
+    source = (
+        root
+        / "research/adaptive_v4_memory/manifests/p3-flashmemory-deepseek-v4-v1.json"
+    )
+    payload = json.loads(source.read_text())
+    package._validate_boundary_manifest("official_deepseek_v4", source)
+
+    payload["status"] = "executed"
+    tampered = tmp_path / "official-v4.json"
+    tampered.write_text(json.dumps(payload))
+    with pytest.raises(ValueError, match="no longer fails closed"):
+        package._validate_boundary_manifest("official_deepseek_v4", tampered)
+
+
+def test_production_runtime_boundary_validation_rejects_relabeling(
+    tmp_path: Path,
+) -> None:
+    root = Path(__file__).resolve().parents[1]
+    source = (
+        root
+        / "research/adaptive_v4_memory/manifests/p4-production-resource-blocker-v1.json"
+    )
+    payload = json.loads(source.read_text())
+    package._validate_boundary_manifest("production_runtime_blocker", source)
+
+    payload["failure_policy"] = "static results may stand in for external runtime evidence"
+    tampered = tmp_path / "production-runtime.json"
+    tampered.write_text(json.dumps(payload))
+    with pytest.raises(ValueError, match="anti-relabel policy"):
+        package._validate_boundary_manifest("production_runtime_blocker", tampered)
 
 
 def test_p5_classification_preserves_claim_boundaries() -> None:
