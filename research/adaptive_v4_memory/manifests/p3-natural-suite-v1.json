@@ -18,6 +18,11 @@
       "date": "2026-07-14",
       "change": "permit prefetch and cryptographic verification only for the already preregistered immutable model revision and pinned public code dependencies before the P2 causal gate; retain the gate for benchmark dataset payload acquisition, baseline selection, dataset generation, and every prediction",
       "reason": "record the exact pre-execution infrastructure action transparently: the model snapshot plus pinned RULER and KVPress code checkouts were present; no model inference, natural-suite benchmark payload acquisition, or outcome inspection occurred"
+    },
+    {
+      "date": "2026-07-14",
+      "change": "freeze generation_seed=42 for every natural benchmark and require the runner, arm-cell run identity, and audit summary to agree on that seed",
+      "reason": "a pre-execution audit found that four runners relied on an unfrozen CLI default; no natural-suite benchmark payload acquisition, baseline selection, dataset generation, or model inference had occurred"
     }
   ],
   "protocol": "research/adaptive_v4_memory/paper_grade_protocol.md",
@@ -165,6 +170,7 @@
       }
     },
     "SCBench": {
+      "generation_seed": 42,
       "rouge_metric": {
         "repo_id": "evaluate-metric/rouge",
         "revision": "ea7c4bf30945a2a8e31f2b1b3bdba6cd617eebe2",
@@ -239,6 +245,7 @@
       }
     },
     "LongBench-v2": {
+      "generation_seed": 42,
       "dataset": {
         "repo_id": "zai-org/LongBench-v2",
         "legacy_repo_id": "THUDM/LongBench-v2",
@@ -287,6 +294,7 @@
       }
     },
     "LongMemEval": {
+      "generation_seed": 42,
       "dataset": {
         "repo_id": "xiaowu0162/longmemeval-cleaned",
         "revision": "98d7416c24c778c2fee6e6f3006e7a073259d48f",
@@ -344,6 +352,7 @@
       }
     },
     "MRCR": {
+      "generation_seed": 42,
       "dataset": {
         "repo_id": "openai/mrcr",
         "revision": "f4c69fae7cf81f7ca26b9fee34b392a50f6b8a1d",

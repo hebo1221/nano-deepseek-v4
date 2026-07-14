@@ -51,6 +51,7 @@ EXPECTED_LICENSES = {
     "LongMemEval-code": "mit",
     "MRCR-data": "mit",
 }
+EXPECTED_GENERATION_SEED = 42
 
 
 def _require_sha256(value: Any, label: str) -> None:
@@ -74,11 +75,15 @@ def validate_manifest(payload: dict[str, Any]) -> dict[str, Any]:
     amendments = payload.get("amendments", [])
     if (
         not isinstance(amendments, list)
-        or len(amendments) != 3
+        or len(amendments) != 4
         or "RULER scorer SHA-256" not in amendments[0].get("change", "")
         or "tokenizer.json SHA-256" not in amendments[1].get("change", "")
         or "pinned public code dependencies" not in amendments[2].get("change", "")
         or "no model inference" not in amendments[2].get("reason", "")
+        or "generation_seed=42" not in amendments[3].get("change", "")
+        or "no natural-suite benchmark payload acquisition" not in amendments[3].get(
+            "reason", ""
+        )
     ):
         raise ValueError("Natural-suite pre-execution correction record drifted.")
     if tuple(payload.get("execution_order", ())) != EXPECTED_ORDER:
@@ -278,6 +283,12 @@ def validate_manifest(payload: dict[str, Any]) -> dict[str, Any]:
     ):
         raise ValueError("MRCR execution or exact-token contract drifted.")
 
+    if any(
+        _benchmark(payload, name).get("generation_seed") != EXPECTED_GENERATION_SEED
+        for name in EXPECTED_ORDER
+    ):
+        raise ValueError("Every natural benchmark must retain generation_seed=42.")
+
     all_data_files: list[dict[str, Any]] = []
     benchmark_contracts = {
         "SCBench": scbench,
@@ -346,6 +357,7 @@ def validate_manifest(payload: dict[str, Any]) -> dict[str, Any]:
         "mrcr_examples_through_128k": 1500,
         "dataset_files": len(all_data_files),
         "dataset_bytes": expected_bytes,
+        "generation_seed": EXPECTED_GENERATION_SEED,
     }
 
 

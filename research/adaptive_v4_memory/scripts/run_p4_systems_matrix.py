@@ -117,6 +117,8 @@ def require_p3_audit(path: Path) -> dict[str, Any]:
         or audit.get("all_required_artifacts_verified") is not True
         or audit.get("all_required_baseline_cells_terminal") is not True
         or audit.get("all_failure_accounting_complete") is not True
+        or audit.get("all_run_identities_verified") is not True
+        or audit.get("all_terminal_measurement_schema_verified") is not True
         or audit.get("safety_stress_terminal") is not True
         or audit.get("natural_safety_terminal") is not True
         or audit.get("benchmarks_terminal") != len(P3_BENCHMARKS)

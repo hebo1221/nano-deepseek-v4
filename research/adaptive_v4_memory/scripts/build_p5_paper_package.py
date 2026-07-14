@@ -943,6 +943,8 @@ def classify_evidence(
         and natural_audit.get("all_failure_accounting_complete") is True
         and natural_audit.get("all_source_implementations_verified") is True
         and natural_audit.get("all_record_revisions_verified") is True
+        and natural_audit.get("all_run_identities_verified") is True
+        and natural_audit.get("all_terminal_measurement_schema_verified") is True
         and natural_audit.get("all_paired_quality_contrasts_verified") is True
         and natural_audit.get("dataset_license_revision_inventory_verified") is True
         and natural_audit.get("upstream_code_license_revision_inventory_verified") is True
@@ -982,6 +984,7 @@ def classify_evidence(
         and natural_safety_audit.get("ifeval_official_terminal") is True
         and natural_safety_audit.get("ifeval_input_pairing_verified") is True
         and natural_safety_audit.get("ifeval_expected_prompts_per_arm") == 541
+        and natural_safety_audit.get("ifeval_raw_evidence_verified") is True
         and natural_safety_audit.get("failure_accounting_complete") is True
         and natural_safety_audit.get("source_implementations_verified") is True
         and natural_safety_audit.get("raw_artifact_digests_verified") is True
@@ -994,6 +997,11 @@ def classify_evidence(
         and ifeval_audit.get("input_pairing_verified") is True
         and ifeval_audit.get("official_scoring_accounted") is True
         and ifeval_audit.get("source_implementations_verified") is True
+        and ifeval_audit.get("generation_dependency_digests_verified") is True
+        and ifeval_audit.get("generation_record_revisions_verified") is True
+        and ifeval_audit.get("generation_terminal_measurement_schema_verified") is True
+        and ifeval_audit.get("generation_seed_verified") is True
+        and ifeval_audit.get("official_result_schema_verified") is True
         and ifeval_audit.get("expected_prompts_per_arm") == 541
     )
     longsafety_audit = p3_longsafety["audit"]

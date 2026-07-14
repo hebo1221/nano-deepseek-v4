@@ -277,6 +277,10 @@ def main() -> None:
     manifest, selection = load_dependencies(
         args.manifest, args.dataset_inventory, args.fixed_selection
     )
+    _require(
+        args.seed == manifest["benchmarks"][BENCHMARK]["generation_seed"],
+        "Natural RULER generation seed drifted from the frozen manifest.",
+    )
     model_snapshot = args.model_snapshot.resolve()
     verify_snapshot(model_snapshot, manifest["model"])
     manifest_digest = sha256(args.manifest)

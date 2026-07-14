@@ -133,6 +133,11 @@ def summarize(*, manifest_path: Path, longsafety_path: Path, ifeval_path: Path) 
         and ifeval_audit.get("input_pairing_verified") is True
         and ifeval_audit.get("official_scoring_accounted") is True
         and ifeval_audit.get("source_implementations_verified") is True
+        and ifeval_audit.get("generation_dependency_digests_verified") is True
+        and ifeval_audit.get("generation_record_revisions_verified") is True
+        and ifeval_audit.get("generation_terminal_measurement_schema_verified") is True
+        and ifeval_audit.get("generation_seed_verified") is True
+        and ifeval_audit.get("official_result_schema_verified") is True
         and ifeval_audit.get("expected_prompts_per_arm") == expected_ifeval,
         "IFEval official audit contract drifted.",
     )
@@ -212,6 +217,7 @@ def summarize(*, manifest_path: Path, longsafety_path: Path, ifeval_path: Path) 
             "ifeval_official_terminal": True,
             "ifeval_input_pairing_verified": True,
             "ifeval_expected_prompts_per_arm": expected_ifeval,
+            "ifeval_raw_evidence_verified": True,
             "failure_accounting_complete": True,
             "source_implementations_verified": True,
             "raw_artifact_digests_verified": True,

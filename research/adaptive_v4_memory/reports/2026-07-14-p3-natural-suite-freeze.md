@@ -2,7 +2,9 @@
 
 Status: amended and frozen before execution. Exact-revision snapshot verification
 corrected transcription errors in the RULER scorer and tokenizer digests before
-any natural prediction; the amendments are recorded in the authoritative manifest.
+any natural prediction. A later pre-execution audit also froze generation seed 42
+for all five runners instead of relying on four CLI defaults; the amendments are
+recorded in the authoritative manifest.
 Only the already frozen model revision and pinned public RULER/KVPress code
 dependencies were prefetched and hash-verified. Natural-suite benchmark payload
 acquisition, baseline selection, generated datasets, and inference remain blocked
@@ -14,7 +16,7 @@ The natural transfer stage is now an executable, digest-bound protocol rather
 than a list of benchmark names. The authoritative contract is
 `manifests/p3-natural-suite-v1.json`, and
 `scripts/validate_p3_natural_suite_manifest.py` rejects task selection, revision
-drift, sample-count drift, or silent prompt truncation.
+drift, sample-count drift, generation-seed drift, or silent prompt truncation.
 
 The primary compatible model is
 [`Qwen/Qwen3-4B-Instruct-2507`](https://huggingface.co/Qwen/Qwen3-4B-Instruct-2507)

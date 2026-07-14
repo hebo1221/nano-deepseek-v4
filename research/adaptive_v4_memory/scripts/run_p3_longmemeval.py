@@ -340,6 +340,10 @@ def main() -> None:
     manifest, selection, data_path, source_root = load_dependencies(
         args.manifest, args.dataset_inventory, args.source_inventory, args.fixed_selection
     )
+    _require(
+        args.seed == manifest["benchmarks"][BENCHMARK]["generation_seed"],
+        "LongMemEval generation seed drifted from the frozen manifest.",
+    )
     model_snapshot = args.model_snapshot.resolve()
     verify_snapshot(model_snapshot, manifest["model"])
     rows = load_rows(data_path)

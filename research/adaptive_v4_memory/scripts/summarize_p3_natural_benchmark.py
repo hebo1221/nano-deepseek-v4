@@ -315,6 +315,7 @@ def audit_arm(
     manifest_digest: str,
     allowed_failures: set[str],
     expected_revisions: dict[str, str] | None = None,
+    expected_seed: int = 42,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     artifact = json.loads(artifact_path.read_text())
     _require(
@@ -339,6 +340,47 @@ def audit_arm(
         artifact.get("experiment_manifest", {}).get("sha256") == manifest_digest,
         f"{benchmark}/{arm} manifest drifted.",
     )
+    run_identity = artifact.get("run_identity")
+    _require(isinstance(run_identity, dict), f"Missing {benchmark}/{arm} run identity.")
+    assert isinstance(run_identity, dict)
+    identity_contract = {
+        "source_commit": artifact["source"]["commit"],
+        "implementation_sha256": source_implementation["implementation_sha256"],
+        "manifest_sha256": manifest_digest,
+        "inventory_sha256": artifact.get("dataset_inventory", {}).get("sha256"),
+        "causal_gate_sha256": artifact.get("causal_gate", {}).get("sha256"),
+        "fixed_selection_sha256": artifact.get("fixed_baseline_selection", {}).get("sha256"),
+        "model_snapshot_digest_set_sha256": artifact.get(
+            "model_snapshot_digest_set_sha256"
+        ),
+        "seed": expected_seed,
+    }
+    _require(
+        all(run_identity.get(key) == value for key, value in identity_contract.items()),
+        f"{benchmark}/{arm} run identity drifted.",
+    )
+    identity_arm_config = run_identity.get("arm_config")
+    _require(
+        isinstance(identity_arm_config, dict) and bool(identity_arm_config),
+        f"{benchmark}/{arm} run arm config is missing.",
+    )
+    if benchmark == "RULER":
+        _require(
+            run_identity.get("dataset_manifest_digest_set_sha256")
+            == artifact.get("benchmark_dataset_digest_set_sha256"),
+            f"{benchmark}/{arm} dataset run identity drifted.",
+        )
+    if benchmark == "SCBench" and expected_revisions is not None:
+        _require(
+            run_identity.get("scorer_bundle_sha256")
+            == expected_revisions["scorer_sha256"],
+            f"{benchmark}/{arm} scorer run identity drifted.",
+        )
+    if benchmark == "LongMemEval":
+        _require(
+            run_identity.get("judge_mode") in {"blocked", "openai"},
+            f"{benchmark}/{arm} judge-mode run identity drifted.",
+        )
     raw_metadata = artifact.get("raw_records", {})
     raw_path = Path(raw_metadata.get("path", ""))
     _require(raw_path.is_file(), f"Missing {benchmark}/{arm} raw records.")
@@ -369,7 +411,7 @@ def audit_arm(
         _require(row.get("benchmark") == benchmark and row.get("arm") == arm, "Record drift.")
         _require(row.get("status") in STATUS_VALUES, f"Invalid record status: {identifier}")
         _require(
-            _nonnegative_integer(row.get("exact_input_tokens"))
+            _positive_integer(row.get("exact_input_tokens"))
             and _positive_integer(row.get("generation_reserve_tokens")),
             f"Invalid token accounting: {identifier}",
         )
@@ -416,13 +458,20 @@ def audit_arm(
                 revisions == expected_revisions,
                 f"Frozen record revisions drifted: {identifier}",
             )
-        _require(isinstance(row.get("arm_config"), dict), f"Missing arm config: {identifier}")
+        _require(
+            row.get("arm_config") == identity_arm_config,
+            f"Record arm config drifted: {identifier}",
+        )
         for metric in measurement_values:
             measurement_values[metric].append(row[metric])
         if benchmark in {"RULER", "SCBench", "LongBench-v2", "LongMemEval", "MRCR"}:
             _require(
                 _nonnegative_integer(row.get("token_boundary_retreat")),
                 f"Invalid exact-token boundary accounting: {identifier}",
+            )
+            _require(
+                row["token_boundary_retreat"] <= row["exact_input_tokens"],
+                f"Impossible exact-token boundary accounting: {identifier}",
             )
         if benchmark == "RULER":
             _sha256_value(row.get("input_token_ids_sha256"), f"{identifier} token ids")
@@ -481,6 +530,12 @@ def audit_arm(
             if not _unit_interval_number(score):
                 raise ValueError(f"Invalid score: {identifier}")
             _require(row.get("failure_type") is None, f"Scored record has failure: {identifier}")
+            _require(
+                bool(row["raw_response"].strip())
+                and _positive_integer(row.get("generated_tokens_observed"))
+                and row.get("stop_reason") in {"max-new-tokens", "eos-or-special-token"},
+                f"Incomplete scored generation evidence: {identifier}",
+            )
             scored += 1
             score_sum += float(cast(int | float, score))
             for metric in scored_measurement_values:
@@ -490,6 +545,11 @@ def audit_arm(
             if not isinstance(failure, str) or failure not in allowed_failures:
                 raise ValueError(f"Unregistered failure: {failure}")
             _require(row.get("score") is None, f"Failed record has a score: {identifier}")
+            generated = row.get("generated_tokens_observed")
+            _require(
+                generated is None or _positive_integer(generated),
+                f"Invalid failed generation evidence: {identifier}",
+            )
             failures[failure] = failures.get(failure, 0) + 1
         canonical = json.dumps(row, sort_keys=True, separators=(",", ":"))
         record_digests.append(hashlib.sha256(canonical.encode()).hexdigest())
@@ -506,6 +566,14 @@ def audit_arm(
         "model_snapshot_digest_set_sha256": artifact.get("model_snapshot_digest_set_sha256"),
         "benchmark_dataset_digest_set_sha256": benchmark_dataset_digest,
     }
+    source_inventory_metadata = artifact.get("evaluation_source_inventory")
+    if source_inventory_metadata is not None:
+        source_inventory = _dependency(source_inventory_metadata, "evaluation source inventory")
+        _require(
+            run_identity.get("source_inventory_sha256") == source_inventory["sha256"],
+            f"{benchmark}/{arm} source-inventory run identity drifted.",
+        )
+        dependencies["evaluation_source_inventory"] = source_inventory
     _sha256_value(dependencies["model_snapshot_digest_set_sha256"], "model snapshot set")
     return (
         {
@@ -534,6 +602,8 @@ def audit_arm(
                 "\n".join(sorted(record_digests)).encode()
             ).hexdigest(),
             "source_implementation": source_implementation,
+            "run_identity_verified": True,
+            "terminal_measurement_schema_verified": True,
         },
         dependencies,
     )
@@ -554,6 +624,7 @@ def summarize_benchmark(
     allowed_failures = set(manifest["common_protocol"]["failure_accounting"])
     expected = manifest["suite_audit"]["per_arm_minimum_accounted_examples"][benchmark]
     expected_revisions = expected_record_revisions(benchmark, manifest)
+    expected_seed = manifest["benchmarks"][benchmark]["generation_seed"]
     arms: dict[str, Any] = {}
     dependencies: list[dict[str, Any]] = []
     for arm in required:
@@ -565,6 +636,7 @@ def summarize_benchmark(
             manifest_digest=manifest_digest,
             allowed_failures=allowed_failures,
             expected_revisions=expected_revisions,
+            expected_seed=expected_seed,
         )
         dependencies.append(dependency)
     causal = {row["causal_gate"]["sha256"] for row in dependencies}
@@ -617,6 +689,8 @@ def summarize_benchmark(
             "all_required_arms_input_paired": True,
             "all_source_implementations_verified": True,
             "all_record_revisions_verified": True,
+            "all_run_identities_verified": True,
+            "all_terminal_measurement_schema_verified": True,
             "raw_record_digest_set_sha256": hashlib.sha256(
                 "\n".join(
                     sorted(row["raw_record_digest_set_sha256"] for row in arms.values())

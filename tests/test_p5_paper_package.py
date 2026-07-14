@@ -103,6 +103,11 @@ def _ifeval_evidence() -> dict[str, object]:
             "input_pairing_verified": True,
             "official_scoring_accounted": True,
             "source_implementations_verified": True,
+            "generation_dependency_digests_verified": True,
+            "generation_record_revisions_verified": True,
+            "generation_terminal_measurement_schema_verified": True,
+            "generation_seed_verified": True,
+            "official_result_schema_verified": True,
             "expected_prompts_per_arm": 541,
         }
     }
@@ -121,6 +126,7 @@ def _natural_safety_evidence() -> dict[str, object]:
             "ifeval_official_terminal": True,
             "ifeval_input_pairing_verified": True,
             "ifeval_expected_prompts_per_arm": 541,
+            "ifeval_raw_evidence_verified": True,
             "failure_accounting_complete": True,
             "source_implementations_verified": True,
             "raw_artifact_digests_verified": True,
@@ -373,6 +379,18 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
     assert (
         manifest["evidence"]["p3_natural"]["required_audit"][
             "all_record_revisions_verified"
+        ]
+        is True
+    )
+    assert (
+        manifest["evidence"]["p3_natural"]["required_audit"][
+            "all_run_identities_verified"
+        ]
+        is True
+    )
+    assert (
+        manifest["evidence"]["p3_natural"]["required_audit"][
+            "all_terminal_measurement_schema_verified"
         ]
         is True
     )
@@ -670,9 +688,11 @@ def test_p5_classification_preserves_claim_boundaries() -> None:
                 "all_required_artifacts_verified": True,
                 "all_required_baseline_cells_terminal": True,
                 "all_failure_accounting_complete": True,
-                "all_source_implementations_verified": True,
-                "all_record_revisions_verified": True,
-                "all_paired_quality_contrasts_verified": True,
+                    "all_source_implementations_verified": True,
+                    "all_record_revisions_verified": True,
+                    "all_run_identities_verified": True,
+                    "all_terminal_measurement_schema_verified": True,
+                    "all_paired_quality_contrasts_verified": True,
                 "dataset_license_revision_inventory_verified": True,
                 "upstream_code_license_revision_inventory_verified": True,
                 "ruler_license_revision_manifest_verified": True,
@@ -752,9 +772,11 @@ def test_p5_success_requires_full_system_coverage() -> None:
                 "all_required_artifacts_verified": True,
                 "all_required_baseline_cells_terminal": True,
                 "all_failure_accounting_complete": True,
-                "all_source_implementations_verified": True,
-                "all_record_revisions_verified": True,
-                "all_paired_quality_contrasts_verified": True,
+                    "all_source_implementations_verified": True,
+                    "all_record_revisions_verified": True,
+                    "all_run_identities_verified": True,
+                    "all_terminal_measurement_schema_verified": True,
+                    "all_paired_quality_contrasts_verified": True,
                 "dataset_license_revision_inventory_verified": True,
                 "upstream_code_license_revision_inventory_verified": True,
                 "ruler_license_revision_manifest_verified": True,
@@ -825,6 +847,8 @@ def test_p5_marks_all_failed_production_coverage_unverified() -> None:
                 "all_failure_accounting_complete": True,
                 "all_source_implementations_verified": True,
                 "all_record_revisions_verified": True,
+                "all_run_identities_verified": True,
+                "all_terminal_measurement_schema_verified": True,
                 "all_paired_quality_contrasts_verified": True,
                 "dataset_license_revision_inventory_verified": True,
                 "upstream_code_license_revision_inventory_verified": True,

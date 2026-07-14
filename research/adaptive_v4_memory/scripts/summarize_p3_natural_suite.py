@@ -130,6 +130,14 @@ def audit_benchmark(
         f"{name} record revision audit failed.",
     )
     _require(
+        audit.get("all_run_identities_verified") is True,
+        f"{name} run identity audit failed.",
+    )
+    _require(
+        audit.get("all_terminal_measurement_schema_verified") is True,
+        f"{name} terminal measurement audit failed.",
+    )
+    _require(
         audit.get("all_failure_accounting_complete") is True,
         f"{name} failure accounting is incomplete.",
     )
@@ -143,6 +151,11 @@ def audit_benchmark(
     arm_rows: dict[str, Any] = {}
     for arm in required_arms:
         row = arms[arm]
+        _require(
+            row.get("run_identity_verified") is True
+            and row.get("terminal_measurement_schema_verified") is True,
+            f"{name}/{arm} execution evidence audit failed.",
+        )
         failures = row.get("failures_by_type", {})
         _require(isinstance(failures, dict), f"{name}/{arm} failure map invalid.")
         _require(
@@ -867,6 +880,8 @@ def summarize(
             "all_failure_accounting_complete": True,
             "all_source_implementations_verified": True,
             "all_record_revisions_verified": True,
+            "all_run_identities_verified": True,
+            "all_terminal_measurement_schema_verified": True,
             "all_paired_quality_contrasts_verified": True,
             "dataset_license_revision_inventory_verified": True,
             "upstream_code_license_revision_inventory_verified": True,

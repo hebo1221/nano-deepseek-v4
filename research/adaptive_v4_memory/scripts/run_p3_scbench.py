@@ -382,6 +382,10 @@ def main() -> None:
         source_inventory_path=args.source_inventory,
         selection_path=args.fixed_selection,
     )
+    _require(
+        args.seed == manifest["benchmarks"][BENCHMARK]["generation_seed"],
+        "SCBench generation seed drifted from the frozen manifest.",
+    )
     model_snapshot = args.model_snapshot.resolve()
     verify_snapshot(model_snapshot, manifest["model"])
     expected = manifest["benchmarks"][BENCHMARK]["expected_predictions_per_arm"]

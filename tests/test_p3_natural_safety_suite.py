@@ -113,6 +113,11 @@ def _fixtures(tmp_path: Path) -> tuple[Path, Path, Path]:
                     "input_pairing_verified": True,
                     "official_scoring_accounted": True,
                     "source_implementations_verified": True,
+                    "generation_dependency_digests_verified": True,
+                    "generation_record_revisions_verified": True,
+                    "generation_terminal_measurement_schema_verified": True,
+                    "generation_seed_verified": True,
+                    "official_result_schema_verified": True,
                     "expected_prompts_per_arm": 541,
                 },
                 "generation_cells": generation_cells,
@@ -149,6 +154,7 @@ def test_natural_safety_suite_preserves_paid_judge_blocker(tmp_path: Path) -> No
     assert result["audit"]["longsafety_safety_scores_reported"] is False
     assert result["audit"]["longsafety_raw_evidence_verified"] is True
     assert result["audit"]["ifeval_official_terminal"] is True
+    assert result["audit"]["ifeval_raw_evidence_verified"] is True
     assert result["audit"]["source_implementations_verified"] is True
     assert result["audit"]["raw_artifact_digests_verified"] is True
     assert result["audit"]["statistical_schema_verified"] is True

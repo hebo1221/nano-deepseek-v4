@@ -129,6 +129,8 @@ def test_p4_requires_full_natural_suite_not_ruler_only(tmp_path: Path) -> None:
                     "all_required_artifacts_verified": True,
                     "all_required_baseline_cells_terminal": True,
                     "all_failure_accounting_complete": True,
+                    "all_run_identities_verified": True,
+                    "all_terminal_measurement_schema_verified": True,
                     "safety_stress_terminal": True,
                     "natural_safety_terminal": True,
                     "benchmarks_terminal": 5,

@@ -130,6 +130,8 @@
         "minimum_protocol_examples_accounted_per_arm": 45289,
         "all_source_implementations_verified": true,
         "all_record_revisions_verified": true,
+        "all_run_identities_verified": true,
+        "all_terminal_measurement_schema_verified": true,
         "all_paired_quality_contrasts_verified": true,
         "dataset_license_revision_inventory_verified": true,
         "upstream_code_license_revision_inventory_verified": true,
@@ -171,6 +173,7 @@
         "ifeval_official_terminal": true,
         "ifeval_input_pairing_verified": true,
         "ifeval_expected_prompts_per_arm": 541,
+        "ifeval_raw_evidence_verified": true,
         "failure_accounting_complete": true,
         "source_implementations_verified": true,
         "raw_artifact_digests_verified": true,
@@ -186,6 +189,11 @@
         "input_pairing_verified": true,
         "official_scoring_accounted": true,
         "source_implementations_verified": true,
+        "generation_dependency_digests_verified": true,
+        "generation_record_revisions_verified": true,
+        "generation_terminal_measurement_schema_verified": true,
+        "generation_seed_verified": true,
+        "official_result_schema_verified": true,
         "expected_prompts_per_arm": 541
       }
     },

@@ -47,7 +47,11 @@ def test_natural_suite_freezes_full_scale_and_sample_contract() -> None:
     result = validate_manifest(manifest)
 
     assert manifest["status"] == "amended_and_frozen_before_execution"
-    assert len(manifest["amendments"]) == 3
+    assert len(manifest["amendments"]) == 4
+    assert result["generation_seed"] == 42
+    assert {
+        contract["generation_seed"] for contract in manifest["benchmarks"].values()
+    } == {42}
     assert "pinned public code dependencies may be prefetched" in manifest["sequence_gate"]["policy"]
     assert "before natural-suite benchmark payload acquisition" in manifest["sequence_gate"]["policy"]
     assert manifest["benchmarks"]["RULER"]["lengths_tokens"] == [
@@ -104,6 +108,11 @@ def test_natural_suite_rejects_task_subselection_and_silent_truncation() -> None
     missing_fixed["common_protocol"]["p4_gate_baseline_arms"] = ["native-dense"]
     with pytest.raises(ValueError, match="both compatible natural baselines"):
         validate_manifest(missing_fixed)
+
+    seed_drift = deepcopy(manifest)
+    seed_drift["benchmarks"]["MRCR"]["generation_seed"] = 43
+    with pytest.raises(ValueError, match="generation_seed=42"):
+        validate_manifest(seed_drift)
 
 
 def test_natural_suite_rejects_frozen_license_and_ruler_digest_drift() -> None:
@@ -325,6 +334,8 @@ def _natural_benchmark_summaries(tmp_path: Path, manifest_path: Path) -> dict[st
                 "all_required_arms_input_paired": True,
                 "all_source_implementations_verified": True,
                 "all_record_revisions_verified": True,
+                "all_run_identities_verified": True,
+                "all_terminal_measurement_schema_verified": True,
                 "raw_record_digest_set_sha256": "0" * 64,
             },
             "arms": {
@@ -337,6 +348,8 @@ def _natural_benchmark_summaries(tmp_path: Path, manifest_path: Path) -> dict[st
                     "mean_score_over_scored": 0.5,
                     "mean_score_over_all_expected_failures_zero": 0.5,
                     "failure_rate": 1 / expected[name],
+                    "run_identity_verified": True,
+                    "terminal_measurement_schema_verified": True,
                     "measurements": {
                         "all_terminal_attempts": {
                             metric: distribution(expected[name])
@@ -699,6 +712,8 @@ def test_natural_suite_audit_requires_all_examples_and_baselines(tmp_path: Path)
     assert payload["audit"]["natural_safety_terminal"] is True
     assert payload["audit"]["all_paired_quality_contrasts_verified"] is True
     assert payload["audit"]["all_record_revisions_verified"] is True
+    assert payload["audit"]["all_run_identities_verified"] is True
+    assert payload["audit"]["all_terminal_measurement_schema_verified"] is True
     assert payload["audit"]["dataset_license_revision_inventory_verified"] is True
     assert payload["audit"]["upstream_code_license_revision_inventory_verified"] is True
     assert payload["audit"]["ruler_license_revision_manifest_verified"] is True
@@ -908,7 +923,8 @@ def _raw_arm_cell(tmp_path: Path) -> tuple[Path, Path, Path]:
             "hot_resident_bytes": 80,
             "raw_response": "The correct answer is (A)",
             "parsed_response": "A",
-            "stop_reason": "eos",
+            "stop_reason": "eos-or-special-token",
+            "generated_tokens_observed": 8,
             "revisions": {
                 "model_revision": "model",
                 "dataset_revision": "dataset",
@@ -947,6 +963,11 @@ def _raw_arm_cell(tmp_path: Path) -> tuple[Path, Path, Path]:
     ]
     raw.write_text("".join(json.dumps(row) + "\n" for row in records))
     cell = tmp_path / "cell.json"
+    source = _source_for("LongBench-v2")
+    arm_config = {"method": "native"}
+    inventory_digest = _digest(inventory)
+    causal_digest = _digest(causal)
+    selection_digest = _digest(selection)
     cell.write_text(
         json.dumps(
             {
@@ -954,19 +975,30 @@ def _raw_arm_cell(tmp_path: Path) -> tuple[Path, Path, Path]:
                 "benchmark": "LongBench-v2",
                 "arm": "native-dense",
                 "status": "terminal",
-                "source": _source_for("LongBench-v2"),
+                "source": source,
                 "experiment_manifest": {"sha256": "4" * 64},
                 "raw_records": {"path": str(raw), "sha256": _digest(raw)},
-                "causal_gate": {"path": str(causal), "sha256": _digest(causal)},
+                "causal_gate": {"path": str(causal), "sha256": causal_digest},
                 "dataset_inventory": {
                     "path": str(inventory),
-                    "sha256": _digest(inventory),
+                    "sha256": inventory_digest,
                 },
                 "fixed_baseline_selection": {
                     "path": str(selection),
-                    "sha256": _digest(selection),
+                    "sha256": selection_digest,
                 },
                 "model_snapshot_digest_set_sha256": "5" * 64,
+                "run_identity": {
+                    "source_commit": source["commit"],
+                    "implementation_sha256": source["implementation_sha256"],
+                    "manifest_sha256": "4" * 64,
+                    "inventory_sha256": inventory_digest,
+                    "causal_gate_sha256": causal_digest,
+                    "fixed_selection_sha256": selection_digest,
+                    "model_snapshot_digest_set_sha256": "5" * 64,
+                    "seed": 42,
+                    "arm_config": arm_config,
+                },
             }
         )
     )
@@ -1016,6 +1048,10 @@ def test_natural_benchmark_summary_reports_paired_quality_and_physical_contrasts
     native_payload["model_snapshot_digest_set_sha256"] = manifest["model"][
         "snapshot_digest_set_sha256"
     ]
+    native_payload["run_identity"]["manifest_sha256"] = _digest(manifest_path)
+    native_payload["run_identity"]["model_snapshot_digest_set_sha256"] = manifest["model"][
+        "snapshot_digest_set_sha256"
+    ]
     native_payload["raw_records"]["sha256"] = _digest(native_raw)
     native_cell.write_text(json.dumps(native_payload))
 
@@ -1029,6 +1065,7 @@ def test_natural_benchmark_summary_reports_paired_quality_and_physical_contrasts
     fixed_cell = tmp_path / "fixed-cell.json"
     fixed_payload = deepcopy(native_payload)
     fixed_payload["arm"] = "strongest-memory-matched-fixed"
+    fixed_payload["run_identity"]["arm_config"] = {"method": "fixed"}
     fixed_payload["raw_records"] = {
         "path": str(fixed_raw),
         "sha256": _digest(fixed_raw),
@@ -1098,6 +1135,41 @@ def test_natural_arm_audit_rejects_runner_digest_not_bound_to_commit(
         )
 
 
+def test_natural_arm_audit_rejects_seed_and_record_arm_config_drift(
+    tmp_path: Path,
+) -> None:
+    cell, raw, _causal = _raw_arm_cell(tmp_path)
+    payload = json.loads(cell.read_text())
+    payload["run_identity"]["seed"] = 43
+    cell.write_text(json.dumps(payload))
+
+    with pytest.raises(ValueError, match="run identity drifted"):
+        audit_arm(
+            benchmark="LongBench-v2",
+            arm="native-dense",
+            artifact_path=cell,
+            expected_examples=2,
+            manifest_digest="4" * 64,
+            allowed_failures={"unsupported-context"},
+        )
+
+    payload["run_identity"]["seed"] = 42
+    records = [json.loads(line) for line in raw.read_text().splitlines()]
+    records[0]["arm_config"] = {"method": "tampered"}
+    raw.write_text("".join(json.dumps(row) + "\n" for row in records))
+    payload["raw_records"]["sha256"] = _digest(raw)
+    cell.write_text(json.dumps(payload))
+    with pytest.raises(ValueError, match="Record arm config drifted"):
+        audit_arm(
+            benchmark="LongBench-v2",
+            arm="native-dense",
+            artifact_path=cell,
+            expected_examples=2,
+            manifest_digest="4" * 64,
+            allowed_failures={"unsupported-context"},
+        )
+
+
 def test_ruler_arm_audit_requires_exact_tokens_scorer_and_dataset_set(tmp_path: Path) -> None:
     cell, raw, _causal = _raw_arm_cell(tmp_path)
     records = [json.loads(line) for line in raw.read_text().splitlines()]
@@ -1110,8 +1182,13 @@ def test_ruler_arm_audit_requires_exact_tokens_scorer_and_dataset_set(tmp_path: 
     payload = json.loads(cell.read_text())
     payload["benchmark"] = "RULER"
     payload["source"] = _source_for("RULER")
+    payload["run_identity"]["source_commit"] = payload["source"]["commit"]
+    payload["run_identity"]["implementation_sha256"] = payload["source"][
+        "implementation_sha256"
+    ]
     payload["raw_records"]["sha256"] = _digest(raw)
     payload["benchmark_dataset_digest_set_sha256"] = "9" * 64
+    payload["run_identity"]["dataset_manifest_digest_set_sha256"] = "9" * 64
     cell.write_text(json.dumps(payload))
 
     result, dependencies = audit_arm(
@@ -1128,7 +1205,7 @@ def test_ruler_arm_audit_requires_exact_tokens_scorer_and_dataset_set(tmp_path: 
 
     payload.pop("benchmark_dataset_digest_set_sha256")
     cell.write_text(json.dumps(payload))
-    with pytest.raises(ValueError, match="dataset manifest set"):
+    with pytest.raises(ValueError, match="dataset run identity drifted"):
         audit_arm(
             benchmark="RULER",
             arm="native-dense",
@@ -1175,6 +1252,11 @@ def test_longmem_arm_audit_requires_official_or_blocked_judge_provenance(
     payload = json.loads(cell.read_text())
     payload["benchmark"] = "LongMemEval"
     payload["source"] = _source_for("LongMemEval")
+    payload["run_identity"]["source_commit"] = payload["source"]["commit"]
+    payload["run_identity"]["implementation_sha256"] = payload["source"][
+        "implementation_sha256"
+    ]
+    payload["run_identity"]["judge_mode"] = "blocked"
     payload["raw_records"]["sha256"] = _digest(raw)
     cell.write_text(json.dumps(payload))
 
@@ -1226,6 +1308,10 @@ def test_scbench_arm_audit_requires_turn_coordinates_tokens_and_scorer(
     payload = json.loads(cell.read_text())
     payload["benchmark"] = "SCBench"
     payload["source"] = _source_for("SCBench")
+    payload["run_identity"]["source_commit"] = payload["source"]["commit"]
+    payload["run_identity"]["implementation_sha256"] = payload["source"][
+        "implementation_sha256"
+    ]
     payload["raw_records"]["sha256"] = _digest(raw)
     cell.write_text(json.dumps(payload))
 

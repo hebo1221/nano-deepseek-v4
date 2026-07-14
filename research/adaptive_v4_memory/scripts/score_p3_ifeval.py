@@ -5,6 +5,7 @@ import hashlib
 import importlib
 import importlib.metadata
 import json
+import math
 import subprocess
 import sys
 from pathlib import Path
@@ -37,6 +38,30 @@ def _is_sha256(value: Any) -> bool:
     )
 
 
+def _nonnegative_integer(value: Any) -> bool:
+    return type(value) is int and value >= 0
+
+
+def _positive_integer(value: Any) -> bool:
+    return type(value) is int and value > 0
+
+
+def _finite_nonnegative_number(value: Any) -> bool:
+    return type(value) in (int, float) and (
+        type(value) is int or math.isfinite(value)
+    ) and value >= 0
+
+
+def _dependency(metadata: Any, label: str) -> str:
+    _require(isinstance(metadata, dict), f"Missing IFEval {label} dependency.")
+    path = Path(metadata.get("path", ""))
+    _require(
+        path.is_file() and metadata.get("sha256") == sha256(path),
+        f"IFEval {label} dependency drifted.",
+    )
+    return metadata["sha256"]
+
+
 def score_arm(
     *, inputs: list[dict[str, Any]], records: list[dict[str, Any]], official: Any
 ) -> list[dict[str, Any]]:
@@ -50,6 +75,15 @@ def score_arm(
         key = row["key"]
         _require(key in by_key, f"IFEval generation is missing key {key}.")
         record = by_key[key]
+        _require(
+            record.get("example_id") == f"ifeval:{key}"
+            and record.get("metadata")
+            == {
+                "instruction_id_list": row["instruction_id_list"],
+                "kwargs": row["kwargs"],
+            },
+            f"IFEval generation metadata drifted: {key}.",
+        )
         response = record.get("raw_response") if record.get("status") == "generated" else ""
         _require(isinstance(response, str), f"IFEval response is not text: {key}.")
         assert isinstance(response, str)
@@ -68,6 +102,13 @@ def score_arm(
                 == len(row["instruction_id_list"]),
                 f"IFEval official instruction result length drifted: {key}.",
             )
+            _require(
+                type(strict.follow_all_instructions) is bool
+                and type(loose.follow_all_instructions) is bool
+                and all(type(value) is bool for value in strict.follow_instruction_list)
+                and all(type(value) is bool for value in loose.follow_instruction_list),
+                f"IFEval official result schema drifted: {key}.",
+            )
             outputs.append(
                 {
                     "source_id": key,
@@ -77,9 +118,9 @@ def score_arm(
                     "response_sha256": hashlib.sha256(response.encode()).hexdigest(),
                     "instruction_id_list": row["instruction_id_list"],
                     "strict_follow_instruction_list": list(strict.follow_instruction_list),
-                    "strict_follow_all_instructions": bool(strict.follow_all_instructions),
+                    "strict_follow_all_instructions": strict.follow_all_instructions,
                     "loose_follow_instruction_list": list(loose.follow_instruction_list),
-                    "loose_follow_all_instructions": bool(loose.follow_all_instructions),
+                    "loose_follow_all_instructions": loose.follow_all_instructions,
                     "scorer_status": "scored",
                     "scorer_failure_type": None,
                 }
@@ -169,6 +210,51 @@ def paired_effect(
     }
 
 
+def audit_official_outputs(
+    outputs: list[dict[str, Any]], *, expected: int
+) -> None:
+    _require(len(outputs) == expected, "IFEval official result count drifted.")
+    identifiers: set[int] = set()
+    for row in outputs:
+        source_id = row.get("source_id")
+        instructions = row.get("instruction_id_list")
+        strict = row.get("strict_follow_instruction_list")
+        loose = row.get("loose_follow_instruction_list")
+        _require(
+            _nonnegative_integer(source_id)
+            and source_id not in identifiers
+            and row.get("example_id") == f"ifeval:{source_id}"
+            and row.get("generation_status") in {"generated", "failure"}
+            and _is_sha256(row.get("response_sha256"))
+            and isinstance(instructions, list)
+            and bool(instructions)
+            and all(isinstance(value, str) and value for value in instructions)
+            and isinstance(strict, list)
+            and isinstance(loose, list)
+            and len(strict) == len(loose) == len(instructions)
+            and all(type(value) is bool for value in strict)
+            and all(type(value) is bool for value in loose)
+            and type(row.get("strict_follow_all_instructions")) is bool
+            and type(row.get("loose_follow_all_instructions")) is bool
+            and row.get("scorer_status") in {"scored", "failure"},
+            f"IFEval official result schema drifted: {source_id}.",
+        )
+        assert isinstance(source_id, int)
+        identifiers.add(source_id)
+        if row["scorer_status"] == "scored":
+            _require(
+                row.get("scorer_failure_type") is None,
+                f"IFEval scored result has a failure type: {source_id}.",
+            )
+        else:
+            _require(
+                row.get("scorer_failure_type") == "official-scorer-error"
+                and isinstance(row.get("error_type"), str)
+                and isinstance(row.get("error"), str),
+                f"IFEval scorer failure schema drifted: {source_id}.",
+            )
+
+
 def _records(
     cell_path: Path,
     arm: str,
@@ -176,6 +262,7 @@ def _records(
     *,
     manifest_digest: str,
     inventory_digest: str,
+    manifest: dict[str, Any],
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     cell = json.loads(cell_path.read_text())
     _require(
@@ -187,9 +274,13 @@ def _records(
         and cell.get("expected_generations") == expected,
         f"IFEval generation cell is invalid: {arm}.",
     )
+    manifest_dependency = _dependency(cell.get("manifest"), "manifest")
+    observed_inventory_digest = _dependency(cell.get("asset_inventory"), "asset inventory")
+    natural_manifest_digest = _dependency(cell.get("natural_manifest"), "natural manifest")
+    fixed_selection_digest = _dependency(cell.get("fixed_selection"), "fixed selection")
     _require(
-        cell.get("manifest", {}).get("sha256") == manifest_digest
-        and cell.get("asset_inventory", {}).get("sha256") == inventory_digest,
+        manifest_dependency == manifest_digest
+        and observed_inventory_digest == inventory_digest,
         f"IFEval generation provenance drifted: {arm}.",
     )
     cell["verified_source_implementation"] = verify_git_implementation(
@@ -197,22 +288,116 @@ def _records(
         expected_path=GENERATION_RUNNER_PATH,
         label=f"IFEval/{arm}",
     )
+    natural_manifest = json.loads(Path(cell["natural_manifest"]["path"]).read_text())
+    fixed_selection = json.loads(Path(cell["fixed_selection"]["path"]).read_text())
+    expected_arm_config = (
+        {"press_name": "no_press", "compression_ratio": 0.0}
+        if arm == "native-dense"
+        else {
+            "press_name": fixed_selection.get("selected_arm"),
+            "compression_ratio": fixed_selection.get("selected_compression_ratio"),
+            "selection_sha256": fixed_selection_digest,
+        }
+    )
+    _require(
+        natural_manifest.get("model", {}).get("revision") == manifest["model"]["revision"]
+        and natural_manifest.get("model", {}).get("snapshot_digest_set_sha256")
+        == manifest["model"]["snapshot_digest_set_sha256"]
+        and fixed_selection.get("experiment_id") == "p3-fixed-baseline-selection-v1"
+        and fixed_selection.get("source", {}).get("dirty") is False,
+        f"IFEval frozen generation dependencies drifted: {arm}.",
+    )
+    identity = cell.get("run_identity")
+    _require(
+        isinstance(identity, dict)
+        and identity.get("source_commit") == cell["source"]["commit"]
+        and identity.get("implementation_sha256")
+        == cell["verified_source_implementation"]["implementation_sha256"]
+        and identity.get("manifest_sha256") == manifest_digest
+        and identity.get("asset_inventory_sha256") == inventory_digest
+        and identity.get("natural_manifest_sha256") == natural_manifest_digest
+        and identity.get("fixed_selection_sha256") == fixed_selection_digest
+        and identity.get("model_snapshot_digest_set_sha256")
+        == manifest["model"]["snapshot_digest_set_sha256"]
+        and identity.get("benchmark") == "IFEval"
+        and identity.get("arm_config") == expected_arm_config
+        and identity.get("seed") == manifest["statistics"]["generation_seed"],
+        f"IFEval run identity drifted: {arm}.",
+    )
     path = Path(cell.get("raw_records", {}).get("path", ""))
     _require(
         path.is_file() and cell["raw_records"]["sha256"] == sha256(path), "IFEval records drifted."
     )
     records = [json.loads(line) for line in path.read_text().splitlines() if line]
     _require(len(records) == expected, f"IFEval record count drifted: {arm}.")
-    _require(
-        all(
-            record.get("benchmark") == "IFEval"
+    expected_revisions = {
+        "model_revision": manifest["model"]["revision"],
+        "dataset_revision": manifest["benchmarks"]["IFEval"]["dataset"]["revision"],
+        "code_revision": manifest["benchmarks"]["IFEval"]["upstream_code"]["revision"],
+        "runner_sha256": cell["verified_source_implementation"]["implementation_sha256"],
+    }
+    failures = set(manifest["failure_accounting"])
+    identifiers: set[int] = set()
+    for record in records:
+        source_id = record.get("source_id")
+        metadata = record.get("metadata")
+        _require(
+            _nonnegative_integer(source_id)
+            and source_id not in identifiers
+            and record.get("example_id") == f"ifeval:{source_id}"
+            and record.get("benchmark") == "IFEval"
             and record.get("arm") == arm
+            and record.get("prompt_position") == "official-short"
+            and _positive_integer(record.get("exact_input_tokens"))
+            and record.get("generation_reserve_tokens")
+            == manifest["benchmarks"]["IFEval"]["protocol"]["generation_max_new_tokens"]
+            and _nonnegative_integer(record.get("token_boundary_retreat"))
+            and record.get("arm_config") == expected_arm_config
+            and record.get("revisions") == expected_revisions
             and _is_sha256(record.get("raw_prompt_sha256"))
             and _is_sha256(record.get("input_token_ids_sha256"))
-            for record in records
-        ),
-        f"IFEval record provenance drifted: {arm}.",
-    )
+            and isinstance(metadata, dict)
+            and isinstance(metadata.get("instruction_id_list"), list)
+            and bool(metadata["instruction_id_list"])
+            and all(
+                isinstance(value, str) and value
+                for value in metadata["instruction_id_list"]
+            )
+            and isinstance(metadata.get("kwargs"), list)
+            and len(metadata["kwargs"]) == len(metadata["instruction_id_list"]),
+            f"IFEval record provenance drifted: {source_id}.",
+        )
+        assert isinstance(source_id, int)
+        identifiers.add(source_id)
+        _require(
+            isinstance(record.get("raw_response"), str)
+            and record.get("score") is None
+            and isinstance(record.get("stop_reason"), str)
+            and bool(record["stop_reason"])
+            and _finite_nonnegative_number(record.get("latency_ms"))
+            and _nonnegative_integer(record.get("peak_hbm_bytes"))
+            and _nonnegative_integer(record.get("hot_resident_bytes")),
+            f"IFEval terminal measurements drifted: {source_id}.",
+        )
+        if record.get("status") == "generated":
+            _require(
+                record.get("failure_type") is None
+                and bool(record["raw_response"].strip())
+                and record.get("evaluation_status")
+                == "pending-official-deterministic-scorer"
+                and _nonnegative_integer(record.get("generated_tokens_observed"))
+                and record["generated_tokens_observed"]
+                <= record["generation_reserve_tokens"],
+                f"IFEval generated record drifted: {source_id}.",
+            )
+        else:
+            failure_type = record.get("failure_type")
+            _require(
+                record.get("status") == "failure"
+                and isinstance(failure_type, str)
+                and failure_type in failures,
+                f"IFEval failure record drifted: {source_id}.",
+            )
     return records, cell
 
 
@@ -397,15 +582,22 @@ def main() -> None:
             expected,
             manifest_digest=manifest_digest,
             inventory_digest=inventory_digest,
+            manifest=manifest,
         )
+    generation_by_source = {
+        arm: {record["source_id"]: record for record in generation[arm]}
+        for arm in ARMS
+    }
     _require(
-        all(
-            generation[ARMS[0]][index]["source_id"] == generation[ARMS[1]][index]["source_id"]
-            and generation[ARMS[0]][index]["raw_prompt_sha256"]
-            == generation[ARMS[1]][index]["raw_prompt_sha256"]
-            and generation[ARMS[0]][index]["input_token_ids_sha256"]
-            == generation[ARMS[1]][index]["input_token_ids_sha256"]
-            for index in range(expected)
+        set(generation_by_source[ARMS[0]]) == set(generation_by_source[ARMS[1]])
+        and all(
+            generation_by_source[ARMS[0]][key]["raw_prompt_sha256"]
+            == generation_by_source[ARMS[1]][key]["raw_prompt_sha256"]
+            and generation_by_source[ARMS[0]][key]["input_token_ids_sha256"]
+            == generation_by_source[ARMS[1]][key]["input_token_ids_sha256"]
+            and generation_by_source[ARMS[0]][key]["metadata"]
+            == generation_by_source[ARMS[1]][key]["metadata"]
+            for key in generation_by_source[ARMS[0]]
         ),
         "IFEval generation arms are not input paired.",
     )
@@ -422,6 +614,8 @@ def main() -> None:
     scored = {
         arm: score_arm(inputs=inputs, records=generation[arm], official=official) for arm in ARMS
     }
+    for arm in ARMS:
+        audit_official_outputs(scored[arm], expected=expected)
     output_root = args.output.parent / "ifeval-official"
     raw_outputs: dict[str, Any] = {}
     for arm in ARMS:
@@ -463,6 +657,11 @@ def main() -> None:
             "input_pairing_verified": True,
             "official_scoring_accounted": True,
             "source_implementations_verified": True,
+            "generation_dependency_digests_verified": True,
+            "generation_record_revisions_verified": True,
+            "generation_terminal_measurement_schema_verified": True,
+            "generation_seed_verified": True,
+            "official_result_schema_verified": True,
             "expected_prompts_per_arm": expected,
         },
         "arms": {
