@@ -954,6 +954,7 @@ def main() -> None:
             "independent_seed_clusters_per_cell": len(shard.TRAINING_SEEDS),
             "minimum_attainable_two_sided_seed_p": 2.0
             / (1 << len(shard.TRAINING_SEEDS)),
+            "seed_p_values_used_as_success_gate": False,
             **STRICT_RAW_AUDIT,
             "registered_causal_arms": len(shard.ALL_ARM_NAMES),
             "registered_paired_contrasts": len(CONTRASTS),
