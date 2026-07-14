@@ -19,7 +19,13 @@ from typing import Any, TypeGuard, cast
 import torch
 from adaptive_v4_gpu_lock import acquire_gpu_lock
 
-from nano_deepseek_v4 import DeepSeekV4Config, DeepSeekV4ForCausalLM, measure_cache_memory
+from nano_deepseek_v4 import (
+    DeepSeekV4Cache,
+    DeepSeekV4Config,
+    DeepSeekV4ForCausalLM,
+    SameTokenControllerConfig,
+    measure_cache_memory,
+)
 
 SCALES = ("s55", "s151")
 CONTEXTS = (8_192, 32_768, 131_072)
@@ -275,26 +281,46 @@ def run_policy(
     decode_tokens: list[torch.Tensor],
     input_digest: str,
     device: torch.device,
+    controller_config: SameTokenControllerConfig | None = None,
+    protected_end_positions: tuple[int, ...] = (),
 ) -> dict[str, Any]:
-    if policy not in POLICIES:
+    if controller_config is None and policy not in POLICIES:
         raise ValueError(f"Unknown P4 policy: {policy}")
+    if controller_config is not None and policy not in {"fixed+pins", "calibrated+pins"}:
+        raise ValueError(f"Unknown adaptive P4 policy: {policy}")
     _cleanup()
     baseline_allocated = torch.cuda.memory_allocated(device)
     torch.cuda.reset_peak_memory_stats(device)
     caches: list[Any] = []
     request_prefill_ms: list[float] = []
     cell_started = time.perf_counter_ns()
-    for prompt_cpu in prompts:
+    for request_index, prompt_cpu in enumerate(prompts):
         request_started = time.perf_counter_ns()
         cache: Any = None
+        if controller_config is not None:
+            cache = DeepSeekV4Cache(model.config)
+            cache.enable_same_token_memory_controller(
+                controller_config,
+                protected_end_positions=protected_end_positions,
+                trace_id=f"p4-adaptive:{policy}:{request_index}",
+                request_id=f"request-{request_index}",
+            )
         for start in range(0, prompt_cpu.shape[1], PREFILL_CHUNK):
             chunk = prompt_cpu[:, start : start + PREFILL_CHUNK].to(device)
             output = model(chunk, past_key_values=cache, use_cache=True)
             cache = output.past_key_values
             if cache is None:
                 raise RuntimeError("P4 prefill did not return a cache.")
-            if policy == "tiered-native" and start == 0:
-                cache.enable_csa_tiering(model.config.index_topk * prompt_cpu.shape[0])
+            if start == 0:
+                if policy == "tiered-native":
+                    cache.enable_csa_tiering(model.config.index_topk * prompt_cpu.shape[0])
+                elif controller_config is not None:
+                    cache.enable_csa_tiering(
+                        {
+                            layer: blocks_per_sequence * prompt_cpu.shape[0]
+                            for layer, blocks_per_sequence in controller_config.layer_budgets
+                        }
+                    )
             del output, chunk
         torch.cuda.synchronize()
         request_prefill_ms.append((time.perf_counter_ns() - request_started) / 1_000_000.0)
@@ -327,6 +353,43 @@ def run_policy(
     decode_elapsed_ms = (time.perf_counter_ns() - decode_started) / 1_000_000.0
     end_to_end_ms = (time.perf_counter_ns() - cell_started) / 1_000_000.0
     totals = _cache_totals(caches)
+    controller_stats = [
+        stats
+        for cache in caches
+        if (stats := cache.same_token_controller_stats()) is not None
+    ]
+    controller_time_ns = sum(stats.controller_time_ns for stats in controller_stats)
+    controller_payload: dict[str, Any] | None = None
+    if controller_config is not None:
+        layer_indices = controller_config.csa_layer_indices
+        observed_hot_blocks = {layer: 0 for layer in layer_indices}
+        for cache in caches:
+            tier_stats = cache.tiered_memory_stats()
+            if len(tier_stats) != len(layer_indices):
+                raise RuntimeError("Adaptive P4 tier statistics lost a configured CSA layer.")
+            for layer, stats in zip(layer_indices, tier_stats, strict=True):
+                observed_hot_blocks[layer] += stats.hot_blocks
+        controller_payload = {
+            "enabled": True,
+            "protected_end_positions": list(protected_end_positions),
+            "configured_blocks_per_sequence_by_layer": dict(
+                controller_config.layer_budgets
+            ),
+            "configured_physical_hot_blocks_by_layer": {
+                layer: blocks * prompts[0].shape[0] * len(prompts)
+                for layer, blocks in controller_config.layer_budgets
+            },
+            "observed_hot_blocks_by_layer": observed_hot_blocks,
+            "selected_queries": sum(stats.selected_queries for stats in controller_stats),
+            "finalized_control_points": sum(
+                stats.finalized_control_points for stats in controller_stats
+            ),
+            "fallback_control_points": sum(
+                stats.fallback_control_points for stats in controller_stats
+            ),
+            "telemetry_time_ns": sum(stats.telemetry_time_ns for stats in controller_stats),
+            "controller_time_ns": controller_time_ns,
+        }
     trace = IndexerTimingTrace()
     caches[0].memory_trace = trace
     probe = torch.zeros((prompts[0].shape[0], 1), dtype=torch.long, device=device)
@@ -370,7 +433,8 @@ def run_policy(
             "useful_h2d_ratio": totals["useful_h2d_bytes"] / max(totals["h2d_bytes"], 1),
         },
         "untimed_indexer_probe": asdict(trace),
-        "controller_time_ns": 0,
+        "controller_time_ns": controller_time_ns,
+        "adaptive_controller": controller_payload,
     }
     del caches, probe
     _cleanup()
