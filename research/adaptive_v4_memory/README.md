@@ -315,6 +315,15 @@ short-prefix speedup. The checked counterexample is in
 `results/p2-batch20-equivalence-s55.summary.json`; the matrix runner rejects
 larger batch sizes and validates this field when resuming shards.
 
+Paper-grade execution now has three resume-safe parallel entry points:
+`run_p2_core_parallel.py`, `run_p2_causal_parallel.py`, and
+`run_p1_online_lookahead_parallel.py`. They hold the same exclusive study GPU
+lock as the sequential runners, divide only disjoint seed/family coordinates,
+and preserve the original shard implementation digests. The parent process
+publishes a canonical matrix only after checking complete Cartesian coverage,
+dependency hashes, and raw-artifact hashes. This is an execution-throughput
+change, not a protocol, sample-size, or reported systems-performance change.
+
 Before any held-out causal-factorial shard was generated, the execution
 contract was amended to reuse a forward only when the complete frozen
 `SameTokenControllerConfig` has both the same canonical SHA-256 digest and exact

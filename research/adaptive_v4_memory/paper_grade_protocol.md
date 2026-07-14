@@ -1,6 +1,6 @@
 # Paper-grade expansion protocol
 
-Protocol version: 1.2
+Protocol version: 1.3
 Frozen: 2026-07-14  
 Amended: 2026-07-14, before causal-factorial held-out execution
 Status: active; P2 synthetic core runs first, followed by causal ablations,
@@ -17,6 +17,14 @@ descriptive, non-causal, and prohibited from calibration, memory matching,
 method selection, or the primary gate. It also replaces the marginal six-profile
 P4 sweeps with the complete 4 batch × 3 load/concurrency factorial before any
 systems cell is generated.
+
+Version 1.3 changes execution scheduling only. The frozen examples, seeds,
+arms, budgets, statistics, and implementation digests are unchanged. Disjoint
+seed/family groups may run in three same-accelerator worker processes under one
+exclusive study lock; every worker writes a distinct artifact path, and a
+single parent verifies exact Cartesian coverage and raw digests before emitting
+the canonical matrix. The online learned-lookahead runner additionally reuses
+one immutable checkpoint load across shards from the same scale and seed.
 
 ## 1. Primary questions
 
@@ -98,6 +106,23 @@ The enforced causal execution chain is:
 No stage may consume 807-series quality to tune the fixed mixture. A failed
 calibration-memory cell or equivalence audit blocks held-out execution for that
 cell instead of permitting a post-hoc repair.
+
+The resume-safe execution commands are:
+
+```bash
+python research/adaptive_v4_memory/scripts/run_p2_core_parallel.py --scale s151 --workers 3
+python research/adaptive_v4_memory/scripts/run_p2_causal_parallel.py --workers 3
+python research/adaptive_v4_memory/scripts/run_p1_online_lookahead_parallel.py --workers 3
+```
+
+The core parallel runner preserves already verified shards from the other
+scale. The causal runner partitions the five training seeds without overlap and
+rejects any missing or duplicate one of the 9,000 coordinates. The online
+runner refuses to publish its progress matrix unless all 6,750 label shards,
+20 policies, and 9,000 held-out test shards independently pass their original
+implementation and dependency checks. Parallel scheduling is not system
+performance evidence; shard wall times from concurrent execution are excluded
+from P4 latency and throughput claims.
 
 ## 3. Models and seeds
 

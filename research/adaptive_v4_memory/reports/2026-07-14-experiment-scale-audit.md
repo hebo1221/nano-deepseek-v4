@@ -18,6 +18,15 @@ deterministic scoring; the paid LongSafety judge remains blocked. These units
 are reported separately and are never combined into a
 misleading headline total.
 
+Execution is scheduled with three disjoint same-accelerator workers for the
+remaining S151 core scale, the causal factorial, and the online learned
+lookahead study. This does not multiply experimental units: coordinates remain
+exactly those frozen above. It reduces idle accelerator time during the
+long-generation slices and eliminates per-shard checkpoint reloads in the
+online study. Canonical matrices are emitted only after exact-count,
+no-overlap, implementation-digest, dependency-digest, and raw-artifact checks;
+concurrent shard wall time is not used as P4 performance evidence.
+
 The remaining weakness is breadth, not raw count. The primary natural and
 safety evidence uses one compatible model family, actual-model evaluation stops
 at 128K, and the 500K preflight uses only the two Tier-S reference scales. Official
