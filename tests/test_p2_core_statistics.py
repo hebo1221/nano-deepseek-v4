@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -12,6 +13,7 @@ from summarize_p2_core_matrix import (  # noqa: E402
     _quality_gate,
     bootstrap_paired_mean,
     holm_bonferroni,
+    seed_cluster_statistics,
 )
 
 
@@ -44,13 +46,25 @@ def test_holm_bonferroni_is_monotone_in_sorted_hypothesis_order() -> None:
     assert adjusted == pytest.approx({"first": 0.03, "second": 0.06, "third": 0.06})
 
 
+def test_seed_cluster_statistics_use_five_independent_training_seeds() -> None:
+    result = seed_cluster_statistics([0.1] * 5, label="core-seeds", resamples=1_000)
+
+    assert result["independent_seed_clusters"] == 5
+    assert result["seed_cluster_bootstrap_ci"] == pytest.approx([0.1, 0.1])
+    assert result["mean_difference"] == pytest.approx(0.1)
+    assert result["two_sided_seed_cluster_bootstrap_p"] < 0.01
+
+
 def test_quality_gate_requires_corrected_families_on_each_scale() -> None:
-    fixed = {
+    fixed: dict[str, Any] = {
         "pooled_by_scale": [
             {
                 "budget_multiplier": 1,
                 "scale": scale,
                 "paired_cluster_bootstrap_95_ci": [0.01, 0.02],
+                "seed_cluster_inference": {
+                    "seed_cluster_bootstrap_ci": [0.01, 0.02]
+                },
             }
             for scale in ("s55", "s151")
         ],
@@ -61,6 +75,9 @@ def test_quality_gate_requires_corrected_families_on_each_scale() -> None:
                 "family": f"family-{index}",
                 "mean_difference": 0.01,
                 "holm_adjusted_p": 0.01 if index < significant else 1.0,
+                "seed_cluster_inference": {
+                    "seed_cluster_bootstrap_ci": [0.001, 0.02]
+                },
             }
             for scale, significant in (("s55", 2), ("s151", 2))
             for index in range(2)
@@ -71,7 +88,7 @@ def test_quality_gate_requires_corrected_families_on_each_scale() -> None:
             for _ in range(5)
         ],
     }
-    native = {
+    native: dict[str, Any] = {
         "pooled_by_scale": [
             {"budget_multiplier": 1, "scale": scale, "mean_difference": -0.005}
             for scale in ("s55", "s151")
@@ -103,3 +120,9 @@ def test_quality_gate_requires_corrected_families_on_each_scale() -> None:
     native_failure = _quality_gate(fixed, native)[0]
     assert native_failure["native_family_regression_within_2pp_on_both_scales"] is False
     assert native_failure["passes_fixed_baseline_component"] is False
+
+    native["by_scale_family"][0]["mean_difference"] = -0.01
+    fixed["by_seed"][0]["mean_difference"] = 0.0
+    seed_failure = _quality_gate(fixed, native)[0]
+    assert seed_failure["all_seed_effects_positive"] is False
+    assert seed_failure["passes_fixed_baseline_component"] is False

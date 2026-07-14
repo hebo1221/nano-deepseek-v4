@@ -13,7 +13,11 @@ from typing import Any, cast
 
 import evaluate_p2_causal_factorial_shard as shard
 import numpy as np
-from summarize_p2_core_matrix import bootstrap_paired_mean, holm_bonferroni, stable_seed
+from summarize_p2_core_matrix import (
+    bootstrap_paired_mean,
+    holm_bonferroni,
+    seed_cluster_statistics,
+)
 
 from nano_deepseek_v4 import PAPER_GRADE_WORKLOAD_FAMILIES
 
@@ -85,49 +89,6 @@ def _merge(groups: Iterable[list[float]]) -> list[float]:
     for group in groups:
         result.extend(group)
     return result
-
-
-def seed_cluster_statistics(
-    seed_means: Iterable[float],
-    *,
-    label: str,
-    confidence: float = 0.95,
-    resamples: int = 10_000,
-) -> dict[str, Any]:
-    values = np.asarray(tuple(seed_means), dtype=np.float64)
-    if values.ndim != 1 or len(values) < 2:
-        raise ValueError("Seed-cluster inference requires at least two independent seeds.")
-    rng = np.random.default_rng(stable_seed(label))
-    bootstrap_indices = rng.integers(0, len(values), size=(resamples, len(values)))
-    bootstrap_means = values[bootstrap_indices].mean(axis=1)
-    alpha = 1.0 - confidence
-    lower, upper = np.quantile(
-        bootstrap_means, (alpha / 2.0, 1.0 - alpha / 2.0)
-    )
-    signs = np.where(rng.integers(0, 2, size=(resamples, len(values))) == 0, -1.0, 1.0)
-    null_means = (signs * values).mean(axis=1)
-    observed = float(values.mean())
-    threshold = max(0.0, abs(observed) - np.finfo(np.float64).eps * 16.0)
-    randomization_p = (
-        np.count_nonzero(np.abs(null_means) >= threshold) + 1
-    ) / (resamples + 1)
-    standard_deviation = float(values.std(ddof=1))
-    return {
-        "independent_seed_clusters": len(values),
-        "seed_means": values.tolist(),
-        "mean_difference": observed,
-        "mean_difference_percentage_points": observed * 100.0,
-        "seed_mean_sample_standard_deviation": standard_deviation,
-        "seed_mean_range": [float(values.min()), float(values.max())],
-        "cohens_dz_across_seeds": (
-            observed / standard_deviation if standard_deviation > 0.0 else None
-        ),
-        "confidence_level": confidence,
-        "seed_cluster_bootstrap_ci": [float(lower), float(upper)],
-        "paired_randomization_two_sided_p": float(randomization_p),
-        "bootstrap_resamples": resamples,
-        "inference_seed": stable_seed(label),
-    }
 
 
 def contrast_statistics(

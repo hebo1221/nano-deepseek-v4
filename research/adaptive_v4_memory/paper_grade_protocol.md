@@ -188,6 +188,9 @@ A controller passes the primary quality gate only if its mean regression from
 native is at most 1 percentage point, no primary family regresses by more than
 2 points, and the lower confidence bound of its improvement over the strongest
 fixed policy is non-negative on at least two families at both scales.
+All five training-seed effects must also be positive at each scale; the
+family-level improvement count uses seed-cluster intervals and Holm-adjusted
+seed-cluster bootstrap p-values rather than treating examples as independent.
 
 The central causal claim has a separate, stricter gate. At the same measured
 hot-memory footprint, `calibrated+pins` must beat `fixed+pins` on both S55 and

@@ -47,7 +47,12 @@
     }
   },
   "boundary_manifests": {
+    "paper_grade_study": "research/adaptive_v4_memory/manifests/paper-grade-study-v1.json",
+    "p2_causal_factorial": "research/adaptive_v4_memory/manifests/p2-causal-factorial-v1.json",
+    "p3_ruler": "research/adaptive_v4_memory/manifests/p3-ruler-qwen3-1.7b-v1.json",
     "natural_suite": "research/adaptive_v4_memory/manifests/p3-natural-suite-v1.json",
+    "p4_reference_systems": "research/adaptive_v4_memory/manifests/p4-reference-systems-matrix-v1.json",
+    "p4_production_systems": "research/adaptive_v4_memory/manifests/p4-production-systems-matrix-v1.json",
     "official_deepseek_v4": "research/adaptive_v4_memory/manifests/p3-flashmemory-deepseek-v4-v1.json",
     "production_runtime_blocker": "research/adaptive_v4_memory/manifests/p4-production-resource-blocker-v1.json"
   },

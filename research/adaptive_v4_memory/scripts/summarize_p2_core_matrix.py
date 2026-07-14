@@ -83,6 +83,55 @@ def bootstrap_paired_mean(
     }
 
 
+def seed_cluster_statistics(
+    seed_means: Iterable[float],
+    *,
+    label: str,
+    confidence: float = CONFIDENCE_LEVEL,
+    resamples: int = BOOTSTRAP_RESAMPLES,
+) -> dict[str, Any]:
+    """Infer across independent training seeds, not within-seed examples."""
+    values = np.asarray(tuple(seed_means), dtype=np.float64)
+    if values.ndim != 1 or len(values) < 2:
+        raise ValueError("Seed-cluster inference requires at least two independent seeds.")
+    rng = np.random.default_rng(stable_seed(label))
+    bootstrap_indices = rng.integers(0, len(values), size=(resamples, len(values)))
+    bootstrap_means = values[bootstrap_indices].mean(axis=1)
+    alpha = 1.0 - confidence
+    lower, upper = np.quantile(
+        bootstrap_means, (alpha / 2.0, 1.0 - alpha / 2.0)
+    )
+    lower_tail = (np.count_nonzero(bootstrap_means <= 0.0) + 1) / (resamples + 1)
+    upper_tail = (np.count_nonzero(bootstrap_means >= 0.0) + 1) / (resamples + 1)
+    signs = np.where(rng.integers(0, 2, size=(resamples, len(values))) == 0, -1.0, 1.0)
+    null_means = (signs * values).mean(axis=1)
+    observed = float(values.mean())
+    threshold = max(0.0, abs(observed) - np.finfo(np.float64).eps * 16.0)
+    randomization_p = (
+        np.count_nonzero(np.abs(null_means) >= threshold) + 1
+    ) / (resamples + 1)
+    standard_deviation = float(values.std(ddof=1))
+    return {
+        "independent_seed_clusters": len(values),
+        "seed_means": values.tolist(),
+        "mean_difference": observed,
+        "mean_difference_percentage_points": observed * 100.0,
+        "seed_mean_sample_standard_deviation": standard_deviation,
+        "seed_mean_range": [float(values.min()), float(values.max())],
+        "cohens_dz_across_seeds": (
+            observed / standard_deviation if standard_deviation > 0.0 else None
+        ),
+        "confidence_level": confidence,
+        "seed_cluster_bootstrap_ci": [float(lower), float(upper)],
+        "two_sided_seed_cluster_bootstrap_p": min(
+            1.0, 2.0 * min(lower_tail, upper_tail)
+        ),
+        "paired_randomization_two_sided_p": float(randomization_p),
+        "bootstrap_resamples": resamples,
+        "inference_seed": stable_seed(label),
+    }
+
+
 def holm_bonferroni(p_values: dict[str, float]) -> dict[str, float]:
     ordered = sorted(p_values.items(), key=lambda item: (item[1], item[0]))
     adjusted: dict[str, float] = {}
@@ -201,6 +250,7 @@ def _statistics(
             )
             stats = bootstrap_paired_mean(values, label=f"{namespace}:pooled:{budget}:{scale}")
             pooled.append({"budget_multiplier": budget, "scale": scale, **stats})
+            cell_seed_means: list[float] = []
             for training_seed in shard.TRAINING_SEEDS:
                 seed_values = _merge(
                     group
@@ -223,6 +273,11 @@ def _statistics(
                         "mean_difference_percentage_points": float(np.mean(seed_values) * 100.0),
                     }
                 )
+                cell_seed_means.append(float(np.mean(seed_values)))
+            pooled[-1]["seed_cluster_inference"] = seed_cluster_statistics(
+                cell_seed_means,
+                label=f"{namespace}:pooled-seeds:{budget}:{scale}",
+            )
         family_rows: list[dict[str, Any]] = []
         for family in shard.PAPER_GRADE_WORKLOAD_FAMILIES:
             values = _merge(
@@ -237,9 +292,44 @@ def _statistics(
                 if item_budget == budget and item_family == family
             )
             stats = bootstrap_paired_mean(values, label=f"{namespace}:family:{budget}:{family}")
-            family_rows.append({"budget_multiplier": budget, "family": family, **stats})
+            family_seed_means = [
+                float(
+                    np.mean(
+                        _merge(
+                            group
+                            for (
+                                item_budget,
+                                _scale,
+                                item_seed,
+                                item_family,
+                                _context,
+                            ), group in differences.items()
+                            if item_budget == budget
+                            and item_seed == training_seed
+                            and item_family == family
+                        )
+                    )
+                )
+                for training_seed in shard.TRAINING_SEEDS
+            ]
+            family_rows.append(
+                {
+                    "budget_multiplier": budget,
+                    "family": family,
+                    **stats,
+                    "seed_cluster_inference": seed_cluster_statistics(
+                        family_seed_means,
+                        label=f"{namespace}:family-seeds:{budget}:{family}",
+                    ),
+                }
+            )
         adjusted = holm_bonferroni(
-            {row["family"]: row["paired_sign_flip_two_sided_p"] for row in family_rows}
+            {
+                row["family"]: row["seed_cluster_inference"][
+                    "two_sided_seed_cluster_bootstrap_p"
+                ]
+                for row in family_rows
+            }
         )
         for row in family_rows:
             row["holm_adjusted_p"] = adjusted[row["family"]]
@@ -257,6 +347,27 @@ def _statistics(
                     ), group in differences.items()
                     if item_budget == budget and item_scale == scale and item_family == family
                 )
+                scale_family_seed_means = [
+                    float(
+                        np.mean(
+                            _merge(
+                                group
+                                for (
+                                    item_budget,
+                                    item_scale,
+                                    item_seed,
+                                    item_family,
+                                    _context,
+                                ), group in differences.items()
+                                if item_budget == budget
+                                and item_scale == scale
+                                and item_seed == training_seed
+                                and item_family == family
+                            )
+                        )
+                    )
+                    for training_seed in shard.TRAINING_SEEDS
+                ]
                 scale_families.append(
                     {
                         "budget_multiplier": budget,
@@ -265,6 +376,12 @@ def _statistics(
                         **bootstrap_paired_mean(
                             scale_family_values,
                             label=(f"{namespace}:scale-family:{budget}:{scale}:{family}"),
+                        ),
+                        "seed_cluster_inference": seed_cluster_statistics(
+                            scale_family_seed_means,
+                            label=(
+                                f"{namespace}:scale-family-seeds:{budget}:{scale}:{family}"
+                            ),
                         ),
                     }
                 )
@@ -302,7 +419,12 @@ def _statistics(
                 if row["budget_multiplier"] == budget and row["scale"] == scale
             ]
             adjusted = holm_bonferroni(
-                {row["family"]: row["paired_sign_flip_two_sided_p"] for row in scale_rows}
+                {
+                    row["family"]: row["seed_cluster_inference"][
+                        "two_sided_seed_cluster_bootstrap_p"
+                    ]
+                    for row in scale_rows
+                }
             )
             for row in scale_rows:
                 row["holm_adjusted_p"] = adjusted[row["family"]]
@@ -370,7 +492,9 @@ def _quality_gate(
         ]
         significant_by_scale = {
             scale: sum(
-                row["mean_difference"] > 0.0 and row["holm_adjusted_p"] < 0.05
+                row["mean_difference"] > 0.0
+                and row["seed_cluster_inference"]["seed_cluster_bootstrap_ci"][0] >= 0.0
+                and row["holm_adjusted_p"] < 0.05
                 for row in budget_scale_families
                 if row["scale"] == scale
             )
@@ -380,10 +504,14 @@ def _quality_gate(
             {
                 "budget_multiplier": budget,
                 "positive_pooled_lower_ci_on_both_scales": all(
-                    row["paired_cluster_bootstrap_95_ci"][0] > 0.0 for row in budget_pooled
+                    row["seed_cluster_inference"]["seed_cluster_bootstrap_ci"][0] > 0.0
+                    for row in budget_pooled
                 ),
                 "positive_seed_effects": sum(row["mean_difference"] > 0.0 for row in budget_seeds),
                 "total_seed_effects": len(budget_seeds),
+                "all_seed_effects_positive": all(
+                    row["mean_difference"] > 0.0 for row in budget_seeds
+                ),
                 "holm_significant_positive_families_by_scale": significant_by_scale,
                 "minimum_required_improved_families": 2,
                 "native_mean_regression_within_1pp_on_both_scales": all(
@@ -397,6 +525,7 @@ def _quality_gate(
     for row in results:
         row["passes_fixed_baseline_component"] = (
             row["positive_pooled_lower_ci_on_both_scales"]
+            and row["all_seed_effects_positive"]
             and all(
                 count >= row["minimum_required_improved_families"]
                 for count in row["holm_significant_positive_families_by_scale"].values()

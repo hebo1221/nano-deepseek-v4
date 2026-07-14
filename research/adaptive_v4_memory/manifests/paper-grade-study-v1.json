@@ -96,6 +96,7 @@
   ],
   "statistics": {
     "paired_unit": "example-or-complete-conversation",
+    "primary_inference_unit": "independent training-seed mean; example/conversation bootstrap is descriptive within seed",
     "bootstrap_resamples": 10000,
     "confidence_level": 0.95,
     "multiple_testing": "Holm-Bonferroni across primary workload families",
@@ -107,6 +108,7 @@
     "maximum_family_native_regression_percentage_points": 2.0,
     "fixed_baseline_improvement_lower_ci_minimum": 0.0,
     "minimum_improved_families": 2,
+    "positive_seed_effects_required_per_scale": 5,
     "required_scales": 2
   },
   "primary_causal_gate": {
