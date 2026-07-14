@@ -77,7 +77,7 @@ def _completed(
         or payload.get("context") != context
         or payload.get("replicate") != replicate
         or payload.get("examples") != shard.EXAMPLES_PER_SHARD
-        or payload.get("chunk_size") != shard.CHUNK_SIZE
+        or payload.get("chunk_size") != shard.CHUNK_SIZE_BY_SCALE[scale]
         or tuple(payload.get("policies", ())) != shard.CORE_POLICIES
     ):
         return None
@@ -130,7 +130,7 @@ def _write_matrix(path: Path, source_commit: str, runs: list[dict[str, Any]]) ->
                 len(shard.CONTEXTS) * len(shard.REPLICATES) * shard.EXAMPLES_PER_SHARD
             ),
             "core_policies": shard.CORE_POLICIES,
-            "chunk_size": shard.CHUNK_SIZE,
+            "chunk_size_by_scale": shard.CHUNK_SIZE_BY_SCALE,
             "total_expected_shards": (
                 len(SCALES)
                 * len(shard.TRAINING_SEEDS)
@@ -171,11 +171,19 @@ def main() -> None:
         default=Path("artifacts/adaptive_v4_memory/paper_grade/p2_core_quality"),
     )
     parser.add_argument(
-        "--equivalence",
+        "--equivalence-s55",
         type=Path,
         default=Path(
             "research/adaptive_v4_memory/results/"
             "p1-chunked-cache-equivalence.summary.json"
+        ),
+    )
+    parser.add_argument(
+        "--equivalence-s151",
+        type=Path,
+        default=Path(
+            "research/adaptive_v4_memory/results/"
+            "p1-token-cache-equivalence-s151.summary.json"
         ),
     )
     parser.add_argument(
@@ -193,8 +201,10 @@ def main() -> None:
     if _dirty():
         raise RuntimeError("P2 core matrix requires a clean source tree.")
     source_commit = _head()
-    equivalence = shard._equivalence(args.equivalence)
-    equivalence_sha256 = _sha256(args.equivalence)
+    equivalence_paths = {
+        "s55": args.equivalence_s55,
+        "s151": args.equivalence_s151,
+    }
     scales = tuple(args.scale or SCALES)
     training_seeds = tuple(args.training_seed or shard.TRAINING_SEEDS)
     families = tuple(args.family or PAPER_GRADE_WORKLOAD_FAMILIES)
@@ -204,6 +214,9 @@ def main() -> None:
     new_shards = 0
 
     for scale in scales:
+        equivalence_path = equivalence_paths[scale]
+        equivalence = shard._equivalence(equivalence_path, scale)
+        equivalence_sha256 = _sha256(equivalence_path)
         for training_seed in training_seeds:
             checkpoint = (
                 args.training_root
@@ -246,7 +259,7 @@ def main() -> None:
                             checkpoint_sha256=checkpoint_sha256,
                             calibration=calibration_path,
                             calibration_sha256=calibration_sha256,
-                            equivalence=args.equivalence,
+                            equivalence=equivalence_path,
                             equivalence_sha256=equivalence_sha256,
                         )
                         if payload is None:
@@ -260,7 +273,7 @@ def main() -> None:
                                 checkpoint=checkpoint,
                                 calibration_path=calibration_path,
                                 calibration=calibration,
-                                equivalence_path=args.equivalence,
+                                equivalence_path=equivalence_path,
                                 equivalence=equivalence,
                                 scale=scale,
                                 family=family,

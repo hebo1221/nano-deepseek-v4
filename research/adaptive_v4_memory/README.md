@@ -194,8 +194,10 @@ protected instruction retention. Exact no-pin predictions matched fixed 1x
 (30/80 instruction queries), while pins reached 63/80. At 4x calibrated and
 fixed both scored 245/560, with calibrated using 86.7% of fixed H2D traffic.
 S151 rejected chunk=2 on an exact-prediction counterexample, so its large-scale
-quality path must use token-sized cache steps unless a separately validated
-alternative is found.
+quality path uses token-sized cache steps. Chunk=1 was subsequently validated
+on all 1,260 core-policy records and 3,920 predictions with exact agreement to
+the physical-tier token reference. The frozen P2 quality contract is therefore
+S55 chunk=2 and S151 chunk=1.
 
 The matching S151 held-out pilot is also complete. Hierarchical versus fixed
 was +5.89 pp at 1x, +2.68 pp at 2x, and tied at 4x; all net 1x/2x gains came

@@ -1,0 +1,54 @@
+{
+  "audit": {
+    "all_dependency_digests_verified": true,
+    "clean_source_verified": true,
+    "exact_prediction_equivalence_verified": true,
+    "quality_only_path": true
+  },
+  "calibration_artifact": {
+    "digests": {
+      "1x": "8046476b03d61fa8b3635f0f81925dd4a5667236e1533db5fcb99a62763bdc86",
+      "2x": "8006d31733273a9b3520422e5412a8f96275c8cd3057034f863b708c18385f37",
+      "4x": "ca13cab39e27e6fa142c46d2b5776fc4d07837ff1223e1c6ac6d618c3fc0b66b"
+    },
+    "path": "artifacts/adaptive_v4_memory/paper_grade/calibration_matrix/s151/seed-6071401/p1-layer-quotas.json",
+    "seed": 7071401,
+    "sha256": "39fa896339e6b83ddccdddfc4f243b48093427b470ea3d10bf60843560a93eaa"
+  },
+  "checkpoint": {
+    "bytes": 606450713,
+    "path": "artifacts/adaptive_v4_memory/paper_grade/training/s151/seed-6071401/s151-step-1000.pt",
+    "sha256": "3eca7b855c477718e4af0b37fc6ad4b6a546c5a65abd201f1b1e77edbc19dfec"
+  },
+  "experiment_id": "p1-chunked-cache-equivalence-audit-v1",
+  "interpretation": "chunk=1 accepted for quality only; no systems-performance claim",
+  "pilot_artifact": {
+    "path": "artifacts/adaptive_v4_memory/paper_grade/heldout_pilot/s151/seed-6071401/p1-heldout-policy-pilot.json",
+    "sha256": "d7580aef918fd7f7b7ee16b6797fa19c61842b2656bf2114988c609c7b9ff939"
+  },
+  "raw_artifact": {
+    "path": "artifacts/adaptive_v4_memory/paper_grade/validation/p1-chunked-1-equivalence-s151.json",
+    "sha256": "8981d93b2186c35a643a71d97731ee8bbc524f46f4c236780c084555d0ddb4dd"
+  },
+  "schema_version": 1,
+  "source": {
+    "commit": "caa1cad05231bfbdb67c2dadc93ab5a7676b39f9",
+    "dirty": false
+  },
+  "validation": {
+    "all_predictions_identical": true,
+    "checked_policy_conversation_records": 1260,
+    "checked_predictions": 3920,
+    "chunk_size": 1,
+    "chunked_wall_ms_sum": 1665385.6149680002,
+    "core_policies": [
+      "native",
+      "fixed-1x",
+      "fixed-2x",
+      "fixed-4x",
+      "calibrated-hierarchical-1x",
+      "calibrated-hierarchical-2x",
+      "calibrated-hierarchical-4x"
+    ]
+  }
+}

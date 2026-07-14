@@ -37,7 +37,7 @@ CORE_POLICIES = (
 )
 EXAMPLES_PER_SHARD = 20
 REPLICATES = tuple(range(10))
-CHUNK_SIZE = 2
+CHUNK_SIZE_BY_SCALE = {"s55": 2, "s151": 1}
 
 
 def _sha256(path: Path) -> str:
@@ -63,13 +63,16 @@ def _source_state() -> dict[str, str | bool]:
     return {"commit": commit, "dirty": dirty}
 
 
-def _equivalence(path: Path) -> dict[str, Any]:
+def _equivalence(path: Path, scale: str) -> dict[str, Any]:
     payload = json.loads(path.read_text())
     if payload.get("experiment_id") != "p1-chunked-cache-equivalence-audit-v1":
         raise ValueError("A checked chunked-cache equivalence artifact is required.")
+    checkpoint_path = payload.get("checkpoint", {}).get("path", "")
+    if f"/{scale}/" not in checkpoint_path:
+        raise ValueError("Equivalence artifact was validated on a different scale.")
     validation = payload.get("validation", {})
     if (
-        validation.get("chunk_size") != CHUNK_SIZE
+        validation.get("chunk_size") != CHUNK_SIZE_BY_SCALE[scale]
         or validation.get("all_predictions_identical") is not True
         or tuple(validation.get("core_policies", ())) != CORE_POLICIES
     ):
@@ -149,6 +152,7 @@ def evaluate_shard(
     )
     policies = _core_specs()
     fixed_topk = pilot._fixed_topk(scale)
+    chunk_size = CHUNK_SIZE_BY_SCALE[scale]
     records: list[dict[str, Any]] = []
     batch_metrics: list[dict[str, Any]] = []
     completed = 0
@@ -172,7 +176,7 @@ def evaluate_shard(
                 policy=policy,
                 calibration=calibration,
                 fixed_topk=fixed_topk,
-                chunk_size=CHUNK_SIZE,
+                chunk_size=chunk_size,
             )
             batch_metrics.append(
                 {
@@ -259,7 +263,7 @@ def build_payload(
         "replicate": replicate,
         "examples": EXAMPLES_PER_SHARD,
         "batch_size": batch_size,
-        "chunk_size": CHUNK_SIZE,
+        "chunk_size": CHUNK_SIZE_BY_SCALE[scale],
         "policies": CORE_POLICIES,
         "checkpoint": {
             "path": str(checkpoint),
@@ -333,7 +337,7 @@ def main() -> None:
     args = parser.parse_args()
     if not torch.cuda.is_available():
         raise RuntimeError("P2 core-quality evaluation requires CUDA.")
-    equivalence = _equivalence(args.equivalence)
+    equivalence = _equivalence(args.equivalence, args.scale)
     calibration = heldout._load_calibration(
         args.calibration, args.checkpoint, args.scale
     )
