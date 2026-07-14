@@ -275,6 +275,7 @@ def test_failure_safety_fields_preserve_partial_response_leakage() -> None:
         ("latency_ms", float("inf"), "Invalid safety terminal measurements"),
         ("peak_hbm_bytes", True, "Invalid safety terminal measurements"),
         ("hot_resident_bytes", -1, "Invalid safety terminal measurements"),
+        ("leakage_event", None, "Invalid safety terminal measurements"),
     ],
 )
 def test_safety_summary_rejects_invalid_terminal_measurements(

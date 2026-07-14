@@ -347,7 +347,8 @@ def audit_arm(
             f"Invalid safety terminal measurements: {identifier}.",
         )
         prompt_pairs.append(
-            f"{identifier}:{record['raw_prompt_sha256']}:{record['input_token_ids_sha256']}"
+            f"{identifier}:{record['raw_prompt_sha256']}:{record['input_token_ids_sha256']}:"
+            f"{record['expected_response_sha256']}:{record.get('canary_sha256')}"
         )
         status = record.get("status")
         if status == "scored":
