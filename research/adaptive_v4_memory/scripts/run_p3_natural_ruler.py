@@ -12,6 +12,7 @@ from typing import Any
 import numpy as np
 import torch
 from adaptive_v4_gpu_lock import acquire_gpu_lock
+from p3_cross_family_sequence_gate import require_cross_family_sequence_gate
 from p3_natural_workloads import (
     encode_rendered_segments_exact,
     render_chat_split_user_content,
@@ -39,11 +40,22 @@ from run_p3_ruler_matrix import (
     load_dataset,
     load_evaluator,
 )
+from validate_p3_natural_adaptive_quota_manifest import (
+    SCORE_COMPATIBLE,
+)
+from validate_p3_natural_adaptive_quota_manifest import (
+    validate_manifest as validate_adaptive_quota_manifest,
+)
 from verify_p3_natural_model import sha256, verify_snapshot
 
 BENCHMARK = "RULER"
 ARMS = ("native-dense", "strongest-memory-matched-fixed")
+ADAPTIVE_QUOTA_ARMS = ("fixed+pins", "natural-adaptive-quota+pins")
 EXPECTED_EXAMPLES = len(LENGTHS) * EXPECTED_ROWS_PER_LENGTH
+DEFAULT_OUTPUT_ROOT = Path("artifacts/adaptive_v4_memory/paper_grade/p3/natural/ruler-qwen3-4b")
+ADAPTIVE_QUOTA_OUTPUT_ROOT = Path(
+    "artifacts/adaptive_v4_memory/paper_grade/p3/natural-adaptive-quota/ruler-qwen3-4b"
+)
 
 
 def _require(condition: bool, message: str) -> None:
@@ -100,6 +112,40 @@ def expected_example_ids() -> list[str]:
         for task in TASKS
         for row_number in range(SAMPLES_PER_TASK)
     ]
+
+
+def select_score_compatible_baseline(selection: dict[str, Any]) -> dict[str, Any]:
+    candidates = [
+        row
+        for row in selection.get("candidates", [])
+        if row.get("arm") in SCORE_COMPATIBLE and row.get("compression_ratio") == 0.5
+    ]
+    _require(
+        {row.get("arm") for row in candidates} == set(SCORE_COMPATIBLE),
+        "Fixed selection lacks the frozen score-compatible candidate set.",
+    )
+    return min(
+        candidates,
+        key=lambda row: (-float(row["row_weighted_mean_accuracy"]), str(row["arm"])),
+    )
+
+
+def compatibility_arm_config(
+    arm: str, selection: dict[str, Any], selection_digest: str
+) -> dict[str, Any]:
+    _require(arm in ADAPTIVE_QUOTA_ARMS, f"Unknown adaptive-quota RULER arm: {arm}.")
+    selected = select_score_compatible_baseline(selection)
+    return {
+        "press_name": selected["arm"],
+        "compression_ratio": 0.5,
+        "protected_prefix_token_span": {"start": 0, "end": 4},
+        "quota_policy": "fixed-per-layer" if arm == "fixed+pins" else "causal-adaptive",
+        "max_adjustment_fraction": 0.0 if arm == "fixed+pins" else 0.25,
+        "selection_sha256": selection_digest,
+        "score_compatible_selection_rule": (
+            "highest frozen Qwen3-1.7B row-weighted mean; lexicographic tie-break"
+        ),
+    }
 
 
 def load_dataset_contracts(
@@ -225,6 +271,7 @@ def _completed(cell_path: Path, arm: str, identity: dict[str, Any]) -> bool:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run Qwen3-4B RULER natural baseline arms.")
+    parser.add_argument("--cohort", choices=("baseline", "adaptive-quota"), default="baseline")
     parser.add_argument("--kvpress-root", type=Path, required=True)
     parser.add_argument("--model-snapshot", type=Path, required=True)
     parser.add_argument(
@@ -255,6 +302,25 @@ def main() -> None:
         default=Path("artifacts/adaptive_v4_memory/paper_grade/p2-causal-ablation.summary.json"),
     )
     parser.add_argument(
+        "--primary-core-summary",
+        type=Path,
+        default=Path(
+            "artifacts/adaptive_v4_memory/paper_grade/p2-core-quality-matrix.strict.summary.json"
+        ),
+    )
+    parser.add_argument(
+        "--nine-seed-causal-summary",
+        type=Path,
+        default=Path("artifacts/adaptive_v4_memory/paper_grade/p2-nine-seed-causal.summary.json"),
+    )
+    parser.add_argument(
+        "--adaptive-quota-manifest",
+        type=Path,
+        default=Path(
+            "research/adaptive_v4_memory/manifests/p3-natural-adaptive-quota-ruler-v1.json"
+        ),
+    )
+    parser.add_argument(
         "--p2-matrix",
         type=Path,
         default=Path("artifacts/adaptive_v4_memory/paper_grade/p2-core-quality-matrix.json"),
@@ -262,9 +328,9 @@ def main() -> None:
     parser.add_argument(
         "--output-root",
         type=Path,
-        default=Path("artifacts/adaptive_v4_memory/paper_grade/p3/natural/ruler-qwen3-4b"),
+        default=DEFAULT_OUTPUT_ROOT,
     )
-    parser.add_argument("--arm", action="append", choices=ARMS)
+    parser.add_argument("--arm", action="append", choices=(*ARMS, *ADAPTIVE_QUOTA_ARMS))
     parser.add_argument("--max-new-examples", type=int)
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
@@ -272,7 +338,20 @@ def main() -> None:
         args.max_new_examples is None or args.max_new_examples > 0,
         "max-new-examples must be positive.",
     )
-    sequence_decision = require_p3_sequence_gate(args.p2_matrix, args.causal_gate)
+    if args.cohort == "adaptive-quota":
+        sequence_decision = require_cross_family_sequence_gate(
+            primary_core=args.primary_core_summary,
+            primary_causal=args.causal_gate,
+            nine_seed_causal=args.nine_seed_causal_summary,
+            fixed_selection=args.fixed_selection,
+        )
+        adaptive_manifest = json.loads(args.adaptive_quota_manifest.read_text())
+        validate_adaptive_quota_manifest(adaptive_manifest)
+        if args.output_root == DEFAULT_OUTPUT_ROOT:
+            args.output_root = ADAPTIVE_QUOTA_OUTPUT_ROOT
+    else:
+        sequence_decision = require_p3_sequence_gate(args.p2_matrix, args.causal_gate)
+        adaptive_manifest = None
     source_commit = git_head(Path.cwd())
     if git_dirty(Path.cwd()):
         raise RuntimeError("Natural RULER evaluation requires a clean source tree.")
@@ -308,7 +387,15 @@ def main() -> None:
         official_scorer.is_file() and sha256(official_scorer) == official_scorer_digest,
         "Pinned official RULER scorer drifted.",
     )
-    selected_arms = tuple(args.arm or ARMS)
+    cohort_arms = ADAPTIVE_QUOTA_ARMS if args.cohort == "adaptive-quota" else ARMS
+    selected_arms = tuple(args.arm or cohort_arms)
+    _require(
+        all(arm in cohort_arms for arm in selected_arms),
+        f"Selected arms do not belong to the {args.cohort} cohort.",
+    )
+    compatibility_manifest_digest = (
+        sha256(args.adaptive_quota_manifest) if adaptive_manifest is not None else None
+    )
     identities = {
         arm: {
             "source_commit": source_commit,
@@ -319,7 +406,13 @@ def main() -> None:
             "causal_gate_sha256": causal_digest,
             "fixed_selection_sha256": selection_digest,
             "model_snapshot_digest_set_sha256": manifest["model"]["snapshot_digest_set_sha256"],
-            "arm_config": arm_config(arm, selection, selection_digest),
+            "cohort": args.cohort,
+            "adaptive_quota_manifest_sha256": compatibility_manifest_digest,
+            "arm_config": (
+                compatibility_arm_config(arm, selection, selection_digest)
+                if args.cohort == "adaptive-quota"
+                else arm_config(arm, selection, selection_digest)
+            ),
             "seed": args.seed,
         }
         for arm in selected_arms
@@ -336,6 +429,11 @@ def main() -> None:
 
     lock = acquire_gpu_lock("p3-natural-ruler")
     try:
+        from p3_protected_prefix_press import (
+            wrap_same_budget_adaptive_quota_protected_prefix,
+            wrap_same_budget_protected_prefix,
+        )
+
         EvaluationConfig, EvaluationRunner, _scorer = load_evaluator(kvpress_root)
         base_config = EvaluationConfig(
             dataset="ruler",
@@ -366,6 +464,17 @@ def main() -> None:
             runner.config.press_name = settings["press_name"]
             runner.config.compression_ratio = settings["compression_ratio"]
             runner._setup_press()
+            active_press: Any = runner.press
+            compatibility_press: Any = None
+            if args.cohort == "adaptive-quota":
+                if arm == "fixed+pins":
+                    compatibility_press = wrap_same_budget_protected_prefix(runner.press)
+                else:
+                    compatibility_press = wrap_same_budget_adaptive_quota_protected_prefix(
+                        runner.press,
+                        max_adjustment_fraction=settings["max_adjustment_fraction"],
+                    )
+                active_press = compatibility_press
             root = args.output_root / arm
             progress = root / "progress.json"
             partial = root / "records.partial.jsonl"
@@ -438,11 +547,21 @@ def main() -> None:
                             torch.cuda.synchronize()
                             started = time.perf_counter_ns()
                             try:
+                                if compatibility_press is not None:
+                                    span = settings["protected_prefix_token_span"]
+                                    compatibility_press.configure(
+                                        protected_start=span["start"], protected_end=span["end"]
+                                    )
                                 response, resident_bytes = infer_one(
                                     pipeline=runner.pipeline,
-                                    press=runner.press,
+                                    press=active_press,
                                     rendered=rendered,
                                     max_new_tokens=reserve,
+                                )
+                                compatibility_audit = (
+                                    compatibility_press.audit()
+                                    if compatibility_press is not None
+                                    else None
                                 )
                                 torch.cuda.synchronize()
                                 latency_ms = (time.perf_counter_ns() - started) / 1_000_000.0
@@ -455,6 +574,7 @@ def main() -> None:
                                         peak_hbm_bytes=peak_hbm,
                                         hot_resident_bytes=resident_bytes,
                                     )
+                                    record["quota_physical_audit"] = compatibility_audit
                                 else:
                                     generated = len(
                                         runner.pipeline.tokenizer.encode(
@@ -479,6 +599,7 @@ def main() -> None:
                                         "latency_ms": latency_ms,
                                         "peak_hbm_bytes": peak_hbm,
                                         "hot_resident_bytes": resident_bytes,
+                                        "quota_physical_audit": compatibility_audit,
                                     }
                             except torch.cuda.OutOfMemoryError as error:
                                 record = failure_record(
@@ -524,6 +645,7 @@ def main() -> None:
                 "experiment_id": "p3-natural-benchmark-arm-cell-v1",
                 "benchmark": BENCHMARK,
                 "arm": arm,
+                "cohort": args.cohort,
                 "status": "terminal",
                 "source": {
                     "commit": source_commit,
@@ -532,6 +654,14 @@ def main() -> None:
                 },
                 "run_identity": identities[arm],
                 "experiment_manifest": {"path": str(args.manifest), "sha256": manifest_digest},
+                "adaptive_quota_manifest": (
+                    {
+                        "path": str(args.adaptive_quota_manifest),
+                        "sha256": compatibility_manifest_digest,
+                    }
+                    if compatibility_manifest_digest is not None
+                    else None
+                ),
                 "causal_gate": {"path": str(args.causal_gate), "sha256": causal_digest},
                 "dataset_inventory": {
                     "path": str(args.dataset_inventory),

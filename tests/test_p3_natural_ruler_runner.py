@@ -14,9 +14,11 @@ sys.path.insert(0, str(SCRIPTS))
 from run_p3_natural_ruler import (  # noqa: E402
     EXPECTED_EXAMPLES,
     _existing_records,
+    compatibility_arm_config,
     expected_example_ids,
     load_dataset_contracts,
     rendered_input,
+    select_score_compatible_baseline,
     token_digest,
 )
 
@@ -127,6 +129,35 @@ def test_natural_ruler_progress_recovers_empty_crash_window(tmp_path: Path) -> N
     assert _existing_records(progress, partial, identity) == []
     progress.unlink()
     assert _existing_records(progress, partial, identity) == []
+
+
+def test_adaptive_quota_cohort_selects_best_direct_scorer_without_natural_outcomes() -> None:
+    selection = {
+        "candidates": [
+            {
+                "arm": arm,
+                "compression_ratio": 0.5,
+                "row_weighted_mean_accuracy": score,
+            }
+            for arm, score in (
+                ("streaming_llm", 0.70),
+                ("snapkv", 0.75),
+                ("pyramidkv", 0.80),
+                ("critical_expected_attention", 0.80),
+                ("adakv_snapkv", 0.99),
+                ("expected_attention", 0.98),
+            )
+        ]
+    }
+
+    assert select_score_compatible_baseline(selection)["arm"] == "critical_expected_attention"
+    fixed = compatibility_arm_config("fixed+pins", selection, "a" * 64)
+    adaptive = compatibility_arm_config("natural-adaptive-quota+pins", selection, "a" * 64)
+    assert fixed["press_name"] == adaptive["press_name"] == "critical_expected_attention"
+    assert fixed["compression_ratio"] == adaptive["compression_ratio"] == 0.5
+    assert fixed["max_adjustment_fraction"] == 0.0
+    assert adaptive["max_adjustment_fraction"] == 0.25
+    assert fixed["protected_prefix_token_span"] == {"start": 0, "end": 4}
 
 
 def test_natural_ruler_is_sequence_gated_before_model_or_dataset_io(tmp_path: Path) -> None:
