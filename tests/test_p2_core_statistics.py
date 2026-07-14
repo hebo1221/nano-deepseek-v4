@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import sys
 from pathlib import Path
 from typing import Any
@@ -9,12 +10,127 @@ import pytest
 SCRIPTS = Path(__file__).resolve().parents[1] / "research/adaptive_v4_memory/scripts"
 sys.path.insert(0, str(SCRIPTS))
 
+import summarize_p2_core_matrix as core  # noqa: E402
 from summarize_p2_core_matrix import (  # noqa: E402
     _quality_gate,
     bootstrap_paired_mean,
     holm_bonferroni,
     seed_cluster_statistics,
 )
+
+
+def _valid_raw_shard() -> tuple[dict[str, Any], dict[str, Any]]:
+    scale = "s55"
+    training_seed = core.shard.TRAINING_SEEDS[0]
+    family = core.shard.PAPER_GRADE_WORKLOAD_FAMILIES[0]
+    context = core.shard.CONTEXTS[0]
+    replicate = core.shard.REPLICATES[0]
+    evaluation_seed = core.shard._evaluation_seed(training_seed)
+    records = [
+        {
+            "policy": policy,
+            "conversation_id": f"{family}:{context}:{index}",
+            "family": family,
+            "context": context,
+            "replicate": replicate,
+            "predictions": [index],
+            "targets": [index],
+            "correct": [True],
+            "correct_count": 1,
+            "total": 1,
+            "query_positions": [context - 1],
+            "evidence_positions": [0],
+        }
+        for policy in core.shard.CORE_POLICIES
+        for index in range(core.shard.EXAMPLES_PER_SHARD)
+    ]
+    records.sort(key=lambda row: (row["policy"], row["conversation_id"]))
+    batch_metrics = [
+        {
+            "batch_index": batch_index,
+            "policy": policy,
+            "execution_index": (policy_index - batch_index) % len(core.shard.CORE_POLICIES),
+            "budget_violations": 0,
+        }
+        for batch_index in range(core.shard.EXAMPLES_PER_SHARD // core.shard.BATCH_SIZE)
+        for policy_index, policy in enumerate(core.shard.CORE_POLICIES)
+    ]
+    raw: dict[str, Any] = {
+        "schema_version": 1,
+        "experiment_id": "p2-core-quality-shard-v1",
+        "source": {"dirty": False, "implementation_digest": "implementation"},
+        "scale": scale,
+        "training_seed": training_seed,
+        "evaluation_seed_namespace": "held_out_evaluation",
+        "evaluation_seed": evaluation_seed,
+        "generation_seed": core.shard._generation_seed(
+            evaluation_seed, family, context, replicate
+        ),
+        "family": family,
+        "context": context,
+        "replicate": replicate,
+        "examples": core.shard.EXAMPLES_PER_SHARD,
+        "batch_size": core.shard.BATCH_SIZE,
+        "chunk_size": core.shard.CHUNK_SIZE_BY_SCALE[scale],
+        "policies": core.shard.CORE_POLICIES,
+        "policy_configs": {policy: {} for policy in core.shard.CORE_POLICIES},
+        "leakage_guard": {
+            "calibration_seed_used_for_evaluation": False,
+            "evaluation_targets_used_for_policy_selection": False,
+            "paired_examples_shared_across_policies": True,
+        },
+        "records": records,
+        "records_digest": core.records_digest(records),
+        "aggregate": core.shard._aggregate(records),
+        "batch_metrics": batch_metrics,
+        "checkpoint": {},
+        "calibration_artifact": {},
+        "equivalence_artifact": {"path": "equivalence.json"},
+    }
+    run = {
+        "scale": scale,
+        "training_seed": training_seed,
+        "family": family,
+        "context": context,
+        "replicate": replicate,
+    }
+    return raw, run
+
+
+def test_raw_shard_verifier_binds_seeds_pairing_and_execution_order(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    raw, run = _valid_raw_shard()
+    monkeypatch.setattr(core, "_verify_dependency", lambda metadata, name: None)
+    monkeypatch.setattr(core.shard, "_equivalence", lambda path, scale: {})
+
+    core.verify_raw_shard(raw, run, "implementation")
+
+    wrong_seed = copy.deepcopy(raw)
+    wrong_seed["generation_seed"] += 1
+    with pytest.raises(ValueError, match="Generation seed drifted"):
+        core.verify_raw_shard(wrong_seed, run, "implementation")
+
+    leaked = copy.deepcopy(raw)
+    leaked["leakage_guard"]["evaluation_targets_used_for_policy_selection"] = True
+    with pytest.raises(ValueError, match="leakage guard drifted"):
+        core.verify_raw_shard(leaked, run, "implementation")
+
+    unpaired = copy.deepcopy(raw)
+    unpaired["records"][0]["conversation_id"] = "different-conversation"
+    unpaired["records_digest"] = core.records_digest(unpaired["records"])
+    with pytest.raises(ValueError, match="Paired conversation coverage drifted"):
+        core.verify_raw_shard(unpaired, run, "implementation")
+
+    biased_order = copy.deepcopy(raw)
+    biased_order["batch_metrics"][0]["execution_index"] = 1
+    with pytest.raises(ValueError, match="execution coverage drifted"):
+        core.verify_raw_shard(biased_order, run, "implementation")
+
+    bad_aggregate = copy.deepcopy(raw)
+    bad_aggregate["aggregate"][0]["correct"] = 0
+    with pytest.raises(ValueError, match="Aggregate drifted"):
+        core.verify_raw_shard(bad_aggregate, run, "implementation")
 
 
 def test_bootstrap_paired_mean_is_deterministic_and_uses_paired_units() -> None:

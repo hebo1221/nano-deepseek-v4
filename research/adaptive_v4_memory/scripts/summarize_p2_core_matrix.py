@@ -159,6 +159,7 @@ def verify_raw_shard(
     run: dict[str, Any],
     implementation_digest: str,
 ) -> None:
+    _require(raw.get("schema_version") == 1, "Wrong shard schema version.")
     _require(raw.get("experiment_id") == "p2-core-quality-shard-v1", "Wrong shard id.")
     _require(raw.get("source", {}).get("dirty") is False, "Dirty P2 shard source.")
     _require(
@@ -167,9 +168,39 @@ def verify_raw_shard(
     )
     for key in ("scale", "training_seed", "family", "context", "replicate"):
         _require(raw.get(key) == run.get(key), f"P2 run metadata drifted: {key}")
+    training_seed = raw["training_seed"]
+    _require(
+        raw.get("evaluation_seed_namespace") == "held_out_evaluation"
+        and raw.get("evaluation_seed") == shard._evaluation_seed(training_seed),
+        "Held-out evaluation seed drifted.",
+    )
+    _require(
+        raw.get("generation_seed")
+        == shard._generation_seed(
+            raw["evaluation_seed"], raw["family"], raw["context"], raw["replicate"]
+        ),
+        "Generation seed drifted.",
+    )
     _require(raw.get("examples") == shard.EXAMPLES_PER_SHARD, "Shard size drifted.")
     _require(raw.get("batch_size") == shard.BATCH_SIZE, "Batch size drifted.")
+    _require(
+        raw.get("chunk_size") == shard.CHUNK_SIZE_BY_SCALE[raw["scale"]],
+        "Chunk size drifted.",
+    )
     _require(tuple(raw.get("policies", ())) == shard.CORE_POLICIES, "Policy set drifted.")
+    _require(
+        set(raw.get("policy_configs", {})) == set(shard.CORE_POLICIES),
+        "Policy configuration coverage drifted.",
+    )
+    _require(
+        raw.get("leakage_guard")
+        == {
+            "calibration_seed_used_for_evaluation": False,
+            "evaluation_targets_used_for_policy_selection": False,
+            "paired_examples_shared_across_policies": True,
+        },
+        "P2 leakage guard drifted.",
+    )
     raw_records = raw.get("records")
     _require(isinstance(raw_records, list), "Shard records are not a list.")
     records = cast(list[dict[str, Any]], raw_records)
@@ -178,7 +209,19 @@ def verify_raw_shard(
         "Shard record count drifted.",
     )
     _require(records_digest(records) == raw.get("records_digest"), "Record digest drifted.")
+    conversation_ids_by_policy: dict[str, set[str]] = {
+        policy: set() for policy in shard.CORE_POLICIES
+    }
     for record in records:
+        _require(record.get("policy") in shard.CORE_POLICIES, "Unknown record policy.")
+        for field in ("family", "context", "replicate"):
+            _require(record.get(field) == raw[field], f"Record {field} drifted.")
+        conversation_id = record.get("conversation_id")
+        _require(isinstance(conversation_id, str), "Conversation id drifted.")
+        conversation_id = cast(str, conversation_id)
+        policy_ids = conversation_ids_by_policy[record["policy"]]
+        _require(conversation_id not in policy_ids, "Duplicate policy-conversation record.")
+        policy_ids.add(conversation_id)
         predictions = record.get("predictions", [])
         targets = record.get("targets", [])
         _require(len(predictions) == len(targets), "Prediction/target length drifted.")
@@ -188,8 +231,31 @@ def verify_raw_shard(
         _require(correctness == record.get("correct"), "Correctness field drifted.")
         _require(sum(correctness) == record.get("correct_count"), "Correct count drifted.")
         _require(len(correctness) == record.get("total"), "Query total drifted.")
+    native_ids = conversation_ids_by_policy["native"]
     _require(
-        all(metric.get("budget_violations") == 0 for metric in raw.get("batch_metrics", ())),
+        len(native_ids) == shard.EXAMPLES_PER_SHARD
+        and all(ids == native_ids for ids in conversation_ids_by_policy.values()),
+        "Paired conversation coverage drifted.",
+    )
+    _require(raw.get("aggregate") == shard._aggregate(records), "Aggregate drifted.")
+    raw_batch_metrics = raw.get("batch_metrics")
+    _require(isinstance(raw_batch_metrics, list), "Batch metrics are not a list.")
+    batch_metrics = cast(list[dict[str, Any]], raw_batch_metrics)
+    expected_batches = shard.EXAMPLES_PER_SHARD // shard.BATCH_SIZE
+    _require(
+        len(batch_metrics) == expected_batches * len(shard.CORE_POLICIES),
+        "Batch metric coverage drifted.",
+    )
+    for batch_index in range(expected_batches):
+        rows = [row for row in batch_metrics if row.get("batch_index") == batch_index]
+        _require(
+            {row.get("policy") for row in rows} == set(shard.CORE_POLICIES)
+            and {row.get("execution_index") for row in rows}
+            == set(range(len(shard.CORE_POLICIES))),
+            "Batch policy execution coverage drifted.",
+        )
+    _require(
+        all(metric.get("budget_violations") == 0 for metric in batch_metrics),
         "A shard contains a budget violation.",
     )
     _verify_dependency(raw["checkpoint"], "checkpoint")
