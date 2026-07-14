@@ -67,6 +67,71 @@ def _require(condition: bool, message: str) -> None:
         raise ValueError(message)
 
 
+def validate_exact_config_reuse(
+    rows: list[dict[str, Any]], *, expected_arms: tuple[str, ...]
+) -> dict[str, int]:
+    """Audit executed/reused rows without treating reuse as a new forward."""
+
+    by_batch_arm = {
+        (row.get("schedule_batch_index"), row.get("arm")): row for row in rows
+    }
+    _require(len(by_batch_arm) == len(rows), "Duplicate causal execution-accounting row.")
+    batches = {key[0] for key in by_batch_arm}
+    _require(
+        all(
+            {arm for batch, arm in by_batch_arm if batch == batch_index}
+            == set(expected_arms)
+            for batch_index in batches
+        ),
+        "Causal execution-accounting arm coverage drifted.",
+    )
+    counts = {"executed": 0, "reused_exact_config": 0}
+    for (batch_index, arm), row in by_batch_arm.items():
+        digest = row.get("config_sha256")
+        _require(
+            isinstance(digest, str)
+            and len(digest) == 64
+            and all(character in "0123456789abcdef" for character in digest),
+            "Causal execution config digest drifted.",
+        )
+        mode = row.get("execution_mode")
+        reused_from = row.get("reused_from_arm")
+        wall_ms = row.get("wall_ms")
+        _require(
+            isinstance(wall_ms, (int, float)) and not isinstance(wall_ms, bool),
+            "Causal execution wall time drifted.",
+        )
+        assert isinstance(wall_ms, (int, float)) and not isinstance(wall_ms, bool)
+        if mode == "executed":
+            _require(reused_from is None and wall_ms > 0, "Executed causal row drifted.")
+            counts["executed"] += 1
+            continue
+        _require(
+            mode == "reused-exact-config"
+            and isinstance(reused_from, str)
+            and reused_from != arm
+            and wall_ms == 0.0,
+            "Reused causal row drifted.",
+        )
+        source = by_batch_arm.get((batch_index, reused_from))
+        source_index = source.get("execution_index") if source is not None else None
+        reuse_index = row.get("execution_index")
+        _require(
+            type(source_index) is int and type(reuse_index) is int,
+            "Causal exact-config reuse order drifted.",
+        )
+        assert isinstance(source_index, int) and isinstance(reuse_index, int)
+        _require(
+            source is not None
+            and source.get("execution_mode") == "executed"
+            and source.get("config_sha256") == digest
+            and source_index < reuse_index,
+            "Causal exact-config reuse source drifted.",
+        )
+        counts["reused_exact_config"] += 1
+    return counts
+
+
 def _verify_dependency(
     metadata: dict[str, Any],
     name: str,
@@ -427,6 +492,8 @@ def main() -> None:
     verified_dependencies: set[tuple[str, str, str]] = set()
     validated_memory_matches: set[Path] = set()
     validated_equivalences: set[Path] = set()
+    quality_execution_counts = {"executed": 0, "reused_exact_config": 0}
+    physical_execution_counts = {"executed": 0, "reused_exact_config": 0}
     for run in runs:
         identity = (
             run["scale"],
@@ -486,15 +553,25 @@ def main() -> None:
                 training_seed=raw["training_seed"],
             )
             validated_equivalences.add(equivalence_path)
+        batch_metrics = raw["batch_metrics"]
         _require(
-            len(raw["batch_metrics"])
+            len(batch_metrics)
             == shard.BATCHES_PER_SHARD * len(shard.ALL_ARM_NAMES),
             "Causal batch metric coverage drifted.",
         )
         _require(
-            all(metric.get("budget_violations") == 0 for metric in raw["batch_metrics"]),
+            all(metric.get("budget_violations") == 0 for metric in batch_metrics),
             "Causal shard contains a budget violation.",
         )
+        shard_quality_counts = validate_exact_config_reuse(
+            batch_metrics, expected_arms=shard.ALL_ARM_NAMES
+        )
+        for key, value in shard_quality_counts.items():
+            quality_execution_counts[key] += value
+        quality_by_schedule_arm = {
+            (metric["schedule_batch_index"], metric["arm"]): metric
+            for metric in batch_metrics
+        }
         _require(
             raw.get("arm_metadata", {}).get("fixed_match_source")
             == "calibration-physical-hot-bytes",
@@ -515,6 +592,15 @@ def main() -> None:
             "Causal conversation coverage drifted.",
         )
         for record in records:
+            metric = quality_by_schedule_arm[
+                (record["schedule_batch_index"], record["arm"])
+            ]
+            _require(
+                record.get("execution_mode") == metric.get("execution_mode")
+                and record.get("reused_from_arm") == metric.get("reused_from_arm")
+                and record.get("config_sha256") == metric.get("config_sha256"),
+                "Causal record execution provenance drifted.",
+            )
             predictions = record["predictions"]
             targets = record["targets"]
             correctness = [
@@ -551,6 +637,11 @@ def main() -> None:
             len(measurements) == shard.BATCHES_PER_SHARD * len(shard.PHYSICAL_ARM_NAMES),
             "Physical measurement count drifted.",
         )
+        shard_physical_counts = validate_exact_config_reuse(
+            measurements, expected_arms=shard.PHYSICAL_ARM_NAMES
+        )
+        for key, value in shard_physical_counts.items():
+            physical_execution_counts[key] += value
         by_batch_arm = {
             (measurement["batch_index"], measurement["arm"]): measurement
             for measurement in measurements
@@ -661,6 +752,9 @@ def main() -> None:
             "all_record_digests_verified": True,
             "no_budget_violations": True,
             "all_physical_predictions_identical": True,
+            "exact_config_reuse_verified": True,
+            "quality_execution_counts": quality_execution_counts,
+            "physical_execution_counts": physical_execution_counts,
             "unique_shards": len(seen),
             "raw_shard_digest_set_sha256": hashlib.sha256(
                 "\n".join(sorted(raw_digests)).encode()

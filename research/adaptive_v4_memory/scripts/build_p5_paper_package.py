@@ -306,7 +306,10 @@ mechanical and deliberately narrower than the motivating hypothesis.
   2 scales, 9 workload families, 5 contexts, and 1,000 examples per
   seed-scale-family.
 - P2 causal: {p2_causal["audit"]["unique_shards"]:,} verified factorial shards;
-  the calibrated+pins versus fixed+pins gate passed: **{causal["passed"]}**.
+  {p2_causal["audit"]["quality_execution_counts"]["executed"]:,} quality forwards were
+  executed and {p2_causal["audit"]["quality_execution_counts"]["reused_exact_config"]:,}
+  arm-batches reused an exact byte-identical config; the calibrated+pins versus
+  fixed+pins gate passed: **{causal["passed"]}**.
 - P3 RULER: {p3_ruler["audit"]["completed_cells"]} cells and
   {p3_ruler["audit"]["total_predictions"]:,} predictions on one pinned compatible model.
 - P3 natural suite: {p3_natural["audit"]["benchmarks_terminal"]} terminal benchmarks and

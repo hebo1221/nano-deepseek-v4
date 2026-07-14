@@ -1,8 +1,17 @@
 {
   "schema_version": 1,
   "experiment_id": "p2-causal-factorial-v1",
-  "status": "frozen_before_execution",
+  "status": "amended_and_frozen_before_execution",
   "frozen_at": "2026-07-14T15:41:48+09:00",
+  "protocol_amendments": [
+    {
+      "date": "2026-07-14",
+      "timing": "before any causal-factorial held-out shard was generated",
+      "change": "reuse a completed forward only when the full SameTokenControllerConfig dataclass and its canonical SHA-256 digest are identical within the same paired batch",
+      "reason": "avoid redundant computation for structurally identical preregistered arms without changing examples, arm labels, predictions, controller records, paired units, or inference claims",
+      "reporting": "retain one record per arm and conversation; mark executed versus reused-exact-config and report physical forward counts separately from arm-conversation counts"
+    }
+  ],
   "execution_prerequisite": "strict chain: P2 core has 4500 validated shards -> calibration-only physical hot-memory matching for every seed/scale -> exact equivalence for every seed/scale -> held-out causal factorial",
   "scales": ["s55", "s151"],
   "training_seeds": [6071401, 6071402, 6071403, 6071404, 6071405],
@@ -181,6 +190,13 @@
     },
     "physical_path_arms": ["fixed+pins", "calibrated+pins"],
     "execution_order": "deterministic rotation of all arms within every paired batch",
+    "exact_config_reuse": {
+      "scope": "within one paired batch only",
+      "identity": "canonical SHA-256 of the complete SameTokenControllerConfig plus exact dataclass equality",
+      "collision_action": "fail the shard",
+      "timing_accounting": "reused arms record zero executed wall time and name the source arm",
+      "statistical_unit": "unchanged paired conversation; reused arm labels are not presented as independent inference executions"
+    },
     "arm_builder": "research/adaptive_v4_memory/scripts/freeze_p2_causal_factorial_arms.py",
     "prerequisite_runner": "research/adaptive_v4_memory/scripts/run_p2_causal_prerequisites.py",
     "factorial_runner": "research/adaptive_v4_memory/scripts/run_p2_causal_factorial_matrix.py",

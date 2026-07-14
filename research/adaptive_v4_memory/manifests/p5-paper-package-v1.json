@@ -11,7 +11,10 @@
     "p2_causal": {
       "path": "artifacts/adaptive_v4_memory/paper_grade/p2-causal-ablation.summary.json",
       "experiment_id": "p2-causal-ablation-audit-v1",
-      "required_audit": {"unique_shards": 9000}
+      "required_audit": {
+        "unique_shards": 9000,
+        "exact_config_reuse_verified": true
+      }
     },
     "p3_ruler": {
       "path": "artifacts/adaptive_v4_memory/paper_grade/p3/ruler-qwen3-1.7b.summary.json",

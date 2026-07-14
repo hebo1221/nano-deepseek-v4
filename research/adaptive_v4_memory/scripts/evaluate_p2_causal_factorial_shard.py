@@ -127,6 +127,30 @@ def records_digest(records: list[dict[str, Any]]) -> str:
     ).hexdigest()
 
 
+def config_digest(config: SameTokenControllerConfig) -> str:
+    """Identify byte-equivalent frozen controller configurations."""
+
+    return hashlib.sha256(
+        json.dumps(asdict(config), sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+
+
+def exact_config_reuse(
+    cache: dict[str, tuple[str, SameTokenControllerConfig, dict[str, Any]]],
+    config: SameTokenControllerConfig,
+) -> tuple[str, dict[str, Any]] | None:
+    """Return a prior run only when both its digest and dataclass are identical."""
+
+    digest = config_digest(config)
+    cached = cache.get(digest)
+    if cached is None:
+        return None
+    arm_name, cached_config, run = cached
+    if cached_config != config:
+        raise RuntimeError("Causal config SHA-256 collision detected.")
+    return arm_name, run
+
+
 def schedule_batch_index(
     *, family: str, context: int, replicate: int, local_batch_index: int
 ) -> int:
@@ -468,16 +492,28 @@ def evaluate_shard(
         rotation = schedule_index % len(ALL_ARM_NAMES)
         execution_order = (*ALL_ARM_NAMES[rotation:], *ALL_ARM_NAMES[:rotation])
         quality_runs: dict[str, dict[str, Any]] = {}
+        quality_config_cache: dict[
+            str, tuple[str, SameTokenControllerConfig, dict[str, Any]]
+        ] = {}
         for execution_index, arm_name in enumerate(execution_order):
             built_arm = arms[arm_name]
             config = built_arm.config_for_batch(schedule_index)
-            run = run_chunked_quality(
-                model,
-                workload,
-                arm_name=arm_name,
-                config=config,
-                chunk_size=CHUNK_SIZE_BY_SCALE[scale],
-            )
+            config_sha256 = config_digest(config)
+            reused = exact_config_reuse(quality_config_cache, config)
+            if reused is None:
+                run = run_chunked_quality(
+                    model,
+                    workload,
+                    arm_name=arm_name,
+                    config=config,
+                    chunk_size=CHUNK_SIZE_BY_SCALE[scale],
+                )
+                quality_config_cache[config_sha256] = (arm_name, config, run)
+                execution_mode = "executed"
+                reused_from_arm = None
+            else:
+                reused_from_arm, run = reused
+                execution_mode = "reused-exact-config"
             quality_runs[arm_name] = run
             row_violations = sum(row["budget_violations"] for row in run["controller_rows"])
             batch_metrics.append(
@@ -486,8 +522,11 @@ def evaluate_shard(
                     "schedule_batch_index": schedule_index,
                     "arm": arm_name,
                     "execution_index": execution_index,
+                    "execution_mode": execution_mode,
+                    "reused_from_arm": reused_from_arm,
+                    "config_sha256": config_sha256,
                     "config_variant": _config_variant(built_arm, config),
-                    "wall_ms": run["wall_ms"],
+                    "wall_ms": run["wall_ms"] if reused is None else 0.0,
                     "controller": run["controller"],
                     "budget_violations": row_violations,
                 }
@@ -514,6 +553,9 @@ def evaluate_shard(
                         "total": len(correctness),
                         "config_variant": _config_variant(built_arm, config),
                         "schedule_batch_index": schedule_index,
+                        "execution_mode": execution_mode,
+                        "reused_from_arm": reused_from_arm,
+                        "config_sha256": config_sha256,
                         "controller": run["controller_rows"][row],
                     }
                 )
@@ -522,10 +564,24 @@ def evaluate_shard(
             *PHYSICAL_ARM_NAMES[physical_rotation:],
             *PHYSICAL_ARM_NAMES[:physical_rotation],
         )
+        physical_config_cache: dict[
+            str, tuple[str, SameTokenControllerConfig, dict[str, Any]]
+        ] = {}
         for execution_index, arm_name in enumerate(physical_order):
             built_arm = arms[arm_name]
             config = built_arm.config_for_batch(schedule_index)
-            physical = run_sequential_physical(model, workload, arm_name=arm_name, config=config)
+            config_sha256 = config_digest(config)
+            reused = exact_config_reuse(physical_config_cache, config)
+            if reused is None:
+                physical = run_sequential_physical(
+                    model, workload, arm_name=arm_name, config=config
+                )
+                physical_config_cache[config_sha256] = (arm_name, config, physical)
+                execution_mode = "executed"
+                reused_from_arm = None
+            else:
+                reused_from_arm, physical = reused
+                execution_mode = "reused-exact-config"
             quality = quality_runs[arm_name]
             identical = physical["predictions"] == quality["predictions"]
             if not identical:
@@ -539,10 +595,13 @@ def evaluate_shard(
                     "schedule_batch_index": schedule_index,
                     "arm": arm_name,
                     "execution_index": execution_index,
+                    "execution_mode": execution_mode,
+                    "reused_from_arm": reused_from_arm,
+                    "config_sha256": config_sha256,
                     "config_variant": _config_variant(built_arm, config),
                     "conversation_ids": list(workload.conversation_ids),
                     "predictions_identical_to_chunked": identical,
-                    "wall_ms": physical["wall_ms"],
+                    "wall_ms": physical["wall_ms"] if reused is None else 0.0,
                     "accounting": physical["accounting"],
                     "tier": physical["tier"],
                     "controller_rows": physical["controller_rows"],

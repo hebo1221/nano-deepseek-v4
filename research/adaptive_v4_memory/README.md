@@ -297,6 +297,15 @@ short-prefix speedup. The checked counterexample is in
 `results/p2-batch20-equivalence-s55.summary.json`; the matrix runner rejects
 larger batch sizes and validates this field when resuming shards.
 
+Before any held-out causal-factorial shard was generated, the execution
+contract was amended to reuse a forward only when the complete frozen
+`SameTokenControllerConfig` has both the same canonical SHA-256 digest and exact
+dataclass equality within the same paired batch. Every arm-conversation record
+is retained, while executed and reused forwards are counted separately and a
+digest collision fails the shard. The amendment and its claim boundary are
+recorded in
+[`2026-07-14-p2-causal-exact-config-reuse.md`](reports/2026-07-14-p2-causal-exact-config-reuse.md).
+
 The S151 paired pilot is also complete. Hierarchical versus fixed was +5.89 pp
 at 1x, +2.68 pp at 2x, and 0 pp at 4x; the 1x difference again came from
 protected instruction retention. Exact no-pin predictions matched fixed 1x
