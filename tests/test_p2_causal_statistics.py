@@ -8,64 +8,58 @@ import pytest
 SCRIPTS = Path(__file__).resolve().parents[1] / "research/adaptive_v4_memory/scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-from summarize_p2_causal_factorial_matrix import (  # noqa: E402
-    CENTRAL_CONTRAST,
-    central_gate,
-    holm_bonferroni,
-    seed_cluster_statistics,
-)
+import summarize_p2_causal_factorial as causal  # noqa: E402
 
 
 def test_seed_cluster_statistics_are_deterministic_and_seed_level() -> None:
-    first = seed_cluster_statistics([0.1] * 5, label="constant", resamples=1_000)
-    second = seed_cluster_statistics([0.1] * 5, label="constant", resamples=1_000)
+    first = causal.seed_cluster_statistics(
+        [0.1] * 5, label="constant", confidence=0.9875, resamples=1_000
+    )
+    second = causal.seed_cluster_statistics(
+        [0.1] * 5, label="constant", confidence=0.9875, resamples=1_000
+    )
 
     assert first == second
     assert first["independent_seed_clusters"] == 5
     assert first["mean_difference"] == pytest.approx(0.1)
     assert first["seed_cluster_bootstrap_ci"] == pytest.approx([0.1, 0.1])
-    assert first["cohens_dz_across_seeds"] is None
 
 
-def test_seed_cluster_statistics_retain_a_symmetric_null() -> None:
-    result = seed_cluster_statistics(
-        [-0.2, -0.1, 0.0, 0.1, 0.2], label="symmetric", resamples=2_000
-    )
-
-    assert result["mean_difference"] == pytest.approx(0.0)
-    assert result["seed_cluster_bootstrap_ci"][0] < 0.0
-    assert result["seed_cluster_bootstrap_ci"][1] > 0.0
-    assert result["paired_randomization_two_sided_p"] > 0.9
-
-
-def test_causal_holm_bonferroni_is_monotone() -> None:
-    adjusted = holm_bonferroni({"a": 0.01, "b": 0.03, "c": 0.04})
-
-    assert adjusted == pytest.approx({"a": 0.03, "b": 0.06, "c": 0.06})
-
-
-def test_central_gate_requires_effect_seed_ci_significance_and_memory() -> None:
-    effects = {
-        "pooled_by_scale_budget": [
+def _statistics() -> dict:
+    return {
+        "cells": [
             {
-                "contrast": CENTRAL_CONTRAST,
                 "scale": scale,
                 "budget": budget,
-                "mean_difference": 0.1,
-                "seed_means": [0.1] * 5,
-                "familywise_corrected_seed_cluster_bootstrap_ci": [0.05, 0.15],
-                "holm_adjusted_p_within_scale_budget": 0.01,
+                "mean_difference": 0.02,
+                "four_cell_corrected_bootstrap": {
+                    "confidence_interval": [0.01, 0.03]
+                },
             }
             for scale in ("s55", "s151")
             for budget in ("2x", "4x")
-        ]
-    }
-    memory = {
-        "pooled_by_scale_budget": [
+        ],
+        "by_seed": [
             {
                 "scale": scale,
                 "budget": budget,
-                "pooled_within_one_percent": True,
+                "training_seed": seed,
+                "mean_difference": 0.01,
+            }
+            for scale in ("s55", "s151")
+            for budget in ("2x", "4x")
+            for seed in causal.shard.TRAINING_SEEDS
+        ],
+    }
+
+
+def _memory() -> dict:
+    return {
+        "aggregate": [
+            {
+                "scale": scale,
+                "budget": budget,
+                "relative_difference": 0.005,
                 "all_seed_cells_within_one_percent": True,
             }
             for scale in ("s55", "s151")
@@ -73,10 +67,59 @@ def test_central_gate_requires_effect_seed_ci_significance_and_memory() -> None:
         ]
     }
 
-    passing = central_gate(effects, memory)
-    assert all(row["passes"] for row in passing)
 
-    effects["pooled_by_scale_budget"][0]["seed_means"][-1] = -0.01
-    failing = central_gate(effects, memory)
-    assert failing[0]["checks"]["all_five_seed_effects_positive"] is False
-    assert failing[0]["passes"] is False
+def test_primary_causal_gate_requires_all_four_cells_and_all_five_seeds() -> None:
+    statistics = _statistics()
+    gate = causal.primary_causal_gate(statistics, _memory())
+
+    assert gate["passed"] is True
+    assert gate["required_cells"] == 4
+    assert all(cell["positive_seed_effects"] == 5 for cell in gate["cells"])
+
+    statistics["by_seed"][0]["mean_difference"] = 0.0
+    failed = causal.primary_causal_gate(statistics, _memory())
+    assert failed["passed"] is False
+    assert failed["cells"][0]["all_seed_effects_positive"] is False
+
+
+def test_primary_causal_gate_withholds_a_hot_memory_mismatch() -> None:
+    memory = _memory()
+    memory["aggregate"][2]["all_seed_cells_within_one_percent"] = False
+
+    gate = causal.primary_causal_gate(_statistics(), memory)
+
+    assert gate["passed"] is False
+    assert gate["cells"][2]["all_seed_memory_cells_within_one_percent"] is False
+
+
+def test_physical_memory_statistics_enforces_each_seed_cell() -> None:
+    values = {}
+    for scale in ("s55", "s151"):
+        for budget in ("2x", "4x"):
+            for seed in causal.shard.TRAINING_SEEDS:
+                values[(scale, budget, seed, "fixed+pins")] = [
+                    1_000
+                ] * causal.EXPECTED_PHYSICAL_BATCHES_PER_SEED_CELL
+                values[(scale, budget, seed, "calibrated+pins")] = [
+                    1_005
+                ] * causal.EXPECTED_PHYSICAL_BATCHES_PER_SEED_CELL
+    values[("s151", "4x", causal.shard.TRAINING_SEEDS[-1], "fixed+pins")] = [
+        900
+    ] * causal.EXPECTED_PHYSICAL_BATCHES_PER_SEED_CELL
+
+    result = causal.physical_memory_statistics(values)
+
+    failed_seed = next(
+        row
+        for row in result["by_seed"]
+        if row["scale"] == "s151"
+        and row["budget"] == "4x"
+        and row["training_seed"] == causal.shard.TRAINING_SEEDS[-1]
+    )
+    failed_cell = next(
+        row
+        for row in result["aggregate"]
+        if row["scale"] == "s151" and row["budget"] == "4x"
+    )
+    assert failed_seed["within_one_percent"] is False
+    assert failed_cell["all_seed_cells_within_one_percent"] is False

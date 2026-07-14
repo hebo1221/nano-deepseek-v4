@@ -193,7 +193,7 @@
     "confidence_level": 0.95,
     "paired_randomization_resamples": 10000,
     "primary_four_cell_confidence_level": 0.9875,
-    "primary_four_cell_correction": "Bonferroni over the 2 scales x 2 required budget cells",
+    "primary_four_cell_correction": "Bonferroni over the 2 scales x 2 required budget cells using the five independent training-seed means as bootstrap clusters",
     "family_correction": "Holm-Bonferroni separately within each scale and budget",
     "required_slices": ["scale", "budget", "training-seed", "family", "context"]
   },
@@ -201,7 +201,7 @@
     "contrast": "calibrated+pins - fixed+pins",
     "required_budget_points": ["2x", "4x"],
     "pooled_effect": "strictly positive at every required budget and both scales",
-    "corrected_cluster_bootstrap_lower_bound": "98.75 percent paired cluster-bootstrap lower bound is strictly positive in each of the four 2-scale x 2-budget primary cells",
+    "corrected_cluster_bootstrap_lower_bound": "98.75 percent training-seed-cluster bootstrap lower bound is strictly positive in each of the four 2-scale x 2-budget primary cells",
     "seed_effects": "all five strictly positive at each required budget and scale",
     "memory_match": "within 1 percent at every required budget and scale",
     "failure_interpretation": "failed-or-bounded causal claim"

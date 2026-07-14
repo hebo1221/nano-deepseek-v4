@@ -196,8 +196,9 @@ all five seed-level effects must be positive at each scale. Any failed clause is
 reported as a failed or bounded causal claim rather than averaged away. Every
 clause is required separately at both 2x and 4x; one budget cannot rescue the
 other. The four primary scale-by-budget cells use a Bonferroni-corrected 98.75%
-paired cluster-bootstrap interval; family slices use Holm-Bonferroni separately
-within each scale and budget. The
+training-seed-cluster bootstrap interval over the five independent seed means;
+conversation-paired intervals remain descriptive within a seed. Family slices
+use Holm-Bonferroni separately within each scale and budget. The
 contrasts `fixed+pins - fixed` and `calibrated+pins - calibrated-no-pins`
 estimate the pin contribution; `calibrated-no-pins - fixed` and
 `calibrated+pins - fixed+pins` estimate adaptive-quota contribution; shuffled

@@ -13,7 +13,7 @@ from typing import Any, cast
 
 import evaluate_p2_causal_factorial_shard as shard
 import numpy as np
-from summarize_p2_core_matrix import bootstrap_paired_mean, holm_bonferroni
+from summarize_p2_core_matrix import bootstrap_paired_mean, holm_bonferroni, stable_seed
 
 from nano_deepseek_v4 import PAPER_GRADE_WORKLOAD_FAMILIES
 
@@ -77,6 +77,42 @@ def _merge(groups: Iterable[list[float]]) -> list[float]:
     return result
 
 
+def seed_cluster_statistics(
+    seed_means: Iterable[float],
+    *,
+    label: str,
+    confidence: float = 0.95,
+    resamples: int = 10_000,
+) -> dict[str, Any]:
+    values = np.asarray(tuple(seed_means), dtype=np.float64)
+    if values.ndim != 1 or len(values) < 2:
+        raise ValueError("Seed-cluster inference requires at least two independent seeds.")
+    rng = np.random.default_rng(stable_seed(label))
+    bootstrap_indices = rng.integers(0, len(values), size=(resamples, len(values)))
+    bootstrap_means = values[bootstrap_indices].mean(axis=1)
+    alpha = 1.0 - confidence
+    lower, upper = np.quantile(
+        bootstrap_means, (alpha / 2.0, 1.0 - alpha / 2.0)
+    )
+    signs = np.where(rng.integers(0, 2, size=(resamples, len(values))) == 0, -1.0, 1.0)
+    null_means = (signs * values).mean(axis=1)
+    observed = float(values.mean())
+    threshold = max(0.0, abs(observed) - np.finfo(np.float64).eps * 16.0)
+    randomization_p = (
+        np.count_nonzero(np.abs(null_means) >= threshold) + 1
+    ) / (resamples + 1)
+    return {
+        "independent_seed_clusters": len(values),
+        "seed_means": values.tolist(),
+        "mean_difference": observed,
+        "confidence_level": confidence,
+        "seed_cluster_bootstrap_ci": [float(lower), float(upper)],
+        "paired_randomization_two_sided_p": float(randomization_p),
+        "bootstrap_resamples": resamples,
+        "inference_seed": stable_seed(label),
+    }
+
+
 def contrast_statistics(
     differences: dict[tuple[str, str, int, str, int], list[float]],
     *,
@@ -102,6 +138,7 @@ def contrast_statistics(
                     **bootstrap_paired_mean(values, label=f"causal:{name}:cell:{scale}:{budget}"),
                 }
             )
+            cell_seed_means: list[float] = []
             for training_seed in shard.TRAINING_SEEDS:
                 seed_values = _merge(
                     group
@@ -128,6 +165,11 @@ def contrast_statistics(
                         ),
                     }
                 )
+                cell_seed_means.append(float(np.mean(seed_values)))
+            cells[-1]["seed_cluster_inference"] = seed_cluster_statistics(
+                cell_seed_means,
+                label=f"causal:{name}:seed-cluster:{scale}:{budget}",
+            )
             cell_families: list[dict[str, Any]] = []
             for family in PAPER_GRADE_WORKLOAD_FAMILIES:
                 family_values = _merge(
@@ -152,10 +194,37 @@ def contrast_statistics(
                         label=f"causal:{name}:family:{scale}:{budget}:{family}",
                     ),
                 }
+                family_seed_means = [
+                    float(
+                        np.mean(
+                            _merge(
+                                group
+                                for (
+                                    item_scale,
+                                    item_budget,
+                                    item_seed,
+                                    item_family,
+                                    _context,
+                                ), group in differences.items()
+                                if item_scale == scale
+                                and item_budget == budget
+                                and item_seed == training_seed
+                                and item_family == family
+                            )
+                        )
+                    )
+                    for training_seed in shard.TRAINING_SEEDS
+                ]
+                row["seed_cluster_inference"] = seed_cluster_statistics(
+                    family_seed_means,
+                    label=f"causal:{name}:family-seeds:{scale}:{budget}:{family}",
+                )
                 cell_families.append(row)
             adjusted = holm_bonferroni(
                 {
-                    row["family"]: row["paired_sign_flip_two_sided_p"]
+                    row["family"]: row["seed_cluster_inference"][
+                        "paired_randomization_two_sided_p"
+                    ]
                     for row in cell_families
                 }
             )
@@ -519,24 +588,23 @@ def main() -> None:
         for name, values in differences.items()
     }
     primary = contrast_payload["adaptive_quota_with_pins"]
-    primary_values = differences["adaptive_quota_with_pins"]
     for cell in primary["cells"]:
-        values = _merge(
-            group
-            for (scale, budget, _seed, _family, _context), group in primary_values.items()
-            if scale == cell["scale"] and budget == cell["budget"]
-        )
-        corrected = bootstrap_paired_mean(
-            values,
+        seed_means = [
+            row["mean_difference"]
+            for row in primary["by_seed"]
+            if row["scale"] == cell["scale"] and row["budget"] == cell["budget"]
+        ]
+        corrected = seed_cluster_statistics(
+            seed_means,
             label=f"causal:primary:four-cell:{cell['scale']}:{cell['budget']}",
             confidence=PRIMARY_CELL_CONFIDENCE,
         )
         cell["four_cell_corrected_bootstrap"] = {
             "confidence_level": PRIMARY_CELL_CONFIDENCE,
-            "confidence_interval": corrected["paired_cluster_bootstrap_95_ci"],
-            "paired_units": corrected["paired_units"],
+            "confidence_interval": corrected["seed_cluster_bootstrap_ci"],
+            "independent_seed_clusters": corrected["independent_seed_clusters"],
             "bootstrap_resamples": corrected["bootstrap_resamples"],
-            "bootstrap_seed": corrected["bootstrap_seed"],
+            "bootstrap_seed": corrected["inference_seed"],
         }
     memory = physical_memory_statistics(physical)
     gate = primary_causal_gate(primary, memory)
