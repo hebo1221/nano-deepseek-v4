@@ -1,0 +1,112 @@
+{
+  "schema_version": 1,
+  "experiment_id": "p3-cross-family-adaptive-quota-ruler-v1",
+  "status": "frozen_before_any_cross_family_adaptive_prediction",
+  "frozen_date": "2026-07-15",
+  "role": "held-out model-family replication of the natural adaptive-quota compatibility arm",
+  "prerequisites": [
+    "terminal digest-bound nine-seed P2 causal audit",
+    "terminal Qwen3-4B natural adaptive-quota RULER audit regardless of its outcome",
+    "frozen Qwen3-1.7B score-compatible baseline selection",
+    "complete frozen Phi tokenizer-specific RULER dataset"
+  ],
+  "sequence_policy": "prefetch is allowed, but no Phi adaptive prediction may run before all prerequisites are terminal; prerequisite outcomes never select or cancel this cohort",
+  "relationship_to_other_cohorts": {
+    "primary_natural_model_family": "Qwen3",
+    "transfer_model_family": "Phi-4",
+    "pooled_with_qwen": false,
+    "pooled_with_phi_native_fixed_transfer": false,
+    "phi_specific_tuning_or_reselection_allowed": false
+  },
+  "model": {
+    "repo_id": "microsoft/Phi-4-mini-instruct",
+    "revision": "cfbefacb99257ffa30c83adab238a50856ac3083",
+    "license": "mit",
+    "architecture": "Phi3ForCausalLM",
+    "dtype": "bfloat16",
+    "num_hidden_layers": 32,
+    "maximum_supported_context_tokens": 131072,
+    "snapshot_digest_set_sha256": "102f70c901015c02c6157e947ffbe2e1aa5667c8b28a0b3df17f4bc269e9889c"
+  },
+  "benchmark": {
+    "name": "RULER",
+    "base_dataset_manifest": "research/adaptive_v4_memory/manifests/p3-cross-family-ruler-transfer-v1.json",
+    "lengths_tokens": [8192, 32768, 131072],
+    "tasks": [
+      "niah_single_1", "niah_single_2", "niah_single_3",
+      "niah_multikey_1", "niah_multikey_2", "niah_multikey_3",
+      "niah_multivalue", "niah_multiquery", "vt", "cwe", "fwe", "qa_1", "qa_2"
+    ],
+    "samples_per_task_length": 100,
+    "generation_seed": 42,
+    "predictions_per_arm": 3900,
+    "paired_predictions_total": 7800,
+    "paired_unit": "same frozen Phi-tokenized RULER example under both compatibility arms"
+  },
+  "scorer_selection": {
+    "source": "artifacts/adaptive_v4_memory/paper_grade/p3/fixed-baseline-selection.json",
+    "eligible_arms": ["streaming_llm", "snapkv", "critical_expected_attention"],
+    "rule": "highest frozen Qwen3-1.7B row-weighted mean accuracy among direct fixed-per-layer ScorerPress candidates; lexicographic tie-break",
+    "phi_outcome_inspection_allowed": false,
+    "excluded": {
+      "pyramidkv": "overrides compress() with its own layer allocation and would confound the compatibility controller",
+      "adakv_snapkv": "already performs a distinct adaptive allocation",
+      "expected_attention": "not in the direct score-compatible frozen candidate set"
+    }
+  },
+  "arms": {
+    "fixed+pins": {
+      "compression_ratio": 0.5,
+      "quota": "floor(context_tokens * 0.5) at every layer",
+      "protected_prefix_token_span": {"start": 0, "end": 4},
+      "selection": "top scorer positions after forcing protected positions inside the same layer budget"
+    },
+    "cross-family-adaptive-quota+pins": {
+      "compression_ratio": 0.5,
+      "global_quota": "32 * floor(context_tokens * 0.5), exactly equal to fixed+pins",
+      "layer_signal": "normalized entropy concentration of z-scored current-layer scorer values",
+      "causal_prior": "running mean of earlier-layer concentrations only",
+      "maximum_layer_adjustment_fraction": 0.25,
+      "feasibility_rule": "reserve feasible minimum and maximum capacity for every remaining layer; final layer consumes the exact residual",
+      "protected_prefix_token_span": {"start": 0, "end": 4},
+      "selection": "top scorer positions after forcing protected positions inside the allocated layer budget"
+    }
+  },
+  "physical_contract": {
+    "same_global_kept_tokens": true,
+    "same_compression_ratio": 0.5,
+    "same_scorer": true,
+    "same_protected_prefix": true,
+    "per_example_required_audit": [
+      "all 32 layer allocations in causal order",
+      "configured and observed total kept tokens",
+      "fixed comparator kept tokens per layer",
+      "score concentration and controller time per layer",
+      "hot-resident bytes, peak HBM, latency, and operational failure"
+    ]
+  },
+  "statistics": {
+    "paired_bootstrap_resamples": 10000,
+    "paired_bootstrap_seed": 9271503,
+    "confidence": 0.95,
+    "task_cluster_sign_flip": true,
+    "exact_task_sign_flip_assignments_per_length": 8192,
+    "holm_family_size": 3,
+    "failure_policy": "intention-to-evaluate; operational failures score zero and are never silently retried, truncated, or dropped"
+  },
+  "confirmation_gate": {
+    "all_required": true,
+    "overall_accuracy_difference_minimum": 0.0,
+    "paired_bootstrap_lower_bound_minimum": -0.01,
+    "nonnegative_length_count_minimum": 2,
+    "worst_task_length_regression_minimum": -0.05,
+    "maximum_failure_rate_increase": 0.01,
+    "maximum_global_kept_token_relative_error": 0.0,
+    "maximum_hot_resident_byte_relative_difference": 0.01
+  },
+  "outputs": {
+    "result_root": "artifacts/adaptive_v4_memory/paper_grade/p3/cross-family/phi4-mini-adaptive-quota-ruler/results",
+    "summary": "artifacts/adaptive_v4_memory/paper_grade/p3/cross-family/phi4-mini-adaptive-quota-ruler.summary.json"
+  },
+  "claim_boundary": "A passing result supports bounded transfer of the natural score-concentration quota heuristic to one held-out Phi-family RULER cohort at equal logical KV budget. It is not unchanged transfer of the synthetic P2 controller. It is not a second full natural-language suite, Phi-specific optimization, dynamic-serving evidence, or official DeepSeek-V4 evidence."
+}
