@@ -108,7 +108,8 @@ export PHI_SNAPSHOT=artifacts/adaptive_v4_memory/paper_grade/p3/assets/models/cf
   --local-dir "$PHI_SNAPSHOT"
 .venv/bin/python research/adaptive_v4_memory/scripts/verify_p3_natural_model.py \
   --manifest research/adaptive_v4_memory/manifests/p3-cross-family-ruler-transfer-v1.json \
-  --model-snapshot "$PHI_SNAPSHOT" \
+  --snapshot "$PHI_SNAPSHOT" \
+  --output artifacts/adaptive_v4_memory/paper_grade/p3/cross-family/phi4-mini-model-verification.json \
   --experiment-id p3-cross-family-model-snapshot-verification-v1
 .venv/bin/python research/adaptive_v4_memory/scripts/prepare_p3_cross_family_ruler_dataset.py \
   --ruler-root "$RULER_ROOT" --tokenizer-snapshot "$PHI_SNAPSHOT"
