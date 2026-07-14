@@ -4,7 +4,6 @@ import argparse
 import contextlib
 import hashlib
 import json
-import os
 import random
 import time
 from collections.abc import Iterator
@@ -246,15 +245,20 @@ def _existing_records(
 ) -> list[dict[str, Any]]:
     if not progress.exists() and not partial.exists():
         atomic_json(progress, identity)
-        partial.touch()
+        partial.mkdir(parents=True)
         return []
     if progress.is_file() and not partial.exists():
-        partial.touch()
-    if partial.is_file() and partial.stat().st_size == 0 and not progress.exists():
+        partial.mkdir(parents=True)
+    if partial.is_dir() and not any(partial.iterdir()) and not progress.exists():
         atomic_json(progress, identity)
-    _require(progress.is_file() and partial.is_file(), "Partial SCBench state is incomplete.")
+    _require(progress.is_file() and partial.is_dir(), "Partial SCBench state is incomplete.")
     _require(json.loads(progress.read_text()) == identity, "Partial SCBench provenance drifted.")
-    records = [json.loads(line) for line in partial.read_text().splitlines() if line]
+    parts = sorted(partial.glob("*.json"))
+    _require(
+        [part.name for part in parts] == [f"{index:06d}.json" for index in range(len(parts))],
+        "Partial SCBench turn sequence drifted.",
+    )
+    records = [json.loads(part.read_text()) for part in parts]
     _require(len(records) <= expected, "Partial SCBench has too many records.")
     return records
 
@@ -473,14 +477,14 @@ def main() -> None:
             runner._setup_press()
             root = args.output_root / arm
             progress = root / "progress.json"
-            partial = root / "records.partial.jsonl"
+            partial = root / "record-parts"
             existing = _existing_records(progress, partial, identities[arm], expected)
             limit = expected
             if args.max_new_examples is not None:
                 limit = min(limit, len(existing) + args.max_new_examples)
             global_index = 0
             root.mkdir(parents=True, exist_ok=True)
-            with partial.open("a") as handle:
+            with contextlib.nullcontext():
                 for mode, task, row_index, row, workload in iter_workloads(
                     manifest=manifest,
                     rows_by_task=rows_by_task,
@@ -529,9 +533,13 @@ def main() -> None:
                         "initial_prefill_hot_resident_bytes": 0,
                     }
                     row_error: BaseException | None = None
+                    row_blocked_by_unsupported = False
                     initial_tokens = int(token_segments[0].shape[1])
                     try:
-                        if initial_tokens > maximum_context:
+                        initial_required = initial_tokens
+                        if mode == "multi-turn":
+                            initial_required += int(turns[0]["generation_reserve_tokens"])
+                        if initial_required > maximum_context:
                             raise OverflowError("initial SCBench prompt exceeds model context")
                         torch.cuda.empty_cache()
                         torch.cuda.reset_peak_memory_stats()
@@ -577,7 +585,7 @@ def main() -> None:
                                 )
                                 logical_position += int(token_segments[prior].shape[1])
                     except OverflowError:
-                        pass
+                        row_blocked_by_unsupported = True
                     except BaseException as error:
                         row_error = error
                         torch.cuda.empty_cache()
@@ -617,13 +625,15 @@ def main() -> None:
                         )
                         base.update(shared_metrics)
                         reserve = turn["generation_reserve_tokens"]
-                        if exact_tokens + reserve > maximum_context:
+                        if row_blocked_by_unsupported or exact_tokens + reserve > maximum_context:
                             record = failure_record(
                                 base,
                                 failure_type="unsupported-context",
                                 latency_ms=0.0,
                                 peak_hbm_bytes=0,
                             )
+                            if mode == "multi-turn":
+                                row_blocked_by_unsupported = True
                         elif row_error is not None or cache is None:
                             record = failure_record(
                                 base,
@@ -715,9 +725,7 @@ def main() -> None:
                                     generated_tokens_observed=generated,
                                     error=error,
                                 )
-                        handle.write(json.dumps(record, sort_keys=True) + "\n")
-                        handle.flush()
-                        os.fsync(handle.fileno())
+                        atomic_json(partial / f"{global_index + turn_index:06d}.json", record)
                         print(
                             json.dumps(
                                 {
@@ -734,9 +742,14 @@ def main() -> None:
             if limit < expected:
                 continue
             _require(global_index == expected, "SCBench prediction grid did not close.")
+            completed = _existing_records(progress, partial, identities[arm], expected)
+            _require(len(completed) == expected, "SCBench atomic turn grid did not close.")
             records = root / "records.jsonl"
-            partial.replace(records)
-            progress.unlink()
+            temporary = root / ".records.jsonl.tmp"
+            temporary.write_text(
+                "".join(json.dumps(record, sort_keys=True) + "\n" for record in completed)
+            )
+            temporary.replace(records)
             cell = {
                 "schema_version": 1,
                 "experiment_id": "p3-natural-benchmark-arm-cell-v1",
@@ -769,6 +782,7 @@ def main() -> None:
                 "raw_records": {"path": str(records), "sha256": sha256(records)},
             }
             atomic_json(root / "cell.json", cell)
+            progress.unlink()
     finally:
         lock.close()
 

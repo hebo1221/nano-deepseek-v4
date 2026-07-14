@@ -190,7 +190,7 @@
         "raw_output_root": "artifacts/adaptive_v4_memory/paper_grade/p3/natural/scbench",
         "native_arm_artifact": "artifacts/adaptive_v4_memory/paper_grade/p3/natural/scbench/native-dense/cell.json",
         "fixed_arm_artifact": "artifacts/adaptive_v4_memory/paper_grade/p3/natural/scbench/strongest-memory-matched-fixed/cell.json",
-        "resume_unit": "one turn prediction within one shared-context row",
+        "resume_unit": "one atomically published turn prediction within one reconstructable shared-context row",
         "multi_turn_cache": "compress the first rendered prompt once; retain every official golden-answer follow-up prompt while removing generated answer tokens",
         "multi_request_cache": "compress one shared context once; restore that exact cache after every independent query",
         "upstream_deviation": "do not apply upstream 128K truncation; classify every oversized turn as unsupported-context without model execution",

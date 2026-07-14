@@ -110,12 +110,12 @@ def test_scbench_turn_generation_retains_prompt_but_removes_generated_answer() -
 
 def test_scbench_progress_recovers_empty_crash_window(tmp_path: Path) -> None:
     progress = tmp_path / "progress.json"
-    partial = tmp_path / "records.partial.jsonl"
+    partial = tmp_path / "record-parts"
     identity = {"digest": "a" * 64}
 
     assert _existing_records(progress, partial, identity, 10_286) == []
-    assert progress.is_file() and partial.is_file()
-    partial.unlink()
+    assert progress.is_file() and partial.is_dir()
+    partial.rmdir()
     assert _existing_records(progress, partial, identity, 10_286) == []
     progress.unlink()
     assert _existing_records(progress, partial, identity, 10_286) == []

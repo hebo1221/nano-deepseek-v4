@@ -138,7 +138,8 @@ def validate_manifest(payload: dict[str, Any]) -> dict[str, Any]:
     scbench_execution = scbench["execution"]
     if (
         scbench_execution["runner"] != "research/adaptive_v4_memory/scripts/run_p3_scbench.py"
-        or scbench_execution["resume_unit"] != "one turn prediction within one shared-context row"
+        or scbench_execution["resume_unit"]
+        != "one atomically published turn prediction within one reconstructable shared-context row"
         or "golden-answer follow-up" not in scbench_execution["multi_turn_cache"]
         or "restore that exact cache" not in scbench_execution["multi_request_cache"]
         or "without model execution" not in scbench_execution["upstream_deviation"]
