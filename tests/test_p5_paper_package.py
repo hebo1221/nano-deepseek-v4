@@ -621,6 +621,11 @@ def test_p5_classification_preserves_claim_boundaries() -> None:
                 "failed_cells": 2,
                 "actual_concurrency_verified": True,
                 "all_required_metrics_verified": True,
+                "warmup_accounting_status_recorded": True,
+                "warmup_accounting_available_all_adapter_cells": True,
+                "warmup_accounting_unavailable_cells": 0,
+                "allocator_hbm_metrics_verified": True,
+                "process_total_hbm_availability_accounted": True,
                 "backend_provenance_consistent": True,
                 "tail_failure_accounting_complete": True,
                 "all_paired_predictions_identical": True,
@@ -696,6 +701,11 @@ def test_p5_success_requires_full_system_coverage() -> None:
                 "failed_cells": 0,
                 "actual_concurrency_verified": True,
                 "all_required_metrics_verified": True,
+                "warmup_accounting_status_recorded": True,
+                "warmup_accounting_available_all_adapter_cells": True,
+                "warmup_accounting_unavailable_cells": 0,
+                "allocator_hbm_metrics_verified": True,
+                "process_total_hbm_availability_accounted": True,
                 "backend_provenance_consistent": True,
                 "tail_failure_accounting_complete": True,
                 "all_paired_predictions_identical": True,
@@ -811,6 +821,44 @@ def test_p5_p4_table_retains_terminal_failure() -> None:
     assert rows[0]["warmup_repetitions_attempted"] == 1
     assert "warmup" in rows[0]["warmup_failures"]
     assert "oom" in rows[0]["failure"]
+
+
+def test_p5_p4_table_does_not_invent_warmup_counts_for_orchestrator_failure() -> None:
+    rows = package._p4_rows(
+        {
+            "complete_cell_statistics": [],
+            "partial_cell_statistics": [],
+            "failure_table": [
+                {
+                    "cell": {
+                        "scale": "s55",
+                        "context": 8_192,
+                        "generation": 128,
+                        "profile": "prefill",
+                        "batch": 16,
+                        "concurrency": 1,
+                    },
+                    "warmup_accounting_available": False,
+                    "warmup_repetitions_attempted": None,
+                    "warmup_paired_repetitions_completed": None,
+                    "warmup_failures": [],
+                    "policy_status": {
+                        "resident-native": {
+                            "failure": {
+                                "failure_type": "adapter-contract-or-execution-failure",
+                                "phase": "orchestrator",
+                            }
+                        }
+                    },
+                }
+            ],
+        }
+    )
+
+    assert rows[0]["warmup_accounting_available"] is False
+    assert rows[0]["warmup_repetitions_attempted"] is None
+    assert rows[0]["warmup_paired_repetitions_completed"] is None
+    assert "orchestrator" in rows[0]["failure"]
 
 
 def test_p5_learned_lookahead_table_joins_quality_and_physical_gate() -> None:

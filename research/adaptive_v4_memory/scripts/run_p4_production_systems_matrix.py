@@ -526,14 +526,27 @@ def _artifact_valid(
             return False
         adapter_payload = payload["adapter_payload"]
         if adapter_payload.get("orchestrator_failure") is True:
+            policy_status = adapter_payload.get("policy_status")
             if (
                 adapter_payload.get("status") != "failed"
                 or adapter_payload.get("repetitions") != []
+                or adapter_payload.get("warmups") != WARMUPS
                 or adapter_payload.get("warmup_accounting_available") is not False
                 or adapter_payload.get("warmup_repetitions_attempted") is not None
                 or adapter_payload.get("warmup_paired_repetitions_completed") is not None
                 or adapter_payload.get("warmup_policy_runs_completed")
                 != {policy: None for policy in POLICIES}
+                or adapter_payload.get("warmup_failures") != []
+                or adapter_payload.get("measured_repetitions") != MEASURED_REPETITIONS
+                or not isinstance(policy_status, dict)
+                or set(policy_status) != set(POLICIES)
+                or any(
+                    not isinstance(status, dict)
+                    or status.get("measured_repetitions") != 0
+                    or not isinstance(status.get("failure"), dict)
+                    or status["failure"].get("phase") != "orchestrator"
+                    for status in policy_status.values()
+                )
             ):
                 return False
         else:
@@ -549,6 +562,7 @@ def _terminal_failure(
     message = str(error)
     failure = {
         "failure_type": "adapter-contract-or-execution-failure",
+        "phase": "orchestrator",
         "error_type": type(error).__name__ if isinstance(error, Exception) else "AdapterError",
         "error": message,
     }

@@ -1880,7 +1880,8 @@ manually, remains mandatory before goal completion, and is never reported as pas
   {p4_production["failed_cells"]} failed.
   Warmup accounting availability was recorded for every terminal cell; accounting was
   available for every adapter-executed cell: **{p4_production["warmup_accounting_available_all_adapter_cells"]}**.
-  Orchestrator failures, if any, retain explicit unavailable/null warmup fields.
+  {p4_production["warmup_accounting_unavailable_cells"]} orchestrator-failure cells retain
+  explicit unavailable/null warmup fields rather than invented zero counts.
   Allocator/device HBM remains mandatory for successful runs; process-total HBM was available
   for {p4_production["process_total_hbm_measured_runs"]:,} measured policy runs and explicitly
   unavailable for {p4_production["process_total_hbm_unavailable_runs"]:,}, with no zero or proxy

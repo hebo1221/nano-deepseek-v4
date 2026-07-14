@@ -354,6 +354,12 @@ def test_orchestrator_failure_is_terminal_and_resumable(tmp_path: Path) -> None:
     terminal = production._terminal_failure(cell=cell, error="failed")
     assert terminal["warmup_accounting_available"] is False
     assert terminal["warmup_repetitions_attempted"] is None
+    assert terminal["warmup_paired_repetitions_completed"] is None
+    assert terminal["warmup_failures"] == []
+    assert all(
+        status["failure"]["phase"] == "orchestrator"
+        for status in terminal["policy_status"].values()
+    )
     payload = {
         "experiment_id": "p4-production-systems-cell-v1",
         "cell": production.cell_dict(cell),
@@ -367,6 +373,17 @@ def test_orchestrator_failure_is_terminal_and_resumable(tmp_path: Path) -> None:
     artifact.write_text(json.dumps(payload))
 
     assert production._artifact_valid(
+        artifact,
+        cell=cell,
+        implementation="implementation",
+        manifest_digest="manifest",
+        p3_digest="p3",
+        adapter_digest=adapter_digest,
+    )
+
+    terminal["warmup_repetitions_attempted"] = 0
+    artifact.write_text(json.dumps(payload))
+    assert not production._artifact_valid(
         artifact,
         cell=cell,
         implementation="implementation",

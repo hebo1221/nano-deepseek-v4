@@ -258,6 +258,7 @@ def summarize(matrix_path: Path) -> dict[str, Any]:
     process_total_hbm_unavailable_runs = 0
     successful_policy_runs = 0
     all_warmup_accounting_available = True
+    warmup_accounting_unavailable_cells = 0
     backend_provenance: set[str] = set()
     for run in runs:
         cell = tuple(
@@ -288,6 +289,8 @@ def summarize(matrix_path: Path) -> dict[str, Any]:
         all_warmup_accounting_available &= (
             adapter["warmup_accounting_available"] is True
         )
+        if adapter["warmup_accounting_available"] is not True:
+            warmup_accounting_unavailable_cells += 1
         _require(adapter["status"] == run["status"], "Production status drifted.")
         _require(
             payload.get("source", {}).get("dirty") is False
@@ -368,6 +371,7 @@ def summarize(matrix_path: Path) -> dict[str, Any]:
             "warmup_accounting_available_all_adapter_cells": (
                 all_warmup_accounting_available
             ),
+            "warmup_accounting_unavailable_cells": warmup_accounting_unavailable_cells,
             "allocator_hbm_metrics_verified": successful_policy_runs > 0,
             "successful_policy_runs_with_allocator_hbm": successful_policy_runs,
             "process_total_hbm_availability_accounted": True,
