@@ -130,11 +130,14 @@ def test_parallel_probe_requires_exact_record_equivalence(
             "records": [{"prediction": seed}],
             "aggregate": [{"accuracy": 1.0}],
             "generation_seed": seed,
+            "source": {"dirty": False, "implementation_digest": "implementation"},
+            "orchestration": {"sha256": "orchestrator"},
         }
         canonical.write_text(json.dumps(payload))
         probe.write_text(json.dumps(payload))
     monkeypatch.setattr(parallel.matrix, "_head", lambda: "commit")
     monkeypatch.setattr(parallel.shard, "_implementation_digest", lambda: "implementation")
+    monkeypatch.setattr(parallel.matrix, "_sha256", lambda _path: "orchestrator")
 
     audit = parallel.audit_parallel_probe(
         canonical_root=canonical_root,
@@ -149,6 +152,35 @@ def test_parallel_probe_requires_exact_record_equivalence(
     payload["records"] = [{"prediction": -1}]
     tampered.write_text(json.dumps(payload))
     with pytest.raises(RuntimeError, match="changed P2 predictions"):
+        parallel.audit_parallel_probe(
+            canonical_root=canonical_root,
+            probe_root=probe_root,
+            audit_path=tmp_path / "audit.json",
+        )
+
+
+def test_parallel_probe_rejects_stale_orchestrator(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    canonical_root = tmp_path / "serial"
+    probe_root = tmp_path / "parallel"
+    for seed, family in parallel.PARALLEL_PROBE_TASKS:
+        payload = {
+            "records_digest": f"digest-{seed}",
+            "records": [{"prediction": seed}],
+            "aggregate": [{"accuracy": 1.0}],
+            "generation_seed": seed,
+            "source": {"dirty": False, "implementation_digest": "implementation"},
+            "orchestration": {"sha256": "stale"},
+        }
+        for root in (canonical_root, probe_root):
+            path = parallel._coordinate_path(root, "s55", seed, family, 80, 0)
+            path.parent.mkdir(parents=True)
+            path.write_text(json.dumps(payload))
+    monkeypatch.setattr(parallel.shard, "_implementation_digest", lambda: "implementation")
+    monkeypatch.setattr(parallel.matrix, "_sha256", lambda _path: "current")
+
+    with pytest.raises(RuntimeError, match="provenance drifted"):
         parallel.audit_parallel_probe(
             canonical_root=canonical_root,
             probe_root=probe_root,

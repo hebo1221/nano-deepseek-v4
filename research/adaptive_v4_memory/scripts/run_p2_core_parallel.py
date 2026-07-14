@@ -223,6 +223,8 @@ def audit_parallel_probe(
     *, canonical_root: Path, probe_root: Path, audit_path: Path
 ) -> dict[str, Any]:
     probes = []
+    implementation_digest = shard._implementation_digest()
+    orchestrator_sha256 = matrix._sha256(Path(__file__))
     for seed, family in PARALLEL_PROBE_TASKS:
         canonical_path = _coordinate_path(canonical_root, "s55", seed, family, 80, 0)
         probe_path = _coordinate_path(probe_root, "s55", seed, family, 80, 0)
@@ -230,6 +232,13 @@ def audit_parallel_probe(
             raise RuntimeError(f"Parallel equivalence probe is missing: {seed}/{family}")
         canonical = json.loads(canonical_path.read_text())
         probe = json.loads(probe_path.read_text())
+        if any(
+            payload.get("source", {}).get("dirty") is not False
+            or payload.get("source", {}).get("implementation_digest") != implementation_digest
+            or payload.get("orchestration", {}).get("sha256") != orchestrator_sha256
+            for payload in (canonical, probe)
+        ):
+            raise RuntimeError(f"Parallel equivalence probe provenance drifted: {seed}/{family}")
         if (
             canonical.get("records_digest") != probe.get("records_digest")
             or canonical.get("records") != probe.get("records")
@@ -260,8 +269,8 @@ def audit_parallel_probe(
         "source": {
             "commit": matrix._head(),
             "dirty": False,
-            "orchestrator_sha256": matrix._sha256(Path(__file__)),
-            "implementation_digest": shard._implementation_digest(),
+            "orchestrator_sha256": orchestrator_sha256,
+            "implementation_digest": implementation_digest,
         },
         "audit": {
             "workers": len(PARALLEL_PROBE_TASKS),
@@ -284,16 +293,35 @@ def run_parallel_probe(
     probe_root: Path,
     audit_path: Path,
 ) -> dict[str, Any]:
-    probe_base = {
+    serial_base = {
         **base,
         "scale": "s55",
-        "output_root": str(probe_root),
+        "output_root": str(canonical_root),
         "contexts": (80,),
         "replicates": (0,),
         "equivalence": (
             "research/adaptive_v4_memory/results/p1-chunked-cache-equivalence.summary.json"
         ),
     }
+    for task in PARALLEL_PROBE_TASKS:
+        process = context.Process(
+            target=_evaluate_tasks,
+            args=(
+                {
+                    **serial_base,
+                    "worker": 0,
+                    "workers": 1,
+                    "tasks": (task,),
+                },
+            ),
+        )
+        process.start()
+        process.join()
+        if process.exitcode != 0:
+            raise RuntimeError(
+                f"P2 serial equivalence baseline failed for {task}: {process.exitcode}"
+            )
+    probe_base = {**serial_base, "output_root": str(probe_root)}
     processes = []
     for worker, task in enumerate(PARALLEL_PROBE_TASKS):
         config = {
@@ -473,12 +501,20 @@ def main() -> None:
     lock = acquire_gpu_lock(f"p2-core-parallel-{args.scale}")
     try:
         context = mp.get_context("spawn")
-        if args.scale == "s151":
+        serial_probe_root = args.parallel_probe_root / "serial"
+        parallel_probe_root = args.parallel_probe_root / "parallel"
+        try:
+            audit_parallel_probe(
+                canonical_root=serial_probe_root,
+                probe_root=parallel_probe_root,
+                audit_path=args.parallel_probe_audit,
+            )
+        except RuntimeError:
             run_parallel_probe(
                 context=context,
                 base=base,
-                canonical_root=args.output_root,
-                probe_root=args.parallel_probe_root,
+                canonical_root=serial_probe_root,
+                probe_root=parallel_probe_root,
                 audit_path=args.parallel_probe_audit,
             )
         processes = []
