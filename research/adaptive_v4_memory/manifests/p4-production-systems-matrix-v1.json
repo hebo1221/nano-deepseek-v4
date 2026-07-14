@@ -94,6 +94,8 @@
     "matrix_progress": "artifacts/adaptive_v4_memory/paper_grade/p4/production-systems-matrix.json",
     "audit_output": "artifacts/adaptive_v4_memory/paper_grade/p4/production-systems.summary.json",
     "resume_unit": "one scale-context-generation-load-profile paired cell",
+    "maximum_cell_timeout_seconds": 21600,
+    "timeout_enforcement": "one isolated adapter process group per cell with an orchestrator-enforced hard timeout at or below the preregistered maximum; timeout kills the process group, the actual deadline is digest-bound in every cell, and a terminal failure artifact is emitted",
     "warmup_accounting": "record attempted repetitions, paired-complete repetitions, per-policy completed runs, and every terminal warmup failure separately",
     "failure_is_terminal_and_reported": true
   },

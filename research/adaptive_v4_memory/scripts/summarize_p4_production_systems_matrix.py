@@ -145,6 +145,7 @@ def summarize_cell(payload: dict[str, Any]) -> dict[str, Any]:
     result: dict[str, Any] = {
         "cell": payload["cell"],
         "status": adapter["status"],
+        "cell_timeout_seconds": payload["cell_timeout_seconds"],
         "backend": adapter.get("backend"),
         "policy_status": adapter["policy_status"],
         "warmup_accounting_available": adapter["warmup_accounting_available"],
@@ -259,6 +260,7 @@ def summarize(matrix_path: Path) -> dict[str, Any]:
     successful_policy_runs = 0
     all_warmup_accounting_available = True
     warmup_accounting_unavailable_cells = 0
+    cell_timeouts: list[float] = []
     backend_provenance: set[str] = set()
     for run in runs:
         cell = tuple(
@@ -286,6 +288,7 @@ def summarize(matrix_path: Path) -> dict[str, Any]:
             f"Invalid production artifact: {artifact}",
         )
         adapter = payload["adapter_payload"]
+        cell_timeouts.append(float(payload["cell_timeout_seconds"]))
         all_warmup_accounting_available &= (
             adapter["warmup_accounting_available"] is True
         )
@@ -303,6 +306,7 @@ def summarize(matrix_path: Path) -> dict[str, Any]:
             failures.append(
                 {
                     "cell": payload["cell"],
+                    "cell_timeout_seconds": payload["cell_timeout_seconds"],
                     "policy_status": adapter["policy_status"],
                     "orchestrator_failure": adapter.get("orchestrator_failure", False),
                     "warmup_accounting_available": adapter[
@@ -368,6 +372,9 @@ def summarize(matrix_path: Path) -> dict[str, Any]:
             "actual_concurrency_verified": all_complete and all_concurrency,
             "all_required_metrics_verified": all_complete and all_metrics,
             "warmup_accounting_status_recorded": True,
+            "whole_cell_timeout_contract_verified": True,
+            "minimum_cell_timeout_seconds": min(cell_timeouts),
+            "maximum_cell_timeout_seconds": max(cell_timeouts),
             "warmup_accounting_available_all_adapter_cells": (
                 all_warmup_accounting_available
             ),

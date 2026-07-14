@@ -6,12 +6,14 @@ import hashlib
 import json
 import math
 import platform
+import signal
 import subprocess
 import sys
 import time
 from dataclasses import asdict, dataclass
 from itertools import product
 from pathlib import Path
+from types import FrameType
 from typing import Any
 
 import torch
@@ -41,6 +43,7 @@ P3_BENCHMARKS = ("RULER", "SCBench", "LongBench-v2", "LongMemEval", "MRCR")
 TERMINAL_STATUSES = ("complete", "partial", "failed")
 WARMUPS = 5
 MEASURED_REPETITIONS = 30
+CELL_TIMEOUT_SECONDS = 21_600.0
 PREFILL_CHUNK = 256
 EXPECTED_CELLS = len(SCALES) * len(CONTEXTS) * len(GENERATIONS) * len(LOAD_PROFILES)
 IMPLEMENTATION_PATHS = (
@@ -176,6 +179,31 @@ def _cleanup() -> None:
     gc.collect()
     torch.cuda.empty_cache()
     torch.cuda.synchronize()
+
+
+def _cell_timeout_handler(_signum: int, _frame: FrameType | None) -> None:
+    raise TimeoutError("P4 paired cell exceeded its frozen wall-time limit.")
+
+
+def validate_cell_timeout(seconds: float) -> None:
+    if not math.isfinite(seconds) or not 0.0 < seconds <= CELL_TIMEOUT_SECONDS:
+        raise ValueError(
+            f"cell-timeout-seconds must be finite and in (0, {CELL_TIMEOUT_SECONDS}]."
+        )
+
+
+def arm_cell_timeout(seconds: float) -> Any:
+    validate_cell_timeout(seconds)
+    if signal.getitimer(signal.ITIMER_REAL) != (0.0, 0.0):
+        raise RuntimeError("P4 reference runner cannot replace an existing real-time timer.")
+    previous_handler = signal.signal(signal.SIGALRM, _cell_timeout_handler)
+    signal.setitimer(signal.ITIMER_REAL, seconds)
+    return previous_handler
+
+
+def cancel_cell_timeout(previous_handler: Any) -> None:
+    signal.setitimer(signal.ITIMER_REAL, 0.0)
+    signal.signal(signal.SIGALRM, previous_handler)
 
 
 def _load_model(path: Path, device: torch.device) -> DeepSeekV4ForCausalLM:
@@ -369,6 +397,8 @@ def _artifact_valid(
         and payload.get("manifest", {}).get("sha256") == manifest_digest
         and payload.get("p3_audit", {}).get("sha256") == p3_digest
         and payload.get("status") in TERMINAL_STATUSES
+        and type(payload.get("cell_timeout_seconds")) in (int, float)
+        and 0.0 < payload["cell_timeout_seconds"] <= CELL_TIMEOUT_SECONDS
     )
     if not identity_ok:
         return False
@@ -522,7 +552,9 @@ def main() -> None:
         "--profile", action="append", choices=tuple(row[0] for row in LOAD_PROFILES)
     )
     parser.add_argument("--max-new-cells", type=int)
-    parser.add_argument("--cell-timeout-seconds", type=float, default=21_600.0)
+    parser.add_argument(
+        "--cell-timeout-seconds", type=float, default=CELL_TIMEOUT_SECONDS
+    )
     parser.add_argument(
         "--training-root",
         type=Path,
@@ -551,8 +583,7 @@ def main() -> None:
     args = parser.parse_args()
     if args.max_new_cells is not None and args.max_new_cells <= 0:
         raise ValueError("max-new-cells must be positive.")
-    if args.cell_timeout_seconds <= 0:
-        raise ValueError("cell-timeout-seconds must be positive.")
+    validate_cell_timeout(args.cell_timeout_seconds)
     if _dirty():
         raise RuntimeError("P4 systems execution requires a clean source tree.")
     require_p3_audit(args.p3_audit)
@@ -560,6 +591,8 @@ def main() -> None:
     if (
         manifest.get("experiment_id") != "p4-reference-systems-matrix-v1"
         or manifest.get("primary_paired_cells") != EXPECTED_CELLS
+        or manifest.get("execution", {}).get("maximum_cell_timeout_seconds")
+        != CELL_TIMEOUT_SECONDS
     ):
         raise RuntimeError("The frozen P4 systems manifest is required.")
     if not torch.cuda.is_available():
@@ -619,6 +652,8 @@ def main() -> None:
             warmup_paired_repetitions_completed = 0
             warmup_policy_runs_completed = {policy: 0 for policy in POLICIES}
             warmup_failures: list[dict[str, Any]] = []
+            previous_alarm_handler = arm_cell_timeout(args.cell_timeout_seconds)
+            timeout_cancelled = False
             try:
                 for repetition in range(WARMUPS + MEASURED_REPETITIONS):
                     if time.monotonic() - started > args.cell_timeout_seconds:
@@ -663,6 +698,8 @@ def main() -> None:
                             if repetition < WARMUPS:
                                 warmup_policy_runs_completed[policy] += 1
                         except Exception as error:
+                            if isinstance(error, TimeoutError):
+                                raise
                             failure = {
                                 "failure_type": (
                                     "oom"
@@ -740,6 +777,7 @@ def main() -> None:
                         "active_requests": active_requests,
                     },
                     "warmups": WARMUPS,
+                    "cell_timeout_seconds": args.cell_timeout_seconds,
                     "warmup_accounting_available": True,
                     "warmup_repetitions_attempted": warmup_repetitions_attempted,
                     "warmup_paired_repetitions_completed": (
@@ -756,6 +794,8 @@ def main() -> None:
                     "elapsed_seconds": time.monotonic() - started,
                 }
             except Exception as error:
+                cancel_cell_timeout(previous_alarm_handler)
+                timeout_cancelled = True
                 failure_type = (
                     "oom"
                     if isinstance(error, torch.cuda.OutOfMemoryError)
@@ -802,6 +842,7 @@ def main() -> None:
                         "active_requests": active_requests,
                     },
                     "warmups": WARMUPS,
+                    "cell_timeout_seconds": args.cell_timeout_seconds,
                     "warmup_accounting_available": True,
                     "warmup_repetitions_attempted": warmup_repetitions_attempted,
                     "warmup_paired_repetitions_completed": (
@@ -825,6 +866,8 @@ def main() -> None:
                     "elapsed_seconds": time.monotonic() - started,
                 }
                 _cleanup()
+            if not timeout_cancelled:
+                cancel_cell_timeout(previous_alarm_handler)
             payload.update(
                 {
                     "source": {

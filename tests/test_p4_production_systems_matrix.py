@@ -226,6 +226,7 @@ def test_production_adapter_accepts_explicitly_unavailable_process_hbm() -> None
     summary = production_summary.summarize_cell(
         {
             "cell": production.cell_dict(cell),
+            "cell_timeout_seconds": production.CELL_TIMEOUT_SECONDS,
             "adapter_payload": payload,
         }
     )
@@ -363,6 +364,7 @@ def test_orchestrator_failure_is_terminal_and_resumable(tmp_path: Path) -> None:
     payload = {
         "experiment_id": "p4-production-systems-cell-v1",
         "cell": production.cell_dict(cell),
+        "cell_timeout_seconds": production.CELL_TIMEOUT_SECONDS,
         "source": {"implementation_digest": "implementation"},
         "manifest": {"sha256": "manifest"},
         "p3_audit": {"sha256": "p3"},
@@ -391,3 +393,48 @@ def test_orchestrator_failure_is_terminal_and_resumable(tmp_path: Path) -> None:
         p3_digest="p3",
         adapter_digest=adapter_digest,
     )
+
+
+@pytest.mark.parametrize("seconds", [0.0, -1.0, float("inf"), float("nan"), 21_601.0])
+def test_production_cell_timeout_rejects_invalid_deadline(seconds: float) -> None:
+    with pytest.raises(ValueError, match="finite and in"):
+        production.validate_cell_timeout(seconds)
+
+
+def test_production_adapter_timeout_kills_the_process_group(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[object] = []
+
+    class FakeProcess:
+        pid = 1234
+        returncode = -9
+
+        def communicate(self, timeout: float | None = None) -> tuple[str, str]:
+            calls.append(("communicate", timeout))
+            if timeout is not None:
+                raise subprocess.TimeoutExpired(["adapter"], timeout)
+            return "stdout", "stderr"
+
+    def fake_popen(*args: object, **kwargs: object) -> FakeProcess:
+        calls.append(("popen", args, kwargs))
+        assert kwargs["start_new_session"] is True
+        return FakeProcess()
+
+    monkeypatch.setattr(production.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(
+        production.os,
+        "killpg",
+        lambda pid, sig: calls.append(("killpg", pid, sig)),
+    )
+
+    with pytest.raises(subprocess.TimeoutExpired):
+        production._run_adapter(
+            adapter=tmp_path / "adapter",
+            spec_path=tmp_path / "spec.json",
+            raw_output=tmp_path / "output.json",
+            timeout_seconds=0.5,
+        )
+
+    assert ("killpg", 1234, production.signal.SIGKILL) in calls
+    assert calls[-1] == ("communicate", None)

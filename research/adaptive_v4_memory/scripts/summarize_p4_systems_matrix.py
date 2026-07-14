@@ -87,6 +87,7 @@ def summarize_terminal_cell(payload: dict[str, Any]) -> dict[str, Any]:
     result: dict[str, Any] = {
         "cell": payload["cell"],
         "status": payload["status"],
+        "cell_timeout_seconds": payload["cell_timeout_seconds"],
         "policy_status": payload["policy_status"],
         "warmup_accounting_available": payload["warmup_accounting_available"],
         "warmup_repetitions_attempted": payload["warmup_repetitions_attempted"],
@@ -191,6 +192,7 @@ def main() -> None:
     partial: list[dict[str, Any]] = []
     failures: list[dict[str, Any]] = []
     raw_digests: list[str] = []
+    cell_timeouts: list[float] = []
     for run in runs:
         identity = tuple(
             run[name]
@@ -229,6 +231,7 @@ def main() -> None:
             "P4 cell source drifted.",
         )
         _require(payload.get("status") == run.get("status"), "P4 status drifted.")
+        cell_timeouts.append(float(payload["cell_timeout_seconds"]))
         if payload["status"] == "complete":
             complete.append(summarize_terminal_cell(payload))
         elif payload["status"] == "partial":
@@ -237,6 +240,7 @@ def main() -> None:
             failures.append(
                 {
                     "cell": payload["cell"],
+                    "cell_timeout_seconds": payload["cell_timeout_seconds"],
                     "failure_type": payload.get("failure_type"),
                     "error_type": payload.get("error_type"),
                     "error": payload.get("error"),
@@ -281,6 +285,9 @@ def main() -> None:
             "available_measurement_schema_verified": True,
             "repetition_order_and_pairing_verified": True,
             "warmup_failure_accounting_verified": True,
+            "whole_cell_timeout_contract_verified": True,
+            "minimum_cell_timeout_seconds": min(cell_timeouts),
+            "maximum_cell_timeout_seconds": max(cell_timeouts),
             "tail_latency_metrics_verified": True,
             "terminal_cells": len(seen),
             "complete_cells": len(complete),

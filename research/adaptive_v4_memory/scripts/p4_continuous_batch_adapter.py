@@ -5,6 +5,7 @@ import argparse
 import gc
 import hashlib
 import json
+import math
 import os
 import platform
 import subprocess
@@ -18,6 +19,7 @@ import torch
 from nano_deepseek_v4 import DeepSeekV4Config, DeepSeekV4ForCausalLM, measure_cache_memory
 
 POLICIES = ("resident-native", "tiered-native")
+MAX_CELL_TIMEOUT_SECONDS = 21_600.0
 PREFILL_CHUNK = 256
 
 
@@ -80,14 +82,18 @@ def validate_spec(path: Path) -> dict[str, Any]:
     _require(tuple(spec.get("policies", ())) == POLICIES, "Policy order drifted.")
     warmups = spec.get("warmups")
     measured = spec.get("measured_repetitions")
+    cell_timeout = spec.get("cell_timeout_seconds")
     seeds = spec.get("repetition_seeds")
     _require(
         warmups == 5
         and measured == 30
+        and type(cell_timeout) in (int, float)
+        and math.isfinite(cell_timeout)
+        and 0.0 < cell_timeout <= MAX_CELL_TIMEOUT_SECONDS
         and isinstance(seeds, list)
         and len(seeds) == warmups + measured
         and all(isinstance(seed, int) for seed in seeds),
-        "Warmup or repetition contract drifted.",
+        "Warmup, repetition, or timeout contract drifted.",
     )
     checkpoint = Path(spec.get("checkpoint", ""))
     _require(checkpoint.is_file(), "The frozen checkpoint is missing.")

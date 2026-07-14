@@ -3,7 +3,9 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
+import signal
 import subprocess
 from itertools import product
 from pathlib import Path
@@ -33,6 +35,7 @@ POLICIES = ("resident-native", "tiered-native")
 TERMINAL_STATUSES = ("complete", "partial", "failed")
 WARMUPS = 5
 MEASURED_REPETITIONS = 30
+CELL_TIMEOUT_SECONDS = 21_600.0
 EXPECTED_CELLS = len(SCALES) * len(CONTEXTS) * len(GENERATIONS) * len(LOAD_PROFILES)
 IMPLEMENTATION_PATHS = (
     "research/adaptive_v4_memory/manifests/p4-production-systems-matrix-v1.json",
@@ -70,6 +73,13 @@ TIMING_KEYS = ("controller_time_ns", "indexer_time_ns")
 def _require(condition: bool, message: str) -> None:
     if not condition:
         raise ValueError(message)
+
+
+def validate_cell_timeout(seconds: float) -> None:
+    _require(
+        math.isfinite(seconds) and 0.0 < seconds <= CELL_TIMEOUT_SECONDS,
+        f"Cell timeout must be finite and in (0, {CELL_TIMEOUT_SECONDS}].",
+    )
 
 
 def sha256(path: Path) -> str:
@@ -522,6 +532,8 @@ def _artifact_valid(
             or payload.get("manifest", {}).get("sha256") != manifest_digest
             or payload.get("p3_audit", {}).get("sha256") != p3_digest
             or payload.get("adapter", {}).get("sha256") != adapter_digest
+            or type(payload.get("cell_timeout_seconds")) not in (int, float)
+            or not 0.0 < payload["cell_timeout_seconds"] <= CELL_TIMEOUT_SECONDS
         ):
             return False
         adapter_payload = payload["adapter_payload"]
@@ -593,15 +605,27 @@ def _run_adapter(
     timeout_seconds: float,
 ) -> dict[str, Any]:
     raw_output.unlink(missing_ok=True)
-    completed = subprocess.run(
+    process = subprocess.Popen(
         [str(adapter), "--spec", str(spec_path), "--output", str(raw_output)],
-        capture_output=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         text=True,
-        timeout=timeout_seconds,
         env={**os.environ, "PYTHONUNBUFFERED": "1"},
+        start_new_session=True,
     )
-    if completed.returncode != 0:
-        raise RuntimeError(f"Adapter exited {completed.returncode}: {completed.stderr[-2000:]}")
+    try:
+        _stdout, stderr = process.communicate(timeout=timeout_seconds)
+    except subprocess.TimeoutExpired as error:
+        os.killpg(process.pid, signal.SIGKILL)
+        stdout, stderr = process.communicate()
+        raise subprocess.TimeoutExpired(
+            error.cmd,
+            error.timeout,
+            output=stdout,
+            stderr=stderr,
+        ) from error
+    if process.returncode != 0:
+        raise RuntimeError(f"Adapter exited {process.returncode}: {stderr[-2000:]}")
     if not raw_output.is_file():
         raise RuntimeError("Adapter exited successfully without writing its output artifact.")
     return json.loads(raw_output.read_text())
@@ -647,7 +671,9 @@ def main() -> None:
         "--profile", action="append", choices=tuple(row[0] for row in LOAD_PROFILES)
     )
     parser.add_argument("--max-new-cells", type=int)
-    parser.add_argument("--cell-timeout-seconds", type=float, default=21_600.0)
+    parser.add_argument(
+        "--cell-timeout-seconds", type=float, default=CELL_TIMEOUT_SECONDS
+    )
     parser.add_argument(
         "--training-root",
         type=Path,
@@ -677,7 +703,7 @@ def main() -> None:
     adapter_executable = args.adapter_executable.resolve()
     _require(adapter_executable.is_file(), "Serving adapter executable is missing.")
     _require(os.access(adapter_executable, os.X_OK), "Serving adapter is not executable.")
-    _require(args.cell_timeout_seconds > 0, "Cell timeout must be positive.")
+    validate_cell_timeout(args.cell_timeout_seconds)
     _require(
         args.max_new_cells is None or args.max_new_cells > 0, "max-new-cells must be positive."
     )
@@ -687,7 +713,9 @@ def main() -> None:
     manifest = json.loads(args.manifest.read_text())
     _require(
         manifest.get("experiment_id") == "p4-production-systems-matrix-v1"
-        and manifest.get("primary_paired_cells") == EXPECTED_CELLS,
+        and manifest.get("primary_paired_cells") == EXPECTED_CELLS
+        and manifest.get("execution", {}).get("maximum_cell_timeout_seconds")
+        == CELL_TIMEOUT_SECONDS,
         "The frozen P4 production manifest is required.",
     )
     lock = acquire_gpu_lock("p4-production-systems-matrix")
@@ -736,6 +764,7 @@ def main() -> None:
             "policies": list(POLICIES),
             "warmups": WARMUPS,
             "measured_repetitions": MEASURED_REPETITIONS,
+            "cell_timeout_seconds": args.cell_timeout_seconds,
             "repetition_seeds": [
                 9_071_400 + index for index in range(WARMUPS + MEASURED_REPETITIONS)
             ],
@@ -761,6 +790,7 @@ def main() -> None:
             "schema_version": 1,
             "experiment_id": "p4-production-systems-cell-v1",
             "cell": cell_dict(cell),
+            "cell_timeout_seconds": args.cell_timeout_seconds,
             "source": {
                 "commit": _head(),
                 "dirty": False,

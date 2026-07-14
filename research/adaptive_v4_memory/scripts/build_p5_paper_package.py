@@ -955,6 +955,7 @@ def classify_evidence(
         and production_audit.get("all_required_metrics_verified") is True
         and production_audit.get("warmup_accounting_status_recorded") is True
         and production_audit.get("warmup_accounting_available_all_adapter_cells") is True
+        and production_audit.get("whole_cell_timeout_contract_verified") is True
         and production_audit.get("allocator_hbm_metrics_verified") is True
         and production_audit.get("process_total_hbm_availability_accounted") is True
         and production_audit.get("backend_provenance_consistent") is True
@@ -1633,6 +1634,7 @@ def _p4_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
         row.update(
             {
                 "paired_repetitions": cell["paired_repetitions"],
+                "cell_timeout_seconds": cell["cell_timeout_seconds"],
                 "warmup_accounting_available": cell["warmup_accounting_available"],
                 "warmup_repetitions_attempted": cell[
                     "warmup_repetitions_attempted"
@@ -1667,6 +1669,7 @@ def _p4_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
                 "concurrency": failure["cell"].get("concurrency", ""),
                 "status": "failed",
                 "paired_repetitions": 0,
+                "cell_timeout_seconds": failure["cell_timeout_seconds"],
                 "warmup_accounting_available": failure[
                     "warmup_accounting_available"
                 ],
@@ -1874,10 +1877,16 @@ manually, remains mandatory before goal completion, and is never reported as pas
   **{p4_500k_correctness["all_successful_pair_predictions_identical"]}**.
 - P4 reference systems: {p4_reference["terminal_cells"]} terminal serial-interleaved cells,
   {p4_reference["complete_cells"]} complete, {p4_reference["partial_cells"]} partial, and
-  {p4_reference["failed_cells"]} failed.
+  {p4_reference["failed_cells"]} failed. Digest-bound per-cell POSIX timer deadlines ranged
+  from {p4_reference["minimum_cell_timeout_seconds"]:,.0f} to
+  {p4_reference["maximum_cell_timeout_seconds"]:,.0f} seconds; this does not claim that a
+  Python signal preempts an uninterruptible native CUDA call.
 - P4 production systems: {p4_production["terminal_cells"]} terminal actual-concurrency cells,
   {p4_production["complete_cells"]} complete, {p4_production["partial_cells"]} partial, and
-  {p4_production["failed_cells"]} failed.
+  {p4_production["failed_cells"]} failed. Each adapter cell runs in a subprocess under a
+  digest-bound hard deadline ranging from
+  {p4_production["minimum_cell_timeout_seconds"]:,.0f} to
+  {p4_production["maximum_cell_timeout_seconds"]:,.0f} seconds.
   Warmup accounting availability was recorded for every terminal cell; accounting was
   available for every adapter-executed cell: **{p4_production["warmup_accounting_available_all_adapter_cells"]}**.
   {p4_production["warmup_accounting_unavailable_cells"]} orchestrator-failure cells retain
@@ -2131,6 +2140,7 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         "concurrency",
         "status",
         "paired_repetitions",
+        "cell_timeout_seconds",
         "warmup_accounting_available",
         "warmup_repetitions_attempted",
         "warmup_paired_repetitions_completed",

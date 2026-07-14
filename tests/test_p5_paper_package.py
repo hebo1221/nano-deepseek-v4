@@ -243,6 +243,7 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
             "available_measurement_schema_verified",
             "repetition_order_and_pairing_verified",
             "warmup_failure_accounting_verified",
+            "whole_cell_timeout_contract_verified",
             "tail_latency_metrics_verified",
         )
     )
@@ -277,6 +278,12 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
     assert (
         manifest["evidence"]["p4_production_systems"]["required_audit"][
             "warmup_accounting_status_recorded"
+        ]
+        is True
+    )
+    assert (
+        manifest["evidence"]["p4_production_systems"]["required_audit"][
+            "whole_cell_timeout_contract_verified"
         ]
         is True
     )
@@ -804,6 +811,7 @@ def test_p5_p4_table_retains_terminal_failure() -> None:
                         "batch": 16,
                         "concurrency": 1,
                     },
+                    "cell_timeout_seconds": 21_600.0,
                     "warmup_accounting_available": True,
                     "warmup_repetitions_attempted": 1,
                     "warmup_paired_repetitions_completed": 0,
@@ -817,6 +825,7 @@ def test_p5_p4_table_retains_terminal_failure() -> None:
     assert rows[0]["status"] == "failed"
     assert rows[0]["active_requests"] == 1
     assert rows[0]["concurrency"] == 1
+    assert rows[0]["cell_timeout_seconds"] == 21_600.0
     assert rows[0]["warmup_accounting_available"] is True
     assert rows[0]["warmup_repetitions_attempted"] == 1
     assert "warmup" in rows[0]["warmup_failures"]
@@ -838,6 +847,7 @@ def test_p5_p4_table_does_not_invent_warmup_counts_for_orchestrator_failure() ->
                         "batch": 16,
                         "concurrency": 1,
                     },
+                    "cell_timeout_seconds": 21_600.0,
                     "warmup_accounting_available": False,
                     "warmup_repetitions_attempted": None,
                     "warmup_paired_repetitions_completed": None,

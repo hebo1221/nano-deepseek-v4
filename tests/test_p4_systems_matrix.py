@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import signal
 import sys
 from pathlib import Path
 
@@ -25,6 +26,16 @@ def test_p4_frozen_matrix_has_full_batch_load_factorial() -> None:
         (batch, active_requests) for batch in (1, 4, 8, 16) for active_requests in (1, 8, 32)
     }
     assert not any("serving" in cell[3] for cell in cells)
+
+    root = Path(__file__).resolve().parents[1]
+    manifest = json.loads(
+        (root / "research/adaptive_v4_memory/manifests/p4-reference-systems-matrix-v1.json")
+        .read_text()
+    )
+    assert (
+        manifest["execution"]["maximum_cell_timeout_seconds"]
+        == systems.CELL_TIMEOUT_SECONDS
+    )
 
 
 def test_p4_requires_full_natural_suite_not_ruler_only(tmp_path: Path) -> None:
@@ -87,6 +98,52 @@ def test_p4_latency_summary_retains_tail_values() -> None:
     assert result["p95_ms"] > 80.0
     assert result["p99_ms"] > result["p95_ms"]
     assert result["maximum_ms"] == 100.0
+
+
+def test_reference_cell_timeout_arms_raises_and_restores(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[object, ...]] = []
+    previous_handler = object()
+    installed_handler: list[object] = []
+    monkeypatch.setattr(systems.signal, "getitimer", lambda timer: (0.0, 0.0))
+
+    def fake_signal(kind: object, handler: object) -> object:
+        calls.append(("signal", kind, handler))
+        installed_handler.append(handler)
+        return previous_handler
+
+    monkeypatch.setattr(systems.signal, "signal", fake_signal)
+    monkeypatch.setattr(
+        systems.signal,
+        "setitimer",
+        lambda kind, seconds: calls.append(("timer", kind, seconds)),
+    )
+
+    observed = systems.arm_cell_timeout(12.5)
+    assert observed is previous_handler
+    with pytest.raises(TimeoutError, match="frozen wall-time limit"):
+        installed_handler[0](signal.SIGALRM, None)
+    systems.cancel_cell_timeout(observed)
+
+    assert calls[1] == ("timer", signal.ITIMER_REAL, 12.5)
+    assert calls[-2] == ("timer", signal.ITIMER_REAL, 0.0)
+    assert calls[-1] == ("signal", signal.SIGALRM, previous_handler)
+
+
+def test_reference_cell_timeout_rejects_existing_timer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(systems.signal, "getitimer", lambda timer: (1.0, 0.0))
+
+    with pytest.raises(RuntimeError, match="existing real-time timer"):
+        systems.arm_cell_timeout(12.5)
+
+
+@pytest.mark.parametrize("seconds", [0.0, -1.0, float("inf"), float("nan"), 21_601.0])
+def test_reference_cell_timeout_rejects_invalid_deadline(seconds: float) -> None:
+    with pytest.raises(ValueError, match="finite and in"):
+        systems.validate_cell_timeout(seconds)
 
 
 def test_p4_audit_distribution_retains_run_level_tail() -> None:
@@ -170,6 +227,7 @@ def test_p4_partial_artifact_preserves_surviving_policy(tmp_path: Path) -> None:
         "manifest": {"sha256": "manifest"},
         "p3_audit": {"sha256": "p3"},
         "warmups": systems.WARMUPS,
+        "cell_timeout_seconds": systems.CELL_TIMEOUT_SECONDS,
         "warmup_accounting_available": True,
         "warmup_repetitions_attempted": systems.WARMUPS,
         "warmup_paired_repetitions_completed": systems.WARMUPS,
@@ -248,6 +306,10 @@ def test_production_manifest_requires_actual_overlap_and_backend_provenance() ->
     assert manifest["primary_paired_cells"] == 216
     assert manifest["primary_measured_policy_runs"] == 12_960
     assert manifest["primary_total_policy_runs_including_warmup"] == 15_120
+    assert (
+        manifest["execution"]["maximum_cell_timeout_seconds"]
+        == production.CELL_TIMEOUT_SECONDS
+    )
     assert "overlap" in manifest["adapter_contract"]["actual_concurrency_proof"]
     assert "serial-round-robin labeled concurrent" in manifest["adapter_contract"]["forbidden"]
     assert "runtime-name-and-version" in manifest["adapter_contract"]["required_backend_provenance"]

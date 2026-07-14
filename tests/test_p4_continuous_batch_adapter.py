@@ -64,6 +64,7 @@ def test_validate_spec_binds_checkpoint_and_dependencies(tmp_path: Path) -> None
         "policies": list(adapter.POLICIES),
         "warmups": 5,
         "measured_repetitions": 30,
+        "cell_timeout_seconds": adapter.MAX_CELL_TIMEOUT_SECONDS,
         "repetition_seeds": list(range(35)),
         "checkpoint": str(checkpoint),
         "manifest": {"path": str(manifest), "sha256": adapter.sha256(manifest)},
@@ -73,6 +74,11 @@ def test_validate_spec_binds_checkpoint_and_dependencies(tmp_path: Path) -> None
     path.write_text(json.dumps(spec))
 
     assert adapter.validate_spec(path) == spec
+
+    invalid_timeout = {**spec, "cell_timeout_seconds": float("inf")}
+    path.write_text(json.dumps(invalid_timeout))
+    with pytest.raises(ValueError, match="timeout contract drifted"):
+        adapter.validate_spec(path)
 
     spec["p3_audit"]["sha256"] = "0" * 64
     path.write_text(json.dumps(spec))
