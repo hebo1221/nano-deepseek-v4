@@ -74,8 +74,12 @@ def adapter_evidence_boundary(
             and adapter_path.resolve() == checked_reference.resolve()
         ),
         # The current adapter interface validates timestamps and decode overlap, but it
-        # does not attest fused kernels, dynamic arrivals, or continuous admission.
+        # does not attest fused kernels, their physical residency layout, position-aware
+        # recomputation, dynamic arrivals, or continuous admission.
         "external_fused_dynamic_runtime_verified": False,
+        "kernel_aware_residency_layout_verified": False,
+        "position_aware_recomputation_cost_verified": False,
+        "fused_attention_kernel_cost_model_verified": False,
     }
 
 
@@ -427,7 +431,8 @@ def summarize(matrix_path: Path) -> dict[str, Any]:
         "claim_boundary": (
             "Actual request-overlap measurements for the digest-pinned adapter. The checked "
             "reference uses static full-request batching, not external fused kernels, dynamic "
-            "arrivals, or continuous admission. This is not official DeepSeek-V4 or "
+            "arrivals, continuous admission, kernel-aware residency layout, or position-aware "
+            "recomputation. This is not official DeepSeek-V4 or "
             "FlashMemory evidence unless those exact separately frozen resources are used."
         ),
     }

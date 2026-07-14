@@ -303,3 +303,13 @@ def test_adaptive_production_bootstrap_and_holm_are_deterministic() -> None:
         for cell in cells
     ]
     assert adjusted == [0.03, 0.04, 0.5]
+
+
+def test_adaptive_production_kernel_boundary_fails_closed() -> None:
+    assert summary.runtime_evidence_boundary() == {
+        "dynamic_arrivals_or_continuous_admission_verified": False,
+        "external_fused_runtime_verified": False,
+        "kernel_aware_residency_layout_verified": False,
+        "position_aware_recomputation_cost_verified": False,
+        "fused_attention_kernel_cost_model_verified": False,
+    }

@@ -89,5 +89,5 @@
     "maximum_cell_timeout_seconds": 21600,
     "failure_is_terminal_and_reported": true
   },
-  "claim_boundary": "This cohort tests the exact P2 fixed+pins and calibrated+pins controllers in simultaneous real GPU batches with request overlap. The checked adapter admits every request at cell start, so it does not establish dynamic arrivals, continuous admission, request eviction, fused kernels, multi-GPU serving, Qwen runtime transfer, official DeepSeek-V4, FlashMemory, or IndexCache superiority. Quality claims remain bound to P2 and P3 rather than random-token P4 predictions."
+  "claim_boundary": "This cohort tests the exact P2 fixed+pins and calibrated+pins controllers in simultaneous real GPU batches with request overlap. The checked adapter admits every request at cell start, so it does not establish dynamic arrivals, continuous admission, request eviction, fused kernels, kernel-aware residency layout, position-aware recomputation costs, multi-GPU serving, Qwen runtime transfer, official DeepSeek-V4, FlashMemory, or IndexCache superiority. Quality claims remain bound to P2 and P3 rather than random-token P4 predictions."
 }

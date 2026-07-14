@@ -100,6 +100,8 @@ def validate_manifest(payload: dict[str, Any]) -> None:
                 "simultaneous real GPU batches",
                 "does not establish dynamic arrivals",
                 "fused kernels",
+                "kernel-aware residency layout",
+                "position-aware recomputation costs",
                 "official DeepSeek-V4",
                 "Quality claims remain bound to P2 and P3",
             )

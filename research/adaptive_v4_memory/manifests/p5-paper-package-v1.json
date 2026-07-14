@@ -748,7 +748,10 @@
         "holm_metric_families_verified": true,
         "failure_accounting_complete": true,
         "dynamic_arrivals_or_continuous_admission_verified": false,
-        "external_fused_runtime_verified": false
+        "external_fused_runtime_verified": false,
+        "kernel_aware_residency_layout_verified": false,
+        "position_aware_recomputation_cost_verified": false,
+        "fused_attention_kernel_cost_model_verified": false
       }
     },
     "p4_production_systems": {
@@ -769,7 +772,10 @@
         "allocator_hbm_metrics_verified": true,
         "process_total_hbm_availability_accounted": true,
         "checked_static_full_request_batching_adapter": true,
-        "external_fused_dynamic_runtime_verified": false
+        "external_fused_dynamic_runtime_verified": false,
+        "kernel_aware_residency_layout_verified": false,
+        "position_aware_recomputation_cost_verified": false,
+        "fused_attention_kernel_cost_model_verified": false
       }
     }
   },

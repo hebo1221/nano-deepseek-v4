@@ -198,6 +198,9 @@ def test_checked_adapter_remains_bounded_static_batching_evidence() -> None:
     assert production_summary.adapter_evidence_boundary(manifest, adapter) == {
         "checked_static_full_request_batching_adapter": True,
         "external_fused_dynamic_runtime_verified": False,
+        "kernel_aware_residency_layout_verified": False,
+        "position_aware_recomputation_cost_verified": False,
+        "fused_attention_kernel_cost_model_verified": False,
     }
 
 

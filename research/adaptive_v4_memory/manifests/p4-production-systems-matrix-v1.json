@@ -113,5 +113,5 @@
     "warmup_accounting": "record attempted repetitions, paired-complete repetitions, per-policy completed runs, and every terminal warmup failure separately",
     "failure_is_terminal_and_reported": true
   },
-  "claim_boundary": "Actual request-overlap evidence for the pinned adapter backend only. The checked reference uses static full-request batching and cannot establish external fused kernels, dynamic arrivals, or continuous admission. It is not official DeepSeek-V4 or FlashMemory evidence unless the separately frozen compatible runtime and weights are used."
+  "claim_boundary": "Actual request-overlap evidence for the pinned adapter backend only. The checked reference uses static full-request batching and cannot establish external fused kernels, dynamic arrivals, continuous admission, kernel-aware residency layout, or position-aware recomputation costs. It is not official DeepSeek-V4 or FlashMemory evidence unless the separately frozen compatible runtime and weights are used."
 }

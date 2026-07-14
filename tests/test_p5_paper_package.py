@@ -568,6 +568,16 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
         ]
         is False
     )
+    for field in (
+        "kernel_aware_residency_layout_verified",
+        "position_aware_recomputation_cost_verified",
+        "fused_attention_kernel_cost_model_verified",
+    ):
+        assert manifest["evidence"]["p4_production_systems"]["required_audit"][field] is False
+        assert (
+            manifest["evidence"]["p4_adaptive_production_systems"]["required_audit"][field]
+            is False
+        )
     assert (
         manifest["evidence"]["p4_production_systems"]["required_audit"][
             "process_total_hbm_availability_accounted"
@@ -1337,6 +1347,9 @@ def test_p5_classification_preserves_claim_boundaries() -> None:
                 "all_paired_predictions_identical": True,
                 "checked_static_full_request_batching_adapter": True,
                 "external_fused_dynamic_runtime_verified": False,
+                "kernel_aware_residency_layout_verified": False,
+                "position_aware_recomputation_cost_verified": False,
+                "fused_attention_kernel_cost_model_verified": False,
             }
         },
         {
@@ -1908,6 +1921,9 @@ def test_p5_success_requires_full_system_coverage() -> None:
                 "all_paired_predictions_identical": True,
                 "checked_static_full_request_batching_adapter": True,
                 "external_fused_dynamic_runtime_verified": False,
+                "kernel_aware_residency_layout_verified": False,
+                "position_aware_recomputation_cost_verified": False,
+                "fused_attention_kernel_cost_model_verified": False,
             }
         },
     )

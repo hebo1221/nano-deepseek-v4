@@ -17,6 +17,16 @@ RESAMPLES = 10_000
 BOOTSTRAP_SEED = 9_271_502
 
 
+def runtime_evidence_boundary() -> dict[str, bool]:
+    return {
+        "dynamic_arrivals_or_continuous_admission_verified": False,
+        "external_fused_runtime_verified": False,
+        "kernel_aware_residency_layout_verified": False,
+        "position_aware_recomputation_cost_verified": False,
+        "fused_attention_kernel_cost_model_verified": False,
+    }
+
+
 def _require(condition: bool, message: str) -> None:
     if not condition:
         raise ValueError(message)
@@ -233,8 +243,7 @@ def summarize(matrix_path: Path) -> dict[str, Any]:
             "both_budgets_verified": True,
             "both_scales_verified": True,
             "actual_static_batch_concurrency_verified": complete == systems.EXPECTED_CELLS,
-            "dynamic_arrivals_or_continuous_admission_verified": False,
-            "external_fused_runtime_verified": False,
+            **runtime_evidence_boundary(),
             "physical_hot_budget_schema_verified": True,
             "protected_pin_contract_verified": True,
             "prediction_equality_not_required": True,
@@ -256,7 +265,7 @@ def summarize(matrix_path: Path) -> dict[str, Any]:
         },
         "cells": cells,
         "failure_table": failure_table,
-        "claim_boundary": "Simultaneous static full-request GPU batching only; no dynamic-arrival, continuous-admission, fused-kernel, multi-GPU, Qwen-runtime, official DeepSeek-V4, FlashMemory, or IndexCache serving claim.",
+        "claim_boundary": "Simultaneous static full-request GPU batching only; no dynamic-arrival, continuous-admission, fused-kernel, kernel-aware-residency-layout, position-aware-recomputation, multi-GPU, Qwen-runtime, official DeepSeek-V4, FlashMemory, or IndexCache serving claim.",
     }
 
 

@@ -47,3 +47,7 @@ def test_unavailable_production_adapter_fails_closed_with_bound_cell(tmp_path: P
     blocker = Path(failure["blocker"]["path"])
     assert blocker.is_file()
     assert len(failure["blocker"]["sha256"]) == 64
+    blocker_payload = json.loads(blocker.read_text())
+    missing = " ".join(blocker_payload["missing_requirements"])
+    assert "non-contiguous residency layout" in missing
+    assert "position-aware cache-miss recomputation" in missing

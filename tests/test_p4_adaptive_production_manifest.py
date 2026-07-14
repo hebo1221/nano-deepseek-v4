@@ -32,6 +32,8 @@ def test_adaptive_production_manifest_freezes_full_factorial() -> None:
     assert payload["primary_paired_cells"] == 432
     assert payload["primary_measured_policy_runs"] == 25_920
     assert payload["primary_total_policy_runs_including_warmup"] == 30_240
+    assert "kernel-aware residency layout" in payload["claim_boundary"]
+    assert "position-aware recomputation costs" in payload["claim_boundary"]
 
 
 def test_adaptive_production_manifest_rejects_static_batch_relabeling() -> None:

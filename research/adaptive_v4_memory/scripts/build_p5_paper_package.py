@@ -1879,6 +1879,12 @@ def classify_evidence(
         and adaptive_production_audit.get("dynamic_arrivals_or_continuous_admission_verified")
         is False
         and adaptive_production_audit.get("external_fused_runtime_verified") is False
+        and adaptive_production_audit.get("kernel_aware_residency_layout_verified")
+        is False
+        and adaptive_production_audit.get("position_aware_recomputation_cost_verified")
+        is False
+        and adaptive_production_audit.get("fused_attention_kernel_cost_model_verified")
+        is False
         and all(type(value) is int and value >= 0 for value in adaptive_production_counts)
         and sum(cast(int, value) for value in adaptive_production_counts) == 432
     )
@@ -1927,11 +1933,25 @@ def classify_evidence(
     production_external_runtime_verified = (
         production_audit.get("external_fused_dynamic_runtime_verified") is True
     )
+    production_verified_kernel_contract = (
+        production_audit.get("kernel_aware_residency_layout_verified") is True
+        and production_audit.get("position_aware_recomputation_cost_verified") is True
+        and production_audit.get("fused_attention_kernel_cost_model_verified") is True
+    )
+    production_unverified_kernel_boundary = (
+        production_audit.get("kernel_aware_residency_layout_verified") is False
+        and production_audit.get("position_aware_recomputation_cost_verified") is False
+        and production_audit.get("fused_attention_kernel_cost_model_verified") is False
+    )
     production_class = (
         "success"
-        if production_full and production_external_runtime_verified
+        if production_full
+        and production_external_runtime_verified
+        and production_verified_kernel_contract
         else "bounded-result"
-        if production_accounted and production_audit.get("complete_cells", 0) > 0
+        if production_accounted
+        and production_audit.get("complete_cells", 0) > 0
+        and production_unverified_kernel_boundary
         else "unverified"
     )
     result = {
@@ -3589,7 +3609,8 @@ user request, is outside the completion gate, and is never reported as passed.
   {p4_adaptive_production["failed_cells"]} failed. The audit verifies paired controller
   schedules, physical hot-memory equality, raw request/decode timestamps, 10,000 paired
   bootstrap resamples, and Holm correction. It does not claim dynamic arrivals,
-  continuous admission, fused kernels, or an external production runtime.
+  continuous admission, fused kernels, kernel-aware residency layout, position-aware
+  recomputation costs, or an external production runtime.
 - P4 production systems: {p4_production["terminal_cells"]} terminal actual-concurrency cells,
   {p4_production["complete_cells"]} complete, {p4_production["partial_cells"]} partial, and
   {p4_production["failed_cells"]} failed. Each adapter cell runs in a subprocess under a
@@ -3607,6 +3628,8 @@ user request, is outside the completion gate, and is never reported as passed.
   The long-form P4 metric tables retain run-level distributions (mean, standard deviation,
   p50/p95/p99, minimum, and maximum) plus paired bootstrap effects for every registered
   latency, throughput, HBM, fragmentation, cache, transfer, miss, and controller metric.
+  These measurements do not verify non-contiguous fused-attention layout costs or
+  position-aware miss recomputation; those remain explicit external-runtime blockers.
 
 ## Digest-bound figures
 

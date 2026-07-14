@@ -2,14 +2,16 @@
   "schema_version": 1,
   "experiment_id": "p4-production-resource-blocker-v1",
   "status": "external-fused-dynamic-runtime-unavailable",
-  "blocked_scope": "external fused or dynamic-arrival production serving beyond the checked static continuous-batching adapter",
+  "blocked_scope": "external fused or dynamic-arrival production serving, including kernel-aware residency layout and position-aware recomputation costs, beyond the checked static continuous-batching adapter",
   "available_evidence": "the checked static continuous-batching adapter and the P4 reference PyTorch matrix remain executable and are reported separately",
   "missing_requirements": [
     "an external fused serving runtime or a scheduler supporting dynamic arrivals and continuous admission",
     "official runtime and source revision provenance for that external backend",
+    "kernel-level non-contiguous residency layout telemetry and an attention-kernel cost model",
+    "position-aware cache-miss recomputation timing and provenance",
     "multi-GPU production deployment evidence"
   ],
   "failure_policy": "never relabel checked static batching, reference, projected, or serial-interleaved measurements as external fused or dynamic-serving evidence",
   "resolution": "provide an external executable conforming to p4-production-systems-matrix-v1.json and rerun the same frozen Cartesian matrix",
-  "claim_boundary": "The blocker does not invalidate measurements from the checked static continuous-batching adapter, but those results cannot establish dynamic-arrival, fused-kernel, multi-GPU, or official DeepSeek-V4 serving performance."
+  "claim_boundary": "The blocker does not invalidate measurements from the checked static continuous-batching adapter, but those results cannot establish dynamic-arrival, fused-kernel, kernel-aware residency-layout, position-aware recomputation, multi-GPU, or official DeepSeek-V4 serving performance."
 }
