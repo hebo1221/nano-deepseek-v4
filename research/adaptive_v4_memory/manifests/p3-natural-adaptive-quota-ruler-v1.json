@@ -3,6 +3,13 @@
   "experiment_id": "p3-natural-adaptive-quota-ruler-v1",
   "status": "frozen_before_any_compatibility_arm_prediction",
   "date": "2026-07-15",
+  "amendments": [
+    {
+      "timing": "after wrapper implementation but before any compatibility-arm prediction or natural adaptive outcome existed",
+      "change": "exclude PyramidKV from score-compatible selection and retain only direct ScorerPress methods whose native compression is fixed per layer",
+      "reason": "PyramidKV overrides compress() with its own layer quota, so reusing only its score inside a uniform fixed comparator would change the selected baseline semantics"
+    }
+  ],
   "role": "real-model architecture-compatibility test of adaptive layer quota allocation",
   "sequence_gate": {
     "required_nine_seed_causal_summary": "artifacts/adaptive_v4_memory/paper_grade/p2-nine-seed-causal.summary.json",
@@ -32,12 +39,11 @@
     "eligible_arms": [
       "streaming_llm",
       "snapkv",
-      "pyramidkv",
       "critical_expected_attention"
     ],
     "compression_ratio": 0.5,
     "rule": "choose the highest row-weighted mean accuracy from the already frozen Qwen3-1.7B selection artifact, breaking ties lexicographically; do not inspect Qwen3-4B compatibility outcomes",
-    "reason": "the protected-prefix and quota wrappers require a direct ScorerPress and cannot silently unwrap AdaKV"
+    "reason": "the wrappers require a direct ScorerPress with inherited fixed-per-layer compression; they cannot silently unwrap AdaKV or discard PyramidKV's native layer-allocation rule"
   },
   "arms": {
     "fixed+pins": {

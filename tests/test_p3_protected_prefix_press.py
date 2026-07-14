@@ -135,3 +135,16 @@ def test_adaptive_quota_fails_closed_on_layer_order_drift() -> None:
 def test_adaptive_wrapper_rejects_non_scorer_baseline() -> None:
     with pytest.raises(ValueError, match="score-based"):
         wrap_same_budget_adaptive_quota_protected_prefix(object())
+
+
+class LayerAllocatingScorer(AscendingScorer):
+    def compress(self, module, hidden_states, keys, values, attentions, kwargs):
+        del module, hidden_states, attentions, kwargs
+        return keys[..., :1, :], values[..., :1, :]
+
+
+def test_adaptive_wrapper_rejects_scorer_with_native_layer_allocator() -> None:
+    scorer = LayerAllocatingScorer(compression_ratio=0.5)
+
+    with pytest.raises(ValueError, match="fixed-per-layer"):
+        wrap_same_budget_adaptive_quota_protected_prefix(scorer)

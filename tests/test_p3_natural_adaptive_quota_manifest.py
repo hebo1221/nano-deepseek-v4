@@ -18,4 +18,4 @@ def test_natural_adaptive_quota_manifest_is_frozen_and_complete() -> None:
     assert result["arms"] == ["fixed+pins", "natural-adaptive-quota+pins"]
     assert result["predictions_per_arm"] == 32_500
     assert result["paired_predictions_total"] == 65_000
-    assert len(result["score_compatible_candidates"]) == 4
+    assert len(result["score_compatible_candidates"]) == 3

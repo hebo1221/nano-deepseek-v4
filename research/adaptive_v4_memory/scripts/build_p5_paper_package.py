@@ -678,12 +678,19 @@ def _validate_boundary_manifest(name: str, path: Path) -> dict[str, Any]:
     elif name == "natural_adaptive_quota":
         benchmark = payload.get("benchmark", {})
         adaptive = payload.get("arms", {}).get("natural-adaptive-quota+pins", {})
+        selection = payload.get("score_compatible_baseline_selection", {})
+        amendments = payload.get("amendments", [])
         _require(
             payload.get("status") == "frozen_before_any_compatibility_arm_prediction"
             and benchmark.get("predictions_per_arm") == 32_500
             and benchmark.get("paired_predictions_total") == 65_000
             and adaptive.get("maximum_layer_adjustment_fraction") == 0.25
             and payload.get("pins", {}).get("same_budget") is True
+            and selection.get("eligible_arms")
+            == ["streaming_llm", "snapkv", "critical_expected_attention"]
+            and isinstance(amendments, list)
+            and len(amendments) == 1
+            and "PyramidKV" in amendments[0].get("change", "")
             and "not an unchanged transfer" in payload.get("claim_boundary", ""),
             "P3 natural adaptive-quota boundary drifted.",
         )

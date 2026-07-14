@@ -332,6 +332,11 @@ def wrap_same_budget_adaptive_quota_protected_prefix(
         raise ValueError(
             "Adaptive quota compatibility arm requires a score-based KVPress baseline."
         )
+    if type(scorer).compress is not ScorerPress.compress:
+        raise ValueError(
+            "Adaptive quota compatibility arm requires inherited fixed-per-layer "
+            "ScorerPress compression semantics."
+        )
     return SameBudgetAdaptiveQuotaProtectedPrefixPress(
         scorer=scorer, max_adjustment_fraction=max_adjustment_fraction
     )

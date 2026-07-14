@@ -142,7 +142,7 @@ def test_adaptive_quota_cohort_selects_best_direct_scorer_without_natural_outcom
             for arm, score in (
                 ("streaming_llm", 0.70),
                 ("snapkv", 0.75),
-                ("pyramidkv", 0.80),
+                ("pyramidkv", 0.99),
                 ("critical_expected_attention", 0.80),
                 ("adakv_snapkv", 0.99),
                 ("expected_attention", 0.98),

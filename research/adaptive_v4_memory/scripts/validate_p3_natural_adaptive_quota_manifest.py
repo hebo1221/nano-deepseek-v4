@@ -10,7 +10,6 @@ LENGTHS = (8192, 16384, 32768, 65536, 131072)
 SCORE_COMPATIBLE = (
     "streaming_llm",
     "snapkv",
-    "pyramidkv",
     "critical_expected_attention",
 )
 
@@ -43,11 +42,19 @@ def validate_manifest(payload: dict[str, Any]) -> dict[str, Any]:
         "Natural adaptive-quota benchmark coverage drifted.",
     )
     selection = payload.get("score_compatible_baseline_selection", {})
+    amendments = payload.get("amendments", [])
     _require(
         tuple(selection.get("eligible_arms", ())) == SCORE_COMPATIBLE
         and selection.get("compression_ratio") == 0.5
         and "do not inspect Qwen3-4B" in selection.get("rule", ""),
         "Natural adaptive-quota baseline selection drifted.",
+    )
+    _require(
+        isinstance(amendments, list)
+        and len(amendments) == 1
+        and "before any compatibility-arm prediction" in amendments[0].get("timing", "")
+        and "PyramidKV" in amendments[0].get("change", ""),
+        "Natural adaptive-quota pre-outcome amendment drifted.",
     )
     arms = payload.get("arms", {})
     adaptive = arms.get(ARMS[1], {})
