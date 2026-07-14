@@ -26,7 +26,13 @@ from p3_natural_workloads import (
     select_mrcr_primary_rows,
 )
 from p3_sequence_gate import require_p3_sequence_gate
-from run_p3_ruler_matrix import KVPRESS_REVISION, git_dirty, git_head, load_evaluator
+from run_p3_ruler_matrix import (
+    KVPRESS_REVISION,
+    git_dirty,
+    git_head,
+    kvpress_runtime_binding,
+    load_evaluator,
+)
 from transformers import DynamicCache
 from verify_p3_natural_model import sha256, verify_snapshot
 
@@ -291,6 +297,7 @@ def runtime_environment() -> dict[str, Any]:
         "device": torch.cuda.get_device_name(0),
         "transformers": importlib.metadata.version("transformers"),
         "kvpress": importlib.metadata.version("kvpress"),
+        "kvpress_binding": kvpress_runtime_binding(),
         "tiktoken": importlib.metadata.version("tiktoken"),
         "pip_freeze_sha256": hashlib.sha256(freeze.encode()).hexdigest(),
     }

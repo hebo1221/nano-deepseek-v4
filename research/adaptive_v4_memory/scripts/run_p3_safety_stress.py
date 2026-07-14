@@ -15,10 +15,6 @@ from p3_natural_workloads import (
     encode_rendered_system_context_query_exact,
     render_chat_split_system_context_query,
 )
-from p3_protected_prefix_press import (
-    SameBudgetProtectedPrefixPress,
-    wrap_same_budget_protected_prefix,
-)
 from p3_safety_workloads import FAMILIES, build_example, score_response
 from p3_sequence_gate import require_p3_sequence_gate
 from run_p3_longbench_v2 import infer_one
@@ -263,6 +259,8 @@ def main() -> None:
     lock = acquire_gpu_lock("p3-safety-stress")
     try:
         EvaluationConfig, EvaluationRunner, _unused = load_evaluator(kvpress_root)
+        from p3_protected_prefix_press import wrap_same_budget_protected_prefix
+
         config = EvaluationConfig(
             dataset="safety-stress",
             model=str(snapshot),
@@ -296,7 +294,7 @@ def main() -> None:
             runner.config.compression_ratio = settings["compression_ratio"]
             runner._setup_press()
             active_press: Any = runner.press
-            protected_press: SameBudgetProtectedPrefixPress | None = None
+            protected_press: Any = None
             if settings["protected_prefix"]:
                 protected_press = wrap_same_budget_protected_prefix(runner.press)
                 active_press = protected_press

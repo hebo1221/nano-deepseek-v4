@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -30,6 +32,29 @@ def test_ruler_screen_covers_token_layer_and_head_adaptive_baselines() -> None:
     assert runner.ARMS["adakv_snapkv"][0] == "adakv_snapkv"
     assert len(runner.cells(runner.LENGTHS, tuple(runner.ARMS), None)) == 57
     assert summary.EXPECTED_CELLS == 57
+
+
+def test_ruler_loader_imports_press_code_from_pinned_checkout() -> None:
+    root = Path(__file__).resolve().parents[1]
+    checkout = root / "artifacts/adaptive_v4_memory/paper_grade/p3/assets/sources/kvpress"
+    code = f"""
+import json
+import sys
+from pathlib import Path
+sys.path.insert(0, {str(SCRIPTS)!r})
+import run_p3_ruler_matrix as runner
+runner.load_evaluator(Path({str(checkout)!r}))
+print(json.dumps(runner.kvpress_runtime_binding(), sort_keys=True))
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", code], check=True, capture_output=True, text=True
+    )
+    binding = json.loads(result.stdout.splitlines()[-1])
+
+    assert Path(binding["module_path"]).is_relative_to(checkout)
+    assert Path(binding["registry_path"]).is_relative_to(checkout)
+    assert len(binding["module_sha256"]) == 64
+    assert len(binding["registry_sha256"]) == 64
 
 
 def test_paired_ruler_statistics_are_deterministic(monkeypatch: pytest.MonkeyPatch) -> None:

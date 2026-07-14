@@ -25,6 +25,8 @@ from p3_sequence_gate import require_p3_sequence_gate
 from prepare_p3_ruler_dataset import LENGTHS, MODEL_REVISION, RULER_REVISION, TASKS, sha256
 
 KVPRESS_REVISION = "6d965557a5b9f0201a2301b23c454473dd681d0d"
+_BOUND_KVPRESS_ROOT: Path | None = None
+_BOUND_KVPRESS_REGISTRY: Path | None = None
 ARMS = {
     "native": ("no_press", (0.0,)),
     "streaming_llm": ("streaming_llm", (0.25, 0.5, 0.75)),
@@ -186,6 +188,7 @@ def environment() -> dict[str, Any]:
         "transformers": importlib.metadata.version("transformers"),
         "datasets": importlib.metadata.version("datasets"),
         "kvpress": importlib.metadata.version("kvpress"),
+        "kvpress_binding": kvpress_runtime_binding(),
         "pip_freeze_sha256": hashlib.sha256(freeze.encode()).hexdigest(),
     }
 
@@ -200,14 +203,64 @@ def verify_model_snapshot(path: Path, manifest: dict[str, Any]) -> None:
             raise ValueError(f"Model snapshot artifact drifted: {path / name}")
 
 
+def _module_path(module: Any, label: str) -> Path:
+    path = getattr(module, "__file__", None)
+    if path is None:
+        raise ValueError(f"Pinned {label} module has no source path.")
+    return Path(path).resolve()
+
+
 def load_evaluator(kvpress_root: Path) -> tuple[Any, Any, Any]:
-    sys.path.insert(0, str(kvpress_root / "evaluation"))
+    """Load both the evaluator and press code from the frozen checkout."""
+
+    global _BOUND_KVPRESS_REGISTRY, _BOUND_KVPRESS_ROOT
+    root = kvpress_root.resolve()
+    for name in ("kvpress", "evaluate", "evaluate_registry"):
+        loaded = sys.modules.get(name)
+        if loaded is not None and not _module_path(loaded, name).is_relative_to(root):
+            raise ValueError(
+                f"{name} was imported outside the pinned KVPress checkout: "
+                f"{_module_path(loaded, name)}"
+            )
+    inserted = (str(root / "evaluation"), str(root))
+    sys.path[:0] = inserted
     try:
+        import evaluate_registry
+        import kvpress
         from evaluate import EvaluationConfig, EvaluationRunner
-        from evaluate_registry import SCORER_REGISTRY
+        from evaluate_registry import PRESS_REGISTRY, SCORER_REGISTRY
     finally:
-        sys.path.pop(0)
+        del sys.path[: len(inserted)]
+    kvpress_path = _module_path(kvpress, "kvpress")
+    registry_path = _module_path(evaluate_registry, "evaluate_registry")
+    if not kvpress_path.is_relative_to(root) or not registry_path.is_relative_to(root):
+        raise ValueError("KVPress evaluator resolved outside the frozen checkout.")
+    required_presses = {press for press, _ratios in ARMS.values()}
+    if not required_presses.issubset(PRESS_REGISTRY):
+        missing = sorted(required_presses - set(PRESS_REGISTRY))
+        raise ValueError(f"Frozen KVPress registry is missing required presses: {missing}")
+    _BOUND_KVPRESS_ROOT = root
+    _BOUND_KVPRESS_REGISTRY = registry_path
     return EvaluationConfig, EvaluationRunner, SCORER_REGISTRY["ruler"]
+
+
+def kvpress_runtime_binding() -> dict[str, Any]:
+    """Record the exact imported checkout files in every P3 runtime artifact."""
+
+    if _BOUND_KVPRESS_ROOT is None or _BOUND_KVPRESS_REGISTRY is None:
+        raise ValueError("Pinned KVPress evaluator has not been loaded.")
+    import kvpress
+
+    module_path = _module_path(kvpress, "kvpress")
+    if not module_path.is_relative_to(_BOUND_KVPRESS_ROOT):
+        raise ValueError("Runtime KVPress module escaped the frozen checkout.")
+    return {
+        "checkout_root": str(_BOUND_KVPRESS_ROOT),
+        "module_path": str(module_path),
+        "module_sha256": sha256(module_path),
+        "registry_path": str(_BOUND_KVPRESS_REGISTRY),
+        "registry_sha256": sha256(_BOUND_KVPRESS_REGISTRY),
+    }
 
 
 def write_failure(
