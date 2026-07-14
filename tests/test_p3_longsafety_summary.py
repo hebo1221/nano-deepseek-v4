@@ -183,6 +183,23 @@ def test_longsafety_arm_audit_binds_terminal_records(tmp_path: Path) -> None:
     assert set(records) == {"longsafety:7:front", "longsafety:7:end"}
 
 
+def test_longsafety_arm_audit_rejects_runtime_binding_drift(tmp_path: Path) -> None:
+    cell_path, manifest, manifest_digest = _fixture(tmp_path)
+    cell = json.loads(cell_path.read_text())
+    cell["environment"]["kvpress_binding"]["module_sha256"] = "0" * 64
+    cell_path.write_text(json.dumps(cell))
+
+    with pytest.raises(ValueError, match="runtime KVPress binding drifted"):
+        audit_arm(
+            arm="native-dense",
+            cell_path=cell_path,
+            expected=2,
+            failures={"oom", "runtime-error"},
+            manifest_digest=manifest_digest,
+            manifest=manifest,
+        )
+
+
 def test_longsafety_summary_preserves_blocked_judge_boundary(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

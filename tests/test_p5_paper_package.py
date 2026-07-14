@@ -541,6 +541,12 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
         is True
     )
     assert (
+        manifest["evidence"]["p3_natural"]["required_audit"][
+            "all_runtime_kvpress_bindings_verified"
+        ]
+        is True
+    )
+    assert (
         manifest["evidence"]["p3_natural"]["required_audit"]["all_record_revisions_verified"]
         is True
     )
@@ -579,6 +585,12 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
         is True
     )
     assert (
+        manifest["evidence"]["p3_natural_safety"]["required_audit"][
+            "runtime_kvpress_bindings_verified"
+        ]
+        is True
+    )
+    assert (
         manifest["evidence"]["p3_safety"]["required_audit"]["target_and_canary_pairing_verified"]
         is True
     )
@@ -590,6 +602,12 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
     )
     assert (
         manifest["evidence"]["p3_safety"]["required_audit"]["statistical_schema_verified"] is True
+    )
+    assert (
+        manifest["evidence"]["p3_safety"]["required_audit"][
+            "runtime_kvpress_bindings_verified"
+        ]
+        is True
     )
     assert manifest["boundary_manifests"]["production_runtime_blocker"].endswith(
         "p4-production-resource-blocker-v1.json"

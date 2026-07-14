@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import subprocess
-from functools import cache
 from pathlib import Path
 from typing import Any
 
@@ -53,26 +52,26 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-@cache
 def _verify_kvpress_checkout(root_text: str) -> Path:
     root = Path(root_text).resolve()
     _require(root.is_dir(), f"Missing runtime KVPress checkout: {root}")
-    revision = subprocess.run(
+    revision_result = subprocess.run(
         ["git", "rev-parse", "HEAD"],
         cwd=root,
-        check=True,
         capture_output=True,
         text=True,
-    ).stdout.strip()
-    dirty = subprocess.run(
+    )
+    dirty_result = subprocess.run(
         ["git", "status", "--porcelain"],
         cwd=root,
-        check=True,
         capture_output=True,
         text=True,
-    ).stdout.strip()
+    )
     _require(
-        revision == KVPRESS_REVISION and not dirty,
+        revision_result.returncode == 0
+        and dirty_result.returncode == 0
+        and revision_result.stdout.strip() == KVPRESS_REVISION
+        and not dirty_result.stdout.strip(),
         "Runtime KVPress checkout revision or cleanliness drifted.",
     )
     return root
@@ -82,9 +81,22 @@ def verify_runtime_kvpress_binding(binding: Any) -> dict[str, str]:
     """Verify that recorded evaluator and press imports came from the pinned checkout."""
 
     _require(isinstance(binding, dict), "Missing runtime KVPress import binding.")
-    root = _verify_kvpress_checkout(str(binding.get("checkout_root", "")))
-    module = Path(binding.get("module_path", "")).resolve()
-    registry = Path(binding.get("registry_path", "")).resolve()
+    _require(
+        all(
+            isinstance(binding.get(field), str)
+            for field in (
+                "checkout_root",
+                "module_path",
+                "module_sha256",
+                "registry_path",
+                "registry_sha256",
+            )
+        ),
+        "Malformed runtime KVPress import binding.",
+    )
+    root = _verify_kvpress_checkout(binding["checkout_root"])
+    module = Path(binding["module_path"]).resolve()
+    registry = Path(binding["registry_path"]).resolve()
     _require(
         module == root / "kvpress/__init__.py"
         and registry == root / "evaluation/evaluate_registry.py"
