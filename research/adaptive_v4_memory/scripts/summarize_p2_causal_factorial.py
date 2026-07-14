@@ -104,7 +104,12 @@ def validate_exact_config_reuse(
 
     by_batch_arm = {(row.get("schedule_batch_index"), row.get("arm")): row for row in rows}
     _require(len(by_batch_arm) == len(rows), "Duplicate causal execution-accounting row.")
-    batches = {key[0] for key in by_batch_arm}
+    raw_batches = {key[0] for key in by_batch_arm}
+    _require(
+        all(type(batch_index) is int for batch_index in raw_batches),
+        "Causal execution-accounting schedule coordinate drifted.",
+    )
+    batches = cast(set[int], raw_batches)
     if expected_schedule_batches is not None:
         _require(
             batches == expected_schedule_batches,
@@ -112,16 +117,19 @@ def validate_exact_config_reuse(
         )
     _require(
         all(
-            {arm for batch, arm in by_batch_arm if batch == batch_index} == set(expected_arms)
-            and {
-                row.get("execution_index")
-                for (batch, _arm), row in by_batch_arm.items()
-                if batch == batch_index
-            }
-            == set(range(len(expected_arms)))
+            all(
+                by_batch_arm.get((batch_index, arm), {}).get("execution_index")
+                == execution_index
+                for execution_index, arm in enumerate(
+                    (
+                        *expected_arms[batch_index % len(expected_arms) :],
+                        *expected_arms[: batch_index % len(expected_arms)],
+                    )
+                )
+            )
             for batch_index in batches
         ),
-        "Causal execution-accounting arm/order coverage drifted.",
+        "Causal execution-accounting rotation coverage drifted.",
     )
     counts = {"executed": 0, "reused_exact_config": 0}
     for (batch_index, arm), row in by_batch_arm.items():
@@ -222,6 +230,121 @@ def verify_raw_metadata(
         },
         "Causal leakage guard drifted.",
     )
+
+
+def verify_quality_records(
+    raw: dict[str, Any],
+    records: list[dict[str, Any]],
+    quality_by_schedule_arm: dict[tuple[int, str], dict[str, Any]],
+) -> tuple[dict[tuple[str, str], dict[str, Any]], list[str]]:
+    """Verify exact held-out identities, per-query schema, and execution provenance."""
+
+    expected_schedule_by_conversation: dict[str, int] = {}
+    first = raw["replicate"] * shard.EXAMPLES_PER_SHARD
+    for local_batch_index in range(shard.BATCHES_PER_SHARD):
+        schedule_index = shard.schedule_batch_index(
+            family=raw["family"],
+            context=raw["context"],
+            replicate=raw["replicate"],
+            local_batch_index=local_batch_index,
+        )
+        for offset in range(shard.BATCH_SIZE):
+            index = first + local_batch_index * shard.BATCH_SIZE + offset
+            expected_schedule_by_conversation[
+                f"{raw['family']}:{raw['context']}:{index}"
+            ] = schedule_index
+    expected_conversation_ids = set(expected_schedule_by_conversation)
+    by_arm_conversation: dict[tuple[str, str], dict[str, Any]] = {}
+    for record in records:
+        arm = record.get("arm")
+        conversation_id = record.get("conversation_id")
+        _require(
+            arm in shard.ALL_ARM_NAMES
+            and isinstance(conversation_id, str)
+            and conversation_id in expected_conversation_ids,
+            "Causal arm or conversation identity drifted.",
+        )
+        assert isinstance(arm, str) and isinstance(conversation_id, str)
+        coordinate = (arm, conversation_id)
+        _require(
+            coordinate not in by_arm_conversation,
+            "Duplicate causal arm-conversation record.",
+        )
+        by_arm_conversation[coordinate] = record
+        for field in ("budget", "family", "context", "replicate"):
+            _require(record.get(field) == raw[field], f"Causal record {field} drifted.")
+        record_schedule = record.get("schedule_batch_index")
+        _require(
+            type(record_schedule) is int
+            and record_schedule == expected_schedule_by_conversation[conversation_id],
+            "Causal record schedule coordinate drifted.",
+        )
+        metric = quality_by_schedule_arm.get((cast(int, record_schedule), arm))
+        _require(isinstance(metric, dict), "Causal record execution metric is missing.")
+        assert isinstance(metric, dict)
+        _require(
+            record.get("execution_mode") == metric.get("execution_mode")
+            and record.get("reused_from_arm") == metric.get("reused_from_arm")
+            and record.get("config_sha256") == metric.get("config_sha256")
+            and record.get("config_variant") == metric.get("config_variant"),
+            "Causal record execution provenance drifted.",
+        )
+        predictions = record.get("predictions")
+        targets = record.get("targets")
+        query_positions = record.get("query_positions")
+        evidence_positions = record.get("evidence_positions")
+        controller = record.get("controller")
+        _require(
+            isinstance(predictions, list)
+            and isinstance(targets, list)
+            and isinstance(query_positions, list)
+            and isinstance(evidence_positions, list)
+            and len(targets) > 0
+            and len(predictions)
+            == len(targets)
+            == len(query_positions)
+            == len(evidence_positions)
+            and all(type(value) is int and value >= 0 for value in (*targets, *predictions))
+            and all(
+                type(value) is int and 0 <= value < raw["context"]
+                for value in (*query_positions, *evidence_positions)
+            )
+            and query_positions == sorted(set(query_positions))
+            and all(
+                evidence < query
+                for evidence, query in zip(
+                    evidence_positions, query_positions, strict=True
+                )
+            )
+            and isinstance(controller, dict)
+            and controller.get("budget_violations") == 0,
+            "Causal record target, position, or controller schema drifted.",
+        )
+        prediction_values = cast(list[int], predictions)
+        target_values = cast(list[int], targets)
+        correctness = [
+            prediction == target
+            for prediction, target in zip(
+                prediction_values, target_values, strict=True
+            )
+        ]
+        _require(
+            isinstance(record.get("correct"), list)
+            and all(type(value) is bool for value in record["correct"])
+            and correctness == record["correct"],
+            "Causal correctness drifted.",
+        )
+        _require(sum(correctness) == record.get("correct_count"), "Correct count drifted.")
+        _require(len(correctness) == record.get("total"), "Query total drifted.")
+    _require(
+        all(
+            {conversation_id for arm, conversation_id in by_arm_conversation if arm == arm_name}
+            == expected_conversation_ids
+            for arm_name in shard.ALL_ARM_NAMES
+        ),
+        "Paired causal arm-conversation coverage drifted.",
+    )
+    return by_arm_conversation, sorted(expected_conversation_ids)
 
 
 def registered_arm_oracle_scores(
@@ -743,52 +866,9 @@ def main() -> None:
             == "calibration-physical-hot-bytes",
             "Causal shard did not use its frozen physical-memory match.",
         )
-        by_arm_conversation = {
-            (record["arm"], record["conversation_id"]): record for record in records
-        }
-        _require(
-            len(by_arm_conversation) == len(records),
-            "Duplicate causal arm-conversation record.",
+        by_arm_conversation, conversation_ids = verify_quality_records(
+            raw, records, quality_by_schedule_arm
         )
-        conversation_ids = sorted(
-            record["conversation_id"] for record in records if record["arm"] == PRIMARY_COMPARATOR
-        )
-        _require(
-            len(conversation_ids) == shard.EXAMPLES_PER_SHARD,
-            "Causal conversation coverage drifted.",
-        )
-        reference_conversation_ids = set(conversation_ids)
-        _require(
-            all(
-                {
-                    record["conversation_id"]
-                    for record in records
-                    if record["arm"] == arm_name
-                }
-                == reference_conversation_ids
-                for arm_name in shard.ALL_ARM_NAMES
-            ),
-            "Paired causal arm-conversation coverage drifted.",
-        )
-        for record in records:
-            for field in ("budget", "family", "context", "replicate"):
-                _require(record.get(field) == raw[field], f"Causal record {field} drifted.")
-            metric = quality_by_schedule_arm[(record["schedule_batch_index"], record["arm"])]
-            _require(
-                record.get("execution_mode") == metric.get("execution_mode")
-                and record.get("reused_from_arm") == metric.get("reused_from_arm")
-                and record.get("config_sha256") == metric.get("config_sha256"),
-                "Causal record execution provenance drifted.",
-            )
-            predictions = record["predictions"]
-            targets = record["targets"]
-            correctness = [
-                prediction == target
-                for prediction, target in zip(predictions, targets, strict=True)
-            ]
-            _require(correctness == record["correct"], "Causal correctness drifted.")
-            _require(sum(correctness) == record["correct_count"], "Correct count drifted.")
-            _require(len(correctness) == record["total"], "Query total drifted.")
         difference_key = (
             raw["scale"],
             raw["budget"],
@@ -859,21 +939,48 @@ def main() -> None:
                 int(measurement["accounting"]["hot_resident_bytes"])
             )
     _require(seen == expected, "Causal Cartesian shard coverage drifted.")
-    expected_groups = (
-        len(("s55", "s151"))
-        * len(shard.BUDGET_LABELS)
-        * len(shard.TRAINING_SEEDS)
-        * len(PAPER_GRADE_WORKLOAD_FAMILIES)
-        * len(shard.CONTEXTS)
+    expected_difference_keys = set(
+        product(
+            ("s55", "s151"),
+            shard.BUDGET_LABELS,
+            shard.TRAINING_SEEDS,
+            PAPER_GRADE_WORKLOAD_FAMILIES,
+            shard.CONTEXTS,
+        )
     )
     expected_conversations = len(shard.REPLICATES) * shard.EXAMPLES_PER_SHARD
     _require(
         all(
-            len(values) == expected_groups
+            set(values) == expected_difference_keys
             and all(len(group) == expected_conversations for group in values.values())
             for values in differences.values()
+        )
+        and all(
+            set(values) == expected_difference_keys
+            and all(len(group) == expected_conversations for group in values.values())
+            for values in (
+                oracle_differences,
+                oracle_values,
+                oracle_comparator_values,
+            )
         ),
         "Causal paired-difference coverage drifted.",
+    )
+    expected_physical_keys = set(
+        product(
+            ("s55", "s151"),
+            shard.BUDGET_LABELS,
+            shard.TRAINING_SEEDS,
+            shard.PHYSICAL_ARM_NAMES,
+        )
+    )
+    _require(
+        set(physical) == expected_physical_keys
+        and all(
+            len(values) == EXPECTED_PHYSICAL_BATCHES_PER_SEED_CELL
+            for values in physical.values()
+        ),
+        "Causal physical statistical cell coverage drifted.",
     )
     contrast_payload = {
         name: contrast_statistics(
@@ -972,6 +1079,14 @@ def main() -> None:
             "minimum_attainable_two_sided_seed_p": 2.0
             / (1 << len(shard.TRAINING_SEEDS)),
             "seed_p_values_used_as_success_gate": False,
+            "exact_record_schema_verified": True,
+            "exact_execution_rotation_verified": True,
+            "exact_quality_schedule_coordinates_verified": True,
+            "exact_statistical_cell_coverage_verified": True,
+            "paired_units_per_seed_scale_budget_family_context": expected_conversations,
+            "statistical_cells_per_contrast": len(expected_difference_keys),
+            "physical_cells": len(expected_physical_keys),
+            "physical_batches_per_cell": EXPECTED_PHYSICAL_BATCHES_PER_SEED_CELL,
             **STRICT_RAW_AUDIT,
             "registered_causal_arms": len(shard.ALL_ARM_NAMES),
             "registered_paired_contrasts": len(CONTRASTS),

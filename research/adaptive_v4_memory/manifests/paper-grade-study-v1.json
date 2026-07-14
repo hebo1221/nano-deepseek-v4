@@ -6,6 +6,12 @@
   "amendments": [
     {
       "date": "2026-07-14",
+      "timing": "after P2 execution began but before any primary P2 outcome summary was inspected",
+      "change": "preregister a separate four-seed P2 extension, preserving the immutable five-seed cohort and permitting combined nine-seed inference only after an identical-contract pooling audit",
+      "reason": "five independent seeds have a minimum attainable two-sided exact p-value of 0.0625; nine seeds lower that floor to 0.00390625 and make a nine-family Holm-adjusted value below 0.05 attainable"
+    },
+    {
+      "date": "2026-07-14",
       "timing": "before primary P2 core completion and before causal-factorial execution",
       "change": "replace the structurally unattainable five-seed Holm p<0.05 family success condition with the already registered positive-mean and nonnegative seed-cluster lower-interval condition; retain exact and Holm p-values for reporting",
       "reason": "five independent seeds permit only 32 exact sign assignments and a minimum two-sided p-value of 0.0625; no P2 outcome summary was inspected"
@@ -41,6 +47,14 @@
     ]
   },
   "evaluation_seeds": [8071401, 8071402, 8071403, 8071404, 8071405],
+  "confirmatory_seed_extension": {
+    "manifest": "research/adaptive_v4_memory/manifests/p2-independent-seed-extension-v1.json",
+    "additional_training_seeds": [6071406, 6071407, 6071408, 6071409],
+    "additional_calibration_seeds": [7071406, 7071407, 7071408, 7071409],
+    "additional_evaluation_seeds": [8071406, 8071407, 8071408, 8071409],
+    "combined_independent_seeds_per_scale": 9,
+    "outcome_dependent_early_stopping": false
+  },
   "minimum_examples_per_seed_scale_family": 1000,
   "context_lengths": [80, 128, 256, 512, 1024],
   "workload_families": [

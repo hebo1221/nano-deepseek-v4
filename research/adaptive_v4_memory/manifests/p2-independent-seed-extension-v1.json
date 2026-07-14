@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "experiment_id": "p2-independent-seed-extension-v1",
+  "status": "preregistered_before_primary_outcome_inspection",
+  "frozen_at": "2026-07-14T22:52:00+09:00",
+  "reason": "The frozen five-seed primary cohort has dense within-seed sampling but cannot attain a two-sided exact seed-level p-value below 0.0625. Four additional independently trained checkpoints raise the combined confirmatory cohort to nine seeds without changing or relabeling the primary artifacts.",
+  "outcome_blinding": {
+    "primary_outcome_summary_inspected": false,
+    "observed_before_freeze": [
+      "process liveness",
+      "completed shard counts",
+      "implementation digest frequencies"
+    ],
+    "forbidden_before_freeze": [
+      "policy accuracy",
+      "paired effect size",
+      "family result",
+      "seed result",
+      "quality-gate result"
+    ]
+  },
+  "primary_cohort": {
+    "training_seeds": [6071401, 6071402, 6071403, 6071404, 6071405],
+    "calibration_seeds": [7071401, 7071402, 7071403, 7071404, 7071405],
+    "evaluation_seeds": [8071401, 8071402, 8071403, 8071404, 8071405],
+    "artifacts_are_immutable": true
+  },
+  "extension_cohort": {
+    "training_seeds": [6071406, 6071407, 6071408, 6071409],
+    "calibration_seeds": [7071406, 7071407, 7071408, 7071409],
+    "evaluation_seeds": [8071406, 8071407, 8071408, 8071409],
+    "scales": ["s55", "s151"],
+    "families": 9,
+    "contexts": 5,
+    "replicates_per_context": 10,
+    "examples_per_shard": 20,
+    "examples_per_seed_scale_family": 1000,
+    "outcome_dependent_early_stopping": false,
+    "separate_artifact_namespace_required": true
+  },
+  "combined_confirmatory_inference": {
+    "independent_training_seeds_per_scale": 9,
+    "exact_sign_assignments": 512,
+    "minimum_attainable_two_sided_seed_p": 0.00390625,
+    "primary_family_hypotheses": 9,
+    "minimum_attainable_holm_adjusted_family_p": 0.03515625,
+    "pooling_prerequisite": "All nine seeds must use identical frozen model, workload, policy, budget, pairing, and audit contracts; otherwise cohorts are reported separately.",
+    "p_value_role": "confirmatory evidence alongside effect size, seed-cluster interval, memory matching, all-seed direction, and worst-slice constraints; never a sole success criterion"
+  },
+  "planned_extension_volume": {
+    "training_runs": 8,
+    "core_shards": 3600,
+    "core_policy_example_evaluations": 504000,
+    "causal_shards": 7200,
+    "causal_policy_example_evaluations": 2304000
+  },
+  "combined_p2_volume": {
+    "core_shards": 8100,
+    "core_policy_example_evaluations": 1134000,
+    "causal_shards": 16200,
+    "causal_policy_example_evaluations": 5184000
+  },
+  "execution_order": [
+    "finish and audit the immutable five-seed primary core cohort",
+    "train and calibrate four additional checkpoints per scale",
+    "run exact equivalence before extension quality evaluation",
+    "complete the full extension core Cartesian grid",
+    "complete calibration-only physical memory matching and causal equivalence",
+    "complete the full extension causal Cartesian grid",
+    "audit cohorts separately, then emit a combined nine-seed summary only if the pooling prerequisite passes"
+  ],
+  "failure_rules": [
+    "Do not replace a failed primary seed with an extension seed.",
+    "Do not stop the extension after favorable interim outcomes.",
+    "Count operational failures conservatively in the registered aggregate.",
+    "Keep the five-seed and four-seed raw matrices independently reproducible even when combined inference is valid."
+  ]
+}

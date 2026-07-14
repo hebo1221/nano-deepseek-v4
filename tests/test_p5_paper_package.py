@@ -298,8 +298,21 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
             "paired_conversation_coverage_verified",
             "physical_arm_contract_verified",
             "physical_controller_budget_verified",
+            "exact_record_schema_verified",
+            "exact_execution_rotation_verified",
+            "exact_quality_schedule_coordinates_verified",
+            "exact_statistical_cell_coverage_verified",
         )
     )
+    assert manifest["evidence"]["p2_causal"]["required_audit"][
+        "paired_units_per_seed_scale_budget_family_context"
+    ] == 200
+    assert manifest["evidence"]["p2_causal"]["required_audit"][
+        "statistical_cells_per_contrast"
+    ] == 900
+    assert manifest["evidence"]["p2_causal"]["required_audit"][
+        "physical_batches_per_cell"
+    ] == 2_250
     assert manifest["evidence"]["p3_ruler"]["required_audit"]["total_predictions"] == 253500
     assert manifest["evidence"]["p3_safety"]["required_audit"]["examples_accounted_per_arm"] == 1200
     assert manifest["evidence"]["p4_reference_systems"]["required_audit"]["terminal_cells"] == 216

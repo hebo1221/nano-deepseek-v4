@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import sys
 from pathlib import Path
 
@@ -100,6 +101,84 @@ def test_causal_raw_metadata_binds_seeds_arms_and_leakage_guard() -> None:
         causal.verify_raw_metadata(raw, run, "implementation")
 
 
+def _quality_records() -> tuple[
+    dict, list[dict], dict[tuple[int, str], dict]
+]:
+    raw, _run = _raw_metadata()
+    metrics: dict[tuple[int, str], dict] = {}
+    records: list[dict] = []
+    first = raw["replicate"] * causal.shard.EXAMPLES_PER_SHARD
+    for local_batch in range(causal.shard.BATCHES_PER_SHARD):
+        schedule = causal.shard.schedule_batch_index(
+            family=raw["family"],
+            context=raw["context"],
+            replicate=raw["replicate"],
+            local_batch_index=local_batch,
+        )
+        for arm_index, arm in enumerate(causal.shard.ALL_ARM_NAMES):
+            digest = f"{schedule * len(causal.shard.ALL_ARM_NAMES) + arm_index:064x}"
+            metric = {
+                "execution_mode": "executed",
+                "reused_from_arm": None,
+                "config_sha256": digest,
+                "config_variant": "single",
+            }
+            metrics[(schedule, arm)] = metric
+            for offset in range(causal.shard.BATCH_SIZE):
+                conversation_index = first + local_batch * causal.shard.BATCH_SIZE + offset
+                records.append(
+                    {
+                        "arm": arm,
+                        "budget": raw["budget"],
+                        "family": raw["family"],
+                        "context": raw["context"],
+                        "replicate": raw["replicate"],
+                        "conversation_id": (
+                            f"{raw['family']}:{raw['context']}:{conversation_index}"
+                        ),
+                        "targets": [3],
+                        "predictions": [3],
+                        "query_positions": [raw["context"] - 1],
+                        "evidence_positions": [0],
+                        "correct": [True],
+                        "correct_count": 1,
+                        "total": 1,
+                        "schedule_batch_index": schedule,
+                        "controller": {"budget_violations": 0},
+                        **metric,
+                    }
+                )
+    return raw, records, metrics
+
+
+def test_causal_quality_records_bind_exact_id_schema_and_schedule() -> None:
+    raw, records, metrics = _quality_records()
+
+    by_arm, identifiers = causal.verify_quality_records(raw, records, metrics)
+    assert len(by_arm) == len(records)
+    assert len(identifiers) == causal.shard.EXAMPLES_PER_SHARD
+
+    arbitrary_id = copy.deepcopy(records)
+    arbitrary_id[0]["conversation_id"] = "arbitrary-but-paired"
+    with pytest.raises(ValueError, match="identity drifted"):
+        causal.verify_quality_records(raw, arbitrary_id, metrics)
+
+    wrong_schedule = copy.deepcopy(records)
+    wrong_schedule[0]["schedule_batch_index"] += 1
+    with pytest.raises(ValueError, match="schedule coordinate drifted"):
+        causal.verify_quality_records(raw, wrong_schedule, metrics)
+
+    malformed_positions = copy.deepcopy(records)
+    malformed_positions[0]["query_positions"] = []
+    with pytest.raises(ValueError, match="target, position, or controller schema drifted"):
+        causal.verify_quality_records(raw, malformed_positions, metrics)
+
+    provenance_drift = copy.deepcopy(records)
+    provenance_drift[0]["config_variant"] = "high"
+    with pytest.raises(ValueError, match="execution provenance drifted"):
+        causal.verify_quality_records(raw, provenance_drift, metrics)
+
+
 def test_p5_strict_causal_audit_matches_the_raw_verifier_contract() -> None:
     assert causal.STRICT_RAW_AUDIT == {
         "held_out_seed_contract_verified": True,
@@ -124,7 +203,9 @@ def test_causal_execution_accounting_binds_schedule_and_order() -> None:
             "wall_ms": 1.0,
         }
         for batch in (10, 11)
-        for index, arm in enumerate(arms)
+        for index, arm in enumerate(
+            (*arms[batch % len(arms) :], *arms[: batch % len(arms)])
+        )
     ]
 
     counts = causal.validate_exact_config_reuse(
@@ -133,7 +214,7 @@ def test_causal_execution_accounting_binds_schedule_and_order() -> None:
     assert counts == {"executed": 6, "reused_exact_config": 0}
 
     rows[0]["execution_index"] = 1
-    with pytest.raises(ValueError, match="arm/order coverage drifted"):
+    with pytest.raises(ValueError, match="rotation coverage drifted"):
         causal.validate_exact_config_reuse(
             rows, expected_arms=arms, expected_schedule_batches={10, 11}
         )

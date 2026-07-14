@@ -80,3 +80,29 @@ replication is completed.
 
 The machine-readable contract is
 [`experiment-scale-audit-v1.json`](../manifests/experiment-scale-audit-v1.json).
+
+## Independent-seed confirmatory extension
+
+Before inspecting any P2 policy accuracy, paired effect, family result, seed
+result, or quality-gate output, the study added a separate four-seed extension.
+The original five-seed matrices remain immutable and independently reportable.
+The extension uses training seeds 6071406--6071409 with disjoint calibration
+and evaluation seed namespaces, the same two scales, all nine families, all
+five contexts, ten replicates per context, and no outcome-dependent early
+stopping.
+
+This changes the meaningful inferential quantity, not just the headline row
+count. Nine independent training seeds provide 512 exact sign assignments and
+a minimum two-sided seed-level p-value of 0.00390625. Even the theoretical
+Holm floor across nine primary family hypotheses becomes 0.03515625 instead of
+being structurally above 0.05. P-values remain only one part of the gate: effect
+size, seed-cluster uncertainty, physical memory matching, direction across
+seeds, and worst-slice regressions remain mandatory.
+
+The additive extension contains 3,600 core shards (504,000 policy-example
+evaluations) and 7,200 causal shards (2.304 million policy-example evaluations).
+If and only if the implementation, workload, policy, budget, pairing, and audit
+contracts are identical, the combined study contains 8,100 core shards and
+16,200 causal shards across nine independent checkpoints per scale. The frozen
+contract is
+[`p2-independent-seed-extension-v1.json`](../manifests/p2-independent-seed-extension-v1.json).

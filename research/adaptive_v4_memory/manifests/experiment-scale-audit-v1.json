@@ -5,6 +5,12 @@
   "protocol_amendments": [
     {
       "date": "2026-07-14",
+      "timing": "after P2 execution began but before any primary P2 outcome summary was inspected",
+      "change": "add four disjoint independent training, calibration, and evaluation seeds as a separately auditable confirmatory P2 cohort",
+      "reason": "remove the five-seed exact-test resolution floor without altering or replacing primary artifacts"
+    },
+    {
+      "date": "2026-07-14",
       "timing": "before any P4 systems cell was generated",
       "change": "expand both systems matrices from marginal six-profile sweeps to the complete 4 batch x 3 load/concurrency factorial"
     },
@@ -17,6 +23,11 @@
       "date": "2026-07-14",
       "timing": "before any online learned-lookahead label or test shard was generated",
       "change": "add a separate post-P2 online learned-lookahead study with 6750 label shards, 20 fitted policies, and 9000 held-out test shards across six arms"
+    },
+    {
+      "date": "2026-07-14",
+      "timing": "before inspecting any primary P2 policy outcome",
+      "change": "preregister a separate four-seed extension that preserves the immutable five-seed primary cohort and permits nine-seed confirmatory inference only under an identical-contract pooling audit"
     }
   ],
   "date": "2026-07-14",
@@ -38,6 +49,31 @@
       "factorial_arms": 16,
       "fixed_top_p_thresholds": [0.5, 0.8],
       "offline_registered_arm_oracle": true
+    },
+    "p2_independent_seed_extension": {
+      "training_runs": 8,
+      "core_shards": 3600,
+      "core_policy_example_evaluations": 504000,
+      "causal_shards": 7200,
+      "causal_policy_example_evaluations": 2304000
+    },
+    "combined_p2_confirmatory": {
+      "independent_training_seeds_per_scale": 9,
+      "core_shards": 8100,
+      "core_policy_example_evaluations": 1134000,
+      "causal_shards": 16200,
+      "causal_policy_example_evaluations": 5184000
+    },
+    "p2_independent_seed_extension": {
+      "manifest": "research/adaptive_v4_memory/manifests/p2-independent-seed-extension-v1.json",
+      "additional_training_seeds_per_scale": 4,
+      "combined_training_seeds_per_scale": 9,
+      "additional_core_shards": 3600,
+      "combined_core_shards": 8100,
+      "additional_causal_shards": 7200,
+      "combined_causal_shards": 16200,
+      "minimum_attainable_two_sided_seed_p": 0.00390625,
+      "minimum_attainable_holm_adjusted_family_p": 0.03515625
     },
     "p1_online_learned_lookahead": {
       "label_shards": 6750,
@@ -112,6 +148,15 @@
     "example_level_role": "paired descriptive precision within a training seed; examples do not increase the number of independent trained-model clusters",
     "p_value_used_as_success_gate": false,
     "interpretation": "The study has high within-seed sample density but only five independent training seeds per scale. Exact and multiplicity-adjusted seed-level p-values are reported, while causal success requires effect direction, corrected seed-cluster intervals, memory matching, and five-of-five seed consistency rather than an unattainable p<0.05 threshold."
+  },
+  "confirmatory_extension_resolution": {
+    "independent_training_seed_clusters_per_scale": 9,
+    "exact_two_sided_sign_flip_assignments": 512,
+    "minimum_attainable_two_sided_p": 0.00390625,
+    "minimum_attainable_holm_adjusted_family_p": 0.03515625,
+    "primary_cohort_remains_independently_reportable": true,
+    "pooling_requires_identical_frozen_contracts": true,
+    "outcome_dependent_early_stopping": false
   },
   "primary_paper_comparators": [
     {
