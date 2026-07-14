@@ -12,6 +12,11 @@
       "date": "2026-07-14",
       "timing": "before any P4 systems cell was generated",
       "change": "add a separate two-scale x two-policy 500K-token feasibility preflight with terminal failure accounting and no performance claim"
+    },
+    {
+      "date": "2026-07-14",
+      "timing": "before any online learned-lookahead label or test shard was generated",
+      "change": "add a separate post-P2 online learned-lookahead study with 6750 label shards, 20 fitted policies, and 9000 held-out test shards across six arms"
     }
   ],
   "date": "2026-07-14",
@@ -33,6 +38,19 @@
       "factorial_arms": 16,
       "fixed_top_p_thresholds": [0.5, 0.8],
       "offline_registered_arm_oracle": true
+    },
+    "p1_online_learned_lookahead": {
+      "label_shards": 6750,
+      "fitted_policies": 20,
+      "heldout_test_shards": 9000,
+      "paired_test_conversations_per_arm": 180000,
+      "quality_arm_conversations": 1080000,
+      "training_seeds": 5,
+      "scales": 2,
+      "workload_families": 9,
+      "context_lengths": 5,
+      "budgets": 2,
+      "arms": 6
     },
     "p3_small_model_ruler": {
       "predictions": 253500,

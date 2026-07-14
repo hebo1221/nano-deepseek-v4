@@ -4,7 +4,10 @@
 
 The expanded protocol is no longer small by number of experimental units. It
 contains 4,500 core shards (630,000 policy-example evaluations), 9,000 causal
-shards (2.88 million policy-example evaluations across 16 arms), 253,500 small-model RULER
+shards (2.88 million policy-example evaluations across 16 arms), and a separate
+post-P2 online learned-lookahead study with 6,750 label shards, 20 fitted
+policies, and 9,000 held-out shards (1.08 million arm-conversations across six
+arms). It also contains 253,500 small-model RULER
 predictions, 90,578 Qwen3-4B natural-benchmark predictions, 3,600 paired safety
 predictions, 7,254 paired natural-safety generations, and two 216-cell systems
 matrices with 30 measured repetitions per cell. A separate 500K-token feasibility
