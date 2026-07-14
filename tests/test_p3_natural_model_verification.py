@@ -39,7 +39,9 @@ def _snapshot(tmp_path: Path) -> tuple[Path, dict]:
         "revision": "a" * 40,
         "architecture": "FrozenForCausalLM",
         "maximum_supported_context_tokens": 131072,
-        "checkpoint_bytes": shard.stat().st_size,
+        "snapshot_bytes": sum(path.stat().st_size for path in snapshot.iterdir()),
+        "weight_shard_file_bytes": shard.stat().st_size,
+        "indexed_tensor_bytes": shard.stat().st_size,
         "snapshot_files_sha256": expected,
         "snapshot_digest_set_sha256": canonical_digest_set(expected),
     }
@@ -52,7 +54,8 @@ def test_snapshot_verifier_closes_file_hash_weight_and_config_contract(tmp_path:
     result = verify_snapshot(snapshot, model)
 
     assert result["file_count"] == 3
-    assert result["checkpoint_bytes"] == len(b"frozen-weights")
+    assert result["weight_shard_file_bytes"] == len(b"frozen-weights")
+    assert result["indexed_tensor_bytes"] == len(b"frozen-weights")
     assert result["indexed_tensor_count"] == 1
     assert result["maximum_supported_context_tokens"] == 131072
 
@@ -69,17 +72,27 @@ def test_snapshot_verifier_rejects_extra_or_hash_drift(tmp_path: Path) -> None:
         verify_snapshot(snapshot, model)
 
 
-def test_snapshot_verifier_rejects_digest_set_and_checkpoint_drift(tmp_path: Path) -> None:
+def test_snapshot_verifier_rejects_digest_set_and_byte_total_drift(tmp_path: Path) -> None:
     snapshot, model = _snapshot(tmp_path)
     wrong_set = deepcopy(model)
     wrong_set["snapshot_digest_set_sha256"] = "0" * 64
     with pytest.raises(ValueError, match="internally inconsistent"):
         verify_snapshot(snapshot, wrong_set)
 
-    wrong_bytes = deepcopy(model)
-    wrong_bytes["checkpoint_bytes"] += 1
-    with pytest.raises(ValueError, match="Checkpoint byte total drifted"):
-        verify_snapshot(snapshot, wrong_bytes)
+    wrong_snapshot_bytes = deepcopy(model)
+    wrong_snapshot_bytes["snapshot_bytes"] += 1
+    with pytest.raises(ValueError, match="Snapshot byte total drifted"):
+        verify_snapshot(snapshot, wrong_snapshot_bytes)
+
+    wrong_shard_bytes = deepcopy(model)
+    wrong_shard_bytes["weight_shard_file_bytes"] += 1
+    with pytest.raises(ValueError, match="Weight-shard file byte total drifted"):
+        verify_snapshot(snapshot, wrong_shard_bytes)
+
+    wrong_tensor_bytes = deepcopy(model)
+    wrong_tensor_bytes["indexed_tensor_bytes"] += 1
+    with pytest.raises(ValueError, match="Indexed tensor byte total drifted"):
+        verify_snapshot(snapshot, wrong_tensor_bytes)
 
 
 def test_snapshot_verifier_rejects_index_or_architecture_drift(tmp_path: Path) -> None:

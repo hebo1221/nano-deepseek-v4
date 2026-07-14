@@ -73,15 +73,26 @@ def verify_snapshot(snapshot: Path, model: dict[str, Any]) -> dict[str, Any]:
     }
     if indexed_shards != frozen_shards:
         raise ValueError("Weight index shard set does not match the frozen snapshot.")
-    checkpoint_bytes = sum((snapshot / name).stat().st_size for name in indexed_shards)
-    if checkpoint_bytes != model["checkpoint_bytes"]:
+    snapshot_bytes = sum(row["bytes"] for row in files)
+    if snapshot_bytes != model["snapshot_bytes"]:
         raise ValueError(
-            f"Checkpoint byte total drifted: {checkpoint_bytes} != {model['checkpoint_bytes']}."
+            f"Snapshot byte total drifted: {snapshot_bytes} != {model['snapshot_bytes']}."
+        )
+    weight_shard_file_bytes = sum((snapshot / name).stat().st_size for name in indexed_shards)
+    if weight_shard_file_bytes != model["weight_shard_file_bytes"]:
+        raise ValueError(
+            "Weight-shard file byte total drifted: "
+            f"{weight_shard_file_bytes} != {model['weight_shard_file_bytes']}."
         )
     metadata = index.get("metadata")
-    if isinstance(metadata, dict) and "total_size" in metadata:
-        if int(metadata["total_size"]) != checkpoint_bytes:
-            raise ValueError("Weight index metadata total_size does not match shard bytes.")
+    if not isinstance(metadata, dict) or "total_size" not in metadata:
+        raise ValueError("Weight index metadata has no total_size.")
+    indexed_tensor_bytes = int(metadata["total_size"])
+    if indexed_tensor_bytes != model["indexed_tensor_bytes"]:
+        raise ValueError(
+            "Indexed tensor byte total drifted: "
+            f"{indexed_tensor_bytes} != {model['indexed_tensor_bytes']}."
+        )
 
     config = _load_object(snapshot / "config.json", "Model config")
     architectures = config.get("architectures")
@@ -97,8 +108,9 @@ def verify_snapshot(snapshot: Path, model: dict[str, Any]) -> dict[str, Any]:
         "snapshot_path": str(snapshot.resolve()),
         "snapshot_digest_set_sha256": expected_set_digest,
         "file_count": len(files),
-        "snapshot_bytes": sum(row["bytes"] for row in files),
-        "checkpoint_bytes": checkpoint_bytes,
+        "snapshot_bytes": snapshot_bytes,
+        "weight_shard_file_bytes": weight_shard_file_bytes,
+        "indexed_tensor_bytes": indexed_tensor_bytes,
         "indexed_tensor_count": len(weight_map),
         "architecture": model["architecture"],
         "maximum_supported_context_tokens": maximum_context,

@@ -56,11 +56,25 @@ share the same two frozen roots:
 
 ```bash
 export KVPRESS_ROOT=artifacts/adaptive_v4_memory/paper_grade/p3/assets/sources/kvpress
+export RULER_ROOT=artifacts/adaptive_v4_memory/paper_grade/p3/assets/sources/RULER
 export MODEL_SNAPSHOT=artifacts/adaptive_v4_memory/paper_grade/p3/assets/models/cdbee75f17c01a7cc42f958dc650907174af0554
+mkdir -p artifacts/adaptive_v4_memory/paper_grade/p3/assets/sources
+git init "$RULER_ROOT"
+git -C "$RULER_ROOT" remote add origin https://github.com/hsiehjackson/RULER.git
+git -C "$RULER_ROOT" fetch --depth 1 origin 38da79d79519ef87aa46ae804f838e1eab7f86d7
+git -C "$RULER_ROOT" checkout --detach FETCH_HEAD
+git init "$KVPRESS_ROOT"
+git -C "$KVPRESS_ROOT" remote add origin https://github.com/NVIDIA/kvpress.git
+git -C "$KVPRESS_ROOT" fetch --depth 1 origin 6d965557a5b9f0201a2301b23c454473dd681d0d
+git -C "$KVPRESS_ROOT" checkout --detach FETCH_HEAD
+.venv/bin/hf download Qwen/Qwen3-4B-Instruct-2507 \
+  --revision cdbee75f17c01a7cc42f958dc650907174af0554 \
+  --local-dir "$MODEL_SNAPSHOT"
 .venv/bin/python research/adaptive_v4_memory/scripts/prepare_p3_natural_sources.py
 .venv/bin/python research/adaptive_v4_memory/scripts/prepare_p3_natural_datasets.py
 .venv/bin/python research/adaptive_v4_memory/scripts/verify_p3_natural_model.py
-.venv/bin/python research/adaptive_v4_memory/scripts/prepare_p3_natural_ruler_dataset.py
+.venv/bin/python research/adaptive_v4_memory/scripts/prepare_p3_natural_ruler_dataset.py \
+  --ruler-root "$RULER_ROOT" --tokenizer-snapshot "$MODEL_SNAPSHOT"
 .venv/bin/python research/adaptive_v4_memory/scripts/run_p3_natural_ruler.py --kvpress-root "$KVPRESS_ROOT" --model-snapshot "$MODEL_SNAPSHOT"
 .venv/bin/python research/adaptive_v4_memory/scripts/run_p3_scbench.py --kvpress-root "$KVPRESS_ROOT" --model-snapshot "$MODEL_SNAPSHOT"
 .venv/bin/python research/adaptive_v4_memory/scripts/run_p3_longbench_v2.py --kvpress-root "$KVPRESS_ROOT" --model-snapshot "$MODEL_SNAPSHOT"

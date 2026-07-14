@@ -44,6 +44,8 @@ def test_natural_suite_freezes_full_scale_and_sample_contract() -> None:
     manifest = _manifest()
     result = validate_manifest(manifest)
 
+    assert manifest["status"] == "amended_and_frozen_before_execution"
+    assert len(manifest["amendments"]) == 2
     assert manifest["benchmarks"]["RULER"]["lengths_tokens"] == [
         8192,
         16384,
@@ -117,6 +119,11 @@ def test_natural_suite_rejects_frozen_license_and_ruler_digest_drift() -> None:
     wrong_model_license["model"]["license"] = "unknown"
     with pytest.raises(ValueError, match="model license drifted"):
         validate_manifest(wrong_model_license)
+
+    wrong_model_bytes = deepcopy(manifest)
+    wrong_model_bytes["model"]["weight_shard_file_bytes"] += 1
+    with pytest.raises(ValueError, match="weight-shard, or tensor byte total drifted"):
+        validate_manifest(wrong_model_bytes)
 
 
 def test_external_dsa_baselines_cannot_be_claimed_on_qwen() -> None:

@@ -33,7 +33,12 @@ EXPECTED_REVISIONS = {
     "LongMemEval-code": "9e0b455f4ef0e2ab8f2e582289761153549043fc",
     "MRCR-data": "f4c69fae7cf81f7ca26b9fee34b392a50f6b8a1d",
 }
-EXPECTED_MODEL_SNAPSHOT_SET = "67330e21c7b222ff647feee4fc4e037385d1d14f9d9d9ebbdf9343e87f5fa58f"
+EXPECTED_MODEL_SNAPSHOT_SET = "c01e398afbd27d139b203e4b4b13d34dedec6d0a2db521083f55c50522c76e35"
+EXPECTED_MODEL_BYTE_TOTALS = {
+    "snapshot_bytes": 8_060_917_568,
+    "weight_shard_file_bytes": 8_044_982_000,
+    "indexed_tensor_bytes": 8_045_591_552,
+}
 EXPECTED_RULER_SCORER = "1df51402a394b1348f14d96e1fe87b1a4aff10f619f81f80f8840d8e0118fc9b"
 EXPECTED_LICENSES = {
     "model": "apache-2.0",
@@ -64,14 +69,28 @@ def _benchmark(payload: dict[str, Any], name: str) -> dict[str, Any]:
 def validate_manifest(payload: dict[str, Any]) -> dict[str, Any]:
     if payload.get("schema_version") != 1:
         raise ValueError("Natural-suite schema_version must be 1.")
-    if payload.get("status") != "frozen_before_execution":
-        raise ValueError("Natural-suite status must remain frozen_before_execution.")
+    if payload.get("status") != "amended_and_frozen_before_execution":
+        raise ValueError("Natural-suite status must remain amended and frozen before execution.")
+    amendments = payload.get("amendments", [])
+    if (
+        not isinstance(amendments, list)
+        or len(amendments) != 2
+        or "RULER scorer SHA-256" not in amendments[0].get("change", "")
+        or "tokenizer.json SHA-256" not in amendments[1].get("change", "")
+        or any("no P3 natural prediction had run" not in row.get("reason", "") for row in amendments)
+    ):
+        raise ValueError("Natural-suite pre-execution correction record drifted.")
     if tuple(payload.get("execution_order", ())) != EXPECTED_ORDER:
         raise ValueError("Natural benchmark order drifted from the preregistration.")
     if payload["model"]["revision"] != EXPECTED_REVISIONS["model"]:
         raise ValueError("The 128K-compatible model revision drifted.")
     if payload["model"].get("license") != EXPECTED_LICENSES["model"]:
         raise ValueError("The 128K-compatible model license drifted.")
+    if any(
+        payload["model"].get(name) != expected
+        for name, expected in EXPECTED_MODEL_BYTE_TOTALS.items()
+    ):
+        raise ValueError("The model snapshot, weight-shard, or tensor byte total drifted.")
     snapshot_bytes = json.dumps(
         payload["model"]["snapshot_files_sha256"],
         sort_keys=True,

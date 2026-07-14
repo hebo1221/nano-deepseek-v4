@@ -1,7 +1,8 @@
 # P3 natural-language suite freeze
 
-Status: frozen before execution; no natural dataset payload has been acquired
-while the P2 synthetic core is running.
+Status: amended and frozen before execution. Exact-revision snapshot verification
+corrected transcription errors in the RULER scorer and tokenizer digests before
+any natural prediction; the amendments are recorded in the authoritative manifest.
 
 ## Outcome
 

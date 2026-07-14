@@ -25,8 +25,11 @@ from validate_p3_natural_safety_manifest import validate_manifest  # noqa: E402
 def test_natural_safety_manifest_freezes_official_counts_and_paid_judge_guard() -> None:
     root = Path(__file__).resolve().parents[1]
     path = root / "research/adaptive_v4_memory/manifests/p3-natural-safety-v1.json"
+    manifest = json.loads(path.read_text())
 
-    assert validate_manifest(json.loads(path.read_text())) == {
+    assert manifest["status"] == "amended_and_frozen_before_execution"
+    assert len(manifest["amendments"]) == 1
+    assert validate_manifest(manifest) == {
         "benchmarks": 2,
         "required_arms": 2,
         "longsafety_predictions_per_arm": 3086,

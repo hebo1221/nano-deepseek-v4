@@ -40,8 +40,16 @@ def validate_manifest(manifest: dict[str, Any]) -> dict[str, Any]:
     _require(
         manifest.get("schema_version") == 1
         and manifest.get("experiment_id") == "p3-qwen3-4b-natural-safety-v1"
-        and manifest.get("status") == "frozen_before_execution",
+        and manifest.get("status") == "amended_and_frozen_before_execution",
         "Natural safety manifest identity is not frozen.",
+    )
+    amendments = manifest.get("amendments", [])
+    _require(
+        isinstance(amendments, list)
+        and len(amendments) == 1
+        and "canonical snapshot digest set" in amendments[0].get("change", "")
+        and "before any natural-safety generation" in amendments[0].get("reason", ""),
+        "Natural safety pre-execution correction record drifted.",
     )
     _require(tuple(manifest.get("required_arms", ())) == EXPECTED_ARMS, "Arm set drifted.")
     model = manifest.get("model", {})

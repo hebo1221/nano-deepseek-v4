@@ -1,12 +1,19 @@
 {
   "schema_version": 1,
   "experiment_id": "p3-qwen3-4b-natural-safety-v1",
-  "status": "frozen_before_execution",
+  "status": "amended_and_frozen_before_execution",
+  "amendments": [
+    {
+      "date": "2026-07-14",
+      "change": "bind the corrected exact-revision Qwen3-4B tokenizer and canonical snapshot digest set from the natural-suite manifest",
+      "reason": "pre-execution snapshot verification corrected a manifest transcription error before any natural-safety generation"
+    }
+  ],
   "evidence_tier": "official-and-derived-natural-safety-transfer-on-compatible-model",
   "model": {
     "repo_id": "Qwen/Qwen3-4B-Instruct-2507",
     "revision": "cdbee75f17c01a7cc42f958dc650907174af0554",
-    "snapshot_digest_set_sha256": "67330e21c7b222ff647feee4fc4e037385d1d14f9d9d9ebbdf9343e87f5fa58f",
+    "snapshot_digest_set_sha256": "c01e398afbd27d139b203e4b4b13d34dedec6d0a2db521083f55c50522c76e35",
     "maximum_supported_context_tokens": 262144,
     "natural_manifest": "research/adaptive_v4_memory/manifests/p3-natural-suite-v1.json"
   },
