@@ -54,8 +54,11 @@ replication is completed.
 
 | Work | Reported breadth | Position of this study |
 | --- | --- | --- |
+| [RULER](https://arxiv.org/abs/2404.06654) | 13 representative tasks across 17 long-context models | Our five-length, 500-sample-per-task matrix is denser per compatible model, but cannot support the same cross-model generalization. |
 | [SCBench](https://arxiv.org/abs/2412.10319) | 12 tasks, two shared-context modes, four capability categories, eight LLMs | Our example accounting and safety contrast are deeper, but model breadth is narrower. |
 | [SnapKV](https://arxiv.org/abs/2404.14469) | 16 long-sequence datasets and a 380K NIAH demonstration | Our lifecycle and failure analysis are broader; its dataset count and maximum demonstrated length are stronger. |
+| [PyramidKV](https://arxiv.org/abs/2406.02069) | LongBench plus NIAH, including 12% and 0.7% retained-cache regimes | Our three matched compression ratios and lifecycle stresses give a broader operating grid; its 70B NIAH and extreme-compression evidence remain stronger. |
+| [Ada-KV](https://arxiv.org/abs/2407.11550) | 13 RULER and 16 LongBench datasets in both question-aware and question-agnostic settings | Our screen includes an Ada-KV-wrapped SnapKV arm, but its dataset and query-regime breadth is substantially stronger. |
 | [FlashMemory-DeepSeek-V4](https://arxiv.org/abs/2606.09079) | RULER, LongBench-v2, LongMemEval, and 500K physical-cache evidence on V4 | It remains the stronger direct-architecture comparator. We cannot substitute Qwen3 evidence for it. |
 | [The Pitfalls of KV Cache Compression](https://arxiv.org/abs/2510.00231) | Multi-instruction degradation and system-prompt leakage across eviction choices | Our four-family synthetic stress and paired LongSafety/IFEval generation expand coverage, but LongSafety remains generation-only until the official paid judge runs. |
 | [Benchmarking KV-Cache Optimizations across Task Quality and System Performance](https://arxiv.org/abs/2607.05399) | Two model families, four workload categories, quality, TTFT, throughput, realized compression | Our tail repetitions and metric closure are stronger; cross-family coverage is weaker. |

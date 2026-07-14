@@ -177,6 +177,12 @@
   },
   "primary_paper_comparators": [
     {
+      "work": "RULER",
+      "source": "https://arxiv.org/abs/2404.06654",
+      "reported_breadth": "13 representative synthetic tasks evaluated across 17 long-context language models",
+      "comparison": "this study is denser per compatible model at five lengths and 500 samples per task, but cannot claim the same cross-model generalization"
+    },
+    {
       "work": "SCBench",
       "source": "https://arxiv.org/abs/2412.10319",
       "reported_breadth": "12 tasks, two shared-context modes, four capability categories, eight long-context LLMs",
@@ -187,6 +193,18 @@
       "source": "https://arxiv.org/abs/2404.14469",
       "reported_breadth": "16 long-sequence datasets and a Needle-in-a-Haystack demonstration through 380K context",
       "comparison": "broader dataset count and longer compatible-model demonstration; this study has denser multi-seed synthetic statistics and five lifecycle-oriented natural benchmarks"
+    },
+    {
+      "work": "PyramidKV",
+      "source": "https://arxiv.org/abs/2406.02069",
+      "reported_breadth": "LongBench and Needle-in-a-Haystack evaluation including 12% and 0.7% retained-cache regimes and a Llama-3-70B NIAH result",
+      "comparison": "this study evaluates three matched compression ratios and more lifecycle stresses, while PyramidKV provides stronger large-model and extreme-compression evidence"
+    },
+    {
+      "work": "Ada-KV",
+      "source": "https://arxiv.org/abs/2407.11550",
+      "reported_breadth": "13 RULER and 16 LongBench datasets under both question-aware and question-agnostic scenarios",
+      "comparison": "this study includes an Ada-KV-wrapped SnapKV arm but remains substantially narrower in dataset and query-regime breadth"
     },
     {
       "work": "FlashMemory-DeepSeek-V4",
