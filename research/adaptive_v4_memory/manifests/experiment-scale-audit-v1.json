@@ -51,6 +51,12 @@
       "timing": "before any adaptive SCBench prediction and before either prerequisite outcome was inspected",
       "change": "add a separately reported 20572-prediction Qwen3-4B adaptive-quota SCBench replication across both shared-context modes and all twelve tasks",
       "reason": "the adaptive natural-language contrast otherwise relied on RULER only and did not test shared-cache reuse"
+    },
+    {
+      "date": "2026-07-15",
+      "timing": "before any adaptive LongBench-v2 prediction and before either prerequisite outcome was inspected",
+      "change": "add a separately reported 1006-prediction Qwen3-4B adaptive-quota LongBench-v2 replication across all 503 frozen examples and six capability categories",
+      "reason": "RULER and SCBench do not establish transfer to one-pass natural multiple-choice reasoning"
     }
   ],
   "date": "2026-07-14",
@@ -155,6 +161,15 @@
       "turn_predictions_per_mode": 5143,
       "same_initial_global_token_budget": true,
       "continuous_refresh_claim_available": false
+    },
+    "p3_natural_adaptive_quota_longbench_v2_qwen3_4b": {
+      "predictions": 1006,
+      "predictions_per_arm": 503,
+      "paired_arms": 2,
+      "categories": 6,
+      "same_initial_global_token_budget": true,
+      "continuous_refresh_claim_available": false,
+      "secondary_slices_are_descriptive": true
     },
     "p3_safety_qwen3_4b": {
       "predictions": 3600,

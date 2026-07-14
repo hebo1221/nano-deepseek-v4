@@ -277,6 +277,7 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
         "p3_cross_family_adaptive_quota",
         "p3_natural_adaptive_quota",
         "p3_natural_adaptive_quota_scbench",
+        "p3_natural_adaptive_quota_longbench_v2",
         "p3_natural",
         "p3_safety",
         "p3_natural_safety",
@@ -311,6 +312,18 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
         "same_initial_global_token_budget_verified"
     ] is True
     assert adaptive_scbench["required_audit"]["continuous_refresh_claim_available"] is False
+    adaptive_longbench = manifest["evidence"]["p3_natural_adaptive_quota_longbench_v2"]
+    assert adaptive_longbench["required_audit"]["total_predictions"] == 1_006
+    assert adaptive_longbench["required_audit"]["paired_examples"] == 503
+    assert adaptive_longbench["required_audit"]["category_cells"] == 6
+    assert adaptive_longbench["required_audit"]["holm_family_size"] == 6
+    assert adaptive_longbench["required_audit"][
+        "same_initial_global_token_budget_verified"
+    ] is True
+    assert adaptive_longbench["required_audit"][
+        "continuous_refresh_claim_available"
+    ] is False
+    assert adaptive_longbench["required_audit"]["secondary_slices_are_descriptive"] is True
     assert manifest["execution_audits"]["p2_core_parallel_equivalence"]["required_probes"] == 3
     assert manifest["execution_audits"]["p2_causal_parallel_equivalence"]["required_probes"] == 3
     assert manifest["execution_audits"]["p1_online_checkpoint_reuse"]["required_probes"] == 10
@@ -1289,6 +1302,56 @@ def test_adaptive_scbench_classification_is_gate_bound(passed: bool, expected: s
     assert classifications["p3_natural_adaptive_quota_scbench"] == expected
 
 
+@pytest.mark.parametrize(
+    ("passed", "expected"),
+    [(True, "success"), (False, "negative-result")],
+)
+def test_adaptive_longbench_v2_classification_is_gate_bound(
+    passed: bool, expected: str
+) -> None:
+    evidence = {
+        "status": "terminal",
+        "audit": {
+            "terminal_arms": 2,
+            "total_predictions": 1_006,
+            "paired_examples": 503,
+            "all_raw_records_verified": True,
+            "all_scores_recomputed_from_raw_response": True,
+            "all_dependency_digests_verified": True,
+            "exact_input_pairing_verified": True,
+            "exact_token_id_pairing_verified": True,
+            "quota_physical_audits_verified": True,
+            "same_initial_global_token_budget_verified": True,
+            "failure_accounting_complete": True,
+            "operational_failure_vocabulary_verified": True,
+            "category_cells": 6,
+            "holm_family_size": 6,
+            "continuous_refresh_claim_available": False,
+            "outcome_dependent_execution": False,
+        },
+        "confirmation_gate": {"passed": passed},
+    }
+    classifications = package.classify_evidence(
+        _p2_core_evidence(),
+        _m5_pilot_evidence(),
+        _m3_offline_learned_risk_evidence(),
+        _online_learned_lookahead_evidence(),
+        {"primary_causal_gate": {"passed": False}},
+        {"benchmark_complete": False},
+        {"audit": {}},
+        {"audit": {}},
+        {"audit": {}},
+        {"audit": {}},
+        {"audit": {}},
+        {"audit": {}},
+        {"audit": {}},
+        {"audit": {}},
+        {"audit": {}},
+        p3_natural_adaptive_quota_longbench_v2=evidence,
+    )
+    assert classifications["p3_natural_adaptive_quota_longbench_v2"] == expected
+
+
 def test_p5_success_requires_full_system_coverage() -> None:
     classifications = package.classify_evidence(
         _p2_core_evidence(passed=True),
@@ -2144,6 +2207,53 @@ def test_adaptive_scbench_tables_preserve_cluster_inference_and_physical_scope()
     }
     assert cells[0]["task"] == "scbench_kv"
     assert cells[0]["holm_adjusted_p"] == 0.2
+
+
+def test_adaptive_longbench_tables_preserve_holm_and_descriptive_slice_boundary() -> None:
+    payload = {
+        "analysis": {
+            "overall": {"mean_difference": 0.01, "paired_examples": 503},
+            "by_category": [
+                {
+                    "category": "single-document-qa",
+                    "mean_difference": 0.03,
+                    "holm_adjusted_p": 0.2,
+                    "holm_family_size": 6,
+                }
+            ],
+            "descriptive_slices": {
+                "difficulty": [
+                    {
+                        "slice": "easy",
+                        "paired_examples": 100,
+                        "mean_difference": 0.01,
+                        "confirmation_gate_role": False,
+                    }
+                ]
+            },
+            "initial_prefill_physical": {
+                "paired_successful_quota_examples": 500,
+                "maximum_global_kept_token_relative_error": 0.0,
+            },
+            "arms": {
+                "fixed+pins": {"failure_rate": 0.0},
+                "natural-adaptive-quota+pins": {"failure_rate": 0.001},
+            },
+        }
+    }
+
+    summary = package._p3_adaptive_longbench_summary_rows(payload)
+    categories = package._p3_adaptive_longbench_category_rows(payload)
+    slices = package._p3_adaptive_longbench_slice_rows(payload)
+
+    assert {row["scope"] for row in summary} == {
+        "overall",
+        "initial-prefill-physical",
+        "arm",
+    }
+    assert categories[0]["holm_family_size"] == 6
+    assert slices[0]["field"] == "difficulty"
+    assert slices[0]["confirmation_gate_role"] is False
 
 
 def test_p2_inference_resolution_table_separates_examples_from_seed_clusters() -> None:

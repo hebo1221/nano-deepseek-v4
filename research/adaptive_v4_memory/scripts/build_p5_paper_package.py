@@ -58,6 +58,9 @@ REPRODUCTION_REQUIRED_MARKERS = [
     "validate_p3_natural_adaptive_quota_scbench_manifest.py",
     "run_p3_scbench.py --cohort adaptive-quota",
     "summarize_p3_natural_adaptive_quota_scbench.py",
+    "validate_p3_natural_adaptive_quota_longbench_v2_manifest.py",
+    "run_p3_longbench_v2.py --cohort adaptive-quota",
+    "summarize_p3_natural_adaptive_quota_longbench_v2.py",
     "prepare_p3_cross_family_ruler_dataset.py",
     "run_p3_cross_family_ruler.py",
     "summarize_p3_cross_family_ruler.py",
@@ -93,6 +96,9 @@ BOUNDARY_EXPERIMENT_IDS = {
     "cross_family_adaptive_quota": "p3-cross-family-adaptive-quota-ruler-v1",
     "natural_adaptive_quota": "p3-natural-adaptive-quota-ruler-v1",
     "natural_adaptive_quota_scbench": "p3-natural-adaptive-quota-scbench-v1",
+    "natural_adaptive_quota_longbench_v2": (
+        "p3-natural-adaptive-quota-longbench-v2-v1"
+    ),
     "natural_suite": "p3-natural-language-suite-v1",
     "safety_stress": "p3-qwen3-4b-safety-stress-v1",
     "natural_safety": "p3-qwen3-4b-natural-safety-v1",
@@ -126,6 +132,10 @@ SCALE_AUDIT_SOURCE_MANIFESTS = {
     ),
     "natural_adaptive_quota_scbench": Path(
         "research/adaptive_v4_memory/manifests/p3-natural-adaptive-quota-scbench-v1.json"
+    ),
+    "natural_adaptive_quota_longbench_v2": Path(
+        "research/adaptive_v4_memory/manifests/"
+        "p3-natural-adaptive-quota-longbench-v2-v1.json"
     ),
     "safety": Path("research/adaptive_v4_memory/manifests/p3-safety-stress-v1.json"),
     "natural_safety": Path("research/adaptive_v4_memory/manifests/p3-natural-safety-v1.json"),
@@ -528,6 +538,34 @@ def _validate_experiment_scale_audit(payload: dict[str, Any]) -> None:
         "P3 adaptive SCBench scale count drifted.",
     )
 
+    adaptive_longbench = sources["natural_adaptive_quota_longbench_v2"]
+    adaptive_longbench_benchmark = adaptive_longbench.get("benchmark", {})
+    adaptive_longbench_lifecycle = adaptive_longbench.get(
+        "cache_lifecycle_contract", {}
+    )
+    expected_adaptive_longbench = {
+        "predictions": adaptive_longbench_benchmark.get("paired_predictions_total"),
+        "predictions_per_arm": adaptive_longbench_benchmark.get(
+            "predictions_per_arm"
+        ),
+        "paired_arms": len(adaptive_longbench.get("arms", {})),
+        "categories": len(adaptive_longbench_benchmark.get("categories", [])),
+        "same_initial_global_token_budget": adaptive_longbench_lifecycle.get(
+            "same_initial_global_kept_tokens"
+        ),
+        "continuous_refresh_claim_available": adaptive_longbench_lifecycle.get(
+            "continuous_refresh_claim_available"
+        ),
+        "secondary_slices_are_descriptive": adaptive_longbench.get("statistics", {}).get(
+            "secondary_slices_are_descriptive"
+        ),
+    }
+    _require(
+        planned.get("p3_natural_adaptive_quota_longbench_v2_qwen3_4b")
+        == expected_adaptive_longbench,
+        "P3 adaptive LongBench-v2 scale count drifted.",
+    )
+
     safety = sources["safety"]
     expected_safety = {
         "predictions": safety.get("expected_examples_per_arm", 0) * len(safety.get("arms", [])),
@@ -784,6 +822,26 @@ def _validate_boundary_manifest(name: str, path: Path) -> dict[str, Any]:
             and "does not establish continuous adaptive reallocation"
             in payload.get("claim_boundary", ""),
             "P3 adaptive SCBench boundary drifted.",
+        )
+    elif name == "natural_adaptive_quota_longbench_v2":
+        benchmark = payload.get("benchmark", {})
+        lifecycle = payload.get("cache_lifecycle_contract", {})
+        _require(
+            payload.get("status")
+            == "frozen_before_any_adaptive_longbench_v2_prediction"
+            and benchmark.get("predictions_per_arm") == 503
+            and benchmark.get("paired_predictions_total") == 1_006
+            and len(benchmark.get("categories", [])) == 6
+            and lifecycle.get("adaptive_allocation_scope")
+            == "initial context prefill only"
+            and lifecycle.get("same_initial_global_kept_tokens") is True
+            and lifecycle.get("continuous_refresh_claim_available") is False
+            and payload.get("statistics", {}).get("paired_bootstrap_seed")
+            == 9_471_505
+            and payload.get("statistics", {}).get("holm_family_size") == 6
+            and "does not establish continuous adaptive reallocation"
+            in payload.get("claim_boundary", ""),
+            "P3 adaptive LongBench-v2 boundary drifted.",
         )
     elif name == "cross_family_adaptive_quota":
         benchmark = payload.get("benchmark", {})
@@ -1309,6 +1367,7 @@ def classify_evidence(
     p3_cross_family_adaptive_quota: dict[str, Any] | None = None,
     p3_natural_adaptive_quota: dict[str, Any] | None = None,
     p3_natural_adaptive_quota_scbench: dict[str, Any] | None = None,
+    p3_natural_adaptive_quota_longbench_v2: dict[str, Any] | None = None,
 ) -> dict[str, str]:
     core_audit = p2_core.get("audit", {})
     core_complete = (
@@ -1720,6 +1779,37 @@ def classify_evidence(
             if scbench_terminal and scbench_gate.get("passed") is True
             else "negative-result"
             if scbench_terminal and scbench_gate.get("passed") is False
+            else "unverified"
+        )
+    if isinstance(p3_natural_adaptive_quota_longbench_v2, dict):
+        longbench_audit = p3_natural_adaptive_quota_longbench_v2.get("audit", {})
+        longbench_terminal = (
+            p3_natural_adaptive_quota_longbench_v2.get("status") == "terminal"
+            and longbench_audit.get("terminal_arms") == 2
+            and longbench_audit.get("total_predictions") == 1_006
+            and longbench_audit.get("paired_examples") == 503
+            and longbench_audit.get("all_raw_records_verified") is True
+            and longbench_audit.get("all_scores_recomputed_from_raw_response") is True
+            and longbench_audit.get("all_dependency_digests_verified") is True
+            and longbench_audit.get("exact_input_pairing_verified") is True
+            and longbench_audit.get("exact_token_id_pairing_verified") is True
+            and longbench_audit.get("quota_physical_audits_verified") is True
+            and longbench_audit.get("same_initial_global_token_budget_verified") is True
+            and longbench_audit.get("failure_accounting_complete") is True
+            and longbench_audit.get("operational_failure_vocabulary_verified") is True
+            and longbench_audit.get("category_cells") == 6
+            and longbench_audit.get("holm_family_size") == 6
+            and longbench_audit.get("continuous_refresh_claim_available") is False
+            and longbench_audit.get("outcome_dependent_execution") is False
+        )
+        longbench_gate = p3_natural_adaptive_quota_longbench_v2.get(
+            "confirmation_gate", {}
+        )
+        result["p3_natural_adaptive_quota_longbench_v2"] = (
+            "success"
+            if longbench_terminal and longbench_gate.get("passed") is True
+            else "negative-result"
+            if longbench_terminal and longbench_gate.get("passed") is False
             else "unverified"
         )
     if isinstance(p3_cross_family_adaptive_quota, dict):
@@ -2257,6 +2347,38 @@ def _p3_adaptive_scbench_mode_task_rows(payload: dict[str, Any]) -> list[dict[st
     return [_flatten_json_row(row) for row in payload["analysis"]["by_mode_task"]]
 
 
+def _p3_adaptive_longbench_summary_rows(
+    payload: dict[str, Any],
+) -> list[dict[str, Any]]:
+    analysis = payload["analysis"]
+    rows = [{"scope": "overall", **_flatten_json_row(analysis["overall"])}]
+    rows.append(
+        {
+            "scope": "initial-prefill-physical",
+            **_flatten_json_row(analysis["initial_prefill_physical"]),
+        }
+    )
+    for arm, row in analysis["arms"].items():
+        rows.append({"scope": "arm", "arm": arm, **_flatten_json_row(row)})
+    return rows
+
+
+def _p3_adaptive_longbench_category_rows(
+    payload: dict[str, Any],
+) -> list[dict[str, Any]]:
+    return [_flatten_json_row(row) for row in payload["analysis"]["by_category"]]
+
+
+def _p3_adaptive_longbench_slice_rows(
+    payload: dict[str, Any],
+) -> list[dict[str, Any]]:
+    return [
+        {"field": field, **_flatten_json_row(row)}
+        for field, rows in payload["analysis"]["descriptive_slices"].items()
+        for row in rows
+    ]
+
+
 def _p3_safety_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return [
         {"arm": arm, **row}
@@ -2752,6 +2874,7 @@ def _report(
     p3_cross_family_adaptive_quota: dict[str, Any],
     p3_natural_adaptive_quota: dict[str, Any],
     p3_natural_adaptive_quota_scbench: dict[str, Any],
+    p3_natural_adaptive_quota_longbench_v2: dict[str, Any],
     p3_natural: dict[str, Any],
     p3_safety: dict[str, Any],
     p3_natural_safety: dict[str, Any],
@@ -2885,6 +3008,13 @@ user request, is outside the completion gate, and is never reported as passed.
   prefill uses equal global KV tokens and its confirmation gate passed:
   **{p3_natural_adaptive_quota_scbench["confirmation_gate"]["passed"]}**. This does not
   claim adaptive reallocation after prefill or continuous-refresh behavior.
+- P3 adaptive LongBench-v2 replication:
+  {p3_natural_adaptive_quota_longbench_v2["audit"]["total_predictions"]:,} paired
+  Qwen3-4B predictions cover all six frozen reasoning categories with identical token-id
+  inputs and equal initial global KV tokens. Its confirmation gate passed:
+  **{p3_natural_adaptive_quota_longbench_v2["confirmation_gate"]["passed"]}**. Secondary
+  sub-domain, difficulty, and length slices are descriptive only, and this result does
+  not claim continuous adaptive reallocation.
 - P3 natural suite: {p3_natural["audit"]["benchmarks_terminal"]} terminal benchmarks and
   at least {p3_natural["audit"]["minimum_protocol_examples_accounted_per_arm"]:,}
   examples accounted per required arm. The fixed arm was selected before any Qwen3-4B
@@ -3091,6 +3221,9 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         p3_natural_adaptive_quota_scbench=loaded[
             "p3_natural_adaptive_quota_scbench"
         ],
+        p3_natural_adaptive_quota_longbench_v2=loaded[
+            "p3_natural_adaptive_quota_longbench_v2"
+        ],
     )
     classes["p2_core_confirmatory"] = _classify_validated_confirmatory_core(
         loaded["p2_core_confirmatory"]
@@ -3246,6 +3379,30 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         output_root / "table-p3-natural-adaptive-scbench-mode-task.csv",
         p3_adaptive_scbench_mode_task,
         _field_union(p3_adaptive_scbench_mode_task),
+    )
+    p3_adaptive_longbench_summary = _p3_adaptive_longbench_summary_rows(
+        loaded["p3_natural_adaptive_quota_longbench_v2"]
+    )
+    _write_csv(
+        output_root / "table-p3-natural-adaptive-longbench-summary.csv",
+        p3_adaptive_longbench_summary,
+        _field_union(p3_adaptive_longbench_summary),
+    )
+    p3_adaptive_longbench_categories = _p3_adaptive_longbench_category_rows(
+        loaded["p3_natural_adaptive_quota_longbench_v2"]
+    )
+    _write_csv(
+        output_root / "table-p3-natural-adaptive-longbench-categories.csv",
+        p3_adaptive_longbench_categories,
+        _field_union(p3_adaptive_longbench_categories),
+    )
+    p3_adaptive_longbench_slices = _p3_adaptive_longbench_slice_rows(
+        loaded["p3_natural_adaptive_quota_longbench_v2"]
+    )
+    _write_csv(
+        output_root / "table-p3-natural-adaptive-longbench-slices.csv",
+        p3_adaptive_longbench_slices,
+        _field_union(p3_adaptive_longbench_slices),
     )
     p3_safety = _p3_safety_rows(loaded["p3_safety"])
     _write_csv(
@@ -3458,6 +3615,9 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         p3_natural_adaptive_quota=loaded["p3_natural_adaptive_quota"],
         p3_natural_adaptive_quota_scbench=loaded[
             "p3_natural_adaptive_quota_scbench"
+        ],
+        p3_natural_adaptive_quota_longbench_v2=loaded[
+            "p3_natural_adaptive_quota_longbench_v2"
         ],
         p3_natural=loaded["p3_natural"],
         p3_safety=loaded["p3_safety"],

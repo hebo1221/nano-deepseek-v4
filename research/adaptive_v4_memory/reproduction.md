@@ -120,6 +120,17 @@ the initial shared-context prefill; later turn tokens are appended identically.
 .venv/bin/python research/adaptive_v4_memory/scripts/summarize_p3_natural_adaptive_quota_scbench.py
 ```
 
+After the adaptive RULER audit and baseline LongBench-v2 audit are terminal, run the
+separately frozen one-pass reasoning replication. Adaptive allocation applies only to
+the document-context prefill; the question is appended identically under both arms.
+
+```bash
+.venv/bin/python research/adaptive_v4_memory/scripts/validate_p3_natural_adaptive_quota_longbench_v2_manifest.py
+.venv/bin/python research/adaptive_v4_memory/scripts/run_p3_longbench_v2.py --cohort adaptive-quota \
+  --kvpress-root "$KVPRESS_ROOT" --model-snapshot "$MODEL_SNAPSHOT"
+.venv/bin/python research/adaptive_v4_memory/scripts/summarize_p3_natural_adaptive_quota_longbench_v2.py
+```
+
 Run the separately reported Phi-4-mini cross-family transfer only after the
 nine-seed P2 causal audit and Qwen fixed-baseline selection are terminal:
 
