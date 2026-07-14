@@ -22,6 +22,7 @@ from select_p3_fixed_baseline import ELIGIBLE_ARMS, ELIGIBLE_LENGTHS, select_fix
 from summarize_p3_natural_benchmark import (  # noqa: E402
     RUNNER_PATHS,
     audit_arm,
+    expected_example_identifiers,
     expected_record_revisions,
     summarize_benchmark,
 )
@@ -90,6 +91,20 @@ def test_natural_suite_freezes_full_scale_and_sample_contract() -> None:
         "full rendered history-plus-question prompt once"
         in longmem_execution["tokenization_boundary"]
     )
+
+
+def test_ruler_expected_identity_grid_is_recomputed_from_frozen_contract(
+    tmp_path: Path,
+) -> None:
+    identifiers = expected_example_identifiers(
+        benchmark="RULER",
+        manifest=_manifest(),
+        inventory_path=tmp_path / "not-used-for-generated-ruler.json",
+    )
+
+    assert len(identifiers) == 32_500
+    assert "8192:niah_single_1:0" in identifiers
+    assert "131072:qa_2:499" in identifiers
 
 
 def test_natural_suite_rejects_task_subselection_and_silent_truncation() -> None:
