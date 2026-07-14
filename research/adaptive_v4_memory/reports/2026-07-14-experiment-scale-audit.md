@@ -12,7 +12,8 @@ post-P2 online learned-lookahead study with 6,750 label shards, 20 fitted
 policies, and 9,000 held-out shards (1.08 million arm-conversations across six
 arms). It also contains 370,500 small-model RULER predictions across a 57-cell
 screen that includes token-, layer-, and head-adaptive cache baselines, 90,578
-Qwen3-4B natural-benchmark predictions, 3,600 paired safety
+Qwen3-4B natural-benchmark predictions, 7,800 preregistered Phi-4-mini
+cross-family RULER predictions, 3,600 paired safety
 predictions, 7,254 paired natural-safety generations, and two 216-cell systems
 matrices with 30 measured repetitions per cell. A separate 500K-token feasibility
 preflight contributes four terminal scale-policy attempts but no performance sample.
@@ -42,13 +43,13 @@ online study. Canonical matrices are emitted only after exact-count,
 no-overlap, implementation-digest, dependency-digest, and raw-artifact checks;
 concurrent shard wall time is not used as P4 performance evidence.
 
-The remaining weaknesses are breadth and independent-seed resolution, not raw
-count. The primary natural and safety evidence uses one compatible model family,
+The remaining weakness is breadth beyond a bounded two-family transfer, not raw
+count. The full natural and safety suite uses one compatible model family,
 actual-model evaluation stops at 128K, and the 500K preflight uses only the two
 Tier-S reference scales. Official DeepSeek-V4 execution remains blocked by the frozen
 weights/runtime contract. The paper must therefore be framed as a deep,
-digest-bound single-compatible-model study unless a later cross-family
-replication is completed.
+digest-bound Qwen3 natural study with a separately reported Phi-4 RULER
+transfer replication, not a broad model-population study.
 
 ## Comparator audit
 
@@ -61,7 +62,7 @@ replication is completed.
 | [Ada-KV](https://arxiv.org/abs/2407.11550) | 13 RULER and 16 LongBench datasets in both question-aware and question-agnostic settings | Our screen includes an Ada-KV-wrapped SnapKV arm, but its dataset and query-regime breadth is substantially stronger. |
 | [FlashMemory-DeepSeek-V4](https://arxiv.org/abs/2606.09079) | RULER, LongBench-v2, LongMemEval, and 500K physical-cache evidence on V4 | It remains the stronger direct-architecture comparator. We cannot substitute Qwen3 evidence for it. |
 | [The Pitfalls of KV Cache Compression](https://arxiv.org/abs/2510.00231) | Multi-instruction degradation and system-prompt leakage across eviction choices | Our four-family synthetic stress and paired LongSafety/IFEval generation expand coverage, but LongSafety remains generation-only until the official paid judge runs. |
-| [Benchmarking KV-Cache Optimizations across Task Quality and System Performance](https://arxiv.org/abs/2607.05399) | Two model families, four workload categories, quality, TTFT, throughput, realized compression | Our tail repetitions and metric closure are stronger; cross-family coverage is weaker. |
+| [Benchmarking KV-Cache Optimizations across Task Quality and System Performance](https://arxiv.org/abs/2607.05399) | Two model families, four workload categories, quality, TTFT, throughput, realized compression | We now match its two-family count on bounded RULER transfer and retain deeper tail accounting, but its multi-workload coverage on both families remains broader. |
 
 ## Frozen response
 
@@ -80,10 +81,9 @@ replication is completed.
 6. Keep the single-attempt 500K feasibility preflight, repeated reference PyTorch,
    checked static continuous batching, and unavailable external production runtime
    as separate evidence tiers.
-7. After primary completion, add a second instruction-tuned model family only
-   when the causal result is positive or scientifically ambiguous. A clearly
-   negative primary causal result should be published as bounded negative
-   evidence instead of multiplying compute to search for a favorable model.
+7. Execute the preregistered Phi-4-mini transfer cohort regardless of the Qwen
+   or Phi result. It inherits the Qwen-selected 50%-KV operating point without
+   Phi-specific tuning; a failed transfer remains bounded negative evidence.
 
 The machine-readable contract is
 [`experiment-scale-audit-v1.json`](../manifests/experiment-scale-audit-v1.json).

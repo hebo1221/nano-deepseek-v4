@@ -42,12 +42,6 @@
     },
     {
       "date": "2026-07-15",
-      "timing": "before any P3 model prediction or cross-family RULER dataset generation",
-      "change": "add a separately reported 7800-prediction Phi-4-mini held-out RULER transfer cohort without Phi-specific tuning",
-      "reason": "address the preregistered model-family breadth gap without pooling models or selecting a method on Phi outcomes"
-    },
-    {
-      "date": "2026-07-15",
       "timing": "after immutable public model prefetch but before any P3 model prediction, generated RULER dataset, fixed-baseline selection, or natural benchmark outcome existed",
       "change": "add a separately reported Phi-4-mini cross-family RULER transfer cohort with 7800 paired predictions and no Phi-specific method selection",
       "reason": "model-family breadth remained the largest empirical gap after the nine-seed and full natural-suite expansions"
@@ -118,18 +112,9 @@
       "paired_arms": 2,
       "model_families_added": 1,
       "tasks": 13,
-      "context_lengths": 3,
-      "samples_per_task_length": 100,
-      "pooled_with_primary": false,
-      "phi_specific_tuning_allowed": false
-    },
-    "p3_cross_family_phi4_mini": {
-      "predictions": 7800,
-      "paired_arms": 2,
-      "model_families_added": 1,
-      "tasks": 13,
       "context_lengths": [8192, 32768, 131072],
       "examples_per_task_context_arm": 100,
+      "pooled_with_primary": false,
       "phi_specific_tuning_allowed": false
     },
     "p3_safety_qwen3_4b": {
