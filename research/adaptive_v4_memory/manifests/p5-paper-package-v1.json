@@ -113,6 +113,19 @@
         "expected_generations_total": 6172
       }
     },
+    "p4_500k_context": {
+      "path": "artifacts/adaptive_v4_memory/paper_grade/p4/500k-context-preflight.summary.json",
+      "experiment_id": "p4-500k-context-preflight-audit-v1",
+      "required_audit": {
+        "all_terminal_cells_verified": true,
+        "all_artifact_digests_verified": true,
+        "context_tokens": 500000,
+        "generation_tokens": 128,
+        "scales_attempted": 2,
+        "terminal_policy_attempts": 4,
+        "performance_claim_available": false
+      }
+    },
     "p4_reference_systems": {
       "path": "artifacts/adaptive_v4_memory/paper_grade/p4/reference-systems.summary.json",
       "experiment_id": "p4-reference-systems-matrix-audit-v1",
@@ -141,6 +154,7 @@
     "natural_suite": "research/adaptive_v4_memory/manifests/p3-natural-suite-v1.json",
     "safety_stress": "research/adaptive_v4_memory/manifests/p3-safety-stress-v1.json",
     "natural_safety": "research/adaptive_v4_memory/manifests/p3-natural-safety-v1.json",
+    "p4_500k_context": "research/adaptive_v4_memory/manifests/p4-500k-context-preflight-v1.json",
     "p4_reference_systems": "research/adaptive_v4_memory/manifests/p4-reference-systems-matrix-v1.json",
     "p4_production_systems": "research/adaptive_v4_memory/manifests/p4-production-systems-matrix-v1.json",
     "official_deepseek_v4": "research/adaptive_v4_memory/manifests/p3-flashmemory-deepseek-v4-v1.json",
@@ -152,6 +166,7 @@
     "table-p2-causal-gate.csv",
     "table-p3-ruler-cells.csv",
     "table-p3-safety-slices.csv",
+    "table-p4-500k-context.csv",
     "table-p4-reference-system-cells.csv",
     "table-p4-production-system-cells.csv",
     "paper-report.md",
@@ -170,6 +185,7 @@
     "legacy_m3_offline_pilot": "negative pilot only; full-pass native probes and replay plans are not online learned-lookahead evidence",
     "single_compatible_model": "bounded-result; require all five natural benchmarks and never relabel as official DeepSeek-V4 evidence",
     "reference_system_matrix": "always bounded-result; serial interleave is not actual concurrency",
+    "500k_context_preflight": "one attempt per scale-policy is feasibility-only; any success is bounded and all-terminal failure is a bounded negative result",
     "failed_system_cell": "retain in the primary table and classify production systems coverage as bounded-result",
     "official_resource_blocker": "unverified with exact blocker manifest"
   },

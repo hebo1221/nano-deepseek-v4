@@ -97,6 +97,22 @@ def _longsafety_evidence(judge_status: str = "blocked") -> dict[str, object]:
     }
 
 
+def _p4_500k_evidence(successful: int = 2) -> dict[str, object]:
+    return {
+        "audit": {
+            "all_terminal_cells_verified": True,
+            "all_artifact_digests_verified": True,
+            "context_tokens": 500_000,
+            "generation_tokens": 128,
+            "scales_attempted": 2,
+            "terminal_policy_attempts": 4,
+            "successful_policy_attempts": successful,
+            "failed_policy_attempts": 4 - successful,
+            "performance_claim_available": False,
+        }
+    }
+
+
 def test_p5_manifest_requires_every_digest_bound_stage() -> None:
     root = Path(__file__).resolve().parents[1]
     manifest = json.loads(
@@ -114,6 +130,7 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
         "p3_natural_safety",
         "p3_ifeval",
         "p3_longsafety",
+        "p4_500k_context",
         "p4_reference_systems",
         "p4_production_systems",
     }
@@ -125,6 +142,15 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
     assert manifest["evidence"]["p3_ruler"]["required_audit"]["total_predictions"] == 253500
     assert manifest["evidence"]["p3_safety"]["required_audit"]["examples_accounted_per_arm"] == 1200
     assert manifest["evidence"]["p4_reference_systems"]["required_audit"]["terminal_cells"] == 216
+    assert manifest["evidence"]["p4_500k_context"]["required_audit"] == {
+        "all_terminal_cells_verified": True,
+        "all_artifact_digests_verified": True,
+        "context_tokens": 500_000,
+        "generation_tokens": 128,
+        "scales_attempted": 2,
+        "terminal_policy_attempts": 4,
+        "performance_claim_available": False,
+    }
     assert manifest["evidence"]["p4_production_systems"]["required_audit"]["terminal_cells"] == 216
     assert (
         manifest["evidence"]["p4_reference_systems"]["required_audit"][
@@ -179,6 +205,7 @@ def test_p5_classification_preserves_claim_boundaries() -> None:
         _natural_safety_evidence(),
         _ifeval_evidence(),
         _longsafety_evidence(),
+        _p4_500k_evidence(),
         {
             "audit": {
                 "terminal_cells": package.P4_EXPECTED_CELLS,
@@ -212,6 +239,7 @@ def test_p5_classification_preserves_claim_boundaries() -> None:
         "p3_natural_safety": "bounded-result",
         "p3_ifeval": "bounded-result",
         "p3_longsafety": "unverified",
+        "p4_500k_context": "bounded-result",
         "p4_reference_systems": "bounded-result",
         "p4_production_systems": "bounded-result",
         "production_runtime_blocker": "unverified",
@@ -241,6 +269,7 @@ def test_p5_success_requires_full_system_coverage() -> None:
         _natural_safety_evidence(),
         _ifeval_evidence(),
         _longsafety_evidence(),
+        _p4_500k_evidence(),
         {
             "audit": {
                 "terminal_cells": package.P4_EXPECTED_CELLS,
@@ -265,6 +294,7 @@ def test_p5_success_requires_full_system_coverage() -> None:
 
     assert classifications["p2_core"] == "success"
     assert classifications["p2_causal"] == "success"
+    assert classifications["p4_500k_context"] == "bounded-result"
     assert classifications["p4_reference_systems"] == "bounded-result"
     assert classifications["p4_production_systems"] == "success"
 
@@ -291,6 +321,7 @@ def test_p5_marks_all_failed_production_coverage_unverified() -> None:
         _natural_safety_evidence(),
         _ifeval_evidence(),
         _longsafety_evidence(),
+        _p4_500k_evidence(successful=0),
         {"audit": {"terminal_cells": package.P4_EXPECTED_CELLS}},
         {
             "audit": {
@@ -308,6 +339,7 @@ def test_p5_marks_all_failed_production_coverage_unverified() -> None:
     )
 
     assert classifications["p4_production_systems"] == "unverified"
+    assert classifications["p4_500k_context"] == "negative-result"
 
 
 def test_p5_p4_table_retains_terminal_failure() -> None:
@@ -335,3 +367,37 @@ def test_p5_p4_table_retains_terminal_failure() -> None:
     assert rows[0]["active_requests"] == 1
     assert rows[0]["concurrency"] == 1
     assert "oom" in rows[0]["failure"]
+
+
+def test_p5_500k_table_reports_feasibility_without_latency() -> None:
+    rows = package._p4_500k_rows(
+        {
+            "audit": {"context_tokens": 500_000, "generation_tokens": 128},
+            "cells": [
+                {
+                    "scale": "s55",
+                    "policy_attempts": {
+                        "resident-native": {
+                            "status": "success",
+                            "peak_allocated_bytes": 123,
+                            "pinned_host_bytes": 0,
+                            "error_type": None,
+                            "error": None,
+                        },
+                        "tiered-native": {
+                            "status": "oom",
+                            "peak_allocated_bytes": None,
+                            "pinned_host_bytes": None,
+                            "error_type": "OutOfMemoryError",
+                            "error": "terminal",
+                        },
+                    },
+                }
+            ],
+        }
+    )
+
+    assert len(rows) == 2
+    assert rows[0]["context_tokens"] == 500_000
+    assert rows[1]["status"] == "oom"
+    assert "latency" not in rows[0]

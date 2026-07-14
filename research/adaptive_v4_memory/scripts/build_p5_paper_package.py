@@ -69,6 +69,7 @@ def classify_evidence(
     p3_natural_safety: dict[str, Any],
     p3_ifeval: dict[str, Any],
     p3_longsafety: dict[str, Any],
+    p4_500k_context: dict[str, Any],
     p4_reference_systems: dict[str, Any],
     p4_production_systems: dict[str, Any],
 ) -> dict[str, str]:
@@ -150,6 +151,24 @@ def classify_evidence(
         and longsafety_audit.get("expected_generations_total") == 6_172
         and longsafety_audit.get("official_judge_status") == "complete"
     )
+    preflight_audit = p4_500k_context["audit"]
+    preflight_terminal = (
+        preflight_audit.get("all_terminal_cells_verified") is True
+        and preflight_audit.get("all_artifact_digests_verified") is True
+        and preflight_audit.get("context_tokens") == 500_000
+        and preflight_audit.get("generation_tokens") == 128
+        and preflight_audit.get("scales_attempted") == 2
+        and preflight_audit.get("terminal_policy_attempts") == 4
+        and preflight_audit.get("performance_claim_available") is False
+    )
+    preflight_successes = preflight_audit.get("successful_policy_attempts", 0)
+    preflight_class = (
+        "bounded-result"
+        if preflight_terminal and preflight_successes > 0
+        else "negative-result"
+        if preflight_terminal
+        else "unverified"
+    )
     reference_audit = p4_reference_systems["audit"]
     reference_complete = reference_audit.get("terminal_cells") == P4_EXPECTED_CELLS
     production_audit = p4_production_systems["audit"]
@@ -183,6 +202,7 @@ def classify_evidence(
         "p3_natural_safety": ("bounded-result" if natural_safety_complete else "unverified"),
         "p3_ifeval": "bounded-result" if ifeval_complete else "unverified",
         "p3_longsafety": "bounded-result" if longsafety_judged else "unverified",
+        "p4_500k_context": preflight_class,
         "p4_reference_systems": "bounded-result" if reference_complete else "unverified",
         "p4_production_systems": production_class,
         "production_runtime_blocker": "unverified",
@@ -293,6 +313,24 @@ def _p4_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return rows
 
 
+def _p4_500k_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        {
+            "scale": cell["scale"],
+            "policy": policy,
+            "context_tokens": payload["audit"]["context_tokens"],
+            "generation_tokens": payload["audit"]["generation_tokens"],
+            "status": attempt["status"],
+            "peak_allocated_bytes": attempt.get("peak_allocated_bytes"),
+            "pinned_host_bytes": attempt.get("pinned_host_bytes"),
+            "error_type": attempt.get("error_type"),
+            "error": attempt.get("error"),
+        }
+        for cell in payload["cells"]
+        for policy, attempt in cell["policy_attempts"].items()
+    ]
+
+
 def _report(
     *,
     classifications: dict[str, str],
@@ -306,11 +344,13 @@ def _report(
     p3_natural_safety: dict[str, Any],
     p3_ifeval: dict[str, Any],
     p3_longsafety: dict[str, Any],
+    p4_500k_context: dict[str, Any],
     p4_reference_systems: dict[str, Any],
     p4_production_systems: dict[str, Any],
     inputs: list[dict[str, Any]],
 ) -> str:
     causal = p2_causal["primary_causal_gate"]
+    p4_500k = p4_500k_context["audit"]
     p4_reference = p4_reference_systems["audit"]
     p4_production = p4_production_systems["audit"]
     evidence_lines = "\n".join(
@@ -365,6 +405,10 @@ mechanical and deliberately narrower than the motivating hypothesis.
 - P3 LongSafety: {p3_longsafety["audit"]["expected_generations_total"]:,} digest-bound
   generations; official paid judge status is **{p3_longsafety["audit"]["official_judge_status"]}**,
   so no comparative LongSafety safety score is claimed.
+- P4 500K feasibility: {p4_500k["terminal_policy_attempts"]} terminal scale-policy
+  attempts, {p4_500k["successful_policy_attempts"]} successful and
+  {p4_500k["failed_policy_attempts"]} failed. This single-attempt preflight carries
+  no performance claim.
 - P4 reference systems: {p4_reference["terminal_cells"]} terminal serial-interleaved cells,
   {p4_reference["complete_cells"]} complete, {p4_reference["partial_cells"]} partial, and
   {p4_reference["failed_cells"]} failed.
@@ -378,7 +422,8 @@ The P2 result is synthetic Tier-S evidence. A failed causal gate bounds only the
 controller family. P3 quality and synthetic safety-retention results are transfer evidence
 for pinned Qwen3 snapshots, not comprehensive safety certification, official DeepSeek-V4
 evidence, or model-population inference. P4 reference evidence is single-accelerator and
-serial-interleaved; the checked production adapter is static continuous batching, not an
+serial-interleaved. The 500K result is feasibility-only on Tier-S scales; the checked
+production adapter is static continuous batching, not an
 external dynamic/fused/multi-GPU serving runtime. Official DeepSeek-V4 stays unverified until its
 frozen resource contract is satisfied.
 
@@ -419,6 +464,7 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         loaded["p3_natural_safety"],
         loaded["p3_ifeval"],
         loaded["p3_longsafety"],
+        loaded["p4_500k_context"],
         loaded["p4_reference_systems"],
         loaded["p4_production_systems"],
     )
@@ -442,6 +488,12 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         output_root / "table-p3-safety-slices.csv",
         p3_safety,
         list(p3_safety[0]),
+    )
+    p4_500k = _p4_500k_rows(loaded["p4_500k_context"])
+    _write_csv(
+        output_root / "table-p4-500k-context.csv",
+        p4_500k,
+        list(p4_500k[0]),
     )
     p4_reference = _p4_rows(loaded["p4_reference_systems"])
     p4_production = _p4_rows(loaded["p4_production_systems"])
@@ -485,6 +537,7 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         p3_natural_safety=loaded["p3_natural_safety"],
         p3_ifeval=loaded["p3_ifeval"],
         p3_longsafety=loaded["p3_longsafety"],
+        p4_500k_context=loaded["p4_500k_context"],
         p4_reference_systems=loaded["p4_reference_systems"],
         p4_production_systems=loaded["p4_production_systems"],
         inputs=inputs,
