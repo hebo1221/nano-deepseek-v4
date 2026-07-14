@@ -62,6 +62,28 @@ def _p2_confirmatory_evidence(*, passed: bool = False) -> dict[str, object]:
     }
 
 
+def _p2_causal_confirmatory_evidence(*, passed: bool = False) -> dict[str, object]:
+    return {
+        "source": {"dirty": False},
+        "audit": {
+            "unique_shards": 16_200,
+            "independent_seed_clusters_per_cell": 9,
+            "minimum_attainable_two_sided_seed_p": 0.00390625,
+            "statistical_cells_per_contrast": 1_620,
+            "physical_cells": 144,
+        },
+        "pooling_audit": {
+            "identical_frozen_contracts": True,
+            "disjoint_training_seeds": True,
+        },
+        "confirmatory_inference": {
+            "exact_sign_assignments": 512,
+            "minimum_attainable_two_sided_seed_p": 0.00390625,
+        },
+        "primary_causal_gate": {"passed": passed},
+    }
+
+
 def _safety_evidence() -> dict[str, object]:
     return {
         "audit": {
@@ -239,6 +261,7 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
         "m3_offline_learned_risk_pilot",
         "p1_online_learned_lookahead",
         "p2_causal",
+        "p2_causal_confirmatory",
         "p3_ruler",
         "p3_natural",
         "p3_safety",
@@ -351,6 +374,16 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
     assert manifest["evidence"]["p2_causal"]["required_audit"][
         "physical_batches_per_cell"
     ] == 2_250
+    causal_confirmatory = manifest["evidence"]["p2_causal_confirmatory"]
+    assert causal_confirmatory["required_audit"]["unique_shards"] == 16_200
+    assert causal_confirmatory["required_audit"][
+        "independent_seed_clusters_per_cell"
+    ] == 9
+    assert causal_confirmatory["required_audit"]["statistical_cells_per_contrast"] == 1_620
+    assert causal_confirmatory["required_audit"]["physical_cells"] == 144
+    assert causal_confirmatory["required_sections"]["confirmatory_inference"][
+        "exact_sign_assignments"
+    ] == 512
     assert manifest["evidence"]["p3_ruler"]["required_audit"]["total_predictions"] == 253500
     assert manifest["evidence"]["p3_safety"]["required_audit"]["examples_accounted_per_arm"] == 1200
     assert manifest["evidence"]["p4_reference_systems"]["required_audit"]["terminal_cells"] == 216
@@ -625,6 +658,41 @@ def test_confirmatory_core_requires_pooling_and_exact_inference(
         package._validate_evidence("p2_core_confirmatory", path, contract)
 
     assert package._classify_validated_confirmatory_core({"quality_gate": []}) == "unverified"
+
+
+def test_confirmatory_causal_requires_pooling_and_exact_inference(
+    tmp_path: Path,
+) -> None:
+    evidence = _p2_causal_confirmatory_evidence(passed=True)
+    evidence["experiment_id"] = "p2-nine-seed-causal-ablation-audit-v1"
+    path = tmp_path / "causal-confirmatory.json"
+    path.write_text(json.dumps(evidence))
+    contract = {
+        "experiment_id": "p2-nine-seed-causal-ablation-audit-v1",
+        "required_audit": {
+            "unique_shards": 16_200,
+            "independent_seed_clusters_per_cell": 9,
+            "statistical_cells_per_contrast": 1_620,
+            "physical_cells": 144,
+        },
+        "required_sections": {
+            "pooling_audit": {
+                "identical_frozen_contracts": True,
+                "disjoint_training_seeds": True,
+            },
+            "confirmatory_inference": {"exact_sign_assignments": 512},
+        },
+    }
+
+    assert package._validate_evidence("p2_causal_confirmatory", path, contract) == evidence
+    assert package._classify_validated_confirmatory_causal(evidence) == "success"
+
+    evidence["primary_causal_gate"]["passed"] = False  # type: ignore[index]
+    assert package._classify_validated_confirmatory_causal(evidence) == "bounded-result"
+    evidence["confirmatory_inference"]["exact_sign_assignments"] = 32  # type: ignore[index]
+    path.write_text(json.dumps(evidence))
+    with pytest.raises(ValueError, match="confirmatory_inference.exact_sign_assignments"):
+        package._validate_evidence("p2_causal_confirmatory", path, contract)
 
 
 def test_p5_traceability_covers_every_requirement_and_fails_closed() -> None:

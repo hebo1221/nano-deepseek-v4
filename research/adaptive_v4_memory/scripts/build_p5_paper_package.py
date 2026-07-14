@@ -969,6 +969,13 @@ def _classify_validated_confirmatory_core(payload: dict[str, Any]) -> str:
     )
 
 
+def _classify_validated_confirmatory_causal(payload: dict[str, Any]) -> str:
+    gate = payload.get("primary_causal_gate")
+    if not isinstance(gate, dict) or not isinstance(gate.get("passed"), bool):
+        return "unverified"
+    return "success" if gate["passed"] else "bounded-result"
+
+
 def classify_evidence(
     p2_core: dict[str, Any],
     m5_one_token_pilot: dict[str, Any],
@@ -2002,6 +2009,7 @@ def _report(
     m3_offline_learned_risk_pilot: dict[str, Any],
     p1_online_learned_lookahead: dict[str, Any],
     p2_causal: dict[str, Any],
+    p2_causal_confirmatory: dict[str, Any],
     p3_ruler: dict[str, Any],
     p3_natural: dict[str, Any],
     p3_safety: dict[str, Any],
@@ -2013,7 +2021,7 @@ def _report(
     p4_production_systems: dict[str, Any],
     inputs: list[dict[str, Any]],
 ) -> str:
-    causal = p2_causal["primary_causal_gate"]
+    causal = p2_causal_confirmatory["primary_causal_gate"]
     p4_500k = p4_500k_context["audit"]
     p4_500k_correctness = p4_500k_context["correctness"]
     p4_reference = p4_reference_systems["audit"]
@@ -2084,9 +2092,13 @@ manually, remains mandatory before goal completion, and is never reported as pas
   held-out shards, {p1_online_learned_lookahead["audit"]["paired_conversations"]:,} paired
   conversations per arm, 5 seeds and 2 scales; the separate exploratory gate passed:
   **{p1_online_learned_lookahead["primary_gate"]["passed"]}**.
-- P2 causal: {p2_causal["audit"]["unique_shards"]:,} verified factorial shards;
-  {p2_causal["audit"]["quality_execution_counts"]["executed"]:,} quality forwards were
-  executed and {p2_causal["audit"]["quality_execution_counts"]["reused_exact_config"]:,}
+- P2 causal primary cohort: {p2_causal["audit"]["unique_shards"]:,} verified factorial
+  shards over 5 independently trained seeds; its report remains separately auditable.
+- P2 causal confirmatory cohort: {p2_causal_confirmatory["audit"]["unique_shards"]:,}
+  verified factorial shards over 9 independently trained seeds;
+  {p2_causal_confirmatory["audit"]["quality_execution_counts"]["executed"]:,}
+  quality forwards were executed and
+  {p2_causal_confirmatory["audit"]["quality_execution_counts"]["reused_exact_config"]:,}
   arm-batches reused an exact byte-identical config; the calibrated+pins versus
   fixed+pins gate passed: **{causal["passed"]}**.
 - P2 core confirmatory inference: exact enumeration covers
@@ -2095,14 +2107,14 @@ manually, remains mandatory before goal completion, and is never reported as pas
   seed-level p-value of
   {p2_core_confirmatory["confirmatory_inference"]["minimum_attainable_two_sided_seed_p"]:.6f}.
   The original five-seed cohort and four-seed extension are also reported separately.
-- P2 causal inference remains a five-seed analysis with
-  {1 << p2_causal["audit"]["independent_seed_clusters_per_cell"]} exact sign assignments
+- P2 causal confirmatory inference uses nine independent seeds with
+  {1 << p2_causal_confirmatory["audit"]["independent_seed_clusters_per_cell"]} exact sign assignments
   and a minimum attainable two-sided p-value of
-  {p2_causal["audit"]["minimum_attainable_two_sided_seed_p"]:.4f}. Seed-level p-values
+  {p2_causal_confirmatory["audit"]["minimum_attainable_two_sided_seed_p"]:.6f}. Seed-level p-values
   accompany effect sizes and intervals; they are never the sole success criterion.
 - P2 supplemental baselines: fixed top-p 0.5/0.8 are evaluated on the complete
   factorial, and the target-aware registered-arm oracle is reported only as a
-  non-causal upper bound over {len(p2_causal["offline_oracle_upper_bound"]["registered_arms"])} arms.
+  non-causal upper bound over {len(p2_causal_confirmatory["offline_oracle_upper_bound"]["registered_arms"])} arms.
 - P3 RULER: {p3_ruler["audit"]["completed_cells"]} cells and
   {p3_ruler["audit"]["total_predictions"]:,} predictions on one pinned compatible model.
 - P3 natural suite: {p3_natural["audit"]["benchmarks_terminal"]} terminal benchmarks and
@@ -2290,6 +2302,9 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
     classes["p2_core_confirmatory"] = _classify_validated_confirmatory_core(
         loaded["p2_core_confirmatory"]
     )
+    classes["p2_causal_confirmatory"] = _classify_validated_confirmatory_causal(
+        loaded["p2_causal_confirmatory"]
+    )
     traceability_rows = _traceability_rows(traceability, manifest, classes)
     output_root.mkdir(parents=True, exist_ok=True)
     (output_root / "reproduction-guide.md").write_text(reproduction_guide)
@@ -2323,7 +2338,7 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         ],
     )
     inference_resolution = _p2_inference_resolution_rows(
-        loaded["p2_core_confirmatory"], loaded["p2_causal"]
+        loaded["p2_core_confirmatory"], loaded["p2_causal_confirmatory"]
     )
     _write_csv(
         output_root / "table-p2-inference-resolution.csv",
@@ -2358,15 +2373,27 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         learned,
         list(learned[0]),
     )
-    causal = _causal_rows(loaded["p2_causal"])
+    causal = _causal_rows(loaded["p2_causal_confirmatory"])
     _write_csv(output_root / "table-p2-causal-gate.csv", causal, list(causal[0]))
     p2_causal_tables = {
-        "table-p2-causal-contrasts.csv": _causal_contrast_rows(loaded["p2_causal"]),
-        "table-p2-causal-family-effects.csv": _causal_family_rows(loaded["p2_causal"]),
-        "table-p2-causal-seed-effects.csv": _causal_seed_rows(loaded["p2_causal"]),
-        "table-p2-causal-worst-slices.csv": _causal_worst_slice_rows(loaded["p2_causal"]),
-        "table-p2-causal-physical-memory.csv": _causal_physical_memory_rows(loaded["p2_causal"]),
-        "table-p2-causal-offline-oracle.csv": _causal_oracle_rows(loaded["p2_causal"]),
+        "table-p2-causal-contrasts.csv": _causal_contrast_rows(
+            loaded["p2_causal_confirmatory"]
+        ),
+        "table-p2-causal-family-effects.csv": _causal_family_rows(
+            loaded["p2_causal_confirmatory"]
+        ),
+        "table-p2-causal-seed-effects.csv": _causal_seed_rows(
+            loaded["p2_causal_confirmatory"]
+        ),
+        "table-p2-causal-worst-slices.csv": _causal_worst_slice_rows(
+            loaded["p2_causal_confirmatory"]
+        ),
+        "table-p2-causal-physical-memory.csv": _causal_physical_memory_rows(
+            loaded["p2_causal_confirmatory"]
+        ),
+        "table-p2-causal-offline-oracle.csv": _causal_oracle_rows(
+            loaded["p2_causal_confirmatory"]
+        ),
     }
     for name, rows in p2_causal_tables.items():
         _write_csv(output_root / name, rows, _field_union(rows))
@@ -2464,7 +2491,10 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         _p4_metric_rows(loaded["p4_production_systems"]),
         p4_metric_fields,
     )
-    _write_p2_causal_figure(output_root / "figure-p2-causal-effect.svg", loaded["p2_causal"])
+    _write_p2_causal_figure(
+        output_root / "figure-p2-causal-effect.svg",
+        loaded["p2_causal_confirmatory"],
+    )
     _write_p3_natural_figure(output_root / "figure-p3-natural-quality.svg", loaded["p3_natural"])
     _write_p4_tradeoff_figure(
         output_root / "figure-p4-production-tradeoffs.svg",
@@ -2479,6 +2509,7 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         m3_offline_learned_risk_pilot=loaded["m3_offline_learned_risk_pilot"],
         p1_online_learned_lookahead=loaded["p1_online_learned_lookahead"],
         p2_causal=loaded["p2_causal"],
+        p2_causal_confirmatory=loaded["p2_causal_confirmatory"],
         p3_ruler=loaded["p3_ruler"],
         p3_natural=loaded["p3_natural"],
         p3_safety=loaded["p3_safety"],

@@ -187,6 +187,127 @@
         "offline_oracle_excluded_from_primary_gate": true
       }
     },
+    "p2_causal_confirmatory": {
+      "path": "artifacts/adaptive_v4_memory/paper_grade/p2-nine-seed-causal.summary.json",
+      "experiment_id": "p2-nine-seed-causal-ablation-audit-v1",
+      "required_audit": {
+        "unique_shards": 16200,
+        "exact_config_reuse_verified": true,
+        "held_out_seed_contract_verified": true,
+        "leakage_guard_verified": true,
+        "execution_schedule_coverage_verified": true,
+        "paired_conversation_coverage_verified": true,
+        "physical_arm_contract_verified": true,
+        "physical_controller_budget_verified": true,
+        "exact_record_schema_verified": true,
+        "exact_execution_rotation_verified": true,
+        "exact_quality_schedule_coordinates_verified": true,
+        "exact_statistical_cell_coverage_verified": true,
+        "paired_units_per_seed_scale_budget_family_context": 200,
+        "statistical_cells_per_contrast": 1620,
+        "physical_cells": 144,
+        "physical_batches_per_cell": 2250,
+        "exact_seed_randomization_verified": true,
+        "independent_seed_clusters_per_cell": 9,
+        "minimum_attainable_two_sided_seed_p": 0.00390625,
+        "seed_p_values_used_as_success_gate": false,
+        "registered_causal_arms": 16,
+        "registered_paired_contrasts": 15,
+        "preregistered_component_contrasts_verified": true,
+        "required_ablation_factors_verified": [
+          "score-concentration",
+          "temporal-reuse",
+          "cross-layer-signal",
+          "refresh-reuse",
+          "protected-pins",
+          "dense-fallback"
+        ],
+        "supplemental_fixed_top_p_arms_verified": true,
+        "offline_oracle_excluded_from_primary_gate": true
+      },
+      "required_sections": {
+        "pooling_audit": {
+          "identical_frozen_contracts": true,
+          "identical_base_implementation": true,
+          "disjoint_training_seeds": true,
+          "cohorts_independently_audited": true,
+          "primary_report_preserved": true,
+          "extension_report_preserved": true,
+          "outcome_dependent_early_stopping": false
+        },
+        "confirmatory_inference": {
+          "independent_training_seeds_per_scale": 9,
+          "exact_sign_assignments": 512,
+          "minimum_attainable_two_sided_seed_p": 0.00390625,
+          "primary_cohort_reported_separately": true,
+          "extension_cohort_reported_separately": true,
+          "outcome_dependent_early_stopping": false
+        }
+      }
+    },
+    "p2_causal_confirmatory": {
+      "path": "artifacts/adaptive_v4_memory/paper_grade/p2-nine-seed-causal.summary.json",
+      "experiment_id": "p2-nine-seed-causal-ablation-audit-v1",
+      "required_audit": {
+        "unique_shards": 16200,
+        "all_raw_shards_verified": true,
+        "all_dependency_digests_verified": true,
+        "all_record_digests_verified": true,
+        "no_budget_violations": true,
+        "all_physical_predictions_identical": true,
+        "exact_config_reuse_verified": true,
+        "held_out_seed_contract_verified": true,
+        "leakage_guard_verified": true,
+        "execution_schedule_coverage_verified": true,
+        "paired_conversation_coverage_verified": true,
+        "physical_arm_contract_verified": true,
+        "physical_controller_budget_verified": true,
+        "exact_record_schema_verified": true,
+        "exact_execution_rotation_verified": true,
+        "exact_quality_schedule_coordinates_verified": true,
+        "exact_statistical_cell_coverage_verified": true,
+        "paired_units_per_seed_scale_budget_family_context": 200,
+        "statistical_cells_per_contrast": 1620,
+        "physical_cells": 144,
+        "physical_batches_per_cell": 2250,
+        "exact_seed_randomization_verified": true,
+        "independent_seed_clusters_per_cell": 9,
+        "minimum_attainable_two_sided_seed_p": 0.00390625,
+        "seed_p_values_used_as_success_gate": false,
+        "registered_causal_arms": 16,
+        "registered_paired_contrasts": 15,
+        "preregistered_component_contrasts_verified": true,
+        "required_ablation_factors_verified": [
+          "score-concentration",
+          "temporal-reuse",
+          "cross-layer-signal",
+          "refresh-reuse",
+          "protected-pins",
+          "dense-fallback"
+        ],
+        "supplemental_fixed_top_p_arms_verified": true,
+        "offline_oracle_excluded_from_primary_gate": true
+      },
+      "required_sections": {
+        "pooling_audit": {
+          "identical_frozen_contracts": true,
+          "identical_base_implementation": true,
+          "disjoint_training_seeds": true,
+          "cohorts_independently_audited": true,
+          "primary_report_preserved": true,
+          "extension_report_preserved": true,
+          "outcome_dependent_early_stopping": false
+        },
+        "confirmatory_inference": {
+          "independent_training_seeds_per_scale": 9,
+          "exact_sign_assignments": 512,
+          "minimum_attainable_two_sided_seed_p": 0.00390625,
+          "primary_cohort_reported_separately": true,
+          "extension_cohort_reported_separately": true,
+          "outcome_dependent_early_stopping": false
+        }
+      }
+    },
     "p3_ruler": {
       "path": "artifacts/adaptive_v4_memory/paper_grade/p3/ruler-qwen3-1.7b.summary.json",
       "experiment_id": "p3-ruler-qwen3-1.7b-audit-v1",

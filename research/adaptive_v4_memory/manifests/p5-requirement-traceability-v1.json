@@ -104,6 +104,7 @@
         {"kind": "evidence", "name": "p2_core"},
         {"kind": "evidence", "name": "p2_core_confirmatory"},
         {"kind": "evidence", "name": "p2_causal"},
+        {"kind": "evidence", "name": "p2_causal_confirmatory"},
         {"kind": "boundary-manifest", "name": "p2_seed_extension"}
       ]
     },
@@ -132,6 +133,7 @@
       "sources": [
         {"kind": "evidence", "name": "p2_core"},
         {"kind": "evidence", "name": "p2_core_confirmatory"},
+        {"kind": "evidence", "name": "p2_causal_confirmatory"},
         {"kind": "boundary-manifest", "name": "paper_grade_study"}
       ]
     },
@@ -142,7 +144,8 @@
       "sources": [
         {"kind": "evidence", "name": "p2_core"},
         {"kind": "evidence", "name": "p2_core_confirmatory"},
-        {"kind": "evidence", "name": "p2_causal"}
+        {"kind": "evidence", "name": "p2_causal"},
+        {"kind": "evidence", "name": "p2_causal_confirmatory"}
       ]
     },
     {
@@ -267,7 +270,10 @@
       "id": "C.2",
       "phase": "completion",
       "requirement": "Render an explicit Pareto verdict for calibrated+pins versus the strongest fixed+pins baseline.",
-      "sources": [{"kind": "evidence", "name": "p2_causal"}]
+      "sources": [
+        {"kind": "evidence", "name": "p2_causal"},
+        {"kind": "evidence", "name": "p2_causal_confirmatory"}
+      ]
     },
     {
       "id": "C.3",
