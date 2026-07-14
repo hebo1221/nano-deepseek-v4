@@ -1,0 +1,153 @@
+{
+  "schema_version": 1,
+  "experiment_id": "p3-qwen3-4b-natural-safety-v1",
+  "status": "frozen_before_execution",
+  "evidence_tier": "official-and-derived-natural-safety-transfer-on-compatible-model",
+  "model": {
+    "repo_id": "Qwen/Qwen3-4B-Instruct-2507",
+    "revision": "cdbee75f17c01a7cc42f958dc650907174af0554",
+    "snapshot_digest_set_sha256": "67330e21c7b222ff647feee4fc4e037385d1d14f9d9d9ebbdf9343e87f5fa58f",
+    "maximum_supported_context_tokens": 262144,
+    "natural_manifest": "research/adaptive_v4_memory/manifests/p3-natural-suite-v1.json"
+  },
+  "sequence_gate": {
+    "p2_matrix": "artifacts/adaptive_v4_memory/paper_grade/p2-core-quality-matrix.json",
+    "causal_gate": "artifacts/adaptive_v4_memory/paper_grade/p2-causal-ablation.summary.json",
+    "policy": "no acquisition or execution before the frozen P2 sequence gate passes"
+  },
+  "required_arms": [
+    "native-dense",
+    "strongest-memory-matched-fixed"
+  ],
+  "benchmarks": {
+    "LongSafety": {
+      "evidence_role": "official open-ended long-context safety transfer",
+      "dataset": {
+        "repo_id": "thu-coai/LongSafety",
+        "revision": "8cd912b5e59577018a2942ec170ec549394d8c77",
+        "license": "mit",
+        "files": [
+          {
+            "path": "README.md",
+            "bytes": 1882,
+            "sha256": "039f2f299984e13afce767231dc7860364d6f84c8e660d52500a980c7835495e"
+          },
+          {
+            "path": "longsafety.json",
+            "bytes": 55945263,
+            "sha256": "03861337fa6e060bc6441c4ec7394a22e14b37c656d1a0124165c878ffde3a62",
+            "rows": 1543
+          }
+        ],
+        "required_fields": [
+          "id",
+          "link",
+          "length",
+          "safety_type",
+          "key_words",
+          "instruction",
+          "task_type",
+          "doc_num",
+          "context"
+        ]
+      },
+      "upstream_code": {
+        "repository": "https://github.com/thu-coai/LongSafety.git",
+        "raw_base": "https://raw.githubusercontent.com/thu-coai/LongSafety/130a6b739d43870e1010ec699ae4868da06d0a0e",
+        "revision": "130a6b739d43870e1010ec699ae4868da06d0a0e",
+        "license": "mit",
+        "files": [
+          {"path": "LICENSE", "bytes": 1065, "sha256": "cc45bc9fabaaf069de75ab9bab51212bf244589af1c96a4de28173f713a87f61"},
+          {"path": "README.md", "bytes": 3134, "sha256": "c4484dfe1022d804ecb9b135c1921a6f8f8ebdbc40cb37c5fe39bbce4a1c8e60"},
+          {"path": "src/gen_model_response.py", "bytes": 3559, "sha256": "8f26e644386a2ddfee2f3764f3837a91deca99e0a4cc403339e6827d214c5cab"},
+          {"path": "src/multi_agent_eval.py", "bytes": 8984, "sha256": "b164830598fbfcf0d8fd4f1d9b9261395a1de17ca9d843f08ee26fc4b60ac578"},
+          {"path": "src/show_result.py", "bytes": 1672, "sha256": "32b720185135ce49393a7daa73828f0d3a052b84101e599d895a21c13dbd04d0"}
+        ]
+      },
+      "prompt_protocol": {
+        "positions": ["front", "end"],
+        "front": "Based on the following long context, {instruction}\\n\\n{context}",
+        "end": "{context}\\n\\nBased on the long context above, {instruction}",
+        "generation_max_new_tokens": 2048,
+        "do_sample": false,
+        "expected_rows": 1543,
+        "expected_predictions_per_arm": 3086
+      },
+      "judge": {
+        "official_default_model": "gpt-4o-mini",
+        "agents": ["risk-analyzer", "environment-summarizer", "safety-judge"],
+        "default_mode": "blocked",
+        "paid_api_mode": "explicit-opt-in-only",
+        "required_environment_variable": "OPENAI_API_KEY",
+        "raw_responses_are_published_before_judging": true,
+        "judge_failures_are_never_imputed": true
+      },
+      "report_slices": ["arm", "prompt_position", "safety_type", "task_type", "context_length"]
+    },
+    "IFEval": {
+      "evidence_role": "official short-prompt instruction-following control; not long-memory evidence",
+      "dataset": {
+        "repo_id": "google/IFEval",
+        "revision": "966cd89545d6b6acfd7638bc708b98261ca58e84",
+        "license": "apache-2.0",
+        "files": [
+          {
+            "path": "README.md",
+            "bytes": 5523,
+            "sha256": "c3e2d7da8286ae27649f526e3153cc72f071c21a6a7702d06f09cef5f9c114f1"
+          },
+          {
+            "path": "ifeval_input_data.jsonl",
+            "bytes": 207111,
+            "sha256": "6a85310ca8ce15eff755aa08a3a4ff931c7e273e7515ebb3c492ea85fd8288f2",
+            "rows": 541
+          }
+        ],
+        "required_fields": ["key", "prompt", "instruction_id_list", "kwargs"]
+      },
+      "upstream_code": {
+        "repository": "https://github.com/google-research/google-research.git",
+        "raw_base": "https://raw.githubusercontent.com/google-research/google-research/06076564b3311330f3560e8cfba86d359bec31af",
+        "revision": "06076564b3311330f3560e8cfba86d359bec31af",
+        "license": "apache-2.0",
+        "files": [
+          {"path": "LICENSE", "bytes": 11358, "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"},
+          {"path": "instruction_following_eval/README.md", "bytes": 1457, "sha256": "fef3c44408e4b39837af345095ccce7da798853fd60ea94a1de63afa9d3d67b3"},
+          {"path": "instruction_following_eval/evaluation_lib.py", "bytes": 6830, "sha256": "01deab4c67bf7f30c3a48f59d7b0bb31ea165651a636af7f2a3af389a420edbb"},
+          {"path": "instruction_following_eval/evaluation_main.py", "bytes": 2449, "sha256": "e6df07a04d25a0e7134933ba2400c26e0129a243e449c88df55043e583fc4b4a"},
+          {"path": "instruction_following_eval/instructions.py", "bytes": 52983, "sha256": "130f9c50e15ae44820c9ef5b4aa2aa948c4c0a17f4c44c2932b9271add22c6d7"},
+          {"path": "instruction_following_eval/instructions_registry.py", "bytes": 7240, "sha256": "ec92d72c264f6d906978613085db262356174300370a3fffe6fefd5969ce9cfc"},
+          {"path": "instruction_following_eval/instructions_util.py", "bytes": 19538, "sha256": "a73797261eee5bf447e279d82a2b700b1bdd3cb1193412dbab1270a85832bc6b"}
+        ]
+      },
+      "protocol": {
+        "expected_prompts_per_arm": 541,
+        "generation_max_new_tokens": 2048,
+        "do_sample": false,
+        "official_metrics": [
+          "prompt_level_strict_accuracy",
+          "instruction_level_strict_accuracy",
+          "prompt_level_loose_accuracy",
+          "instruction_level_loose_accuracy"
+        ],
+        "boundary": "reported as an instruction-following control and never counted as long-context evidence"
+      }
+    }
+  },
+  "statistics": {
+    "paired_bootstrap_replicates": 10000,
+    "confidence_level": 0.95,
+    "failure_policy": "every expected generation or judge failure is explicit and scores zero only for the corresponding conservative estimand",
+    "pairing": "same example, prompt position, raw prompt digest, and token-id digest across arms"
+  },
+  "dataset_viewer": {
+    "observed_status_on_2026-07-14": "HTTP 503 for both datasets",
+    "policy": "viewer availability is non-authoritative; pinned Hub revision, byte size, SHA-256, row count, schema, and license are authoritative"
+  },
+  "execution": {
+    "asset_preparation": "research/adaptive_v4_memory/scripts/prepare_p3_natural_safety_assets.py",
+    "asset_inventory": "artifacts/adaptive_v4_memory/paper_grade/p3/natural-safety/assets/inventory.json",
+    "default_judge_mode": "blocked"
+  },
+  "claim_boundary": "LongSafety is official open-ended long-context safety transfer on one pinned compatible Qwen3 model. IFEval is an official short-prompt instruction-following control. Neither is official DeepSeek-V4 evidence or a comprehensive safety certification."
+}
