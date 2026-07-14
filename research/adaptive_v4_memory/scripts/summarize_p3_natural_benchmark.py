@@ -3,9 +3,10 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import subprocess
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 from p3_source_provenance import verify_git_implementation
@@ -31,6 +32,30 @@ def _require(condition: bool, message: str) -> None:
 def _sha256_value(value: Any, label: str) -> None:
     _require(isinstance(value, str) and len(value) == 64, f"Invalid {label} digest.")
     int(value, 16)
+
+
+def _nonnegative_integer(value: Any) -> bool:
+    return type(value) is int and value >= 0
+
+
+def _positive_integer(value: Any) -> bool:
+    return type(value) is int and value > 0
+
+
+def _finite_nonnegative_number(value: Any) -> bool:
+    return (
+        type(value) in (int, float)
+        and (type(value) is int or math.isfinite(value))
+        and value >= 0
+    )
+
+
+def _unit_interval_number(value: Any) -> bool:
+    return (
+        type(value) in (int, float)
+        and (type(value) is int or math.isfinite(value))
+        and 0.0 <= value <= 1.0
+    )
 
 
 def _dependency(metadata: Any, label: str) -> dict[str, str]:
@@ -287,24 +312,22 @@ def audit_arm(
         _require(row.get("benchmark") == benchmark and row.get("arm") == arm, "Record drift.")
         _require(row.get("status") in STATUS_VALUES, f"Invalid record status: {identifier}")
         _require(
-            isinstance(row.get("exact_input_tokens"), int)
-            and row["exact_input_tokens"] >= 0
-            and isinstance(row.get("generation_reserve_tokens"), int)
-            and row["generation_reserve_tokens"] > 0,
+            _nonnegative_integer(row.get("exact_input_tokens"))
+            and _positive_integer(row.get("generation_reserve_tokens")),
             f"Invalid token accounting: {identifier}",
         )
         _sha256_value(row.get("raw_prompt_sha256"), f"{identifier} prompt")
         paired_input_digests.append(f"{identifier}:{row['raw_prompt_sha256']}")
         _require(
-            isinstance(row.get("latency_ms"), (int, float)) and row["latency_ms"] >= 0,
+            _finite_nonnegative_number(row.get("latency_ms")),
             f"Invalid latency: {identifier}",
         )
         _require(
-            isinstance(row.get("peak_hbm_bytes"), int) and row["peak_hbm_bytes"] >= 0,
+            _nonnegative_integer(row.get("peak_hbm_bytes")),
             f"Invalid HBM accounting: {identifier}",
         )
         _require(
-            isinstance(row.get("hot_resident_bytes"), int) and row["hot_resident_bytes"] >= 0,
+            _nonnegative_integer(row.get("hot_resident_bytes")),
             f"Invalid hot-memory accounting: {identifier}",
         )
         _require(isinstance(row.get("raw_response"), str), f"Missing response: {identifier}")
@@ -336,8 +359,7 @@ def audit_arm(
             measurement_values[metric].append(row[metric])
         if benchmark in {"RULER", "SCBench", "LongBench-v2", "LongMemEval", "MRCR"}:
             _require(
-                isinstance(row.get("token_boundary_retreat"), int)
-                and row["token_boundary_retreat"] >= 0,
+                _nonnegative_integer(row.get("token_boundary_retreat")),
                 f"Invalid exact-token boundary accounting: {identifier}",
             )
         if benchmark == "RULER":
@@ -352,10 +374,8 @@ def audit_arm(
                 row.get("mode") in {"multi-turn", "multi-request"}
                 and isinstance(row.get("task"), str)
                 and row["task"].startswith("scbench_")
-                and isinstance(row.get("row_index"), int)
-                and row["row_index"] >= 0
-                and isinstance(row.get("turn_index"), int)
-                and row["turn_index"] >= 0,
+                and _nonnegative_integer(row.get("row_index"))
+                and _nonnegative_integer(row.get("turn_index")),
                 f"Invalid SCBench turn coordinates: {identifier}",
             )
             if row["status"] == "scored":
@@ -376,13 +396,12 @@ def audit_arm(
                     and bool(judge["returned_model"])
                     and isinstance(judge.get("response_id"), str)
                     and bool(judge["response_id"])
-                    and isinstance(judge.get("created"), int)
+                    and _nonnegative_integer(judge.get("created"))
                     and isinstance(judge.get("prompt"), str)
                     and bool(judge["prompt"])
                     and isinstance(judge.get("raw_response"), str)
                     and bool(judge["raw_response"])
-                    and isinstance(judge.get("latency_ms"), (int, float))
-                    and judge["latency_ms"] >= 0,
+                    and _finite_nonnegative_number(judge.get("latency_ms")),
                     f"Incomplete official judge provenance: {identifier}",
                 )
             elif row.get("failure_type") == "judge-blocked":
@@ -392,17 +411,16 @@ def audit_arm(
                     and judge.get("status") == "blocked"
                     and isinstance(judge.get("reason"), str)
                     and bool(judge["reason"])
-                    and isinstance(row.get("generated_tokens_observed"), int)
-                    and row["generated_tokens_observed"] >= 0,
+                    and _nonnegative_integer(row.get("generated_tokens_observed")),
                     f"Incomplete blocked-judge provenance: {identifier}",
                 )
         if row["status"] == "scored":
             score = row.get("score")
-            if not isinstance(score, (int, float)) or not 0.0 <= score <= 1.0:
+            if not _unit_interval_number(score):
                 raise ValueError(f"Invalid score: {identifier}")
             _require(row.get("failure_type") is None, f"Scored record has failure: {identifier}")
             scored += 1
-            score_sum += float(score)
+            score_sum += float(cast(int | float, score))
             for metric in scored_measurement_values:
                 scored_measurement_values[metric].append(row[metric])
         else:

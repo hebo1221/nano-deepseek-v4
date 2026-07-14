@@ -1105,6 +1105,41 @@ def test_natural_arm_audit_rejects_duplicate_examples(tmp_path: Path) -> None:
         )
 
 
+@pytest.mark.parametrize(
+    ("field", "invalid", "message"),
+    [
+        ("latency_ms", float("inf"), "Invalid latency"),
+        ("latency_ms", float("nan"), "Invalid latency"),
+        ("exact_input_tokens", True, "Invalid token accounting"),
+        ("generation_reserve_tokens", True, "Invalid token accounting"),
+        ("peak_hbm_bytes", True, "Invalid HBM accounting"),
+        ("hot_resident_bytes", True, "Invalid hot-memory accounting"),
+        ("token_boundary_retreat", True, "Invalid exact-token boundary accounting"),
+        ("score", True, "Invalid score"),
+    ],
+)
+def test_natural_arm_audit_rejects_nonfinite_and_boolean_measurements(
+    tmp_path: Path, field: str, invalid: object, message: str
+) -> None:
+    cell, raw, _causal = _raw_arm_cell(tmp_path)
+    records = [json.loads(line) for line in raw.read_text().splitlines()]
+    records[0][field] = invalid
+    raw.write_text("".join(json.dumps(row) + "\n" for row in records))
+    payload = json.loads(cell.read_text())
+    payload["raw_records"]["sha256"] = _digest(raw)
+    cell.write_text(json.dumps(payload))
+
+    with pytest.raises(ValueError, match=message):
+        audit_arm(
+            benchmark="LongBench-v2",
+            arm="native-dense",
+            artifact_path=cell,
+            expected_examples=2,
+            manifest_digest="4" * 64,
+            allowed_failures={"unsupported-context"},
+        )
+
+
 def test_fixed_baseline_selection_is_frozen_on_small_model_ruler() -> None:
     cell_summary = []
     for arm in ELIGIBLE_ARMS:
