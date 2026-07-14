@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import multiprocessing as mp
+import subprocess
 import sys
 import time
 from itertools import product
@@ -31,6 +32,203 @@ def _set_command(script: str, arguments: argparse.Namespace) -> None:
     for name, value in vars(arguments).items():
         values.extend(("--" + name.replace("_", "-"), str(value)))
     sys.argv = values
+
+
+def _without_timing(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            key: _without_timing(item)
+            for key, item in value.items()
+            if key not in {"wall_ms", "wall_seconds"}
+        }
+    if isinstance(value, list):
+        return [_without_timing(item) for item in value]
+    return value
+
+
+def _require_reuse_equivalence(
+    label_reused: dict[str, Any],
+    label_fresh: dict[str, Any],
+    test_reused: dict[str, Any],
+    test_fresh: dict[str, Any],
+    *,
+    label: str,
+) -> None:
+    label_fields = (
+        "generation_seed",
+        "rows_digest",
+        "rows",
+        "failures",
+        "failure_count",
+        "dense_topk",
+    )
+    if any(label_reused.get(field) != label_fresh.get(field) for field in label_fields):
+        raise RuntimeError(f"Checkpoint reuse changed lookahead labels: {label}")
+    test_fields = (
+        "generation_seed",
+        "records_digest",
+        "records",
+        "batch_metrics",
+        "policy_digest",
+    )
+    if any(
+        _without_timing(test_reused.get(field)) != _without_timing(test_fresh.get(field))
+        for field in test_fields
+    ):
+        raise RuntimeError(f"Checkpoint reuse changed lookahead tests: {label}")
+
+
+def run_reuse_probe(
+    *,
+    reused_model: Any,
+    checkpoint: Path,
+    calibration: Path,
+    memory_match: Path,
+    policy: Path,
+    scale: str,
+    seed: int,
+    probe_root: Path,
+) -> dict[str, Any]:
+    root = probe_root / scale / f"seed-{seed}"
+    label_arguments = argparse.Namespace(
+        checkpoint=checkpoint,
+        scale=scale,
+        training_seed=seed,
+        split="calibration",
+        family="single-remote-retrieval",
+        context=80,
+        replicate=0,
+        output=root / "label-reused.json",
+    )
+    _set_command("collect_p1_online_lookahead_labels.py", label_arguments)
+    label_reused = labels.collect(label_arguments, reused_model)
+    fresh_model = labels.pilot._load_model(checkpoint)
+    label_arguments.output = root / "label-fresh.json"
+    _set_command("collect_p1_online_lookahead_labels.py", label_arguments)
+    label_fresh = labels.collect(label_arguments, fresh_model)
+    evaluation_arguments = argparse.Namespace(
+        checkpoint=checkpoint,
+        calibration=calibration,
+        memory_match=memory_match,
+        policy=policy,
+        scale=scale,
+        training_seed=seed,
+        budget="2x",
+        family="single-remote-retrieval",
+        context=80,
+        replicate=0,
+        output=root / "test-reused.json",
+    )
+    _set_command("evaluate_p1_online_learned_lookahead_shard.py", evaluation_arguments)
+    test_reused = evaluator.evaluate(evaluation_arguments, reused_model)
+    evaluation_arguments.output = root / "test-fresh.json"
+    _set_command("evaluate_p1_online_learned_lookahead_shard.py", evaluation_arguments)
+    test_fresh = evaluator.evaluate(evaluation_arguments, fresh_model)
+    _require_reuse_equivalence(
+        label_reused,
+        label_fresh,
+        test_reused,
+        test_fresh,
+        label=f"{scale}/{seed}",
+    )
+    paths_and_payloads = (
+        (root / "label-reused.json", label_reused),
+        (root / "label-fresh.json", label_fresh),
+        (root / "test-reused.json", test_reused),
+        (root / "test-fresh.json", test_fresh),
+    )
+    for path, payload in paths_and_payloads:
+        _atomic_json(path, payload)
+    audit = {
+        "schema_version": 1,
+        "experiment_id": "p1-online-lookahead-checkpoint-reuse-probe-v1",
+        "scale": scale,
+        "training_seed": seed,
+        "audit": {
+            "label_rows_identical": True,
+            "test_records_identical": True,
+            "controller_accounting_identical": True,
+            "timing_fields_excluded": True,
+        },
+        "implementation": {
+            "label": labels.implementation_digest(),
+            "evaluation": evaluator.implementation_digest(),
+            "orchestrator_sha256": matrix.sha256(Path(__file__)),
+        },
+        "artifacts": [
+            {"path": str(path), "sha256": matrix.sha256(path)}
+            for path, _payload in paths_and_payloads
+        ],
+    }
+    _atomic_json(root / "audit.json", audit)
+    del fresh_model
+    torch.cuda.empty_cache()
+    return audit
+
+
+def audit_reuse_probes(probe_root: Path, output: Path) -> dict[str, Any]:
+    probes = []
+    for scale, seed in product(matrix.SCALES, labels.TRAINING_SEEDS):
+        path = probe_root / scale / f"seed-{seed}" / "audit.json"
+        payload = json.loads(path.read_text())
+        audit = payload.get("audit", {})
+        if (
+            payload.get("experiment_id") != "p1-online-lookahead-checkpoint-reuse-probe-v1"
+            or payload.get("scale") != scale
+            or payload.get("training_seed") != seed
+            or audit.get("label_rows_identical") is not True
+            or audit.get("test_records_identical") is not True
+            or audit.get("controller_accounting_identical") is not True
+            or audit.get("timing_fields_excluded") is not True
+            or payload.get("implementation", {}).get("label") != labels.implementation_digest()
+            or payload.get("implementation", {}).get("evaluation")
+            != evaluator.implementation_digest()
+            or payload.get("implementation", {}).get("orchestrator_sha256")
+            != matrix.sha256(Path(__file__))
+        ):
+            raise RuntimeError(f"Online-lookahead reuse probe is incomplete: {scale}/{seed}")
+        artifacts = payload.get("artifacts", [])
+        if len(artifacts) != 4:
+            raise RuntimeError(f"Online-lookahead reuse probe artifact set drifted: {scale}/{seed}")
+        raw_payloads = []
+        for artifact in artifacts:
+            artifact_path = Path(artifact.get("path", ""))
+            if not artifact_path.is_file() or artifact.get("sha256") != matrix.sha256(
+                artifact_path
+            ):
+                raise RuntimeError(f"Online-lookahead reuse probe drifted: {artifact_path}")
+            raw_payloads.append(json.loads(artifact_path.read_text()))
+        _require_reuse_equivalence(
+            raw_payloads[0],
+            raw_payloads[1],
+            raw_payloads[2],
+            raw_payloads[3],
+            label=f"{scale}/{seed}",
+        )
+        probes.append({"path": str(path), "sha256": matrix.sha256(path)})
+    result = {
+        "schema_version": 1,
+        "experiment_id": "p1-online-lookahead-checkpoint-reuse-audit-v1",
+        "source": {
+            "commit": subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.strip(),
+            "dirty": False,
+            "orchestrator_sha256": matrix.sha256(Path(__file__)),
+        },
+        "audit": {
+            "scale_seed_probes": len(probes),
+            "all_label_rows_identical": True,
+            "all_test_records_identical": True,
+            "all_controller_accounting_identical": True,
+        },
+        "probes": probes,
+    }
+    _atomic_json(output, result)
+    return result
 
 
 def _worker(config: dict[str, Any]) -> None:
@@ -163,6 +361,18 @@ def _worker(config: dict[str, Any]) -> None:
                 )
                 _set_command("evaluate_p1_online_learned_lookahead_shard.py", arguments)
                 _atomic_json(output, evaluator.evaluate(arguments, model))
+        if model is None:
+            model = labels.pilot._load_model(checkpoint)
+        run_reuse_probe(
+            reused_model=model,
+            checkpoint=checkpoint,
+            calibration=calibration,
+            memory_match=memory_match,
+            policy=matrix._policy_path(Path(config["policy_root"]), scale, seed, "2x"),
+            scale=scale,
+            seed=seed,
+            probe_root=Path(config["probe_root"]),
+        )
         del model
         torch.cuda.empty_cache()
 
@@ -248,6 +458,18 @@ def main() -> None:
             "artifacts/adaptive_v4_memory/paper_grade/p1-online-learned-lookahead-matrix.json"
         ),
     )
+    parser.add_argument(
+        "--reuse-probe-root",
+        type=Path,
+        default=Path("artifacts/adaptive_v4_memory/paper_grade/p1_online_lookahead/reuse-probes"),
+    )
+    parser.add_argument(
+        "--reuse-probe-audit",
+        type=Path,
+        default=Path(
+            "artifacts/adaptive_v4_memory/paper_grade/p1-online-lookahead-reuse.summary.json"
+        ),
+    )
     args = parser.parse_args()
     if args.workers <= 0:
         raise ValueError("workers must be positive.")
@@ -268,6 +490,7 @@ def main() -> None:
         "label_root": str(args.label_root),
         "policy_root": str(args.policy_root),
         "test_root": str(args.test_root),
+        "probe_root": str(args.reuse_probe_root),
     }
     lock = acquire_gpu_lock("p1-online-lookahead-parallel")
     try:
@@ -281,6 +504,7 @@ def main() -> None:
             process.start()
             processes.append(process)
         _wait(processes)
+        audit_reuse_probes(args.reuse_probe_root, args.reuse_probe_audit)
         payload = matrix._matrix_payload(
             causal_gate=args.causal_gate,
             label_root=args.label_root,

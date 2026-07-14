@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -44,3 +46,76 @@ def test_parallel_online_command_records_exact_shard_arguments(
         "--output",
         "artifact.json",
     ]
+
+
+def test_reuse_probe_audit_requires_all_scale_seed_artifacts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    probe_root = tmp_path / "probes"
+    monkeypatch.setattr(parallel.matrix, "SCALES", ("s55", "s151"))
+    monkeypatch.setattr(parallel.labels, "TRAINING_SEEDS", (1, 2))
+    monkeypatch.setattr(parallel.matrix, "sha256", parallel.labels.sha256)
+    for scale in parallel.matrix.SCALES:
+        for seed in parallel.labels.TRAINING_SEEDS:
+            root = probe_root / scale / f"seed-{seed}"
+            root.mkdir(parents=True)
+            artifacts = [
+                root / name
+                for name in (
+                    "label-reused.json",
+                    "label-fresh.json",
+                    "test-reused.json",
+                    "test-fresh.json",
+                )
+            ]
+            for artifact in artifacts:
+                artifact.write_text("{}")
+            (root / "audit.json").write_text(
+                json.dumps(
+                    {
+                        "experiment_id": ("p1-online-lookahead-checkpoint-reuse-probe-v1"),
+                        "scale": scale,
+                        "training_seed": seed,
+                        "audit": {
+                            "label_rows_identical": True,
+                            "test_records_identical": True,
+                            "controller_accounting_identical": True,
+                            "timing_fields_excluded": True,
+                        },
+                        "implementation": {
+                            "label": parallel.labels.implementation_digest(),
+                            "evaluation": parallel.evaluator.implementation_digest(),
+                            "orchestrator_sha256": parallel.matrix.sha256(Path(parallel.__file__)),
+                        },
+                        "artifacts": [
+                            {
+                                "path": str(artifact),
+                                "sha256": parallel.labels.sha256(artifact),
+                            }
+                            for artifact in artifacts
+                        ],
+                    }
+                )
+            )
+    audit = parallel.audit_reuse_probes(probe_root, tmp_path / "summary.json")
+
+    assert audit["audit"]["scale_seed_probes"] == 4
+    tampered = probe_root / "s55" / "seed-1" / "label-reused.json"
+    tampered.write_text("changed")
+    with pytest.raises(RuntimeError, match="probe drifted"):
+        parallel.audit_reuse_probes(probe_root, tmp_path / "summary.json")
+
+
+def test_reuse_comparison_excludes_only_timing_fields() -> None:
+    left: dict[str, Any] = {
+        "wall_ms": 1.0,
+        "controller": {"budget": 4, "wall_seconds": 2.0},
+    }
+    right: dict[str, Any] = {
+        "wall_ms": 99.0,
+        "controller": {"budget": 4, "wall_seconds": 88.0},
+    }
+
+    assert parallel._without_timing(left) == parallel._without_timing(right)
+    right["controller"]["budget"] = 3
+    assert parallel._without_timing(left) != parallel._without_timing(right)
