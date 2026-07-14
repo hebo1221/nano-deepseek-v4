@@ -533,6 +533,26 @@ def test_experiment_scale_audit_binds_independent_seed_resolution(tmp_path: Path
         package._validate_boundary_manifest("experiment_scale_audit", tampered)
 
 
+def test_experiment_scale_audit_binds_umbrella_and_executable_p4_grids(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = Path(__file__).resolve().parents[1]
+    scale_audit = (
+        root / "research/adaptive_v4_memory/manifests/experiment-scale-audit-v1.json"
+    )
+    study = json.loads(
+        (root / "research/adaptive_v4_memory/manifests/paper-grade-study-v1.json").read_text()
+    )
+    assert study["systems_matrix"]["context_tokens"][-1] == 500_000
+    study["systems_matrix"]["context_tokens"][-1] = 512_000
+    tampered = tmp_path / "paper-grade-study.json"
+    tampered.write_text(json.dumps(study))
+    monkeypatch.setitem(package.SCALE_AUDIT_SOURCE_MANIFESTS, "study", tampered)
+
+    with pytest.raises(ValueError, match="executable P4 system grids drifted"):
+        package._validate_boundary_manifest("experiment_scale_audit", scale_audit)
+
+
 def test_production_runtime_boundary_validation_rejects_relabeling(
     tmp_path: Path,
 ) -> None:

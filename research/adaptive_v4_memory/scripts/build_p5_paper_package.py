@@ -381,6 +381,34 @@ def _validate_experiment_scale_audit(payload: dict[str, Any]) -> None:
         planned.get("p4_500k_context_preflight") == expected_preflight,
         "P4 500K preflight scale count drifted.",
     )
+    reference = sources["p4_reference"]
+    production = sources["p4_production"]
+    study_systems = study.get("systems_matrix", {})
+    reference_contexts = reference.get("contexts_tokens", [])
+    production_contexts = production.get("contexts_tokens", [])
+    registered_contexts = [*reference_contexts, preflight.get("context_tokens")]
+    reference_batches = sorted(
+        {row.get("batch") for row in reference.get("load_profiles", [])}
+    )
+    reference_loads = sorted(
+        {row.get("active_requests") for row in reference.get("load_profiles", [])}
+    )
+    production_batches = sorted(
+        {row.get("batch") for row in production.get("load_profiles", [])}
+    )
+    production_concurrency = sorted(
+        {row.get("concurrency") for row in production.get("load_profiles", [])}
+    )
+    _require(
+        study_systems.get("context_tokens") == registered_contexts
+        and reference_contexts == production_contexts
+        and study_systems.get("batch_sizes") == reference_batches == production_batches
+        and study_systems.get("concurrency") == reference_loads == production_concurrency
+        and study_systems.get("generation_tokens")
+        == reference.get("generation_tokens")
+        == production.get("generation_tokens"),
+        "Paper-grade and executable P4 system grids drifted.",
+    )
     independent_seeds = len(study.get("training_seeds", []))
     exact_assignments = 1 << independent_seeds
     expected_resolution = {
