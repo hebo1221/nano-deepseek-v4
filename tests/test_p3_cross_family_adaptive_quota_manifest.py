@@ -48,3 +48,19 @@ def test_phi_adaptive_manifest_rejects_budget_drift() -> None:
 
     with pytest.raises(ValueError, match="Same-budget causal contract drifted"):
         adaptive.validate_manifest(payload)
+
+
+def test_phi_adaptive_manifest_freezes_operational_failure_vocabulary() -> None:
+    payload = _manifest()
+
+    assert payload["failure_reporting"]["allowed_failure_types"] == [
+        "unsupported-context",
+        "empty-generation",
+        "oom",
+        "runtime-error",
+    ]
+
+    drifted = deepcopy(payload)
+    drifted["failure_reporting"]["allowed_failure_types"].append("unknown")
+    with pytest.raises(ValueError, match="failure reporting contract drifted"):
+        adaptive.validate_manifest(drifted)

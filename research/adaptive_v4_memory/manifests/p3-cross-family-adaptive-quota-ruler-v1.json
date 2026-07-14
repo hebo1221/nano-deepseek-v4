@@ -94,6 +94,18 @@
     "holm_family_size": 3,
     "failure_policy": "intention-to-evaluate; operational failures score zero and are never silently retried, truncated, or dropped"
   },
+  "failure_reporting": {
+    "allowed_failure_types": [
+      "unsupported-context",
+      "empty-generation",
+      "oom",
+      "runtime-error"
+    ],
+    "unknown_failure_type_policy": "reject the artifact during audit",
+    "missing_failure_type_policy": "reject the artifact during audit",
+    "successful_record_policy": "failure_type must be null",
+    "scoring_policy": "every allowed operational failure remains paired and receives effective score zero"
+  },
   "confirmation_gate": {
     "all_required": true,
     "overall_accuracy_difference_minimum": 0.0,

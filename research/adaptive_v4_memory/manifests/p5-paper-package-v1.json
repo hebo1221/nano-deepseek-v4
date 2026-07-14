@@ -302,6 +302,7 @@
         "all_raw_records_verified": true,
         "all_scores_recomputed_from_raw_response": true,
         "all_dependency_digests_verified": true,
+        "operational_failure_vocabulary_verified": true,
         "exact_input_pairing_verified": true,
         "quota_physical_audits_verified": true,
         "same_global_token_budget_verified": true,

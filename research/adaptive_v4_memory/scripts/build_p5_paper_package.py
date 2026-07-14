@@ -1650,6 +1650,7 @@ def classify_evidence(
             and cross_adaptive_audit.get("all_raw_records_verified") is True
             and cross_adaptive_audit.get("all_scores_recomputed_from_raw_response") is True
             and cross_adaptive_audit.get("all_dependency_digests_verified") is True
+            and cross_adaptive_audit.get("operational_failure_vocabulary_verified") is True
             and cross_adaptive_audit.get("exact_input_pairing_verified") is True
             and cross_adaptive_audit.get("quota_physical_audits_verified") is True
             and cross_adaptive_audit.get("same_global_token_budget_verified") is True

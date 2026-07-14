@@ -3,6 +3,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
+
 SCRIPTS = Path(__file__).resolve().parents[1] / "research/adaptive_v4_memory/scripts"
 sys.path.insert(0, str(SCRIPTS))
 
@@ -134,3 +136,20 @@ def test_phi_summary_identity_is_distinct_from_qwen_and_baseline_transfer() -> N
     assert phi_summary.SUMMARY_EXPERIMENT_ID == (
         "p3-cross-family-adaptive-quota-ruler-audit-v1"
     )
+
+
+def test_phi_summary_rejects_unregistered_operational_failure() -> None:
+    record = {
+        "example_id": "8192:niah_single_1:0",
+        "status": "failure",
+        "failure_type": "driver-reset",
+        "hot_resident_bytes": 0,
+        "quota_physical_audit": None,
+    }
+
+    with pytest.raises(ValueError, match="Unregistered Phi failure type"):
+        phi_summary._verify_quota_records(
+            [record],
+            arm=ADAPTIVE_QUOTA_ARMS[0],
+            allowed_failures={"oom", "runtime-error"},
+        )

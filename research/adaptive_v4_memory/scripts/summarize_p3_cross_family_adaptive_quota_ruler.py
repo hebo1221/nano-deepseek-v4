@@ -61,8 +61,20 @@ def _verify_adaptive_cell(
         )
 
 
-def _verify_quota_records(records: list[dict[str, Any]], *, arm: str) -> None:
+def _verify_quota_records(
+    records: list[dict[str, Any]], *, arm: str, allowed_failures: set[str]
+) -> None:
     for row in records:
+        if row["status"] == "failure":
+            _require(
+                row.get("failure_type") in allowed_failures,
+                f"Unregistered Phi failure type at {row['example_id']}/{arm}.",
+            )
+        else:
+            _require(
+                row.get("failure_type") is None,
+                f"Scored Phi record carries a failure type at {row['example_id']}/{arm}.",
+            )
         audit = row.get("quota_physical_audit")
         if audit is None:
             _require(
@@ -104,6 +116,7 @@ def summarize(
         generator_digest=sha256(GENERATOR),
     )
     answers = _answer_map(dataset_manifests)
+    allowed_failures = set(adaptive_manifest["failure_reporting"]["allowed_failure_types"])
     loaded: dict[str, tuple[dict[str, Any], list[dict[str, Any]]]] = {}
     for arm in ADAPTIVE_QUOTA_ARMS:
         loaded[arm] = _load_arm(
@@ -125,7 +138,7 @@ def summarize(
             adaptive_manifest_digest=adaptive_digest,
             qwen_audit_digest=qwen_digest,
         )
-        _verify_quota_records(records, arm=arm)
+        _verify_quota_records(records, arm=arm, allowed_failures=allowed_failures)
     fixed_cell, fixed = loaded[ADAPTIVE_QUOTA_ARMS[0]]
     adaptive_cell, adaptive = loaded[ADAPTIVE_QUOTA_ARMS[1]]
     _require(
@@ -162,6 +175,7 @@ def summarize(
             "all_raw_records_verified": True,
             "all_scores_recomputed_from_raw_response": True,
             "all_dependency_digests_verified": True,
+            "operational_failure_vocabulary_verified": True,
             "exact_input_pairing_verified": True,
             "quota_physical_audits_verified": True,
             "same_global_token_budget_verified": True,

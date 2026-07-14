@@ -14,6 +14,12 @@ TASKS = (
 ARMS = ("fixed+pins", "cross-family-adaptive-quota+pins")
 SAMPLES_PER_TASK_LENGTH = 100
 EXPECTED_EXAMPLES = len(LENGTHS) * len(TASKS) * SAMPLES_PER_TASK_LENGTH
+ALLOWED_FAILURE_TYPES = (
+    "unsupported-context",
+    "empty-generation",
+    "oom",
+    "runtime-error",
+)
 
 
 def _require(condition: bool, message: str) -> None:
@@ -79,6 +85,17 @@ def validate_manifest(payload: dict[str, Any]) -> None:
         and statistics.get("holm_family_size") == len(LENGTHS)
         and "score zero" in statistics.get("failure_policy", ""),
         "Statistical contract drifted.",
+    )
+    failure_reporting = payload.get("failure_reporting", {})
+    _require(
+        tuple(failure_reporting.get("allowed_failure_types", ())) == ALLOWED_FAILURE_TYPES
+        and failure_reporting.get("unknown_failure_type_policy")
+        == "reject the artifact during audit"
+        and failure_reporting.get("missing_failure_type_policy")
+        == "reject the artifact during audit"
+        and failure_reporting.get("successful_record_policy") == "failure_type must be null"
+        and "effective score zero" in failure_reporting.get("scoring_policy", ""),
+        "Operational failure reporting contract drifted.",
     )
     gate = payload.get("confirmation_gate", {})
     _require(
