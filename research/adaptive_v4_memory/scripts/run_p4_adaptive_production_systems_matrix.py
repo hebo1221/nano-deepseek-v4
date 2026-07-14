@@ -373,18 +373,35 @@ def valid_terminal_adapter_failure(payload: Any, *, cell: Cell) -> bool:
         return False
     failures = [status.get("failure") for status in statuses.values()]
     return (
-        payload.get("experiment_id") == "p4-adaptive-production-adapter-cell-v1"
+        payload.get("schema_version") == 1
+        and payload.get("experiment_id") == "p4-adaptive-production-adapter-cell-v1"
         and payload.get("orchestrator_failure") is True
         and payload.get("cell") == cell_dict(cell)
         and payload.get("status") == "failed"
+        and payload.get("input_seed_base") == INPUT_SEED_BASE
+        and payload.get("warmups") == WARMUPS
+        and payload.get("warmup_accounting_available") is False
+        and payload.get("warmup_repetitions_attempted") is None
+        and payload.get("warmup_paired_repetitions_completed") is None
+        and payload.get("warmup_policy_runs_completed")
+        == {policy: None for policy in POLICIES}
+        and payload.get("warmup_failures") == []
+        and payload.get("measured_repetitions") == MEASURED_REPETITIONS
         and payload.get("repetitions") == []
         and all(
             isinstance(failure, dict)
             and failure.get("failure_type") == "adapter-contract-or-execution-failure"
             and failure.get("phase") == "orchestrator"
+            and isinstance(failure.get("error_type"), str)
+            and bool(failure["error_type"])
             and isinstance(failure.get("error"), str)
             and bool(failure["error"])
             for failure in failures
+        )
+        and all(
+            statuses[policy].get("status") == "failed"
+            and statuses[policy].get("measured_repetitions") == 0
+            for policy in POLICIES
         )
         and all(failure == failures[0] for failure in failures[1:])
     )
@@ -403,6 +420,81 @@ def _run_row(cell: Cell, artifact: Path, payload: dict[str, Any]) -> dict[str, A
         "status": payload["adapter_payload"]["status"],
         "artifact": {"path": str(artifact), "sha256": production.sha256(artifact)},
     }
+
+
+def artifact_valid(path: Path, *, cell: Cell, implementation: str) -> bool:
+    """Validate a resumable cell all the way to its raw and dependency digests."""
+    if not path.is_file():
+        return False
+    try:
+        payload = json.loads(path.read_text())
+        source = payload.get("source", {})
+        if not (
+            payload.get("schema_version") == 1
+            and payload.get("experiment_id") == "p4-adaptive-production-systems-cell-v1"
+            and payload.get("cell") == cell_dict(cell)
+            and isinstance(source.get("commit"), str)
+            and bool(source["commit"])
+            and source.get("dirty") is False
+            and source.get("implementation_digest") == implementation
+            and type(payload.get("cell_timeout_seconds")) in (int, float)
+            and 0.0 < payload["cell_timeout_seconds"] <= CELL_TIMEOUT_SECONDS
+            and isinstance(payload.get("wall_time_seconds"), (int, float))
+            and not isinstance(payload["wall_time_seconds"], bool)
+            and payload["wall_time_seconds"] >= 0.0
+        ):
+            return False
+        spec_metadata = payload.get("adapter_spec", {})
+        spec_path = Path(spec_metadata.get("path", ""))
+        if not (
+            spec_path.is_file()
+            and spec_metadata.get("sha256") == production.sha256(spec_path)
+        ):
+            return False
+        spec = adapter_contract.validate_spec(spec_path)
+        if spec.get("cell") != cell_dict(cell):
+            return False
+        for name in (
+            "manifest",
+            "p2_audit",
+            "p3_adaptive_audit",
+            "calibration",
+            "memory_match",
+        ):
+            metadata = payload.get(name, {})
+            spec_metadata = spec.get(name, {})
+            dependency_path = Path(metadata.get("path", ""))
+            if not (
+                metadata == spec_metadata
+                and dependency_path.is_file()
+                and metadata.get("sha256") == production.sha256(dependency_path)
+            ):
+                return False
+        adapter_metadata = payload.get("adapter", {})
+        adapter_path = Path(adapter_metadata.get("path", ""))
+        if not (
+            adapter_path.is_file()
+            and adapter_metadata.get("sha256") == production.sha256(adapter_path)
+        ):
+            return False
+        adapter_payload = payload.get("adapter_payload")
+        if not isinstance(adapter_payload, dict):
+            return False
+        terminal_failure = valid_terminal_adapter_failure(adapter_payload, cell=cell)
+        if not terminal_failure:
+            validate_adapter_payload(adapter_payload, cell=cell, spec=spec)
+        raw_metadata = payload.get("adapter_raw")
+        if raw_metadata is None:
+            return terminal_failure
+        raw_path = Path(raw_metadata.get("path", ""))
+        if not (
+            raw_path.is_file()
+            and raw_metadata.get("sha256") == production.sha256(raw_path)
+        ):
+            return False
+        return terminal_failure or json.loads(raw_path.read_text()) == adapter_payload
+    except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError):
+        return False
 
 
 def main() -> None:
@@ -519,22 +611,22 @@ def main() -> None:
                 memory_match_path=memory_match,
             )[0]
     runs: dict[Cell, dict[str, Any]] = {}
+    for existing_cell in frozen_cells():
+        existing_artifact = cell_path(args.output_root, existing_cell) / "cell.json"
+        if artifact_valid(
+            existing_artifact,
+            cell=existing_cell,
+            implementation=implementation,
+        ):
+            existing = json.loads(existing_artifact.read_text())
+            runs[existing_cell] = _run_row(existing_cell, existing_artifact, existing)
     new_cells = 0
     for cell in selected:
+        if cell in runs:
+            continue
         scale, budget = cell[:2]
         root = cell_path(args.output_root, cell)
         artifact = root / "cell.json"
-        if artifact.is_file():
-            try:
-                existing = json.loads(artifact.read_text())
-                spec_path = Path(existing["adapter_spec"]["path"])
-                spec = adapter_contract.validate_spec(spec_path)
-                if not valid_terminal_adapter_failure(existing["adapter_payload"], cell=cell):
-                    validate_adapter_payload(existing["adapter_payload"], cell=cell, spec=spec)
-                runs[cell] = _run_row(cell, artifact, existing)
-                continue
-            except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError):
-                pass
         if args.max_new_cells is not None and new_cells >= args.max_new_cells:
             break
         checkpoint, calibration, memory_match = paths[scale]

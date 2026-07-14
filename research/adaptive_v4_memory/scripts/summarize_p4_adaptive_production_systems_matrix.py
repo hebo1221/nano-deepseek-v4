@@ -125,7 +125,8 @@ def summarize(matrix_path: Path) -> dict[str, Any]:
     _require(
         matrix.get("experiment_id") == "p4-adaptive-production-systems-matrix-progress-v1"
         and matrix.get("expected_cells") == systems.EXPECTED_CELLS
-        and matrix.get("terminal_cells") == systems.EXPECTED_CELLS,
+        and matrix.get("terminal_cells") == systems.EXPECTED_CELLS
+        and matrix.get("implementation_digest") == systems.implementation_digest(),
         "Adaptive production matrix is incomplete.",
     )
     expected = set(systems.frozen_cells())
@@ -154,7 +155,14 @@ def summarize(matrix_path: Path) -> dict[str, Any]:
         )
         raw_digests.append(digest)
         payload = json.loads(artifact.read_text())
-        _require(payload.get("cell") == systems.cell_dict(cell), "Cell artifact identity drifted.")
+        _require(
+            systems.artifact_valid(
+                artifact,
+                cell=cell,
+                implementation=matrix["implementation_digest"],
+            ),
+            "Cell artifact dependency or raw digest audit failed.",
+        )
         spec_path = Path(payload.get("adapter_spec", {}).get("path", ""))
         _require(
             spec_path.is_file()
