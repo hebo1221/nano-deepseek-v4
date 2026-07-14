@@ -53,6 +53,15 @@ def _fragmentation_bytes(run: dict[str, Any]) -> float:
     )
 
 
+def _throughput(run: dict[str, Any]) -> float:
+    window = run["decode_window"]
+    generated_tokens = sum(row["generated_tokens"] for row in run["request_records"])
+    return float(
+        generated_tokens
+        / ((window["completed_ns"] - window["started_ns"]) / 1_000_000_000.0)
+    )
+
+
 def adapter_evidence_boundary(
     manifest: dict[str, Any], adapter_path: Path
 ) -> dict[str, bool]:
@@ -87,7 +96,7 @@ METRICS: dict[str, Callable[[dict[str, Any]], float | None]] = {
     "decode_step_p99_ms": lambda run: float(
         np.quantile(np.asarray(run["decode_step_latency_ms"], dtype=np.float64), 0.99)
     ),
-    "throughput_tokens_per_second": lambda run: float(run["generated_token_throughput_per_second"]),
+    "throughput_tokens_per_second": _throughput,
     "end_to_end_ms": lambda run: max(
         _request_latency(run, "scheduler_received_ns", "completed_ns")
     ),
@@ -258,6 +267,8 @@ def summarize(matrix_path: Path) -> dict[str, Any]:
     process_total_hbm_measured_runs = 0
     process_total_hbm_unavailable_runs = 0
     successful_policy_runs = 0
+    raw_request_lifecycle_records = 0
+    raw_decode_step_latency_samples = 0
     all_warmup_accounting_available = True
     warmup_accounting_unavailable_cells = 0
     cell_timeouts: list[float] = []
@@ -342,6 +353,10 @@ def summarize(matrix_path: Path) -> dict[str, Any]:
         for repetition in adapter["repetitions"]:
             for policy_run in repetition.get("policies", {}).values():
                 successful_policy_runs += 1
+                raw_request_lifecycle_records += len(policy_run["request_records"])
+                raw_decode_step_latency_samples += len(
+                    policy_run["decode_step_latency_ms"]
+                )
                 all_tail_accounted &= policy_run.get("tail_failure_accounting_complete") is True
                 availability = policy_run["cuda"]["process_total_hbm_availability"]
                 if availability == "measured-nvidia-smi":
@@ -393,6 +408,9 @@ def summarize(matrix_path: Path) -> dict[str, Any]:
             "process_total_hbm_measured_runs": process_total_hbm_measured_runs,
             "process_total_hbm_unavailable_runs": process_total_hbm_unavailable_runs,
             "tail_failure_accounting_complete": all_tail_accounted,
+            "raw_latency_samples_and_derived_statistics_verified": True,
+            "raw_request_lifecycle_records": raw_request_lifecycle_records,
+            "raw_decode_step_latency_samples": raw_decode_step_latency_samples,
             "failure_provenance_verified": True,
             "all_paired_predictions_identical": all_complete
             and all_predictions_identical,

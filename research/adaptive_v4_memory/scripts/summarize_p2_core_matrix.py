@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import platform
 import subprocess
 from collections import defaultdict
@@ -237,6 +238,13 @@ def verify_raw_shard(
     conversation_ids_by_policy: dict[str, set[str]] = {
         policy: set() for policy in shard.CORE_POLICIES
     }
+    expected_conversation_ids = {
+        f"{raw['family']}:{raw['context']}:{index}"
+        for index in range(
+            raw["replicate"] * shard.EXAMPLES_PER_SHARD,
+            (raw["replicate"] + 1) * shard.EXAMPLES_PER_SHARD,
+        )
+    }
     for record in records:
         _require(record.get("policy") in shard.CORE_POLICIES, "Unknown record policy.")
         for field in ("family", "context", "replicate"):
@@ -247,18 +255,53 @@ def verify_raw_shard(
         policy_ids = conversation_ids_by_policy[record["policy"]]
         _require(conversation_id not in policy_ids, "Duplicate policy-conversation record.")
         policy_ids.add(conversation_id)
-        predictions = record.get("predictions", [])
-        targets = record.get("targets", [])
-        _require(len(predictions) == len(targets), "Prediction/target length drifted.")
+        predictions = record.get("predictions")
+        targets = record.get("targets")
+        query_positions = record.get("query_positions")
+        evidence_positions = record.get("evidence_positions")
+        _require(
+            isinstance(predictions, list)
+            and isinstance(targets, list)
+            and isinstance(query_positions, list)
+            and isinstance(evidence_positions, list)
+            and len(targets) > 0
+            and len(predictions)
+            == len(targets)
+            == len(query_positions)
+            == len(evidence_positions)
+            and all(type(value) is int and value >= 0 for value in (*targets, *predictions))
+            and all(
+                type(value) is int and 0 <= value < raw["context"]
+                for value in (*query_positions, *evidence_positions)
+            )
+            and query_positions == sorted(set(query_positions))
+            and all(
+                evidence < query
+                for evidence, query in zip(
+                    evidence_positions, query_positions, strict=True
+                )
+            ),
+            "Record target and position schema drifted.",
+        )
+        prediction_values = cast(list[int], predictions)
+        target_values = cast(list[int], targets)
         correctness = [
-            prediction == target for prediction, target in zip(predictions, targets, strict=True)
+            prediction == target
+            for prediction, target in zip(
+                prediction_values, target_values, strict=True
+            )
         ]
-        _require(correctness == record.get("correct"), "Correctness field drifted.")
+        _require(
+            isinstance(record.get("correct"), list)
+            and all(type(value) is bool for value in record["correct"])
+            and correctness == record["correct"],
+            "Correctness field drifted.",
+        )
         _require(sum(correctness) == record.get("correct_count"), "Correct count drifted.")
         _require(len(correctness) == record.get("total"), "Query total drifted.")
     native_ids = conversation_ids_by_policy["native"]
     _require(
-        len(native_ids) == shard.EXAMPLES_PER_SHARD
+        native_ids == expected_conversation_ids
         and all(ids == native_ids for ids in conversation_ids_by_policy.values()),
         "Paired conversation coverage drifted.",
     )
@@ -273,16 +316,32 @@ def verify_raw_shard(
     )
     for batch_index in range(expected_batches):
         rows = [row for row in batch_metrics if row.get("batch_index") == batch_index]
+        rotation = batch_index % len(shard.CORE_POLICIES)
+        expected_order = (
+            *shard.CORE_POLICIES[rotation:],
+            *shard.CORE_POLICIES[:rotation],
+        )
         _require(
-            {row.get("policy") for row in rows} == set(shard.CORE_POLICIES)
-            and {row.get("execution_index") for row in rows}
-            == set(range(len(shard.CORE_POLICIES))),
+            len(rows) == len(shard.CORE_POLICIES)
+            and all(
+                row.get("policy") == policy
+                and row.get("execution_index") == execution_index
+                and type(row.get("budget_violations")) is int
+                and row["budget_violations"] == 0
+                and type(row.get("wall_ms")) in (int, float)
+                and math.isfinite(float(row["wall_ms"]))
+                and row["wall_ms"] >= 0.0
+                and (
+                    isinstance(row.get("controller"), dict)
+                    if policy.startswith("calibrated-hierarchical-")
+                    else row.get("controller") is None
+                )
+                for execution_index, (row, policy) in enumerate(
+                    zip(rows, expected_order, strict=True)
+                )
+            ),
             "Batch policy execution coverage drifted.",
         )
-    _require(
-        all(metric.get("budget_violations") == 0 for metric in batch_metrics),
-        "A shard contains a budget violation.",
-    )
     _verify_dependency(raw["checkpoint"], "checkpoint")
     _verify_dependency(raw["calibration_artifact"], "calibration artifact")
     _verify_dependency(raw["equivalence_artifact"], "equivalence artifact")
@@ -313,6 +372,34 @@ def _merge(groups: Iterable[list[float]]) -> list[float]:
     for group in groups:
         merged.extend(group)
     return merged
+
+
+def verify_statistical_coverage(
+    differences: dict[tuple[int, str, int, str, int], list[float]],
+) -> dict[str, int]:
+    expected_keys = set(
+        product(
+            BUDGETS,
+            shard.CHUNK_SIZE_BY_SCALE,
+            shard.TRAINING_SEEDS,
+            shard.PAPER_GRADE_WORKLOAD_FAMILIES,
+            shard.CONTEXTS,
+        )
+    )
+    paired_units_per_context = len(shard.REPLICATES) * shard.EXAMPLES_PER_SHARD
+    _require(
+        set(differences) == expected_keys
+        and all(
+            len(differences[key]) == paired_units_per_context for key in expected_keys
+        ),
+        "P2 paired statistical cell coverage drifted.",
+    )
+    return {
+        "paired_units_per_seed_scale_family_context": paired_units_per_context,
+        "paired_units_per_seed_scale_family": paired_units_per_context
+        * len(shard.CONTEXTS),
+        "statistical_cells_per_comparison": len(expected_keys),
+    }
 
 
 def _statistics(
@@ -740,6 +827,24 @@ def main() -> None:
                     - native["correct_count"] / native["total"]
                 )
     _require(seen == expected_identities, "P2 Cartesian shard coverage drifted.")
+    expected_outcome_keys = set(
+        product(
+            shard.CHUNK_SIZE_BY_SCALE,
+            shard.TRAINING_SEEDS,
+            shard.PAPER_GRADE_WORKLOAD_FAMILIES,
+            shard.CONTEXTS,
+            shard.CORE_POLICIES,
+        )
+    )
+    paired_units_per_context = len(shard.REPLICATES) * shard.EXAMPLES_PER_SHARD
+    _require(
+        set(outcomes) == expected_outcome_keys
+        and all(len(outcomes[key]) == paired_units_per_context for key in expected_outcome_keys),
+        "P2 policy outcome cell coverage drifted.",
+    )
+    fixed_coverage = verify_statistical_coverage(fixed_differences)
+    native_coverage = verify_statistical_coverage(native_differences)
+    _require(fixed_coverage == native_coverage, "P2 comparison coverage drifted.")
     policy_summary = [_summary_row(key, values) for key, values in sorted(outcomes.items())]
     fixed_statistics = _statistics(
         fixed_differences,
@@ -777,6 +882,10 @@ def main() -> None:
             / (1 << len(shard.TRAINING_SEEDS)),
             "seed_p_values_used_as_success_gate": False,
             "family_holm_p_values_used_as_success_gate": False,
+            "exact_record_schema_verified": True,
+            "exact_execution_rotation_verified": True,
+            "exact_statistical_cell_coverage_verified": True,
+            **fixed_coverage,
             **STRICT_RAW_AUDIT,
             "unique_shards": len(seen),
             "raw_shard_digest_set_sha256": hashlib.sha256(

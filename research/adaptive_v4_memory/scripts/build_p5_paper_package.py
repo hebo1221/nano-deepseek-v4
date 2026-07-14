@@ -865,7 +865,31 @@ def classify_evidence(
     p4_reference_systems: dict[str, Any],
     p4_production_systems: dict[str, Any],
 ) -> dict[str, str]:
-    core_passed = any(
+    core_audit = p2_core.get("audit", {})
+    core_complete = (
+        core_audit.get("unique_shards") == 4_500
+        and core_audit.get("all_raw_shards_verified") is True
+        and core_audit.get("all_dependency_digests_verified") is True
+        and core_audit.get("all_record_digests_verified") is True
+        and core_audit.get("no_budget_violations") is True
+        and core_audit.get("held_out_seed_contract_verified") is True
+        and core_audit.get("paired_conversation_coverage_verified") is True
+        and core_audit.get("execution_order_coverage_verified") is True
+        and core_audit.get("exact_record_schema_verified") is True
+        and core_audit.get("exact_execution_rotation_verified") is True
+        and core_audit.get("exact_statistical_cell_coverage_verified") is True
+        and core_audit.get("paired_units_per_seed_scale_family_context") == 200
+        and core_audit.get("paired_units_per_seed_scale_family") == 1_000
+        and core_audit.get("statistical_cells_per_comparison") == 1_350
+        and core_audit.get("aggregate_recomputed") is True
+        and core_audit.get("batch_coverage_verified") is True
+        and core_audit.get("exact_seed_randomization_verified") is True
+        and core_audit.get("independent_seed_clusters_per_cell") == 5
+        and core_audit.get("minimum_attainable_two_sided_seed_p") == 0.0625
+        and core_audit.get("seed_p_values_used_as_success_gate") is False
+        and core_audit.get("family_holm_p_values_used_as_success_gate") is False
+    )
+    core_passed = core_complete and any(
         row.get("passes_fixed_baseline_component") is True for row in p2_core["quality_gate"]
     )
     m5_audit = m5_one_token_pilot["audit"]
@@ -1044,6 +1068,7 @@ def classify_evidence(
     production_accounted = (
         production_audit.get("terminal_cells") == P4_EXPECTED_CELLS
         and production_seed_evidence
+        and production_audit.get("raw_latency_samples_and_derived_statistics_verified") is True
         and all(type(value) is int and value >= 0 for value in production_counts)
         and sum(production_counts) == P4_EXPECTED_CELLS
         and production_audit.get("tail_failure_accounting_complete") is True
@@ -1076,7 +1101,13 @@ def classify_evidence(
         else "unverified"
     )
     result = {
-        "p2_core": "success" if core_passed else "negative-result",
+        "p2_core": (
+            "success"
+            if core_passed
+            else "negative-result"
+            if core_complete
+            else "unverified"
+        ),
         "m5_one_token_pilot": "negative-result" if m5_complete else "unverified",
         "m3_offline_learned_risk_pilot": ("negative-result" if m3_complete else "unverified"),
         "p1_online_learned_lookahead": (

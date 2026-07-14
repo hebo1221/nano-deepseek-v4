@@ -25,7 +25,7 @@ def _policy_run(cell: tuple[str, int, int, str, int, int], policy: str) -> dict[
             "scheduler_received_ns": 0,
             "admitted_ns": 10 + index,
             "first_token_ns": 30 + index,
-            "completed_ns": 10_000 + index,
+            "completed_ns": 10_000 + concurrency - 1,
             "generated_tokens": batch * generation,
             "failure": None,
         }
@@ -45,6 +45,8 @@ def _policy_run(cell: tuple[str, int, int, str, int, int], policy: str) -> dict[
         for token_index in range(generation)
         for request_index in range(concurrency)
     ]
+    decode_window = {"started_ns": 90, "completed_ns": 10_000 + concurrency - 1}
+    generated_tokens = batch * concurrency * generation
     return {
         "policy": policy,
         "input_digest": "1" * 64,
@@ -59,8 +61,10 @@ def _policy_run(cell: tuple[str, int, int, str, int, int], policy: str) -> dict[
         },
         "request_records": requests,
         "decode_token_records": decode_token_records,
-        "decode_step_latency_ms": [1.0] * (concurrency * generation),
-        "generated_token_throughput_per_second": 100.0,
+        "decode_step_latency_ms": [0.000009] * (concurrency * generation),
+        "decode_window": decode_window,
+        "generated_token_throughput_per_second": generated_tokens
+        / ((decode_window["completed_ns"] - decode_window["started_ns"]) / 1_000_000_000.0),
         "prediction_digest": "3" * 64,
         "cuda": {
             **{key: 1 for key in production.CUDA_KEYS},
@@ -455,6 +459,22 @@ def test_production_adapter_rejects_nonfinite_measurements(
     payload["repetitions"][0]["policies"]["resident-native"][field] = value
 
     with pytest.raises(ValueError, match=message):
+        production.validate_adapter_payload(payload, cell=cell, executable_digest=digest)
+
+
+def test_production_adapter_rejects_derived_latency_and_throughput_drift() -> None:
+    cell = next(cell for cell in production.frozen_cells() if cell[5] == 1)
+    digest = "a" * 64
+    payload = _adapter_payload(cell, digest)
+    run = payload["repetitions"][0]["policies"]["resident-native"]
+    run["decode_step_latency_ms"][0] += 1.0
+    with pytest.raises(ValueError, match="latency drifted"):
+        production.validate_adapter_payload(payload, cell=cell, executable_digest=digest)
+
+    payload = _adapter_payload(cell, digest)
+    run = payload["repetitions"][0]["policies"]["resident-native"]
+    run["generated_token_throughput_per_second"] += 1.0
+    with pytest.raises(ValueError, match="throughput drifted"):
         production.validate_adapter_payload(payload, cell=cell, executable_digest=digest)
 
 

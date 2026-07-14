@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import sys
+from itertools import product
 from pathlib import Path
 from typing import Any
 
@@ -45,16 +46,30 @@ def _valid_raw_shard() -> tuple[dict[str, Any], dict[str, Any]]:
         for index in range(core.shard.EXAMPLES_PER_SHARD)
     ]
     records.sort(key=lambda row: (row["policy"], row["conversation_id"]))
-    batch_metrics = [
-        {
-            "batch_index": batch_index,
-            "policy": policy,
-            "execution_index": (policy_index - batch_index) % len(core.shard.CORE_POLICIES),
-            "budget_violations": 0,
-        }
-        for batch_index in range(core.shard.EXAMPLES_PER_SHARD // core.shard.BATCH_SIZE)
-        for policy_index, policy in enumerate(core.shard.CORE_POLICIES)
-    ]
+    batch_metrics = []
+    for batch_index in range(
+        core.shard.EXAMPLES_PER_SHARD // core.shard.BATCH_SIZE
+    ):
+        rotation = batch_index % len(core.shard.CORE_POLICIES)
+        order = (
+            *core.shard.CORE_POLICIES[rotation:],
+            *core.shard.CORE_POLICIES[:rotation],
+        )
+        for execution_index, policy in enumerate(order):
+            batch_metrics.append(
+                {
+                    "batch_index": batch_index,
+                    "policy": policy,
+                    "execution_index": execution_index,
+                    "wall_ms": 1.0,
+                    "controller": (
+                        {}
+                        if policy.startswith("calibrated-hierarchical-")
+                        else None
+                    ),
+                    "budget_violations": 0,
+                }
+            )
     raw: dict[str, Any] = {
         "schema_version": 1,
         "experiment_id": "p2-core-quality-shard-v1",
@@ -122,10 +137,34 @@ def test_raw_shard_verifier_binds_seeds_pairing_and_execution_order(
     with pytest.raises(ValueError, match="Paired conversation coverage drifted"):
         core.verify_raw_shard(unpaired, run, "implementation")
 
+    arbitrary_ids = copy.deepcopy(raw)
+    original_id = arbitrary_ids["records"][0]["conversation_id"]
+    for record in arbitrary_ids["records"]:
+        if record["conversation_id"] == original_id:
+            record["conversation_id"] = "arbitrary-but-paired"
+    arbitrary_ids["records_digest"] = core.records_digest(arbitrary_ids["records"])
+    arbitrary_ids["aggregate"] = core.shard._aggregate(arbitrary_ids["records"])
+    with pytest.raises(ValueError, match="Paired conversation coverage drifted"):
+        core.verify_raw_shard(arbitrary_ids, run, "implementation")
+
+    malformed_positions = copy.deepcopy(raw)
+    malformed_positions["records"][0]["query_positions"] = []
+    malformed_positions["records_digest"] = core.records_digest(
+        malformed_positions["records"]
+    )
+    with pytest.raises(ValueError, match="target and position schema drifted"):
+        core.verify_raw_shard(malformed_positions, run, "implementation")
+
     biased_order = copy.deepcopy(raw)
     biased_order["batch_metrics"][0]["execution_index"] = 1
     with pytest.raises(ValueError, match="execution coverage drifted"):
         core.verify_raw_shard(biased_order, run, "implementation")
+
+    swapped_order = copy.deepcopy(raw)
+    swapped_order["batch_metrics"][0]["execution_index"] = 1
+    swapped_order["batch_metrics"][1]["execution_index"] = 0
+    with pytest.raises(ValueError, match="execution coverage drifted"):
+        core.verify_raw_shard(swapped_order, run, "implementation")
 
     bad_aggregate = copy.deepcopy(raw)
     bad_aggregate["aggregate"][0]["correct"] = 0
@@ -192,6 +231,30 @@ def test_seed_cluster_exact_randomization_retains_symmetric_null() -> None:
 
     assert result["paired_randomization_method"] == "exact-sign-flip-enumeration"
     assert result["paired_randomization_two_sided_p"] == pytest.approx(1.0)
+
+
+def test_statistical_coverage_requires_exact_1000_examples_per_family() -> None:
+    paired_per_context = len(core.shard.REPLICATES) * core.shard.EXAMPLES_PER_SHARD
+    differences = {
+        key: [0.0] * paired_per_context
+        for key in product(
+            core.BUDGETS,
+            core.shard.CHUNK_SIZE_BY_SCALE,
+            core.shard.TRAINING_SEEDS,
+            core.shard.PAPER_GRADE_WORKLOAD_FAMILIES,
+            core.shard.CONTEXTS,
+        )
+    }
+    audit = core.verify_statistical_coverage(differences)
+    assert audit == {
+        "paired_units_per_seed_scale_family_context": 200,
+        "paired_units_per_seed_scale_family": 1_000,
+        "statistical_cells_per_comparison": 1_350,
+    }
+
+    differences[next(iter(differences))].pop()
+    with pytest.raises(ValueError, match="statistical cell coverage drifted"):
+        core.verify_statistical_coverage(differences)
 
 
 def test_quality_gate_requires_corrected_families_on_each_scale() -> None:

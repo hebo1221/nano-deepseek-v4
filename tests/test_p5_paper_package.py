@@ -12,6 +12,35 @@ sys.path.insert(0, str(SCRIPTS))
 import build_p5_paper_package as package  # noqa: E402
 
 
+def _p2_core_evidence(*, passed: bool = False) -> dict[str, object]:
+    return {
+        "audit": {
+            "unique_shards": 4_500,
+            "all_raw_shards_verified": True,
+            "all_dependency_digests_verified": True,
+            "all_record_digests_verified": True,
+            "no_budget_violations": True,
+            "held_out_seed_contract_verified": True,
+            "paired_conversation_coverage_verified": True,
+            "execution_order_coverage_verified": True,
+            "exact_record_schema_verified": True,
+            "exact_execution_rotation_verified": True,
+            "exact_statistical_cell_coverage_verified": True,
+            "paired_units_per_seed_scale_family_context": 200,
+            "paired_units_per_seed_scale_family": 1_000,
+            "statistical_cells_per_comparison": 1_350,
+            "aggregate_recomputed": True,
+            "batch_coverage_verified": True,
+            "exact_seed_randomization_verified": True,
+            "independent_seed_clusters_per_cell": 5,
+            "minimum_attainable_two_sided_seed_p": 0.0625,
+            "seed_p_values_used_as_success_gate": False,
+            "family_holm_p_values_used_as_success_gate": False,
+        },
+        "quality_gate": [{"passes_fixed_baseline_component": passed}],
+    }
+
+
 def _safety_evidence() -> dict[str, object]:
     return {
         "audit": {
@@ -224,13 +253,26 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
     assert all(
         manifest["evidence"]["p2_core"]["required_audit"][field] is True
         for field in (
+            "all_raw_shards_verified",
+            "all_dependency_digests_verified",
+            "all_record_digests_verified",
+            "no_budget_violations",
             "held_out_seed_contract_verified",
             "paired_conversation_coverage_verified",
             "execution_order_coverage_verified",
+            "exact_record_schema_verified",
+            "exact_execution_rotation_verified",
+            "exact_statistical_cell_coverage_verified",
             "aggregate_recomputed",
             "batch_coverage_verified",
         )
     )
+    assert manifest["evidence"]["p2_core"]["required_audit"][
+        "paired_units_per_seed_scale_family"
+    ] == 1_000
+    assert manifest["evidence"]["p2_core"]["required_audit"][
+        "statistical_cells_per_comparison"
+    ] == 1_350
     assert (
         manifest["evidence"]["p1_online_learned_lookahead"]["required_audit"][
             "checkpoint_reuse_equivalence_verified"
@@ -315,6 +357,12 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
     assert (
         manifest["evidence"]["p4_production_systems"]["required_audit"][
             "whole_cell_timeout_contract_verified"
+        ]
+        is True
+    )
+    assert (
+        manifest["evidence"]["p4_production_systems"]["required_audit"][
+            "raw_latency_samples_and_derived_statistics_verified"
         ]
         is True
     )
@@ -688,7 +736,7 @@ def test_production_runtime_boundary_validation_rejects_relabeling(
 
 def test_p5_classification_preserves_claim_boundaries() -> None:
     classifications = package.classify_evidence(
-        {"quality_gate": [{"passes_fixed_baseline_component": False}]},
+        _p2_core_evidence(),
         _m5_pilot_evidence(),
         _m3_offline_learned_risk_evidence(),
         _online_learned_lookahead_evidence(),
@@ -744,6 +792,7 @@ def test_p5_classification_preserves_claim_boundaries() -> None:
                 "terminal_cells": package.P4_EXPECTED_CELLS,
                 "adapter_spec_digests_and_seed_schedule_verified": True,
                 "repetition_seed_schedule_verified": True,
+                "raw_latency_samples_and_derived_statistics_verified": True,
                 "input_seed_base": 9_071_400,
                 "complete_cells": 213,
                 "partial_cells": 1,
@@ -787,7 +836,7 @@ def test_p5_classification_preserves_claim_boundaries() -> None:
 
 def test_p5_success_requires_full_system_coverage() -> None:
     classifications = package.classify_evidence(
-        {"quality_gate": [{"passes_fixed_baseline_component": True}]},
+        _p2_core_evidence(passed=True),
         _m5_pilot_evidence(),
         _m3_offline_learned_risk_evidence(),
         _online_learned_lookahead_evidence(passed=True),
@@ -843,6 +892,7 @@ def test_p5_success_requires_full_system_coverage() -> None:
                 "terminal_cells": package.P4_EXPECTED_CELLS,
                 "adapter_spec_digests_and_seed_schedule_verified": True,
                 "repetition_seed_schedule_verified": True,
+                "raw_latency_samples_and_derived_statistics_verified": True,
                 "input_seed_base": 9_071_400,
                 "complete_cells": package.P4_EXPECTED_CELLS,
                 "partial_cells": 0,
@@ -934,6 +984,7 @@ def test_p5_marks_all_failed_production_coverage_unverified() -> None:
     assert classifications["p4_production_systems"] == "unverified"
     assert classifications["p4_reference_systems"] == "unverified"
     assert classifications["p4_500k_context"] == "negative-result"
+    assert classifications["p2_core"] == "unverified"
 
 
 def test_p5_rejects_incomplete_500k_failure_accounting() -> None:

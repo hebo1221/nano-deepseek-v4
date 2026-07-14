@@ -332,6 +332,10 @@ def run_policy(
         "request_records": request_records,
         "decode_token_records": decode_records,
         "decode_step_latency_ms": step_latencies,
+        "decode_window": {
+            "started_ns": decode_started,
+            "completed_ns": decode_completed,
+        },
         "generated_token_throughput_per_second": generated_tokens / elapsed_seconds,
         "prediction_digest": prediction.hexdigest(),
         "cuda": {

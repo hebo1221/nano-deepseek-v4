@@ -9,7 +9,7 @@ import signal
 import subprocess
 from itertools import product
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from adaptive_v4_gpu_lock import acquire_gpu_lock
 from run_p4_systems_matrix import require_p3_audit
@@ -346,18 +346,54 @@ def validate_policy_run(
         concurrency=concurrency,
     )
     steps = payload.get("decode_step_latency_ms")
+    decode_records = payload["decode_token_records"]
+    expected_steps = [
+        (record["completed_ns"] - record["dispatch_ns"]) / 1_000_000.0
+        for record in decode_records
+    ]
+    if not isinstance(steps, list):
+        raise ValueError("Raw decode-step latency coverage is incomplete.")
     _require(
-        isinstance(steps, list)
-        and len(steps) == concurrency * generation
+        len(steps) == concurrency * generation
         and all(_finite_nonnegative(value) for value in steps),
         "Raw decode-step latency coverage is incomplete.",
     )
+    _require(
+        all(
+            math.isclose(float(observed), expected, rel_tol=1e-12, abs_tol=1e-12)
+            for observed, expected in zip(steps, expected_steps, strict=True)
+        ),
+        "Decode-step latency drifted from raw execution timestamps.",
+    )
+    decode_window = payload.get("decode_window")
+    if not isinstance(decode_window, dict):
+        raise ValueError("Decode throughput window is missing.")
+    decode_started = decode_window.get("started_ns")
+    decode_completed = decode_window.get("completed_ns")
+    _require(
+        type(decode_started) is int
+        and type(decode_completed) is int
+        and decode_started < decode_completed
+        and decode_started <= min(record["dispatch_ns"] for record in decode_records)
+        and decode_completed >= max(record["completed_ns"] for record in decode_records)
+        and all(request["completed_ns"] == decode_completed for request in requests),
+        "Decode throughput window is inconsistent with raw timestamps.",
+    )
+    decode_started_int = cast(int, decode_started)
+    decode_completed_int = cast(int, decode_completed)
     throughput = payload.get("generated_token_throughput_per_second")
     if not isinstance(throughput, (int, float)) or isinstance(throughput, bool):
         raise ValueError("Generated-token throughput must be measured and positive.")
     _require(
         math.isfinite(throughput) and throughput > 0,
         "Generated-token throughput must be measured and positive.",
+    )
+    expected_throughput = sum(request["generated_tokens"] for request in requests) / (
+        (decode_completed_int - decode_started_int) / 1_000_000_000.0
+    )
+    _require(
+        math.isclose(throughput, expected_throughput, rel_tol=1e-12, abs_tol=1e-12),
+        "Generated-token throughput drifted from the raw decode window.",
     )
     _sha256_value(payload.get("prediction_digest"), "prediction")
     cuda = payload.get("cuda")

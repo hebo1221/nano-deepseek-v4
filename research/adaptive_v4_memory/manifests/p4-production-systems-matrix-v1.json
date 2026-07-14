@@ -32,6 +32,12 @@
       "timing": "before any P4 production cell was generated",
       "change": "freeze input_seed_base=9071400 and bind the adapter spec plus every measured repetition to the exact seed schedule",
       "reason": "make the actual-concurrency workload independently auditable instead of trusting an implementation-only seed constant"
+    },
+    {
+      "date": "2026-07-14",
+      "timing": "before any P4 production cell was generated",
+      "change": "bind decode-step latency and generated-token throughput to raw dispatch, completion, and decode-window timestamps",
+      "reason": "tail latency and throughput must be independently regenerated from digest-bound raw serving observations"
     }
   ],
   "evidence_tier": "checked-static-full-request-batching-adapter",
@@ -86,6 +92,7 @@
   "required_measurements": [
     "request admission, first-token, and completion timestamps",
     "per-request per-token decode dispatch/completion timestamps and execution-batch identity",
+    "explicit decode throughput window with independently recomputed decode-step latency and generated-token throughput",
     "TTFT, TPOT, end-to-end p50/p95/p99 and maximum",
     "generated-token throughput and terminal request failures",
     "allocated, reserved, peak, and device-total HBM; process-total HBM when nvidia-smi exposes it, otherwise null with explicit availability status",
