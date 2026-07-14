@@ -7,7 +7,9 @@ contains 4,500 core shards (630,000 policy-example evaluations), 9,000 causal
 shards (2.88 million policy-example evaluations across 16 arms), 253,500 small-model RULER
 predictions, 90,578 Qwen3-4B natural-benchmark predictions, 3,600 paired safety
 predictions, 7,254 paired natural-safety generations, and two 216-cell systems
-matrices with 30 measured repetitions per cell. The natural-safety suite covers
+matrices with 30 measured repetitions per cell. A separate 500K-token feasibility
+preflight contributes four terminal scale-policy attempts but no performance sample.
+The natural-safety suite covers
 6,172 LongSafety generations and 1,082 IFEval generations with official
 deterministic scoring; the paid LongSafety judge remains blocked. These units
 are reported separately and are never combined into a
@@ -15,7 +17,8 @@ misleading headline total.
 
 The remaining weakness is breadth, not raw count. The primary natural and
 safety evidence uses one compatible model family, actual-model evaluation stops
-at 128K, and official DeepSeek-V4 execution remains blocked by the frozen
+at 128K, and the 500K preflight uses only the two Tier-S reference scales. Official
+DeepSeek-V4 execution remains blocked by the frozen
 weights/runtime contract. The paper must therefore be framed as a deep,
 digest-bound single-compatible-model study unless a later cross-family
 replication is completed.
@@ -44,8 +47,9 @@ replication is completed.
 5. Execute the two-arm natural-safety suite, score IFEval with pinned official
    code plus revision-bound `punkt`/`punkt_tab` data, and report LongSafety only
    as digest-bound generation evidence while its paid judge is blocked.
-6. Keep reference PyTorch, checked static continuous batching, and unavailable
-   external production runtime as separate evidence tiers.
+6. Keep the single-attempt 500K feasibility preflight, repeated reference PyTorch,
+   checked static continuous batching, and unavailable external production runtime
+   as separate evidence tiers.
 7. After primary completion, add a second instruction-tuned model family only
    when the causal result is positive or scientifically ambiguous. A clearly
    negative primary causal result should be published as bounded negative

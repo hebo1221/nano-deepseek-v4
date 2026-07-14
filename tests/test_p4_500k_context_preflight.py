@@ -26,6 +26,18 @@ def test_500k_manifest_is_separate_feasibility_evidence() -> None:
     assert manifest["attempts_per_scale_policy"] == 1
     assert "cannot support latency" in manifest["claim_boundary"]
     assert "failed attempt is retained" in manifest["claim_boundary"]
+    scale_audit = json.loads(
+        (root / "research/adaptive_v4_memory/manifests/experiment-scale-audit-v1.json").read_text()
+    )["planned_volume"]["p4_500k_context_preflight"]
+    assert scale_audit == {
+        "scale_cells": 2,
+        "policies": 2,
+        "terminal_policy_attempts": 4,
+        "context_tokens": 500_000,
+        "generation_tokens": 128,
+        "attempts_per_scale_policy": 1,
+        "performance_claim_available": False,
+    }
 
 
 def test_implementation_digests_accept_tracked_directory_pathspecs() -> None:

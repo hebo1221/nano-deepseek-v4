@@ -7,6 +7,11 @@
       "date": "2026-07-14",
       "timing": "before any P4 systems cell was generated",
       "change": "expand both systems matrices from marginal six-profile sweeps to the complete 4 batch x 3 load/concurrency factorial"
+    },
+    {
+      "date": "2026-07-14",
+      "timing": "before any P4 systems cell was generated",
+      "change": "add a separate two-scale x two-policy 500K-token feasibility preflight with terminal failure accounting and no performance claim"
     }
   ],
   "date": "2026-07-14",
@@ -63,6 +68,15 @@
       "measured_repetitions_per_cell": 30,
       "policies": 2,
       "policy_runs_including_warmups": 15120
+    },
+    "p4_500k_context_preflight": {
+      "scale_cells": 2,
+      "policies": 2,
+      "terminal_policy_attempts": 4,
+      "context_tokens": 500000,
+      "generation_tokens": 128,
+      "attempts_per_scale_policy": 1,
+      "performance_claim_available": false
     },
     "p4_production": {
       "cells": 216,
