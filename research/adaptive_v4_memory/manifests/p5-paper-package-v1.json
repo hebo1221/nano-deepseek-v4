@@ -576,6 +576,11 @@
       "path": "artifacts/adaptive_v4_memory/paper_grade/p3/natural-adaptive-quota/suite.summary.json",
       "experiment_id": "p3-natural-adaptive-quota-suite-audit-v1",
       "required_declared_artifact_graph": true,
+      "required_artifact_selectors": {
+        "components.*.manifest": 4,
+        "components.*.summary": 4,
+        "components.*.arm_cells.*": 8
+      },
       "required_audit": {
         "terminal_components": 4,
         "predictions_per_arm": 44789,
@@ -601,6 +606,11 @@
       "path": "artifacts/adaptive_v4_memory/paper_grade/p3/natural-suite.summary.json",
       "experiment_id": "p3-natural-language-suite-audit-v1",
       "required_declared_artifact_graph": true,
+      "required_artifact_selectors": {
+        "benchmarks.*.summary": 5,
+        "supplemental_safety.summary": 1,
+        "supplemental_natural_safety.summary": 1
+      },
       "required_audit": {
         "benchmarks_terminal": 5,
         "minimum_protocol_examples_accounted_per_arm": 45289,
@@ -634,6 +644,7 @@
       "path": "artifacts/adaptive_v4_memory/paper_grade/p3/safety-stress.summary.json",
       "experiment_id": "p3-safety-stress-audit-v1",
       "required_declared_artifact_graph": true,
+      "required_artifact_selectors": {"arms.*.raw_cell": 3},
       "required_audit": {
         "required_arms_terminal": true,
         "failure_accounting_complete": true,
@@ -656,6 +667,10 @@
       "path": "artifacts/adaptive_v4_memory/paper_grade/p3/natural-safety.summary.json",
       "experiment_id": "p3-natural-safety-suite-audit-v1",
       "required_declared_artifact_graph": true,
+      "required_artifact_selectors": {
+        "longsafety.summary": 1,
+        "ifeval.summary": 1
+      },
       "required_audit": {
         "required_arms": 2,
         "longsafety_generation_terminal": true,
@@ -680,6 +695,10 @@
       "path": "artifacts/adaptive_v4_memory/paper_grade/p3/natural-safety/ifeval.summary.json",
       "experiment_id": "p3-natural-safety-ifeval-official-audit-v1",
       "required_declared_artifact_graph": true,
+      "required_artifact_selectors": {
+        "generation_cells.*": 2,
+        "arms.*.raw_official_results": 2
+      },
       "required_audit": {
         "required_arms_terminal": true,
         "input_pairing_verified": true,
@@ -697,6 +716,7 @@
       "path": "artifacts/adaptive_v4_memory/paper_grade/p3/natural-safety/longsafety.summary.json",
       "experiment_id": "p3-natural-safety-longsafety-generation-audit-v1",
       "required_declared_artifact_graph": true,
+      "required_artifact_selectors": {"arms.*.raw_cell": 2},
       "required_audit": {
         "generation_arms_terminal": true,
         "input_pairing_verified": true,

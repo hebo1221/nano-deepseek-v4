@@ -382,6 +382,31 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
         manifest["evidence"][name]["required_declared_artifact_graph"] is True
         for name in graph_bound
     )
+    assert manifest["evidence"]["p3_natural_adaptive_quota_suite"][
+        "required_artifact_selectors"
+    ] == {
+        "components.*.manifest": 4,
+        "components.*.summary": 4,
+        "components.*.arm_cells.*": 8,
+    }
+    assert manifest["evidence"]["p3_natural"]["required_artifact_selectors"] == {
+        "benchmarks.*.summary": 5,
+        "supplemental_safety.summary": 1,
+        "supplemental_natural_safety.summary": 1,
+    }
+    assert manifest["evidence"]["p3_safety"]["required_artifact_selectors"] == {
+        "arms.*.raw_cell": 3
+    }
+    assert manifest["evidence"]["p3_natural_safety"][
+        "required_artifact_selectors"
+    ] == {"longsafety.summary": 1, "ifeval.summary": 1}
+    assert manifest["evidence"]["p3_ifeval"]["required_artifact_selectors"] == {
+        "generation_cells.*": 2,
+        "arms.*.raw_official_results": 2,
+    }
+    assert manifest["evidence"]["p3_longsafety"]["required_artifact_selectors"] == {
+        "arms.*.raw_cell": 2
+    }
     paired_arm_cell_evidence = {
         "p3_cross_family",
         "p3_cross_family_adaptive_quota",
@@ -1154,6 +1179,42 @@ def test_evidence_rejects_an_incomplete_artifact_binding(tmp_path: Path) -> None
         package._validate_evidence("incomplete", summary, contract)
 
 
+def test_evidence_requires_exact_nested_artifact_selector_coverage(
+    tmp_path: Path,
+) -> None:
+    components = []
+    for index in range(2):
+        artifact = tmp_path / f"component-{index}.json"
+        artifact.write_text(json.dumps({"component": index}))
+        components.append(
+            {
+                "summary": {
+                    "path": str(artifact),
+                    "sha256": package.sha256(artifact),
+                }
+            }
+        )
+    evidence = {
+        "experiment_id": "nested-selector-audit-v1",
+        "source": {"dirty": False},
+        "audit": {"terminal": True},
+        "components": components,
+    }
+    summary = tmp_path / "summary.json"
+    summary.write_text(json.dumps(evidence))
+    contract = {
+        "experiment_id": "nested-selector-audit-v1",
+        "required_audit": {"terminal": True},
+        "required_artifact_selectors": {"components.*.summary": 2},
+    }
+
+    assert package._validate_evidence("nested-selector", summary, contract) == evidence
+    evidence["components"].pop()
+    summary.write_text(json.dumps(evidence))
+    with pytest.raises(ValueError, match="artifact selector components.*.summary drifted"):
+        package._validate_evidence("nested-selector", summary, contract)
+
+
 def test_confirmatory_causal_requires_pooling_and_exact_inference(
     tmp_path: Path,
 ) -> None:
@@ -1543,6 +1604,12 @@ def test_natural_suite_boundary_rejects_projected_dsa_baselines(tmp_path: Path) 
     with pytest.raises(ValueError, match="selection-inference boundary"):
         package._validate_boundary_manifest("natural_suite", tampered)
 
+    payload = json.loads(source.read_text())
+    payload["sequence_gate"].pop("nine_seed_causal_gate")
+    tampered.write_text(json.dumps(payload))
+    with pytest.raises(ValueError, match="confirmatory sequence boundary"):
+        package._validate_boundary_manifest("natural_suite", tampered)
+
 
 def test_adaptive_natural_suite_boundary_rejects_cross_benchmark_pooling(
     tmp_path: Path,
@@ -1655,6 +1722,12 @@ def test_p3_ruler_boundary_records_pre_gate_orphan_without_outcomes(
     payload["amendments"][3]["reason"] = "runtime import provenance was not audited"
     tampered.write_text(json.dumps(payload))
     with pytest.raises(ValueError, match="runtime import boundary drifted"):
+        package._validate_boundary_manifest("p3_ruler", tampered)
+
+    payload = json.loads(source.read_text())
+    payload["sequence_gate"].pop("nine_seed_causal_gate")
+    tampered.write_text(json.dumps(payload))
+    with pytest.raises(ValueError, match="confirmatory sequence boundary drifted"):
         package._validate_boundary_manifest("p3_ruler", tampered)
 
 

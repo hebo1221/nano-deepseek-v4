@@ -1165,6 +1165,7 @@ def _validate_boundary_manifest(name: str, path: Path) -> dict[str, Any]:
         )
     elif name == "safety_stress":
         model = payload.get("model", {})
+        sequence = payload.get("sequence_gate", {})
         prefix = payload.get("protected_prefix_contract", {})
         scoring = payload.get("scoring", {})
         _require(
@@ -1180,7 +1181,10 @@ def _validate_boundary_manifest(name: str, path: Path) -> dict[str, Any]:
                 "native-dense",
                 "strongest-memory-matched-fixed",
                 "strongest-memory-matched-fixed+protected-prefix",
-            ],
+            ]
+            and sequence.get("nine_seed_causal_gate")
+            == "artifacts/adaptive_v4_memory/paper_grade/p2-nine-seed-causal.summary.json"
+            and "nine-seed confirmatory" in sequence.get("policy", ""),
             "P3 synthetic-safety matrix boundary drifted.",
         )
         _require(
@@ -1210,6 +1214,9 @@ def _validate_boundary_manifest(name: str, path: Path) -> dict[str, Any]:
             and model.get("repo_id") == "Qwen/Qwen3-4B-Instruct-2507"
             and model.get("revision") == "cdbee75f17c01a7cc42f958dc650907174af0554"
             and "no natural-safety dataset/source" in sequence.get("policy", "")
+            and sequence.get("nine_seed_causal_gate")
+            == "artifacts/adaptive_v4_memory/paper_grade/p2-nine-seed-causal.summary.json"
+            and "nine-seed confirmatory" in sequence.get("policy", "")
             and payload.get("required_arms")
             == ["native-dense", "strongest-memory-matched-fixed"]
             and long_protocol.get("expected_rows") == 1_543
@@ -1233,7 +1240,8 @@ def _validate_boundary_manifest(name: str, path: Path) -> dict[str, Any]:
         )
     elif name == "p3_ruler":
         amendments = payload.get("amendments", [])
-        observed = payload.get("sequence_gate", {}).get("observed_before_gate", {})
+        sequence = payload.get("sequence_gate", {})
+        observed = sequence.get("observed_before_gate", {})
         _require(
             payload.get("status") == "amended_and_frozen_before_execution"
             and isinstance(amendments, list)
@@ -1250,6 +1258,12 @@ def _validate_boundary_manifest(name: str, path: Path) -> dict[str, Any]:
                 "model_predictions": 0,
             },
             "P3 RULER pre-gate artifact accounting drifted.",
+        )
+        _require(
+            sequence.get("nine_seed_causal_gate")
+            == "artifacts/adaptive_v4_memory/paper_grade/p2-nine-seed-causal.summary.json"
+            and "nine-seed confirmatory" in sequence.get("policy", ""),
+            "P3 RULER confirmatory sequence boundary drifted.",
         )
         _require(
             "every model prediction require" in payload.get("sequence_gate", {}).get("policy", "")
@@ -1448,6 +1462,7 @@ def _validate_boundary_manifest(name: str, path: Path) -> dict[str, Any]:
         )
     elif name == "natural_suite":
         baselines = payload.get("external_baselines", {})
+        sequence = payload.get("sequence_gate", {})
         kvpress = baselines.get("kvpress", {})
         flashmemory = baselines.get("FlashMemory-DeepSeek-V4", {})
         indexcache = baselines.get("IndexCache", {})
@@ -1456,6 +1471,12 @@ def _validate_boundary_manifest(name: str, path: Path) -> dict[str, Any]:
             payload.get("status") == "amended_and_frozen_before_execution"
             and kvpress.get("revision") == "6d965557a5b9f0201a2301b23c454473dd681d0d",
             "P3 compatible-model baseline boundary drifted.",
+        )
+        _require(
+            sequence.get("nine_seed_causal_gate")
+            == "artifacts/adaptive_v4_memory/paper_grade/p2-nine-seed-causal.summary.json"
+            and "nine-seed confirmatory" in sequence.get("policy", ""),
+            "P3 natural-suite confirmatory sequence boundary drifted.",
         )
         _require(
             tuple(kvpress.get("compatible_qwen3_methods", ()))
@@ -1823,6 +1844,16 @@ def _validate_evidence(name: str, path: Path, contract: dict[str, Any]) -> dict[
         )
         for index, metadata in enumerate(rows):
             _bound_artifact(metadata, f"{name} {collection_name}[{index}]")
+    for selector, expected_count in contract.get(
+        "required_artifact_selectors", {}
+    ).items():
+        selected = _select_artifact_metadata(payload, selector)
+        _require(
+            len(selected) == expected_count,
+            f"{name} artifact selector {selector} drifted.",
+        )
+        for index, metadata in enumerate(selected):
+            _bound_artifact(metadata, f"{name} {selector}[{index}]")
     analysis_paths = P2_ANALYSIS_PATHS.get(name)
     if analysis_paths is not None:
         _require(
@@ -1849,6 +1880,24 @@ def _bound_artifact(metadata: Any, label: str) -> Path:
     _require(path.is_file(), f"Missing {label}: {path}")
     _require(digest_value == sha256(path), f"Digest mismatch for {label}: {path}")
     return path
+
+
+def _select_artifact_metadata(payload: Any, selector: str) -> list[Any]:
+    """Resolve a dotted selector where `*` expands mapping values or list items."""
+
+    nodes = [payload]
+    for segment in selector.split("."):
+        selected: list[Any] = []
+        for node in nodes:
+            if segment == "*":
+                if isinstance(node, dict):
+                    selected.extend(node.values())
+                elif isinstance(node, list):
+                    selected.extend(node)
+            elif isinstance(node, dict) and segment in node:
+                selected.append(node[segment])
+        nodes = selected
+    return nodes
 
 
 def _verify_declared_artifact_tree(payload: Any, label: str) -> int:
