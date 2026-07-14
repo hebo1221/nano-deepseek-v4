@@ -420,6 +420,13 @@
         "adaptive_allocation_scope": "initial context prefill only",
         "continuous_refresh_claim_available": false,
         "outcome_dependent_execution": false
+      },
+      "required_sections": {
+        "confirmation_gate": {
+          "available": false,
+          "passed": null,
+          "classification": "unverified"
+        }
       }
     },
     "p3_natural_adaptive_quota_scbench": {

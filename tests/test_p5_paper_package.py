@@ -355,6 +355,11 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
     ] is True
     assert adaptive_longmemeval["required_audit"]["official_scores_verified"] is False
     assert adaptive_longmemeval["required_audit"]["proxy_metric_substitution"] is False
+    assert adaptive_longmemeval["required_sections"]["confirmation_gate"] == {
+        "available": False,
+        "passed": None,
+        "classification": "unverified",
+    }
     adaptive_mrcr = manifest["evidence"]["p3_natural_adaptive_quota_mrcr"]
     assert adaptive_mrcr["required_audit"]["total_predictions"] == 3_000
     assert adaptive_mrcr["required_audit"]["paired_examples"] == 1_500
@@ -1559,6 +1564,47 @@ def test_adaptive_longmemeval_remains_unverified_without_official_judge() -> Non
         p3_natural_adaptive_quota_longmemeval=evidence,
     )
     assert classifications["p3_natural_adaptive_quota_longmemeval"] == "unverified"
+
+
+def test_adaptive_longmemeval_evidence_rejects_an_available_confirmation_gate(
+    tmp_path: Path,
+) -> None:
+    root = Path(__file__).resolve().parents[1]
+    manifest = json.loads(
+        (
+            root
+            / "research/adaptive_v4_memory/manifests/p5-paper-package-v1.json"
+        ).read_text()
+    )
+    contract = manifest["evidence"]["p3_natural_adaptive_quota_longmemeval"]
+    evidence = {
+        "experiment_id": contract["experiment_id"],
+        "source": {"dirty": False},
+        "audit": dict(contract["required_audit"]),
+        "confirmation_gate": dict(contract["required_sections"]["confirmation_gate"]),
+    }
+    path = tmp_path / "adaptive-longmemeval-summary.json"
+    path.write_text(json.dumps(evidence))
+
+    assert (
+        package._validate_evidence(
+            "p3_natural_adaptive_quota_longmemeval", path, contract
+        )
+        == evidence
+    )
+    evidence["confirmation_gate"] = {
+        "available": True,
+        "passed": True,
+        "classification": "success",
+    }
+    path.write_text(json.dumps(evidence))
+    with pytest.raises(
+        ValueError,
+        match="section confirmation_gate.available drifted",
+    ):
+        package._validate_evidence(
+            "p3_natural_adaptive_quota_longmemeval", path, contract
+        )
 
 
 @pytest.mark.parametrize(
