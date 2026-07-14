@@ -149,6 +149,8 @@ def _completed(
         or payload.get("batch_size") != shard.BATCH_SIZE
         or payload.get("chunk_size") != shard.CHUNK_SIZE_BY_SCALE[scale]
         or tuple(payload.get("primary_arms", ())) != shard.PRIMARY_ARM_NAMES
+        or tuple(payload.get("supplemental_baseline_arms", ()))
+        != shard.SUPPLEMENTAL_BASELINE_ARM_NAMES
         or tuple(payload.get("component_arms", ())) != shard.COMPONENT_ARM_NAMES
         or tuple(payload.get("physical_arms", ())) != shard.PHYSICAL_ARM_NAMES
     ):
@@ -227,6 +229,7 @@ def _write_matrix(
                 len(shard.CONTEXTS) * len(shard.REPLICATES) * shard.EXAMPLES_PER_SHARD
             ),
             "primary_arms": shard.PRIMARY_ARM_NAMES,
+            "supplemental_baseline_arms": shard.SUPPLEMENTAL_BASELINE_ARM_NAMES,
             "component_arms": shard.COMPONENT_ARM_NAMES,
             "physical_arms": shard.PHYSICAL_ARM_NAMES,
             "chunk_size_by_scale": shard.CHUNK_SIZE_BY_SCALE,

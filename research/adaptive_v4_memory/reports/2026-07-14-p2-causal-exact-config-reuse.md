@@ -3,9 +3,11 @@
 ## Timing and decision
 
 This amendment was frozen before any held-out P2 causal-factorial shard was
-generated. The 9,000-shard Cartesian design, 20 conversations per shard, 14 arm
-labels, two physical arms, paired inputs, batch size 4, and all statistical
-contrasts remain unchanged.
+generated. The 9,000-shard Cartesian design, 20 conversations per shard, 16 arm
+labels, paired inputs, and batch size 4 remain fixed. Four arms receive direct
+physical-path measurements: the central fixed/adaptive pair and both added
+top-p baselines. The top-p contrasts are supplemental; the primary causal gate
+and original component contrasts remain unchanged.
 
 Some calibration cells produce multiple preregistered arm labels whose complete
 `SameTokenControllerConfig` objects are identical. Running the same model,

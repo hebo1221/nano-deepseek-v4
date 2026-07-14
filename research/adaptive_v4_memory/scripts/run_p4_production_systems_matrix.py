@@ -21,7 +21,13 @@ LOAD_PROFILES = (
     ("serving-b8-c1", 8, 1),
     ("serving-b16-c1", 16, 1),
     ("serving-b1-c8", 1, 8),
+    ("serving-b4-c8", 4, 8),
+    ("serving-b8-c8", 8, 8),
+    ("serving-b16-c8", 16, 8),
     ("serving-b1-c32", 1, 32),
+    ("serving-b4-c32", 4, 32),
+    ("serving-b8-c32", 8, 32),
+    ("serving-b16-c32", 16, 32),
 )
 POLICIES = ("resident-native", "tiered-native")
 TERMINAL_STATUSES = ("complete", "partial", "failed")

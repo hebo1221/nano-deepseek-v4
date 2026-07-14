@@ -134,6 +134,29 @@
     "protected_pins": ["hierarchical+pins", "hierarchical-no-pins"],
     "dense_fallback": ["hierarchical+pins+fallback", "hierarchical+pins"]
   },
+  "supplemental_baseline_arms": {
+    "fixed-top-p-0.5": {
+      "threshold": 0.5,
+      "quota_source": "same calibration-frozen uniform low-high cap schedule as fixed top-k",
+      "signals": "current-layer top-p cardinality only; uncertainty extras disabled",
+      "memory_claim": "realized hot memory is measured and reported; equality to fixed top-k is not assumed",
+      "protected_pins": false
+    },
+    "fixed-top-p-0.8": {
+      "threshold": 0.8,
+      "quota_source": "same calibration-frozen uniform low-high cap schedule as fixed top-k",
+      "signals": "current-layer top-p cardinality only; uncertainty extras disabled",
+      "memory_claim": "realized hot memory is measured and reported; equality to fixed top-k is not assumed",
+      "protected_pins": false
+    }
+  },
+  "offline_oracle_upper_bound": {
+    "unit": "complete held-out conversation",
+    "candidate_set": "all 16 registered causal arms at the same scale and budget cell",
+    "selection": "maximum conversation accuracy using held-out targets",
+    "role": "non-causal descriptive upper bound only",
+    "leakage_rule": "never used for calibration, arm selection, memory matching, or the primary causal gate"
+  },
   "shuffle_rule": {
     "algorithm": "cyclically rotate calibrated quota values over sorted eligible layer ids",
     "initial_offset": "1 + int(calibration_digest[0:8], 16) mod (layer_count - 1)",
@@ -171,8 +194,8 @@
     "replicates_per_context": 10,
     "batch_size": 4,
     "total_expected_shards": 9000,
-    "total_quality_arm_conversations": 2520000,
-    "total_physical_arm_conversations": 360000,
+    "total_quality_arm_conversations": 2880000,
+    "total_physical_arm_conversations": 720000,
     "component_arms_use_full_sample": true,
     "quality_chunk_size_by_scale": {"s55": 2, "s151": 1},
     "quality_path_requirement": "each factorial arm must pass exact sequential physical-tier prediction equivalence before chunked quality execution",
@@ -182,13 +205,18 @@
       "generation_seed_base_by_scale": {"s55": 9071401, "s151": 9071402},
       "examples_per_family_context": 4,
       "budgets": ["2x", "4x"],
-      "arms": "all 10 primary and 4 component arms",
+      "arms": "all 10 primary, 2 fixed-top-p baseline, and 4 component arms",
       "paths": ["chunked-quality", "sequential-physical-tier"],
-      "required_exact_records_per_seed_scale": 5040,
-      "required_exact_records_total": 50400,
+      "required_exact_records_per_seed_scale": 5760,
+      "required_exact_records_total": 57600,
       "raw_output_root": "artifacts/adaptive_v4_memory/paper_grade/p2_causal_equivalence"
     },
-    "physical_path_arms": ["fixed+pins", "calibrated+pins"],
+    "physical_path_arms": [
+      "fixed+pins",
+      "calibrated+pins",
+      "fixed-top-p-0.5",
+      "fixed-top-p-0.8"
+    ],
     "execution_order": "deterministic rotation of all arms within every paired batch",
     "exact_config_reuse": {
       "scope": "within one paired batch only",

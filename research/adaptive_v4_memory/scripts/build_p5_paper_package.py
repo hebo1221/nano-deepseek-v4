@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 ALLOWED_CLASSES = {"success", "bounded-result", "negative-result", "unverified"}
+P4_EXPECTED_CELLS = 216
 
 
 def sha256(path: Path) -> str:
@@ -59,6 +60,7 @@ def _validate_evidence(name: str, path: Path, contract: dict[str, Any]) -> dict[
 
 def classify_evidence(
     p2_core: dict[str, Any],
+    m5_one_token_pilot: dict[str, Any],
     p2_causal: dict[str, Any],
     p3_ruler: dict[str, Any],
     p3_natural: dict[str, Any],
@@ -71,6 +73,15 @@ def classify_evidence(
 ) -> dict[str, str]:
     core_passed = any(
         row.get("passes_fixed_baseline_component") is True for row in p2_core["quality_gate"]
+    )
+    m5_audit = m5_one_token_pilot["audit"]
+    m5_complete = (
+        m5_audit.get("raw_artifacts_verified") is True
+        and m5_audit.get("scales_verified") == 2
+        and m5_audit.get("workloads_per_scale") == 3
+        and m5_audit.get("required_arms_verified") == 4
+        and m5_audit.get("one_token_semantics_verified") is True
+        and m5_audit.get("pilot_negative_result_verified") is True
     )
     causal_passed = p2_causal["primary_causal_gate"].get("passed") is True
     p3_complete = p3_ruler.get("benchmark_complete") is True
@@ -106,8 +117,7 @@ def classify_evidence(
         and natural_safety_audit.get("ifeval_input_pairing_verified") is True
         and natural_safety_audit.get("ifeval_expected_prompts_per_arm") == 541
         and natural_safety_audit.get("failure_accounting_complete") is True
-        and natural_safety_audit.get("comparative_long_context_safety_claim_available")
-        is False
+        and natural_safety_audit.get("comparative_long_context_safety_claim_available") is False
     )
     ifeval_audit = p3_ifeval["audit"]
     ifeval_complete = (
@@ -125,11 +135,11 @@ def classify_evidence(
         and longsafety_audit.get("official_judge_status") == "complete"
     )
     reference_audit = p4_reference_systems["audit"]
-    reference_complete = reference_audit.get("terminal_cells") == 108
+    reference_complete = reference_audit.get("terminal_cells") == P4_EXPECTED_CELLS
     production_audit = p4_production_systems["audit"]
     production_full = (
-        production_audit.get("terminal_cells") == 108
-        and production_audit.get("complete_cells") == 108
+        production_audit.get("terminal_cells") == P4_EXPECTED_CELLS
+        and production_audit.get("complete_cells") == P4_EXPECTED_CELLS
         and production_audit.get("partial_cells") == 0
         and production_audit.get("failed_cells") == 0
         and production_audit.get("actual_concurrency_verified") is True
@@ -138,7 +148,7 @@ def classify_evidence(
         and production_audit.get("tail_failure_accounting_complete") is True
         and production_audit.get("all_paired_predictions_identical") is True
     )
-    production_terminal = production_audit.get("terminal_cells") == 108
+    production_terminal = production_audit.get("terminal_cells") == P4_EXPECTED_CELLS
     production_class = (
         "success"
         if production_full
@@ -148,13 +158,12 @@ def classify_evidence(
     )
     result = {
         "p2_core": "success" if core_passed else "negative-result",
+        "m5_one_token_pilot": "negative-result" if m5_complete else "unverified",
         "p2_causal": "success" if causal_passed else "bounded-result",
         "p3_ruler": "bounded-result" if p3_complete else "unverified",
         "p3_natural": "bounded-result" if natural_complete else "unverified",
         "p3_safety": "bounded-result" if safety_complete else "unverified",
-        "p3_natural_safety": (
-            "bounded-result" if natural_safety_complete else "unverified"
-        ),
+        "p3_natural_safety": ("bounded-result" if natural_safety_complete else "unverified"),
         "p3_ifeval": "bounded-result" if ifeval_complete else "unverified",
         "p3_longsafety": "bounded-result" if longsafety_judged else "unverified",
         "p4_reference_systems": "bounded-result" if reference_complete else "unverified",
@@ -271,6 +280,7 @@ def _report(
     *,
     classifications: dict[str, str],
     p2_core: dict[str, Any],
+    m5_one_token_pilot: dict[str, Any],
     p2_causal: dict[str, Any],
     p3_ruler: dict[str, Any],
     p3_natural: dict[str, Any],
@@ -305,11 +315,17 @@ mechanical and deliberately narrower than the motivating hypothesis.
 - P2 core: {p2_core["audit"]["unique_shards"]:,} verified shards, 5 training seeds,
   2 scales, 9 workload families, 5 contexts, and 1,000 examples per
   seed-scale-family.
+- M5 one-token baseline: {m5_one_token_pilot["audit"]["scales_verified"]} scales,
+  {m5_one_token_pilot["audit"]["workloads_per_scale"]} synthetic workloads per scale,
+  classified only as a pilot negative result for the tested interface.
 - P2 causal: {p2_causal["audit"]["unique_shards"]:,} verified factorial shards;
   {p2_causal["audit"]["quality_execution_counts"]["executed"]:,} quality forwards were
   executed and {p2_causal["audit"]["quality_execution_counts"]["reused_exact_config"]:,}
   arm-batches reused an exact byte-identical config; the calibrated+pins versus
   fixed+pins gate passed: **{causal["passed"]}**.
+- P2 supplemental baselines: fixed top-p 0.5/0.8 are evaluated on the complete
+  factorial, and the target-aware registered-arm oracle is reported only as a
+  non-causal upper bound over {len(p2_causal["offline_oracle_upper_bound"]["registered_arms"])} arms.
 - P3 RULER: {p3_ruler["audit"]["completed_cells"]} cells and
   {p3_ruler["audit"]["total_predictions"]:,} predictions on one pinned compatible model.
 - P3 natural suite: {p3_natural["audit"]["benchmarks_terminal"]} terminal benchmarks and
@@ -371,6 +387,7 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
 
     classes = classify_evidence(
         loaded["p2_core"],
+        loaded["m5_one_token_pilot"],
         loaded["p2_causal"],
         loaded["p3_ruler"],
         loaded["p3_natural"],
@@ -435,6 +452,7 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
     report = _report(
         classifications=classes,
         p2_core=loaded["p2_core"],
+        m5_one_token_pilot=loaded["m5_one_token_pilot"],
         p2_causal=loaded["p2_causal"],
         p3_ruler=loaded["p3_ruler"],
         p3_natural=loaded["p3_natural"],

@@ -23,6 +23,7 @@ class CausalArmSpec:
     refresh_reuse: bool
     protected_pins: bool
     dense_fallback: bool = False
+    top_p: float | None = None
 
 
 @dataclass(frozen=True)
@@ -81,6 +82,11 @@ COMPONENT_ARMS = (
     CausalArmSpec("hierarchical+pins-no-temporal", "calibrated", True, False, True, True, True),
     CausalArmSpec("hierarchical+pins-no-refresh", "calibrated", True, True, True, False, True),
     CausalArmSpec("hierarchical+pins+fallback", "calibrated", True, True, True, True, True, True),
+)
+
+SUPPLEMENTAL_BASELINE_ARMS = (
+    CausalArmSpec("fixed-top-p-0.5", "uniform", True, False, False, False, False, top_p=0.5),
+    CausalArmSpec("fixed-top-p-0.8", "uniform", True, False, False, False, False, top_p=0.8),
 )
 
 
@@ -212,8 +218,17 @@ def build_arm_configs(
         *,
         signal_config: TrainingFreeControllerConfig = signal,
     ) -> SameTokenControllerConfig:
+        arm_signal = (
+            replace(
+                signal_config,
+                top_p=arm.top_p,
+                max_extra_blocks_per_layer=0,
+            )
+            if arm.top_p is not None
+            else signal_config
+        )
         return SameTokenControllerConfig(
-            signal=signal_config,
+            signal=arm_signal,
             layer_budgets=layer_budgets,
             dense_layer_budgets=layer_budgets,
             enable_score_concentration=arm.score_concentration,
@@ -225,7 +240,7 @@ def build_arm_configs(
         )
 
     configs: dict[str, BuiltCausalArm] = {}
-    for arm in (*PRIMARY_ARMS, *COMPONENT_ARMS):
+    for arm in (*PRIMARY_ARMS, *SUPPLEMENTAL_BASELINE_ARMS, *COMPONENT_ARMS):
         if arm.quota_source == "uniform":
             low = make_config(arm, uniform_low, signal_config=fixed_signal)
             if fixed_high_numerator:
@@ -322,6 +337,10 @@ def main() -> None:
         raise ValueError("The frozen P2 causal-factorial manifest is required.")
     if set(design.get("primary_arms", {})) != {arm.name for arm in PRIMARY_ARMS}:
         raise ValueError("Causal-factorial manifest arm set drifted.")
+    if set(design.get("supplemental_baseline_arms", {})) != {
+        arm.name for arm in SUPPLEMENTAL_BASELINE_ARMS
+    }:
+        raise ValueError("Causal-factorial supplemental baseline arm set drifted.")
     if args.budget not in design.get("central_gate", {}).get("required_budget_points", ()):
         raise ValueError("Requested budget is outside the central causal gate.")
     calibration = json.loads(args.calibration.read_text())

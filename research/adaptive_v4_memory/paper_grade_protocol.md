@@ -1,14 +1,22 @@
 # Paper-grade expansion protocol
 
-Protocol version: 1.1
+Protocol version: 1.2
 Frozen: 2026-07-14  
-Amended: 2026-07-14, before the full P2 matrix or causal-ablation analysis
+Amended: 2026-07-14, before causal-factorial held-out execution
 Status: active; P2 synthetic core runs first, followed by causal ablations,
 natural-language evaluation, and systems evaluation
 
 This amendment supersedes the experimental scale of the M5 pilot. It does not
 erase the pilot result: it narrows that result to the exact one-token global M2
 interface and preregisters the evidence required for broader claims.
+
+Version 1.2 adds fixed top-p thresholds 0.5 and 0.8 to every held-out causal
+factorial cell and freezes a target-aware offline upper bound that selects the
+best complete-conversation result among all 16 registered arms. The oracle is
+descriptive, non-causal, and prohibited from calibration, memory matching,
+method selection, or the primary gate. It also replaces the marginal six-profile
+P4 sweeps with the complete 4 batch × 3 load/concurrency factorial before any
+systems cell is generated.
 
 ## 1. Primary questions
 
@@ -69,9 +77,10 @@ The enforced causal execution chain is:
    within 1% of `calibrated+pins` for both 2x and 4x at every seed and scale;
 3. for every one of the 10 seed-scale checkpoints, require exact prediction and
    budget equivalence between chunked-quality and sequential physical-tier
-   paths across all 14 arms, 2 budgets, 9 families, and 5 contexts; and
-4. run the 9,000 held-out factorial shards (2,520,000 quality arm-conversations
-   plus 360,000 direct physical arm-conversations).
+   paths across all 16 arms, 2 budgets, 9 families, and 5 contexts; and
+4. run the 9,000 held-out factorial shards (2,880,000 quality arm-conversations
+   plus 720,000 direct physical arm-conversations for the central pair and two
+   fixed top-p baselines).
 
 No stage may consume 807-series quality to tune the fixed mixture. A failed
 calibration-memory cell or equivalence audit blocks held-out execution for that
@@ -273,9 +282,9 @@ outliers are retained in an explicit tail-failure table.
 Reference PyTorch and fused production runtimes are separate result tables.
 Projected kernel speedups are never mixed with measured results.
 
-The production matrix uses six controlled load profiles: b1/b4/b8/b16 at
-concurrency 1 and b1 at actual concurrency 8/32. This yields 108 paired cells
-across two scales, three contexts, and three generation lengths. Actual
+The production matrix crosses all four batch sizes with actual concurrency
+1/8/32. This yields 216 paired cells across two scales, three contexts, and
+three generation lengths. Actual
 concurrency is reconstructed from request-level scheduler admission,
 first-token, and completion timestamps; all c8/c32 request lifetimes must share
 a positive overlap window. Runtime/source/container-or-bare-metal, executable,

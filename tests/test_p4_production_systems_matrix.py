@@ -111,13 +111,16 @@ def _adapter_payload(
     }
 
 
-def test_production_matrix_has_108_actual_serving_profiles() -> None:
+def test_production_matrix_has_full_batch_concurrency_factorial() -> None:
     cells = production.frozen_cells()
 
-    assert len(cells) == production.EXPECTED_CELLS == 108
+    assert len(cells) == production.EXPECTED_CELLS == 216
     assert len(set(cells)) == len(cells)
     assert {cell[5] for cell in cells} == {1, 8, 32}
     assert {cell[4] for cell in cells} == {1, 4, 8, 16}
+    assert {(cell[4], cell[5]) for cell in cells} == {
+        (batch, concurrency) for batch in (1, 4, 8, 16) for concurrency in (1, 8, 32)
+    }
     assert all(cell[3].startswith("serving-") for cell in cells)
 
 

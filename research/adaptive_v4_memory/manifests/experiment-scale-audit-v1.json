@@ -1,7 +1,14 @@
 {
   "schema_version": 1,
   "experiment_id": "adaptive-v4-memory-experiment-scale-audit-v1",
-  "status": "frozen_before_primary_completion",
+  "status": "amended_and_frozen_before_primary_completion",
+  "protocol_amendments": [
+    {
+      "date": "2026-07-14",
+      "timing": "before any P4 systems cell was generated",
+      "change": "expand both systems matrices from marginal six-profile sweeps to the complete 4 batch x 3 load/concurrency factorial"
+    }
+  ],
   "date": "2026-07-14",
   "planned_volume": {
     "p2_core": {
@@ -15,10 +22,12 @@
     },
     "p2_causal": {
       "independent_shards": 9000,
-      "policy_example_evaluations": 2520000,
+      "policy_example_evaluations": 2880000,
       "training_seeds": 5,
       "scales": 2,
-      "factorial_arms": 14
+      "factorial_arms": 16,
+      "fixed_top_p_thresholds": [0.5, 0.8],
+      "offline_registered_arm_oracle": true
     },
     "p3_small_model_ruler": {
       "predictions": 253500,
@@ -49,17 +58,18 @@
       "official_longsafety_judge": "blocked_pending_explicit_paid_api_opt_in"
     },
     "p4_reference": {
-      "cells": 108,
+      "cells": 216,
       "warmups_per_cell": 5,
       "measured_repetitions_per_cell": 30,
       "policies": 2,
-      "policy_runs_including_warmups": 7560
+      "policy_runs_including_warmups": 15120
     },
     "p4_production": {
-      "cells": 108,
+      "cells": 216,
       "warmups_per_cell": 5,
       "measured_repetitions_per_cell": 30,
-      "policies": 2
+      "policies": 2,
+      "policy_runs_including_warmups": 15120
     }
   },
   "primary_paper_comparators": [

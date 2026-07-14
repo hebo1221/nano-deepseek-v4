@@ -45,6 +45,8 @@ CONTRASTS = {
     "temporal_reuse": ("hierarchical+pins", "hierarchical+pins-no-temporal"),
     "refresh_reuse": ("hierarchical+pins", "hierarchical+pins-no-refresh"),
     "dense_fallback": ("hierarchical+pins+fallback", "hierarchical+pins"),
+    "fixed_top_p_0_5": ("fixed-top-p-0.5", "fixed"),
+    "fixed_top_p_0_8": ("fixed-top-p-0.8", "fixed"),
 }
 
 
@@ -72,15 +74,12 @@ def validate_exact_config_reuse(
 ) -> dict[str, int]:
     """Audit executed/reused rows without treating reuse as a new forward."""
 
-    by_batch_arm = {
-        (row.get("schedule_batch_index"), row.get("arm")): row for row in rows
-    }
+    by_batch_arm = {(row.get("schedule_batch_index"), row.get("arm")): row for row in rows}
     _require(len(by_batch_arm) == len(rows), "Duplicate causal execution-accounting row.")
     batches = {key[0] for key in by_batch_arm}
     _require(
         all(
-            {arm for batch, arm in by_batch_arm if batch == batch_index}
-            == set(expected_arms)
+            {arm for batch, arm in by_batch_arm if batch == batch_index} == set(expected_arms)
             for batch_index in batches
         ),
         "Causal execution-accounting arm coverage drifted.",
@@ -132,6 +131,21 @@ def validate_exact_config_reuse(
     return counts
 
 
+def registered_arm_oracle_scores(
+    by_arm_conversation: dict[tuple[str, str], dict[str, Any]], conversation_id: str
+) -> tuple[float, float]:
+    """Return target-aware oracle and fixed comparator conversation accuracy."""
+
+    registered = [
+        by_arm_conversation[(arm_name, conversation_id)] for arm_name in shard.ALL_ARM_NAMES
+    ]
+    totals = {record["total"] for record in registered}
+    _require(len(totals) == 1, "Offline oracle query counts drifted across arms.")
+    oracle_score = max(record["correct_count"] / record["total"] for record in registered)
+    reference = by_arm_conversation[(PRIMARY_COMPARATOR, conversation_id)]
+    return oracle_score, reference["correct_count"] / reference["total"]
+
+
 def _verify_dependency(
     metadata: dict[str, Any],
     name: str,
@@ -171,7 +185,13 @@ def contrast_statistics(
         for budget in shard.BUDGET_LABELS:
             values = _merge(
                 group
-                for (item_scale, item_budget, _seed, _family, _context), group in differences.items()
+                for (
+                    item_scale,
+                    item_budget,
+                    _seed,
+                    _family,
+                    _context,
+                ), group in differences.items()
                 if item_scale == scale and item_budget == budget
             )
             cells.append(
@@ -192,9 +212,7 @@ def contrast_statistics(
                         _family,
                         _context,
                     ), group in differences.items()
-                    if item_scale == scale
-                    and item_budget == budget
-                    and item_seed == training_seed
+                    if item_scale == scale and item_budget == budget and item_seed == training_seed
                 )
                 seeds.append(
                     {
@@ -203,9 +221,7 @@ def contrast_statistics(
                         "training_seed": training_seed,
                         "paired_units": len(seed_values),
                         "mean_difference": float(np.mean(seed_values)),
-                        "mean_difference_percentage_points": float(
-                            np.mean(seed_values) * 100.0
-                        ),
+                        "mean_difference_percentage_points": float(np.mean(seed_values) * 100.0),
                     }
                 )
                 cell_seed_means.append(float(np.mean(seed_values)))
@@ -224,9 +240,7 @@ def contrast_statistics(
                         item_family,
                         _context,
                     ), group in differences.items()
-                    if item_scale == scale
-                    and item_budget == budget
-                    and item_family == family
+                    if item_scale == scale and item_budget == budget and item_family == family
                 )
                 row = {
                     "scale": scale,
@@ -265,9 +279,7 @@ def contrast_statistics(
                 cell_families.append(row)
             adjusted = holm_bonferroni(
                 {
-                    row["family"]: row["seed_cluster_inference"][
-                        "paired_randomization_two_sided_p"
-                    ]
+                    row["family"]: row["seed_cluster_inference"]["paired_randomization_two_sided_p"]
                     for row in cell_families
                 }
             )
@@ -320,9 +332,26 @@ def physical_memory_statistics(
 ) -> dict[str, Any]:
     seed_cells: list[dict[str, Any]] = []
     aggregate_cells: list[dict[str, Any]] = []
+    all_arm_seed_cells: list[dict[str, Any]] = []
     for scale in ("s55", "s151"):
         for budget in shard.BUDGET_LABELS:
             for training_seed in shard.TRAINING_SEEDS:
+                for arm in shard.PHYSICAL_ARM_NAMES:
+                    arm_values = values[(scale, budget, training_seed, arm)]
+                    _require(
+                        len(arm_values) == EXPECTED_PHYSICAL_BATCHES_PER_SEED_CELL,
+                        "Physical held-out arm coverage drifted.",
+                    )
+                    all_arm_seed_cells.append(
+                        {
+                            "scale": scale,
+                            "budget": budget,
+                            "training_seed": training_seed,
+                            "arm": arm,
+                            "physical_batches": len(arm_values),
+                            "mean_hot_resident_bytes": float(np.mean(arm_values)),
+                        }
+                    )
                 fixed = values[(scale, budget, training_seed, PRIMARY_COMPARATOR)]
                 calibrated = values[(scale, budget, training_seed, PRIMARY_CANDIDATE)]
                 _require(
@@ -370,12 +399,14 @@ def physical_memory_statistics(
                     ),
                 }
             )
-    return {"by_seed": seed_cells, "aggregate": aggregate_cells}
+    return {
+        "by_seed": seed_cells,
+        "aggregate": aggregate_cells,
+        "all_physical_arms_by_seed": all_arm_seed_cells,
+    }
 
 
-def primary_causal_gate(
-    statistics: dict[str, Any], memory: dict[str, Any]
-) -> dict[str, Any]:
+def primary_causal_gate(statistics: dict[str, Any], memory: dict[str, Any]) -> dict[str, Any]:
     cells: list[dict[str, Any]] = []
     for scale in ("s55", "s151"):
         for budget in shard.BUDGET_LABELS:
@@ -400,17 +431,11 @@ def primary_causal_gate(
                 "budget": budget,
                 "pooled_effect_positive": quality["mean_difference"] > 0.0,
                 "four_cell_corrected_lower_bound": corrected["confidence_interval"][0],
-                "four_cell_corrected_lower_bound_positive": corrected[
-                    "confidence_interval"
-                ][0]
+                "four_cell_corrected_lower_bound_positive": corrected["confidence_interval"][0]
                 > 0.0,
-                "positive_seed_effects": sum(
-                    row["mean_difference"] > 0.0 for row in seed_rows
-                ),
+                "positive_seed_effects": sum(row["mean_difference"] > 0.0 for row in seed_rows),
                 "required_seed_effects": len(shard.TRAINING_SEEDS),
-                "all_seed_effects_positive": all(
-                    row["mean_difference"] > 0.0 for row in seed_rows
-                ),
+                "all_seed_effects_positive": all(row["mean_difference"] > 0.0 for row in seed_rows),
                 "memory_match_relative_difference": memory_row["relative_difference"],
                 "all_seed_memory_cells_within_one_percent": memory_row[
                     "all_seed_cells_within_one_percent"
@@ -443,9 +468,7 @@ def main() -> None:
     parser.add_argument(
         "--matrix",
         type=Path,
-        default=Path(
-            "artifacts/adaptive_v4_memory/paper_grade/p2-causal-factorial-matrix.json"
-        ),
+        default=Path("artifacts/adaptive_v4_memory/paper_grade/p2-causal-factorial-matrix.json"),
     )
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
@@ -466,6 +489,18 @@ def main() -> None:
     )
     _require(tuple(design.get("contexts", ())) == shard.CONTEXTS, "Context drifted.")
     _require(tuple(design.get("replicates", ())) == shard.REPLICATES, "Replicate drifted.")
+    _require(
+        tuple(design.get("primary_arms", ())) == shard.PRIMARY_ARM_NAMES
+        and tuple(design.get("supplemental_baseline_arms", ()))
+        == shard.SUPPLEMENTAL_BASELINE_ARM_NAMES
+        and tuple(design.get("component_arms", ())) == shard.COMPONENT_ARM_NAMES,
+        "Causal arm design drifted.",
+    )
+    _require(
+        design.get("total_quality_policy_conversations")
+        == EXPECTED_SHARDS * shard.EXAMPLES_PER_SHARD * len(shard.ALL_ARM_NAMES),
+        "Causal quality volume drifted.",
+    )
     runs = matrix.get("runs")
     _require(isinstance(runs, list) and len(runs) == EXPECTED_SHARDS, "Run count drifted.")
     implementation_digest = matrix.get("implementation_digest")
@@ -484,9 +519,12 @@ def main() -> None:
         )
     )
     seen: set[tuple[str, int, str, str, int, int]] = set()
-    differences: dict[
-        str, dict[tuple[str, str, int, str, int], list[float]]
-    ] = {name: defaultdict(list) for name in CONTRASTS}
+    differences: dict[str, dict[tuple[str, str, int, str, int], list[float]]] = {
+        name: defaultdict(list) for name in CONTRASTS
+    }
+    oracle_differences: dict[tuple[str, str, int, str, int], list[float]] = defaultdict(list)
+    oracle_values: dict[tuple[str, str, int, str, int], list[float]] = defaultdict(list)
+    oracle_comparator_values: dict[tuple[str, str, int, str, int], list[float]] = defaultdict(list)
     physical: dict[tuple[str, str, int, str], list[int]] = defaultdict(list)
     raw_digests: list[str] = []
     verified_dependencies: set[tuple[str, str, str]] = set()
@@ -516,6 +554,13 @@ def main() -> None:
         )
         for key in ("scale", "training_seed", "budget", "family", "context", "replicate"):
             _require(raw.get(key) == run.get(key), f"Causal run metadata drifted: {key}")
+        _require(
+            tuple(raw.get("primary_arms", ())) == shard.PRIMARY_ARM_NAMES
+            and tuple(raw.get("supplemental_baseline_arms", ()))
+            == shard.SUPPLEMENTAL_BASELINE_ARM_NAMES
+            and tuple(raw.get("component_arms", ())) == shard.COMPONENT_ARM_NAMES,
+            "Causal raw arm contract drifted.",
+        )
         records_raw = raw.get("records")
         _require(isinstance(records_raw, list), "Causal records are not a list.")
         records = cast(list[dict[str, Any]], records_raw)
@@ -524,9 +569,7 @@ def main() -> None:
             "Causal record count drifted.",
         )
         _require(records_digest(records) == raw.get("records_digest"), "Record digest drifted.")
-        checkpoint_path = _verify_dependency(
-            raw["checkpoint"], "checkpoint", verified_dependencies
-        )
+        checkpoint_path = _verify_dependency(raw["checkpoint"], "checkpoint", verified_dependencies)
         del checkpoint_path
         calibration_path = _verify_dependency(
             raw["calibration_artifact"], "calibration artifact", verified_dependencies
@@ -555,8 +598,7 @@ def main() -> None:
             validated_equivalences.add(equivalence_path)
         batch_metrics = raw["batch_metrics"]
         _require(
-            len(batch_metrics)
-            == shard.BATCHES_PER_SHARD * len(shard.ALL_ARM_NAMES),
+            len(batch_metrics) == shard.BATCHES_PER_SHARD * len(shard.ALL_ARM_NAMES),
             "Causal batch metric coverage drifted.",
         )
         _require(
@@ -569,8 +611,7 @@ def main() -> None:
         for key, value in shard_quality_counts.items():
             quality_execution_counts[key] += value
         quality_by_schedule_arm = {
-            (metric["schedule_batch_index"], metric["arm"]): metric
-            for metric in batch_metrics
+            (metric["schedule_batch_index"], metric["arm"]): metric for metric in batch_metrics
         }
         _require(
             raw.get("arm_metadata", {}).get("fixed_match_source")
@@ -592,9 +633,7 @@ def main() -> None:
             "Causal conversation coverage drifted.",
         )
         for record in records:
-            metric = quality_by_schedule_arm[
-                (record["schedule_batch_index"], record["arm"])
-            ]
+            metric = quality_by_schedule_arm[(record["schedule_batch_index"], record["arm"])]
             _require(
                 record.get("execution_mode") == metric.get("execution_mode")
                 and record.get("reused_from_arm") == metric.get("reused_from_arm")
@@ -632,6 +671,12 @@ def main() -> None:
                     candidate["correct_count"] / candidate["total"]
                     - comparator["correct_count"] / comparator["total"]
                 )
+            oracle_score, comparator_score = registered_arm_oracle_scores(
+                by_arm_conversation, conversation_id
+            )
+            oracle_values[difference_key].append(oracle_score)
+            oracle_comparator_values[difference_key].append(comparator_score)
+            oracle_differences[difference_key].append(oracle_score - comparator_score)
         measurements = raw.get("physical_measurements", [])
         _require(
             len(measurements) == shard.BATCHES_PER_SHARD * len(shard.PHYSICAL_ARM_NAMES),
@@ -690,6 +735,24 @@ def main() -> None:
         )
         for name, values in differences.items()
     }
+    oracle_payload = contrast_statistics(
+        oracle_differences,
+        name="offline_registered_arm_oracle",
+        candidate="offline-registered-arm-oracle",
+        comparator=PRIMARY_COMPARATOR,
+    )
+    for cell in oracle_payload["cells"]:
+        keys = [
+            key for key in oracle_values if key[0] == cell["scale"] and key[1] == cell["budget"]
+        ]
+        observed = _merge(oracle_values[key] for key in keys)
+        comparator_observed = _merge(oracle_comparator_values[key] for key in keys)
+        cell["oracle_mean_conversation_accuracy"] = float(np.mean(observed))
+        cell["comparator_mean_conversation_accuracy"] = float(np.mean(comparator_observed))
+    oracle_payload["registered_arms"] = list(shard.ALL_ARM_NAMES)
+    oracle_payload["selection_unit"] = "complete held-out conversation"
+    oracle_payload["inference_role"] = "descriptive non-causal upper bound only"
+    oracle_payload["used_for_primary_gate"] = False
     for scale in ("s55", "s151"):
         for budget in shard.BUDGET_LABELS:
             cell_rows = {
@@ -702,9 +765,7 @@ def main() -> None:
             }
             adjusted = holm_bonferroni(
                 {
-                    name: row["seed_cluster_inference"][
-                        "paired_randomization_two_sided_p"
-                    ]
+                    name: row["seed_cluster_inference"]["paired_randomization_two_sided_p"]
                     for name, row in cell_rows.items()
                 }
             )
@@ -753,6 +814,9 @@ def main() -> None:
             "no_budget_violations": True,
             "all_physical_predictions_identical": True,
             "exact_config_reuse_verified": True,
+            "registered_causal_arms": len(shard.ALL_ARM_NAMES),
+            "supplemental_fixed_top_p_arms_verified": True,
+            "offline_oracle_excluded_from_primary_gate": True,
             "quality_execution_counts": quality_execution_counts,
             "physical_execution_counts": physical_execution_counts,
             "unique_shards": len(seen),
@@ -761,6 +825,7 @@ def main() -> None:
             ).hexdigest(),
         },
         "paired_statistics": contrast_payload,
+        "offline_oracle_upper_bound": oracle_payload,
         "physical_hot_memory": memory,
         "primary_causal_gate": gate,
         "environment": {"python": platform.python_version(), "numpy": np.__version__},

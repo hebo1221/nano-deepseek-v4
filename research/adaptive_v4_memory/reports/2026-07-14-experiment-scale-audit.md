@@ -4,9 +4,9 @@
 
 The expanded protocol is no longer small by number of experimental units. It
 contains 4,500 core shards (630,000 policy-example evaluations), 9,000 causal
-shards (2.52 million policy-example evaluations), 253,500 small-model RULER
+shards (2.88 million policy-example evaluations across 16 arms), 253,500 small-model RULER
 predictions, 90,578 Qwen3-4B natural-benchmark predictions, 3,600 paired safety
-predictions, 7,254 paired natural-safety generations, and two 108-cell systems
+predictions, 7,254 paired natural-safety generations, and two 216-cell systems
 matrices with 30 measured repetitions per cell. The natural-safety suite covers
 6,172 LongSafety generations and 1,082 IFEval generations with official
 deterministic scoring; the paid LongSafety judge remains blocked. These units
@@ -36,14 +36,17 @@ replication is completed.
    sweep.
 2. Report every operational failure as zero in conservative quality aggregates
    and retain worst family×context slices.
-3. Keep the 3-arm safety contrast same-budget and verify physical KV bytes,
+3. Retain fixed top-p 0.5/0.8 on the full causal grid and report the
+   target-aware registered-arm oracle only as a non-causal descriptive upper
+   bound.
+4. Keep the 3-arm safety contrast same-budget and verify physical KV bytes,
    paired inputs, bootstrap uncertainty, and the exact paired test.
-4. Execute the two-arm natural-safety suite, score IFEval with pinned official
+5. Execute the two-arm natural-safety suite, score IFEval with pinned official
    code plus revision-bound `punkt`/`punkt_tab` data, and report LongSafety only
    as digest-bound generation evidence while its paid judge is blocked.
-5. Keep reference PyTorch, checked static continuous batching, and unavailable
+6. Keep reference PyTorch, checked static continuous batching, and unavailable
    external production runtime as separate evidence tiers.
-6. After primary completion, add a second instruction-tuned model family only
+7. After primary completion, add a second instruction-tuned model family only
    when the causal result is positive or scientifically ambiguous. A clearly
    negative primary causal result should be published as bounded negative
    evidence instead of multiplying compute to search for a favorable model.

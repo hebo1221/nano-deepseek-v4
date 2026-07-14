@@ -1,7 +1,15 @@
 {
   "schema_version": 1,
   "experiment_id": "p4-production-systems-matrix-v1",
-  "status": "frozen_before_execution",
+  "status": "amended_and_frozen_before_execution",
+  "protocol_amendments": [
+    {
+      "date": "2026-07-14",
+      "timing": "before any P4 production cell was generated",
+      "change": "expand the six marginal load profiles to the complete 4 batch x 3 actual-concurrency factorial",
+      "reason": "measure batch-by-concurrency interactions rather than extrapolating them from b1 or c1"
+    }
+  ],
   "evidence_tier": "external-serving-adapter-actual-request-concurrency",
   "prerequisite": "complete digest-bound five-benchmark P3 natural-suite audit",
   "scales": ["s55", "s151"],
@@ -15,15 +23,21 @@
     {"name": "serving-b8-c1", "batch": 8, "concurrency": 1},
     {"name": "serving-b16-c1", "batch": 16, "concurrency": 1},
     {"name": "serving-b1-c8", "batch": 1, "concurrency": 8},
-    {"name": "serving-b1-c32", "batch": 1, "concurrency": 32}
+    {"name": "serving-b4-c8", "batch": 4, "concurrency": 8},
+    {"name": "serving-b8-c8", "batch": 8, "concurrency": 8},
+    {"name": "serving-b16-c8", "batch": 16, "concurrency": 8},
+    {"name": "serving-b1-c32", "batch": 1, "concurrency": 32},
+    {"name": "serving-b4-c32", "batch": 4, "concurrency": 32},
+    {"name": "serving-b8-c32", "batch": 8, "concurrency": 32},
+    {"name": "serving-b16-c32", "batch": 16, "concurrency": 32}
   ],
-  "matrix_interpretation": "Batch and concurrency are separate controlled sweeps. c8/c32 require overlapping request-lifecycle intervals measured by the serving scheduler; serial round-robin is invalid.",
+  "matrix_interpretation": "The complete 4 batch x 3 concurrency factorial is measured. c8/c32 require overlapping request-lifecycle intervals measured by the serving scheduler; serial round-robin is invalid.",
   "warmups_per_paired_cell": 5,
   "measured_repetitions_per_paired_cell": 30,
   "paired_policy_order": "alternate resident-first and tiered-first by repetition",
-  "primary_paired_cells": 108,
-  "primary_measured_policy_runs": 6480,
-  "primary_total_policy_runs_including_warmup": 7560,
+  "primary_paired_cells": 216,
+  "primary_measured_policy_runs": 12960,
+  "primary_total_policy_runs_including_warmup": 15120,
   "adapter_contract": {
     "interface": "executable --spec <json> --output <json>",
     "checked_reference_executable": "research/adaptive_v4_memory/scripts/p4_continuous_batch_adapter.py",

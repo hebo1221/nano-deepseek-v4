@@ -32,9 +32,7 @@ def _statistics() -> dict:
                 "scale": scale,
                 "budget": budget,
                 "mean_difference": 0.02,
-                "four_cell_corrected_bootstrap": {
-                    "confidence_interval": [0.01, 0.03]
-                },
+                "four_cell_corrected_bootstrap": {"confidence_interval": [0.01, 0.03]},
             }
             for scale in ("s55", "s151")
             for budget in ("2x", "4x")
@@ -103,6 +101,12 @@ def test_physical_memory_statistics_enforces_each_seed_cell() -> None:
                 values[(scale, budget, seed, "calibrated+pins")] = [
                     1_005
                 ] * causal.EXPECTED_PHYSICAL_BATCHES_PER_SEED_CELL
+                values[(scale, budget, seed, "fixed-top-p-0.5")] = [
+                    700
+                ] * causal.EXPECTED_PHYSICAL_BATCHES_PER_SEED_CELL
+                values[(scale, budget, seed, "fixed-top-p-0.8")] = [
+                    850
+                ] * causal.EXPECTED_PHYSICAL_BATCHES_PER_SEED_CELL
     values[("s151", "4x", causal.shard.TRAINING_SEEDS[-1], "fixed+pins")] = [
         900
     ] * causal.EXPECTED_PHYSICAL_BATCHES_PER_SEED_CELL
@@ -117,9 +121,8 @@ def test_physical_memory_statistics_enforces_each_seed_cell() -> None:
         and row["training_seed"] == causal.shard.TRAINING_SEEDS[-1]
     )
     failed_cell = next(
-        row
-        for row in result["aggregate"]
-        if row["scale"] == "s151" and row["budget"] == "4x"
+        row for row in result["aggregate"] if row["scale"] == "s151" and row["budget"] == "4x"
     )
     assert failed_seed["within_one_percent"] is False
     assert failed_cell["all_seed_cells_within_one_percent"] is False
+    assert len(result["all_physical_arms_by_seed"]) == 2 * 2 * 5 * 4

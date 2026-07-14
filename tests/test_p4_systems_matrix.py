@@ -14,13 +14,16 @@ import run_p4_systems_matrix as systems  # noqa: E402
 import summarize_p4_systems_matrix as summary  # noqa: E402
 
 
-def test_p4_frozen_matrix_has_108_paired_cells() -> None:
+def test_p4_frozen_matrix_has_full_batch_load_factorial() -> None:
     cells = systems.frozen_cells()
 
-    assert len(cells) == systems.EXPECTED_CELLS == 108
+    assert len(cells) == systems.EXPECTED_CELLS == 216
     assert len(set(cells)) == len(cells)
     assert {cell[3] for cell in cells} == {row[0] for row in systems.LOAD_PROFILES}
     assert "interleaved-c8" in {cell[3] for cell in cells}
+    assert {(cell[4], cell[5]) for cell in cells} == {
+        (batch, active_requests) for batch in (1, 4, 8, 16) for active_requests in (1, 8, 32)
+    }
     assert not any("serving" in cell[3] for cell in cells)
 
 
@@ -157,30 +160,38 @@ def test_production_manifest_requires_actual_overlap_and_backend_provenance() ->
     root = Path(__file__).resolve().parents[1]
     manifest = json.loads(
         (
-            root
-            / "research/adaptive_v4_memory/manifests/p4-production-systems-matrix-v1.json"
+            root / "research/adaptive_v4_memory/manifests/p4-production-systems-matrix-v1.json"
         ).read_text()
     )
 
     profiles = manifest["load_profiles"]
-    assert len(manifest["scales"]) * len(manifest["contexts_tokens"]) * len(
-        manifest["generation_tokens"]
-    ) * len(profiles) == 108
+    assert (
+        len(manifest["scales"])
+        * len(manifest["contexts_tokens"])
+        * len(manifest["generation_tokens"])
+        * len(profiles)
+        == 216
+    )
+    assert {(row["batch"], row["concurrency"]) for row in profiles} == {
+        (batch, concurrency) for batch in (1, 4, 8, 16) for concurrency in (1, 8, 32)
+    }
     assert {row["concurrency"] for row in profiles} == {1, 8, 32}
+    assert manifest["primary_paired_cells"] == 216
+    assert manifest["primary_measured_policy_runs"] == 12_960
+    assert manifest["primary_total_policy_runs_including_warmup"] == 15_120
     assert "overlap" in manifest["adapter_contract"]["actual_concurrency_proof"]
     assert "serial-round-robin labeled concurrent" in manifest["adapter_contract"]["forbidden"]
-    assert "runtime-name-and-version" in manifest["adapter_contract"][
-        "required_backend_provenance"
-    ]
-    assert "request admission, first-token, and completion timestamps" in manifest[
-        "required_measurements"
-    ]
+    assert "runtime-name-and-version" in manifest["adapter_contract"]["required_backend_provenance"]
+    assert (
+        "request admission, first-token, and completion timestamps"
+        in manifest["required_measurements"]
+    )
 
 
-def test_production_grid_has_108_cells_and_real_concurrency_profiles() -> None:
+def test_production_grid_has_full_factorial_and_real_concurrency_profiles() -> None:
     cells = production.frozen_cells()
 
-    assert len(cells) == production.EXPECTED_CELLS == 108
+    assert len(cells) == production.EXPECTED_CELLS == 216
     assert len(set(cells)) == len(cells)
     assert {cell[-1] for cell in cells} == {1, 8, 32}
 

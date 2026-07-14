@@ -60,13 +60,14 @@ def test_causal_matrix_size_matches_frozen_cartesian_product() -> None:
     assert design["execution"]["total_quality_arm_conversations"] == (
         expected * shard.EXAMPLES_PER_SHARD * len(shard.ALL_ARM_NAMES)
     )
+    assert len(shard.ALL_ARM_NAMES) == 16
     assert design["execution"]["total_physical_arm_conversations"] == (
         expected * shard.EXAMPLES_PER_SHARD * len(shard.PHYSICAL_ARM_NAMES)
     )
     equivalence = design["execution"]["equivalence_validation"]
-    assert shard.EXPECTED_EQUIVALENCE_RECORDS == 5_040
-    assert equivalence["required_exact_records_per_seed_scale"] == 5_040
-    assert equivalence["required_exact_records_total"] == 50_400
+    assert shard.EXPECTED_EQUIVALENCE_RECORDS == 5_760
+    assert equivalence["required_exact_records_per_seed_scale"] == 5_760
+    assert equivalence["required_exact_records_total"] == 57_600
     assert shard.MEMORY_MATCH_MIXTURE_DENOMINATOR == 2_250
 
 
@@ -80,14 +81,16 @@ def test_prerequisite_paths_match_the_causal_matrix_contract(tmp_path: Path) -> 
         equivalence_root=tmp_path / "equivalence",
     )
 
-    assert paths["checkpoint"].as_posix().endswith(
-        "training/s151/seed-6071405/s151-step-1000.pt"
+    assert paths["checkpoint"].as_posix().endswith("training/s151/seed-6071405/s151-step-1000.pt")
+    assert (
+        paths["memory_summary"]
+        .as_posix()
+        .endswith("memory/s151/seed-6071405/p2-causal-hot-memory-match.summary.json")
     )
-    assert paths["memory_summary"].as_posix().endswith(
-        "memory/s151/seed-6071405/p2-causal-hot-memory-match.summary.json"
-    )
-    assert paths["equivalence_summary"].as_posix().endswith(
-        "equivalence/s151/seed-6071405.summary.json"
+    assert (
+        paths["equivalence_summary"]
+        .as_posix()
+        .endswith("equivalence/s151/seed-6071405.summary.json")
     )
 
 
@@ -134,9 +137,7 @@ def test_exact_config_reuse_requires_digest_and_dataclass_identity() -> None:
     fixed = arms["fixed"].configs[0]
     calibrated = arms["calibrated-no-pins"].configs[0]
     pinned = arms["fixed+pins"].configs[0]
-    cache = {
-        shard.config_digest(fixed): ("fixed", fixed, {"predictions": [[1]]})
-    }
+    cache = {shard.config_digest(fixed): ("fixed", fixed, {"predictions": [[1]]})}
 
     assert fixed == calibrated
     assert shard.exact_config_reuse(cache, calibrated) == (
@@ -155,9 +156,7 @@ def test_causal_manifest_discloses_exact_config_reuse_before_execution() -> None
 
     assert design["status"] == "amended_and_frozen_before_execution"
     assert design["protocol_amendments"][0]["timing"].startswith("before any")
-    assert design["execution"]["exact_config_reuse"]["scope"] == (
-        "within one paired batch only"
-    )
+    assert design["execution"]["exact_config_reuse"]["scope"] == ("within one paired batch only")
 
 
 def test_exact_config_reuse_audit_counts_forwards_without_double_counting() -> None:
@@ -182,15 +181,14 @@ def test_exact_config_reuse_audit_counts_forwards_without_double_counting() -> N
         },
     ]
 
-    assert summary.validate_exact_config_reuse(
-        rows, expected_arms=("fixed", "calibrated")
-    ) == {"executed": 1, "reused_exact_config": 1}
+    assert summary.validate_exact_config_reuse(rows, expected_arms=("fixed", "calibrated")) == {
+        "executed": 1,
+        "reused_exact_config": 1,
+    }
 
     rows[1]["config_sha256"] = "b" * 64
     with pytest.raises(ValueError, match="reuse source drifted"):
-        summary.validate_exact_config_reuse(
-            rows, expected_arms=("fixed", "calibrated")
-        )
+        summary.validate_exact_config_reuse(rows, expected_arms=("fixed", "calibrated"))
 
 
 def test_causal_shard_executes_each_exact_config_once_per_batch(
@@ -243,9 +241,7 @@ def test_causal_shard_executes_each_exact_config_once_per_batch(
             "correct": [[True] for _ in range(batch_size)],
             "wall_ms": 1.0,
             "controller": {},
-            "controller_rows": [
-                {"budget_violations": 0} for _ in range(batch_size)
-            ],
+            "controller_rows": [{"budget_violations": 0} for _ in range(batch_size)],
         }
 
     def fake_physical(
@@ -289,11 +285,27 @@ def test_causal_shard_executes_each_exact_config_once_per_batch(
     assert generated == 20
     assert len(records) == 20 * len(shard.ALL_ARM_NAMES)
     assert len(metrics) == 5 * len(shard.ALL_ARM_NAMES)
-    assert len(quality_calls) == 5 * 10
+    assert len(quality_calls) == 5 * 12
     assert sum(row["execution_mode"] == "reused-exact-config" for row in metrics) == 20
     assert len(physical) == 5 * len(shard.PHYSICAL_ARM_NAMES)
-    assert len(physical_calls) == 5
+    assert len(physical_calls) == 15
     assert sum(row["execution_mode"] == "reused-exact-config" for row in physical) == 5
+
+
+def test_registered_arm_oracle_is_target_aware_and_not_the_fixed_score() -> None:
+    rows = {
+        (arm, "conversation"): {
+            "total": 2,
+            "correct_count": 1 if arm == shard.PRIMARY_ARM_NAMES[1] else 0,
+        }
+        for arm in shard.ALL_ARM_NAMES
+    }
+    rows[("fixed-top-p-0.8", "conversation")]["correct_count"] = 2
+
+    oracle, fixed = summary.registered_arm_oracle_scores(rows, "conversation")
+
+    assert oracle == 1.0
+    assert fixed == 0.5
 
 
 def test_physical_memory_match_overrides_fixed_schedule_without_changing_calibrated() -> None:
@@ -323,6 +335,21 @@ def test_physical_memory_match_overrides_fixed_schedule_without_changing_calibra
     }
     assert sum(value for _, value in calibrated.configs[0].layer_budgets) == 5
     assert metadata["fixed_match_source"] == "calibration-physical-hot-bytes"
+
+
+def test_supplemental_fixed_top_p_arms_freeze_threshold_and_uniform_budget() -> None:
+    arms, _metadata = build_arm_configs(
+        _calibration([[2, 1], [4, 2], [6, 2]], global_budget=6), "2x"
+    )
+
+    for threshold in (0.5, 0.8):
+        arm = arms[f"fixed-top-p-{threshold:.1f}"]
+        assert all(config.signal.top_p == threshold for config in arm.configs)
+        assert all(config.signal.max_extra_blocks_per_layer == 0 for config in arm.configs)
+        assert all(config.enable_score_concentration for config in arm.configs)
+        assert all(not config.enable_temporal_reuse for config in arm.configs)
+        assert all(not config.enable_cross_layer_signal for config in arm.configs)
+        assert all(not config.enable_protected_pins for config in arm.configs)
 
 
 def test_physical_memory_match_rejects_calibration_drift() -> None:

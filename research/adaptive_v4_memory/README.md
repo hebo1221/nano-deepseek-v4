@@ -196,14 +196,14 @@ golden-answer follow-up prompts while removing generated answer tokens;
 multi-request restores one compressed shared-context cache after every query.
 Task scorers, RepoQA thresholding, and the ROUGE metric script are digest-bound.
 
-The P4 reference systems matrix freezes 108 scale/context/generation/load cells,
+The P4 reference systems matrix freezes 216 scale/context/generation/load cells,
 with five warmups and 30 measured repetitions for resident and tiered policies.
 Policy failures are isolated: if resident OOMs, the surviving tiered policy is
 still measured and the cell is reported as partial instead of being discarded.
 Its c8/c32 profiles are serial round-robin active-request probes, not actual
-concurrent serving; they remain bounded reference evidence even at 108/108.
+concurrent serving; they remain bounded reference evidence even at 216/216.
 
-The separate P4 production manifest freezes another 108 cells behind an
+The separate P4 production manifest freezes another 216 cells behind an
 external serving-adapter contract. Its c8/c32 cells pass only when raw request
 admission, first-token, and completion timestamps reconstruct the requested
 overlap and the per-request, per-token execution records prove either a
@@ -229,9 +229,9 @@ After all audits finish, the strict P5 package can be regenerated with:
 
 The command requires a clean tree and complete 4,500-shard P2 core,
 9,000-shard causal, 253,500-prediction small-model RULER, five-benchmark natural,
-3,600-prediction safety-retention, 7,254-generation natural-safety, 108-cell
+3,600-prediction safety-retention, 7,254-generation natural-safety, 216-cell
 reference-system, and separate
-108-cell actual-concurrency production audits. It writes digest-indexed CSV
+216-cell actual-concurrency production audits. It writes digest-indexed CSV
 tables and a paper-style report under
 `artifacts/adaptive_v4_memory/paper_grade/p5/`; missing evidence is never
 imputed.
@@ -305,6 +305,11 @@ is retained, while executed and reused forwards are counted separately and a
 digest collision fails the shard. The amendment and its claim boundary are
 recorded in
 [`2026-07-14-p2-causal-exact-config-reuse.md`](reports/2026-07-14-p2-causal-exact-config-reuse.md).
+The same pre-execution amendment adds fixed top-p 0.5 and 0.8 to every causal
+cell, bringing the full factorial to 16 arms and 2.88 million quality
+arm-conversations. A target-aware best-registered-arm result is computed per
+complete conversation as an offline upper bound and is explicitly excluded
+from calibration and the primary causal gate.
 
 The S151 paired pilot is also complete. Hierarchical versus fixed was +5.89 pp
 at 1x, +2.68 pp at 2x, and 0 pp at 4x; the 1x difference again came from

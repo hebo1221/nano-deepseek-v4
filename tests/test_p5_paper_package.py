@@ -24,6 +24,19 @@ def _safety_evidence() -> dict[str, object]:
     }
 
 
+def _m5_pilot_evidence() -> dict[str, object]:
+    return {
+        "audit": {
+            "raw_artifacts_verified": True,
+            "scales_verified": 2,
+            "workloads_per_scale": 3,
+            "required_arms_verified": 4,
+            "one_token_semantics_verified": True,
+            "pilot_negative_result_verified": True,
+        }
+    }
+
+
 def _ifeval_evidence() -> dict[str, object]:
     return {
         "audit": {
@@ -73,6 +86,7 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
 
     assert set(manifest["evidence"]) == {
         "p2_core",
+        "m5_one_token_pilot",
         "p2_causal",
         "p3_ruler",
         "p3_natural",
@@ -86,23 +100,29 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
     assert manifest["evidence"]["p2_core"]["required_audit"]["unique_shards"] == 4500
     assert manifest["evidence"]["p2_causal"]["required_audit"]["unique_shards"] == 9000
     assert (
-        manifest["evidence"]["p2_causal"]["required_audit"][
-            "exact_config_reuse_verified"
-        ]
-        is True
+        manifest["evidence"]["p2_causal"]["required_audit"]["exact_config_reuse_verified"] is True
     )
     assert manifest["evidence"]["p3_ruler"]["required_audit"]["total_predictions"] == 253500
     assert manifest["evidence"]["p3_safety"]["required_audit"]["examples_accounted_per_arm"] == 1200
-    assert manifest["evidence"]["p4_reference_systems"]["required_audit"]["terminal_cells"] == 108
+    assert manifest["evidence"]["p4_reference_systems"]["required_audit"]["terminal_cells"] == 216
+    assert manifest["evidence"]["p4_production_systems"]["required_audit"]["terminal_cells"] == 216
     assert (
         manifest["evidence"]["p4_reference_systems"]["required_audit"][
             "all_artifact_digests_verified"
         ]
         is True
     )
-    assert "actual_concurrency_verified" not in manifest["evidence"][
-        "p4_production_systems"
-    ]["required_audit"]
+    assert manifest["evidence"]["p2_causal"]["required_audit"]["registered_causal_arms"] == 16
+    assert (
+        manifest["evidence"]["p2_causal"]["required_audit"][
+            "offline_oracle_excluded_from_primary_gate"
+        ]
+        is True
+    )
+    assert (
+        "actual_concurrency_verified"
+        not in manifest["evidence"]["p4_production_systems"]["required_audit"]
+    )
     assert (
         manifest["evidence"]["p4_production_systems"]["required_audit"][
             "all_artifact_digests_verified"
@@ -120,6 +140,7 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
 def test_p5_classification_preserves_claim_boundaries() -> None:
     classifications = package.classify_evidence(
         {"quality_gate": [{"passes_fixed_baseline_component": False}]},
+        _m5_pilot_evidence(),
         {"primary_causal_gate": {"passed": False}},
         {"benchmark_complete": True},
         {
@@ -139,14 +160,14 @@ def test_p5_classification_preserves_claim_boundaries() -> None:
         _longsafety_evidence(),
         {
             "audit": {
-                "terminal_cells": 108,
+                "terminal_cells": package.P4_EXPECTED_CELLS,
                 "partial_cells": 1,
                 "failed_cells": 2,
             }
         },
         {
             "audit": {
-                "terminal_cells": 108,
+                "terminal_cells": package.P4_EXPECTED_CELLS,
                 "complete_cells": 105,
                 "partial_cells": 1,
                 "failed_cells": 2,
@@ -161,6 +182,7 @@ def test_p5_classification_preserves_claim_boundaries() -> None:
 
     assert classifications == {
         "p2_core": "negative-result",
+        "m5_one_token_pilot": "negative-result",
         "p2_causal": "bounded-result",
         "p3_ruler": "bounded-result",
         "p3_natural": "bounded-result",
@@ -178,6 +200,7 @@ def test_p5_classification_preserves_claim_boundaries() -> None:
 def test_p5_success_requires_full_system_coverage() -> None:
     classifications = package.classify_evidence(
         {"quality_gate": [{"passes_fixed_baseline_component": True}]},
+        _m5_pilot_evidence(),
         {"primary_causal_gate": {"passed": True}},
         {"benchmark_complete": True},
         {
@@ -197,15 +220,15 @@ def test_p5_success_requires_full_system_coverage() -> None:
         _longsafety_evidence(),
         {
             "audit": {
-                "terminal_cells": 108,
+                "terminal_cells": package.P4_EXPECTED_CELLS,
                 "partial_cells": 0,
                 "failed_cells": 0,
             }
         },
         {
             "audit": {
-                "terminal_cells": 108,
-                "complete_cells": 108,
+                "terminal_cells": package.P4_EXPECTED_CELLS,
+                "complete_cells": package.P4_EXPECTED_CELLS,
                 "partial_cells": 0,
                 "failed_cells": 0,
                 "actual_concurrency_verified": True,
@@ -226,6 +249,7 @@ def test_p5_success_requires_full_system_coverage() -> None:
 def test_p5_marks_all_failed_production_coverage_unverified() -> None:
     classifications = package.classify_evidence(
         {"quality_gate": [{"passes_fixed_baseline_component": True}]},
+        _m5_pilot_evidence(),
         {"primary_causal_gate": {"passed": True}},
         {"benchmark_complete": True},
         {
@@ -243,13 +267,13 @@ def test_p5_marks_all_failed_production_coverage_unverified() -> None:
         _natural_safety_evidence(),
         _ifeval_evidence(),
         _longsafety_evidence(),
-        {"audit": {"terminal_cells": 108}},
+        {"audit": {"terminal_cells": package.P4_EXPECTED_CELLS}},
         {
             "audit": {
-                "terminal_cells": 108,
+                "terminal_cells": package.P4_EXPECTED_CELLS,
                 "complete_cells": 0,
                 "partial_cells": 0,
-                "failed_cells": 108,
+                "failed_cells": package.P4_EXPECTED_CELLS,
                 "actual_concurrency_verified": False,
                 "all_required_metrics_verified": False,
                 "backend_provenance_consistent": False,

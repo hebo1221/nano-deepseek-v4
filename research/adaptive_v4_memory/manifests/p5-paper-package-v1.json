@@ -8,12 +8,27 @@
       "experiment_id": "p2-core-quality-matrix-audit-v1",
       "required_audit": {"unique_shards": 4500}
     },
+    "m5_one_token_pilot": {
+      "path": "artifacts/adaptive_v4_memory/paper_grade/p1/m5-pilot-baseline.summary.json",
+      "experiment_id": "m5-one-token-pilot-baseline-audit-v1",
+      "required_audit": {
+        "raw_artifacts_verified": true,
+        "scales_verified": 2,
+        "workloads_per_scale": 3,
+        "required_arms_verified": 4,
+        "one_token_semantics_verified": true,
+        "pilot_negative_result_verified": true
+      }
+    },
     "p2_causal": {
       "path": "artifacts/adaptive_v4_memory/paper_grade/p2-causal-ablation.summary.json",
       "experiment_id": "p2-causal-ablation-audit-v1",
       "required_audit": {
         "unique_shards": 9000,
-        "exact_config_reuse_verified": true
+        "exact_config_reuse_verified": true,
+        "registered_causal_arms": 16,
+        "supplemental_fixed_top_p_arms_verified": true,
+        "offline_oracle_excluded_from_primary_gate": true
       }
     },
     "p3_ruler": {
@@ -84,7 +99,7 @@
       "path": "artifacts/adaptive_v4_memory/paper_grade/p4/reference-systems.summary.json",
       "experiment_id": "p4-reference-systems-matrix-audit-v1",
       "required_audit": {
-        "terminal_cells": 108,
+        "terminal_cells": 216,
         "all_terminal_cells_verified": true,
         "all_artifact_digests_verified": true
       }
@@ -93,7 +108,7 @@
       "path": "artifacts/adaptive_v4_memory/paper_grade/p4/production-systems.summary.json",
       "experiment_id": "p4-production-systems-matrix-audit-v1",
       "required_audit": {
-        "terminal_cells": 108,
+        "terminal_cells": 216,
         "all_terminal_cells_verified": true,
         "all_artifact_digests_verified": true,
         "tail_failure_accounting_complete": true
@@ -133,6 +148,7 @@
   "rules": {
     "missing_required_evidence": "fail generation; never impute",
     "causal_gate_failure": "bounded-result for the tested causal controller, not a general impossibility claim",
+    "offline_oracle": "descriptive target-aware upper bound only; never a causal or deployable method result",
     "single_compatible_model": "bounded-result; require all five natural benchmarks and never relabel as official DeepSeek-V4 evidence",
     "reference_system_matrix": "always bounded-result; serial interleave is not actual concurrency",
     "failed_system_cell": "retain in the primary table and classify production systems coverage as bounded-result",

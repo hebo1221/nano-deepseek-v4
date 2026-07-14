@@ -11,6 +11,7 @@ sys.path.insert(0, str(SCRIPTS))
 from freeze_p2_causal_factorial_arms import (  # noqa: E402
     COMPONENT_ARMS,
     PRIMARY_ARMS,
+    SUPPLEMENTAL_BASELINE_ARMS,
     build_arm_configs,
     shuffled_layer_budgets,
 )
@@ -44,6 +45,10 @@ def test_primary_factorial_has_ten_unique_preregistered_arms() -> None:
         "hierarchical+pins-no-refresh",
         "hierarchical+pins+fallback",
     }
+    assert {arm.name for arm in SUPPLEMENTAL_BASELINE_ARMS} == {
+        "fixed-top-p-0.5",
+        "fixed-top-p-0.8",
+    }
 
 
 def test_manifest_matches_implemented_arms_and_strict_budget_scale_gate() -> None:
@@ -52,6 +57,9 @@ def test_manifest_matches_implemented_arms_and_strict_budget_scale_gate() -> Non
     )
 
     assert set(manifest["primary_arms"]) == {arm.name for arm in PRIMARY_ARMS}
+    assert set(manifest["supplemental_baseline_arms"]) == {
+        arm.name for arm in SUPPLEMENTAL_BASELINE_ARMS
+    }
     assert manifest["component_contrasts"]["score_concentration"] == [
         "hierarchical+pins",
         "hierarchical+pins-no-score",

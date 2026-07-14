@@ -19,6 +19,7 @@ import torch
 from freeze_p2_causal_factorial_arms import (
     COMPONENT_ARMS,
     PRIMARY_ARMS,
+    SUPPLEMENTAL_BASELINE_ARMS,
     BuiltCausalArm,
     build_arm_configs,
 )
@@ -37,8 +38,20 @@ from nano_deepseek_v4 import (
 BUDGET_LABELS = ("2x", "4x")
 PRIMARY_ARM_NAMES = tuple(arm.name for arm in PRIMARY_ARMS)
 COMPONENT_ARM_NAMES = tuple(arm.name for arm in COMPONENT_ARMS)
-ALL_ARM_NAMES = (*PRIMARY_ARM_NAMES, *COMPONENT_ARM_NAMES)
-PHYSICAL_ARM_NAMES = ("fixed+pins", "calibrated+pins")
+SUPPLEMENTAL_BASELINE_ARM_NAMES = tuple(
+    arm.name for arm in SUPPLEMENTAL_BASELINE_ARMS
+)
+ALL_ARM_NAMES = (
+    *PRIMARY_ARM_NAMES,
+    *SUPPLEMENTAL_BASELINE_ARM_NAMES,
+    *COMPONENT_ARM_NAMES,
+)
+PHYSICAL_ARM_NAMES = (
+    "fixed+pins",
+    "calibrated+pins",
+    "fixed-top-p-0.5",
+    "fixed-top-p-0.8",
+)
 EXAMPLES_PER_SHARD = core.EXAMPLES_PER_SHARD
 BATCH_SIZE = core.BATCH_SIZE
 BATCHES_PER_SHARD = EXAMPLES_PER_SHARD // BATCH_SIZE
@@ -675,6 +688,7 @@ def build_payload(
         "chunk_size": CHUNK_SIZE_BY_SCALE[scale],
         "primary_arms": PRIMARY_ARM_NAMES,
         "component_arms": COMPONENT_ARM_NAMES,
+        "supplemental_baseline_arms": SUPPLEMENTAL_BASELINE_ARM_NAMES,
         "physical_arms": PHYSICAL_ARM_NAMES,
         "checkpoint": {
             "path": str(checkpoint),

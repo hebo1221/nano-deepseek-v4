@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "experiment_id": "adaptive-v4-memory-paper-grade-v1",
-  "protocol_version": "1.1",
+  "protocol_version": "1.2",
   "frozen_date": "2026-07-14",
   "protocol": "research/adaptive_v4_memory/paper_grade_protocol.md",
   "scales": ["s55", "s151"],

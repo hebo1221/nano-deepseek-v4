@@ -28,7 +28,13 @@ LOAD_PROFILES = (
     ("batch-b8", 8, 1),
     ("batch-b16", 16, 1),
     ("interleaved-c8", 1, 8),
+    ("interleaved-b4-c8", 4, 8),
+    ("interleaved-b8-c8", 8, 8),
+    ("interleaved-b16-c8", 16, 8),
     ("interleaved-c32", 1, 32),
+    ("interleaved-b4-c32", 4, 32),
+    ("interleaved-b8-c32", 8, 32),
+    ("interleaved-b16-c32", 16, 32),
 )
 POLICIES = ("resident-native", "tiered-native")
 P3_BENCHMARKS = ("RULER", "SCBench", "LongBench-v2", "LongMemEval", "MRCR")
@@ -109,14 +115,10 @@ def require_p3_audit(path: Path) -> dict[str, Any]:
         or audit.get("minimum_protocol_examples_accounted_per_arm") != 45_289
         or set(benchmarks) != set(P3_BENCHMARKS)
         or payload.get("supplemental_safety", {}).get("terminal") is not True
-        or payload.get("supplemental_safety", {}).get(
-            "protected_prefix_physical_budget_verified"
-        )
+        or payload.get("supplemental_safety", {}).get("protected_prefix_physical_budget_verified")
         is not True
         or payload.get("supplemental_natural_safety", {}).get("terminal") is not True
-        or payload.get("supplemental_natural_safety", {}).get(
-            "longsafety_official_judge_status"
-        )
+        or payload.get("supplemental_natural_safety", {}).get("longsafety_official_judge_status")
         != "blocked"
         or payload.get("supplemental_natural_safety", {}).get(
             "comparative_long_context_safety_claim_available"

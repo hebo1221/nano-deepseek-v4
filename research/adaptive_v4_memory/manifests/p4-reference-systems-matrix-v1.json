@@ -1,7 +1,15 @@
 {
   "schema_version": 1,
   "experiment_id": "p4-reference-systems-matrix-v1",
-  "status": "frozen_before_execution",
+  "status": "amended_and_frozen_before_execution",
+  "protocol_amendments": [
+    {
+      "date": "2026-07-14",
+      "timing": "before any P4 reference cell was generated",
+      "change": "expand the six marginal load profiles to the complete 4 batch x 3 active-request factorial",
+      "reason": "measure batch-by-load interactions instead of inferring them from separate one-factor sweeps"
+    }
+  ],
   "evidence_tier": "single-accelerator-serial-interleaved-reference-pytorch-runtime",
   "prerequisite": "complete digest-bound five-benchmark P3 natural-suite audit; P4 baselines run even if the adaptive causal arm is withheld",
   "scales": ["s55", "s151"],
@@ -17,17 +25,23 @@
     {"name": "batch-b8", "batch": 8, "active_requests": 1},
     {"name": "batch-b16", "batch": 16, "active_requests": 1},
     {"name": "interleaved-c8", "batch": 1, "active_requests": 8},
-    {"name": "interleaved-c32", "batch": 1, "active_requests": 32}
+    {"name": "interleaved-b4-c8", "batch": 4, "active_requests": 8},
+    {"name": "interleaved-b8-c8", "batch": 8, "active_requests": 8},
+    {"name": "interleaved-b16-c8", "batch": 16, "active_requests": 8},
+    {"name": "interleaved-c32", "batch": 1, "active_requests": 32},
+    {"name": "interleaved-b4-c32", "batch": 4, "active_requests": 32},
+    {"name": "interleaved-b8-c32", "batch": 8, "active_requests": 32},
+    {"name": "interleaved-b16-c32", "batch": 16, "active_requests": 32}
   ],
-  "matrix_interpretation": "batch and serial round-robin active-request sweeps are separate reference profiles. The active-request profiles are not simultaneous serving concurrency and do not satisfy the production concurrency gate.",
+  "matrix_interpretation": "all 4 batch sizes are crossed with all 3 serial round-robin active-request loads. Active requests are not simultaneous serving concurrency and do not satisfy the production concurrency gate.",
   "production_concurrency_requirement": "A later fused or serving-runtime matrix must independently measure actual concurrency 1/8/32 with request overlap and scheduler timestamps.",
   "prefill_chunk_tokens": 256,
   "warmups_per_paired_cell": 5,
   "measured_repetitions_per_paired_cell": 30,
   "paired_policy_order": "alternate resident-first and tiered-first by repetition",
-  "primary_paired_cells": 108,
-  "primary_measured_policy_runs": 6480,
-  "primary_total_policy_runs_including_warmup": 7560,
+  "primary_paired_cells": 216,
+  "primary_measured_policy_runs": 12960,
+  "primary_total_policy_runs_including_warmup": 15120,
   "measurements": [
     "per-request and aggregate TTFT",
     "TPOT mean and p50/p95/p99",
