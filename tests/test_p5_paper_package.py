@@ -182,6 +182,9 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
     assert manifest["execution_audits"]["p1_online_checkpoint_reuse"]["required_probes"] == 10
     assert manifest["evidence"]["p2_core"]["required_audit"]["unique_shards"] == 4500
     assert manifest["evidence"]["p2_core"]["path"].endswith("strict.summary.json")
+    assert manifest["evidence"]["p2_core"]["required_audit"][
+        "minimum_attainable_two_sided_seed_p"
+    ] == pytest.approx(0.0625)
     assert all(
         manifest["evidence"]["p2_core"]["required_audit"][field] is True
         for field in (
@@ -248,6 +251,12 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
     )
     assert manifest["evidence"]["p2_causal"]["required_audit"]["registered_causal_arms"] == 16
     assert manifest["evidence"]["p2_causal"]["required_audit"]["registered_paired_contrasts"] == 15
+    assert (
+        manifest["evidence"]["p2_causal"]["required_audit"][
+            "exact_seed_randomization_verified"
+        ]
+        is True
+    )
     assert (
         manifest["evidence"]["p2_causal"]["required_audit"][
             "preregistered_component_contrasts_verified"

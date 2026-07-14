@@ -771,6 +771,10 @@ def main() -> None:
             "all_dependency_digests_verified": True,
             "all_record_digests_verified": True,
             "no_budget_violations": True,
+            "exact_seed_randomization_verified": True,
+            "independent_seed_clusters_per_cell": len(shard.TRAINING_SEEDS),
+            "minimum_attainable_two_sided_seed_p": 2.0
+            / (1 << len(shard.TRAINING_SEEDS)),
             **STRICT_RAW_AUDIT,
             "unique_shards": len(seen),
             "raw_shard_digest_set_sha256": hashlib.sha256(

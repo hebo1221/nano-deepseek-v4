@@ -19,7 +19,10 @@
         "paired_conversation_coverage_verified": true,
         "execution_order_coverage_verified": true,
         "aggregate_recomputed": true,
-        "batch_coverage_verified": true
+        "batch_coverage_verified": true,
+        "exact_seed_randomization_verified": true,
+        "independent_seed_clusters_per_cell": 5,
+        "minimum_attainable_two_sided_seed_p": 0.0625
       }
     },
     "m5_one_token_pilot": {
@@ -93,6 +96,9 @@
         "paired_conversation_coverage_verified": true,
         "physical_arm_contract_verified": true,
         "physical_controller_budget_verified": true,
+        "exact_seed_randomization_verified": true,
+        "independent_seed_clusters_per_cell": 5,
+        "minimum_attainable_two_sided_seed_p": 0.0625,
         "registered_causal_arms": 16,
         "registered_paired_contrasts": 15,
         "preregistered_component_contrasts_verified": true,

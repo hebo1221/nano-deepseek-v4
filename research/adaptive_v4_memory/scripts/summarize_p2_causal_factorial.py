@@ -950,6 +950,10 @@ def main() -> None:
             "no_budget_violations": True,
             "all_physical_predictions_identical": True,
             "exact_config_reuse_verified": True,
+            "exact_seed_randomization_verified": True,
+            "independent_seed_clusters_per_cell": len(shard.TRAINING_SEEDS),
+            "minimum_attainable_two_sided_seed_p": 2.0
+            / (1 << len(shard.TRAINING_SEEDS)),
             **STRICT_RAW_AUDIT,
             "registered_causal_arms": len(shard.ALL_ARM_NAMES),
             "registered_paired_contrasts": len(CONTRASTS),
