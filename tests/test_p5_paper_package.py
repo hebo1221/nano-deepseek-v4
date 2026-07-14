@@ -85,6 +85,58 @@ def _p2_confirmatory_evidence(*, passed: bool = False) -> dict[str, object]:
 
 
 def _p2_causal_confirmatory_evidence(*, passed: bool = False) -> dict[str, object]:
+    quality_effect = 0.02 if passed else -0.02
+    seed_effect = 0.01 if passed else -0.01
+    interval = [0.01, 0.03] if passed else [-0.03, -0.01]
+    coordinates = [
+        (scale, budget)
+        for scale in ("s55", "s151")
+        for budget in ("2x", "4x")
+    ]
+    quality_cells = [
+        {
+            "scale": scale,
+            "budget": budget,
+            "mean_difference": quality_effect,
+            "four_cell_corrected_bootstrap": {"confidence_interval": interval},
+        }
+        for scale, budget in coordinates
+    ]
+    seed_cells = [
+        {
+            "scale": scale,
+            "budget": budget,
+            "training_seed": seed,
+            "mean_difference": seed_effect,
+        }
+        for scale, budget in coordinates
+        for seed in range(9)
+    ]
+    memory_cells = [
+        {
+            "scale": scale,
+            "budget": budget,
+            "relative_difference": 0.005,
+            "all_seed_cells_within_one_percent": True,
+        }
+        for scale, budget in coordinates
+    ]
+    gate_cells = [
+        {
+            "scale": scale,
+            "budget": budget,
+            "pooled_effect_positive": passed,
+            "four_cell_corrected_lower_bound": interval[0],
+            "four_cell_corrected_lower_bound_positive": passed,
+            "positive_seed_effects": 9 if passed else 0,
+            "required_seed_effects": 9,
+            "all_seed_effects_positive": passed,
+            "memory_match_relative_difference": 0.005,
+            "all_seed_memory_cells_within_one_percent": True,
+            "passed": passed,
+        }
+        for scale, budget in coordinates
+    ]
     return {
         "source": {"dirty": False},
         "analysis_implementation": package._analysis_implementation_metadata(
@@ -107,7 +159,23 @@ def _p2_causal_confirmatory_evidence(*, passed: bool = False) -> dict[str, objec
             "exact_sign_assignments": 512,
             "minimum_attainable_two_sided_seed_p": 0.00390625,
         },
-        "primary_causal_gate": {"passed": passed},
+        "paired_statistics": {
+            "adaptive_quota_with_pins": {
+                "cells": quality_cells,
+                "by_seed": seed_cells,
+            }
+        },
+        "physical_hot_memory": {"aggregate": memory_cells},
+        "primary_causal_gate": {
+            "candidate": "calibrated+pins",
+            "comparator": "fixed+pins",
+            "scales": ["s55", "s151"],
+            "budgets": ["2x", "4x"],
+            "seeds_per_scale": 9,
+            "required_cells": 4,
+            "cells": gate_cells,
+            "passed": passed,
+        },
     }
 
 
@@ -975,7 +1043,19 @@ def test_confirmatory_causal_requires_pooling_and_exact_inference(
     assert package._classify_validated_confirmatory_causal(evidence) == "success"
 
     evidence["primary_causal_gate"]["passed"] = False  # type: ignore[index]
-    assert package._classify_validated_confirmatory_causal(evidence) == "bounded-result"
+    with pytest.raises(ValueError, match="top-level Pareto gate drifted"):
+        package._classify_validated_confirmatory_causal(evidence)
+    inconsistent_cell = _p2_causal_confirmatory_evidence(passed=True)
+    gate = inconsistent_cell["primary_causal_gate"]
+    assert isinstance(gate, dict)
+    cells = gate["cells"]
+    assert isinstance(cells, list) and isinstance(cells[0], dict)
+    cells[0]["passed"] = False
+    gate["passed"] = False
+    with pytest.raises(ValueError, match="Pareto gate drifted for s55/2x"):
+        package._classify_validated_confirmatory_causal(inconsistent_cell)
+    failed = _p2_causal_confirmatory_evidence(passed=False)
+    assert package._classify_validated_confirmatory_causal(failed) == "bounded-result"
     evidence["confirmatory_inference"]["exact_sign_assignments"] = 32  # type: ignore[index]
     path.write_text(json.dumps(evidence))
     with pytest.raises(ValueError, match="confirmatory_inference.exact_sign_assignments"):

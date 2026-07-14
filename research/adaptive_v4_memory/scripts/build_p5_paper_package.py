@@ -1681,11 +1681,129 @@ def _classify_validated_confirmatory_core(payload: dict[str, Any]) -> str:
     )
 
 
-def _classify_validated_confirmatory_causal(payload: dict[str, Any]) -> str:
+def _validated_confirmatory_causal_pareto(payload: dict[str, Any]) -> tuple[bool, str]:
     gate = payload.get("primary_causal_gate")
-    if not isinstance(gate, dict) or not isinstance(gate.get("passed"), bool):
-        return "unverified"
-    return "success" if gate["passed"] else "bounded-result"
+    paired = payload.get("paired_statistics")
+    physical = payload.get("physical_hot_memory")
+    _require(
+        isinstance(gate, dict)
+        and isinstance(paired, dict)
+        and isinstance(physical, dict),
+        "Confirmatory causal Pareto evidence is incomplete.",
+    )
+    gate = cast(dict[str, Any], gate)
+    paired = cast(dict[str, Any], paired)
+    physical = cast(dict[str, Any], physical)
+    contrast = paired.get("adaptive_quota_with_pins")
+    _require(isinstance(contrast, dict), "Primary causal contrast is missing.")
+    contrast = cast(dict[str, Any], contrast)
+    quality_cells = contrast.get("cells")
+    seed_cells = contrast.get("by_seed")
+    memory_cells = physical.get("aggregate")
+    gate_cells = gate.get("cells")
+    _require(
+        all(isinstance(rows, list) for rows in (quality_cells, seed_cells, memory_cells, gate_cells)),
+        "Confirmatory causal Pareto cells are missing.",
+    )
+    assert isinstance(quality_cells, list)
+    assert isinstance(seed_cells, list)
+    assert isinstance(memory_cells, list)
+    assert isinstance(gate_cells, list)
+    expected = {(scale, budget) for scale in ("s55", "s151") for budget in ("2x", "4x")}
+
+    def coordinates(rows: list[Any]) -> set[tuple[Any, Any]]:
+        return {
+            (row.get("scale"), row.get("budget"))
+            for row in rows
+            if isinstance(row, dict)
+        }
+
+    _require(
+        len(quality_cells) == len(memory_cells) == len(gate_cells) == 4
+        and coordinates(quality_cells) == coordinates(memory_cells) == coordinates(gate_cells)
+        == expected,
+        "Confirmatory causal Pareto coordinate coverage drifted.",
+    )
+    seeds = payload.get("audit", {}).get("independent_seed_clusters_per_cell")
+    _require(type(seeds) is int and seeds >= 5, "Confirmatory causal seed count drifted.")
+    assert type(seeds) is int
+    recomputed_cells: list[bool] = []
+    for scale, budget in sorted(expected):
+        quality = next(
+            row for row in quality_cells if row["scale"] == scale and row["budget"] == budget
+        )
+        seed_rows = [
+            row for row in seed_cells if row.get("scale") == scale and row.get("budget") == budget
+        ]
+        memory = next(
+            row for row in memory_cells if row["scale"] == scale and row["budget"] == budget
+        )
+        observed = next(
+            row for row in gate_cells if row["scale"] == scale and row["budget"] == budget
+        )
+        interval = quality.get("four_cell_corrected_bootstrap", {}).get(
+            "confidence_interval"
+        )
+        _require(
+            isinstance(interval, list)
+            and len(interval) == 2
+            and all(isinstance(value, (int, float)) for value in interval)
+            and len(seed_rows) == seeds
+            and all(isinstance(row.get("mean_difference"), (int, float)) for row in seed_rows)
+            and isinstance(quality.get("mean_difference"), (int, float))
+            and isinstance(memory.get("relative_difference"), (int, float))
+            and isinstance(memory.get("all_seed_cells_within_one_percent"), bool),
+            f"Confirmatory causal Pareto schema drifted for {scale}/{budget}.",
+        )
+        positive_seeds = sum(row["mean_difference"] > 0.0 for row in seed_rows)
+        expected_fields = {
+            "pooled_effect_positive": quality["mean_difference"] > 0.0,
+            "four_cell_corrected_lower_bound": interval[0],
+            "four_cell_corrected_lower_bound_positive": interval[0] > 0.0,
+            "positive_seed_effects": positive_seeds,
+            "required_seed_effects": seeds,
+            "all_seed_effects_positive": positive_seeds == seeds,
+            "memory_match_relative_difference": memory["relative_difference"],
+            "all_seed_memory_cells_within_one_percent": memory[
+                "all_seed_cells_within_one_percent"
+            ],
+        }
+        cell_passed = all(
+            (
+                expected_fields["pooled_effect_positive"],
+                expected_fields["four_cell_corrected_lower_bound_positive"],
+                expected_fields["all_seed_effects_positive"],
+                expected_fields["all_seed_memory_cells_within_one_percent"],
+            )
+        )
+        _require(
+            all(observed.get(field) == value for field, value in expected_fields.items())
+            and observed.get("passed") is cell_passed,
+            f"Confirmatory causal Pareto gate drifted for {scale}/{budget}.",
+        )
+        recomputed_cells.append(cell_passed)
+    passed = all(recomputed_cells)
+    _require(
+        gate.get("candidate") == "calibrated+pins"
+        and gate.get("comparator") == "fixed+pins"
+        and gate.get("scales") == ["s55", "s151"]
+        and gate.get("budgets") == ["2x", "4x"]
+        and gate.get("seeds_per_scale") == seeds
+        and gate.get("required_cells") == 4
+        and gate.get("passed") is passed,
+        "Confirmatory causal top-level Pareto gate drifted.",
+    )
+    verdict = (
+        "established for calibrated+pins over fixed+pins"
+        if passed
+        else "not established for the tested calibrated+pins controller"
+    )
+    return passed, verdict
+
+
+def _classify_validated_confirmatory_causal(payload: dict[str, Any]) -> str:
+    passed, _verdict = _validated_confirmatory_causal_pareto(payload)
+    return "success" if passed else "bounded-result"
 
 
 def classify_evidence(
@@ -3479,6 +3597,9 @@ def _report(
     inputs: list[dict[str, Any]],
 ) -> str:
     causal = p2_causal_confirmatory["primary_causal_gate"]
+    _causal_passed, causal_pareto_verdict = _validated_confirmatory_causal_pareto(
+        p2_causal_confirmatory
+    )
     p4_500k = p4_500k_context["audit"]
     p4_500k_correctness = p4_500k_context["correctness"]
     p4_reference = p4_reference_systems["audit"]
@@ -3563,7 +3684,8 @@ user request, is outside the completion gate, and is never reported as passed.
   quality forwards were executed and
   {p2_causal_confirmatory["audit"]["quality_execution_counts"]["reused_exact_config"]:,}
   arm-batches reused an exact byte-identical config; the calibrated+pins versus
-  fixed+pins gate passed: **{causal["passed"]}**.
+  fixed+pins gate passed: **{causal["passed"]}**. The explicit quality-memory
+  Pareto verdict is: **{causal_pareto_verdict}**.
 - P2 core confirmatory inference: exact enumeration covers
   {p2_core_confirmatory["confirmatory_inference"]["exact_sign_assignments"]} sign
   assignments across 9 independent seeds, giving a minimum attainable two-sided
