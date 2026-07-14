@@ -157,8 +157,9 @@ def test_online_learned_lookahead_protocol_freezes_full_separate_matrix() -> Non
     assert lookahead_matrix.EXPECTED_POLICIES == 20
     assert lookahead_matrix.EXPECTED_TEST_SHARDS == 9_000
     assert tuple(manifest["arms"]) == lookahead_eval.ARMS
-    for name in ("matrix_runner", "summary_runner"):
+    for name in ("matrix_runner", "parallel_matrix_runner", "summary_runner"):
         assert (root / manifest["implementation"][name]).is_file()
+    assert manifest["execution_equivalence"]["required_scale_seed_probes"] == 10
 
 
 def test_online_matrix_rejects_stale_implementation_and_dependency(tmp_path: Path) -> None:

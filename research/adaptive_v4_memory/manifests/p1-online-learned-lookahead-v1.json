@@ -120,7 +120,14 @@
     "policy_fitter": "research/adaptive_v4_memory/scripts/fit_p1_online_learned_lookahead_policy.py",
     "shard_evaluator": "research/adaptive_v4_memory/scripts/evaluate_p1_online_learned_lookahead_shard.py",
     "matrix_runner": "research/adaptive_v4_memory/scripts/run_p1_online_learned_lookahead.py",
+    "parallel_matrix_runner": "research/adaptive_v4_memory/scripts/run_p1_online_lookahead_parallel.py",
     "summary_runner": "research/adaptive_v4_memory/scripts/summarize_p1_online_learned_lookahead.py"
+  },
+  "execution_equivalence": {
+    "checkpoint_reuse_probe": "for every one of 5 seeds at both scales, compare one calibration label shard and one held-out test shard from a reused checkpoint instance against a freshly loaded checkpoint instance",
+    "required_scale_seed_probes": 10,
+    "equality_fields": "generation seeds, label rows, quality records, controller accounting, physical accounting, and policy digests must match exactly; wall-clock timing fields are excluded",
+    "failure_action": "withhold the online learned-lookahead result if any probe, child artifact digest, or implementation digest differs"
   },
   "execution_order": "only after the frozen P2 causal summary is terminal; never modify or delay P2 core/causal execution"
 }

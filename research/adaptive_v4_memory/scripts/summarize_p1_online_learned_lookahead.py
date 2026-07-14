@@ -5,6 +5,7 @@ import hashlib
 import json
 import subprocess
 from collections import defaultdict
+from itertools import product
 from pathlib import Path
 from typing import Any
 
@@ -25,6 +26,9 @@ FIXED = "memory-matched-fixed+pins"
 MAXIMUM_HBM_DIFFERENCE = 0.01
 MAXIMUM_WORST_SLICE_REGRESSION = -0.02
 _DIGEST_CACHE: dict[tuple[Path, int, int], str] = {}
+PARALLEL_RUNNER = Path(
+    "research/adaptive_v4_memory/scripts/run_p1_online_lookahead_parallel.py"
+)
 
 
 def sha256(path: Path) -> str:
@@ -66,6 +70,54 @@ def _verify_common(payload: dict[str, Any], *, implementation_digest: str, label
         and payload.get("design", {}).get("sha256") == _cached_sha256(matrix_runner.DESIGN),
         f"{label} design dependency drifted.",
     )
+
+
+def _verify_checkpoint_reuse_audit(metadata: dict[str, Any]) -> int:
+    path = _bound_path(metadata, "online-lookahead checkpoint-reuse audit")
+    payload = json.loads(path.read_text())
+    audit = payload.get("audit", {})
+    _require(
+        payload.get("experiment_id") == "p1-online-lookahead-checkpoint-reuse-audit-v1"
+        and payload.get("source", {}).get("dirty") is False
+        and payload.get("source", {}).get("orchestrator_sha256")
+        == _cached_sha256(PARALLEL_RUNNER)
+        and audit.get("scale_seed_probes") == 10
+        and audit.get("all_label_rows_identical") is True
+        and audit.get("all_test_records_identical") is True
+        and audit.get("all_controller_accounting_identical") is True,
+        "Online-lookahead checkpoint-reuse audit is incomplete.",
+    )
+    coordinates: set[tuple[str, int]] = set()
+    for probe_metadata in payload.get("probes", []):
+        probe_path = _bound_path(probe_metadata, "online-lookahead checkpoint-reuse probe")
+        probe = json.loads(probe_path.read_text())
+        probe_audit = probe.get("audit", {})
+        coordinate = (probe.get("scale"), probe.get("training_seed"))
+        _require(
+            probe.get("experiment_id") == "p1-online-lookahead-checkpoint-reuse-probe-v1"
+            and coordinate[0] in matrix_runner.SCALES
+            and coordinate[1] in labels.TRAINING_SEEDS
+            and coordinate not in coordinates
+            and probe_audit.get("label_rows_identical") is True
+            and probe_audit.get("test_records_identical") is True
+            and probe_audit.get("controller_accounting_identical") is True
+            and probe_audit.get("timing_fields_excluded") is True
+            and probe.get("implementation", {}).get("label")
+            == labels.implementation_digest()
+            and probe.get("implementation", {}).get("evaluation")
+            == evaluator.implementation_digest()
+            and probe.get("implementation", {}).get("orchestrator_sha256")
+            == _cached_sha256(PARALLEL_RUNNER),
+            f"Online-lookahead checkpoint-reuse probe drifted: {probe_path}",
+        )
+        for artifact in probe.get("artifacts", []):
+            _bound_path(artifact, f"checkpoint-reuse child artifact for {probe_path}")
+        coordinates.add(coordinate)
+    _require(
+        coordinates == set(product(matrix_runner.SCALES, labels.TRAINING_SEEDS)),
+        "Online-lookahead checkpoint-reuse coordinate coverage drifted.",
+    )
+    return len(coordinates)
 
 
 def summarize(matrix_path: Path) -> dict[str, Any]:
@@ -110,6 +162,7 @@ def summarize(matrix_path: Path) -> dict[str, Any]:
     )
     causal_gate_path = _bound_path(matrix.get("p2_causal_gate", {}), "P2 causal gate")
     matrix_runner.require_causal_gate(causal_gate_path)
+    reuse_probes = _verify_checkpoint_reuse_audit(matrix.get("checkpoint_reuse_audit", {}))
     label_implementation = labels.implementation_digest()
     fit_implementation = fitter.implementation_digest()
     evaluation_implementation = evaluator.implementation_digest()
@@ -432,6 +485,8 @@ def summarize(matrix_path: Path) -> dict[str, Any]:
             "all_dependencies_verified": True,
             "implementation_digests_verified": True,
             "dependency_artifact_digests_verified": True,
+            "checkpoint_reuse_equivalence_verified": True,
+            "checkpoint_reuse_scale_seed_probes": reuse_probes,
             "all_inputs_paired": True,
             "zero_budget_violations": budget_violations == 0,
             "complete_failure_accounting": True,

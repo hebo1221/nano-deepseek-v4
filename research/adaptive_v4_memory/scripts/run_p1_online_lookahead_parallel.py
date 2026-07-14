@@ -511,6 +511,10 @@ def main() -> None:
             policy_root=args.policy_root,
             test_root=args.test_root,
         )
+        payload["checkpoint_reuse_audit"] = {
+            "path": str(args.reuse_probe_audit),
+            "sha256": matrix.sha256(args.reuse_probe_audit),
+        }
         require_complete(payload)
         matrix._write_matrix(args.matrix, payload)
     finally:

@@ -76,6 +76,8 @@ def _online_learned_lookahead_evidence(*, passed: bool = False) -> dict[str, obj
             "all_dependencies_verified": True,
             "implementation_digests_verified": True,
             "dependency_artifact_digests_verified": True,
+            "checkpoint_reuse_equivalence_verified": True,
+            "checkpoint_reuse_scale_seed_probes": 10,
             "all_inputs_paired": True,
             "zero_budget_violations": True,
             "complete_failure_accounting": True,
@@ -171,6 +173,18 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
         "p4_production_systems",
     }
     assert manifest["evidence"]["p2_core"]["required_audit"]["unique_shards"] == 4500
+    assert (
+        manifest["evidence"]["p1_online_learned_lookahead"]["required_audit"][
+            "checkpoint_reuse_equivalence_verified"
+        ]
+        is True
+    )
+    assert (
+        manifest["evidence"]["p1_online_learned_lookahead"]["required_audit"][
+            "checkpoint_reuse_scale_seed_probes"
+        ]
+        == 10
+    )
     assert manifest["evidence"]["p2_causal"]["required_audit"]["unique_shards"] == 9000
     assert (
         manifest["evidence"]["p2_causal"]["required_audit"]["exact_config_reuse_verified"] is True

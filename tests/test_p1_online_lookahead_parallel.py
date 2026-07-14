@@ -11,6 +11,7 @@ SCRIPTS = Path(__file__).resolve().parents[1] / "research/adaptive_v4_memory/scr
 sys.path.insert(0, str(SCRIPTS))
 
 import run_p1_online_lookahead_parallel as parallel  # noqa: E402
+import summarize_p1_online_learned_lookahead as summary  # noqa: E402
 
 
 def test_parallel_online_gate_requires_exact_terminal_counts(
@@ -48,13 +49,8 @@ def test_parallel_online_command_records_exact_shard_arguments(
     ]
 
 
-def test_reuse_probe_audit_requires_all_scale_seed_artifacts(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_reuse_probe_audit_requires_all_scale_seed_artifacts(tmp_path: Path) -> None:
     probe_root = tmp_path / "probes"
-    monkeypatch.setattr(parallel.matrix, "SCALES", ("s55", "s151"))
-    monkeypatch.setattr(parallel.labels, "TRAINING_SEEDS", (1, 2))
-    monkeypatch.setattr(parallel.matrix, "sha256", parallel.labels.sha256)
     for scale in parallel.matrix.SCALES:
         for seed in parallel.labels.TRAINING_SEEDS:
             root = probe_root / scale / f"seed-{seed}"
@@ -97,10 +93,19 @@ def test_reuse_probe_audit_requires_all_scale_seed_artifacts(
                     }
                 )
             )
-    audit = parallel.audit_reuse_probes(probe_root, tmp_path / "summary.json")
+    audit_path = tmp_path / "summary.json"
+    audit = parallel.audit_reuse_probes(probe_root, audit_path)
 
-    assert audit["audit"]["scale_seed_probes"] == 4
-    tampered = probe_root / "s55" / "seed-1" / "label-reused.json"
+    assert audit["audit"]["scale_seed_probes"] == 10
+    assert summary._verify_checkpoint_reuse_audit(
+        {"path": str(audit_path), "sha256": parallel.matrix.sha256(audit_path)}
+    ) == 10
+    tampered = (
+        probe_root
+        / "s55"
+        / f"seed-{parallel.labels.TRAINING_SEEDS[0]}"
+        / "label-reused.json"
+    )
     tampered.write_text("changed")
     with pytest.raises(RuntimeError, match="probe drifted"):
         parallel.audit_reuse_probes(probe_root, tmp_path / "summary.json")

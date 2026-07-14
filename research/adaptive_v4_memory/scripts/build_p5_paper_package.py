@@ -248,6 +248,8 @@ def classify_evidence(
         and learned_audit.get("all_dependencies_verified") is True
         and learned_audit.get("implementation_digests_verified") is True
         and learned_audit.get("dependency_artifact_digests_verified") is True
+        and learned_audit.get("checkpoint_reuse_equivalence_verified") is True
+        and learned_audit.get("checkpoint_reuse_scale_seed_probes") == 10
         and learned_audit.get("all_inputs_paired") is True
         and learned_audit.get("zero_budget_violations") is True
         and learned_audit.get("complete_failure_accounting") is True
