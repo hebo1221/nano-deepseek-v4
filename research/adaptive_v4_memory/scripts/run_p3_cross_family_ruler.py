@@ -275,6 +275,10 @@ def main() -> None:
     )
     runner_digest = sha256(Path(__file__))
     selected_arms = tuple(args.arm or ARMS)
+    _require(
+        len(selected_arms) == len(set(selected_arms)),
+        "Cross-family arms must not be repeated.",
+    )
     identities = {
         arm: {
             "source_commit": source_commit,
@@ -376,6 +380,11 @@ def main() -> None:
                             maximum_context=maximum_context,
                         )
                         reserve = int(row["max_new_tokens"])
+                        _require(
+                            rendered["exact_input_tokens"] + reserve <= length,
+                            f"Rendered Phi RULER prompt exceeds the {length}-token contract: "
+                            f"{example_id}.",
+                        )
                         base = {
                             "example_id": example_id,
                             "benchmark": BENCHMARK,
