@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "experiment_id": "adaptive-v4-memory-paper-grade-v1",
-  "protocol_version": "2.2",
+  "protocol_version": "2.3",
   "frozen_date": "2026-07-14",
   "amendments": [
     {
@@ -33,6 +33,12 @@
       "timing": "before any P3 benchmark dataset acquisition beyond the explicitly permitted immutable prefetch, before any P3 model prediction or result cell, and while P2 core execution was still in progress",
       "change": "require the terminal nine-seed confirmatory causal audit, in addition to the frozen five-seed primary core and causal audits, before every P3 dataset-generation, baseline-selection, natural-language, or safety execution path",
       "reason": "the watcher already sequenced P3 after the confirmatory extension, but the common P3 gate accepted only the primary cohort; binding the confirmatory audit in the executable gate prevents manual early execution and outcome-dependent evidence ordering"
+    },
+    {
+      "date": "2026-07-15",
+      "timing": "before any P3 dataset acquisition, baseline selection, model prediction, or result cell and while the primary P2 core matrix was still running",
+      "change": "require the digest-bound five-seed strict core audit and nine-seed confirmatory core audit, including raw-matrix SHA-256 and frozen statistical contracts, before every P3 execution path",
+      "reason": "the common gate checked only the raw primary core completion count; requiring both audited core summaries prevents P3 from starting from complete-but-unaudited or digest-drifted Tier-S evidence"
     }
   ],
   "protocol": "research/adaptive_v4_memory/paper_grade_protocol.md",

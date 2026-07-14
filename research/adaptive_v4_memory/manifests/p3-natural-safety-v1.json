@@ -22,6 +22,11 @@
       "date": "2026-07-15",
       "change": "require the terminal nine-seed confirmatory causal audit before natural-safety asset acquisition, scoring setup, or generation",
       "reason": "align the executable gate with the frozen confirmatory-first watcher before any natural-safety dataset or outcome existed"
+    },
+    {
+      "date": "2026-07-15",
+      "change": "require digest-bound primary and nine-seed core audits with verified raw-matrix bindings before natural-safety execution",
+      "reason": "prevent complete-but-unaudited Tier-S core artifacts from authorizing asset acquisition, scoring, or generation"
     }
   ],
   "evidence_tier": "official-and-derived-natural-safety-transfer-on-compatible-model",
@@ -34,9 +39,11 @@
   },
   "sequence_gate": {
     "p2_matrix": "artifacts/adaptive_v4_memory/paper_grade/p2-core-quality-matrix.json",
+    "primary_core_audit": "artifacts/adaptive_v4_memory/paper_grade/p2-core-quality-matrix.strict.summary.json",
+    "nine_seed_core_audit": "artifacts/adaptive_v4_memory/paper_grade/p2-nine-seed-core.summary.json",
     "causal_gate": "artifacts/adaptive_v4_memory/paper_grade/p2-causal-ablation.summary.json",
     "nine_seed_causal_gate": "artifacts/adaptive_v4_memory/paper_grade/p2-nine-seed-causal.summary.json",
-    "policy": "the exact preregistered immutable model snapshot may be prefetched and cryptographically verified without inference; no natural-safety dataset/source or scoring-asset acquisition and no generation may occur before the terminal five-seed and nine-seed confirmatory P2 sequence gate passes"
+    "policy": "the exact preregistered immutable model snapshot may be prefetched and cryptographically verified without inference; no natural-safety dataset/source or scoring-asset acquisition and no generation may occur before digest-bound five-seed and nine-seed core audits plus the terminal five-seed and nine-seed confirmatory P2 causal audits pass"
   },
   "required_arms": [
     "native-dense",

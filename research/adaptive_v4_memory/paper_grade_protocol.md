@@ -1,6 +1,6 @@
 # Paper-grade expansion protocol
 
-Protocol version: 2.2
+Protocol version: 2.3
 Frozen: 2026-07-14  
 Amended: 2026-07-15, before any causal-factorial held-out shard
 Status: active; P2 synthetic core runs first, followed by causal ablations,
@@ -100,6 +100,14 @@ pre-gate action. The watcher already used this order, but the common executable
 gate previously accepted the primary cohort alone. No P3 model prediction,
 result cell, or benchmark dataset acquisition beyond the recorded immutable
 prefetch existed when this amendment was frozen.
+
+Version 2.3 additionally requires the digest-bound five-seed strict core audit
+and nine-seed confirmatory core audit before any P3 action beyond immutable
+prefetch. The common gate rehashes each audit's raw matrix and verifies frozen
+seed counts, 1,000 paired examples per seed-scale-family, outcome-independent
+completion, and registered statistical-audit fields. This closes the remaining
+complete-but-unaudited core path; no P2 arm, sample, threshold, or outcome was
+changed, and no P3 dataset, prediction, or result cell existed at amendment time.
 
 ## 1. Primary questions
 

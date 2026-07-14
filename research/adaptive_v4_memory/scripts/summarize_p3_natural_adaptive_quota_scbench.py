@@ -159,7 +159,13 @@ def _verify_adaptive_cell(
     _require(
         isinstance(dependencies, dict)
         and set(dependencies)
-        == {"primary_core", "primary_causal", "nine_seed_causal", "fixed_selection"},
+        == {
+            "primary_core",
+            "nine_seed_core",
+            "primary_causal",
+            "nine_seed_causal",
+            "fixed_selection",
+        },
         f"Adaptive SCBench sequence dependency set drifted for {arm}.",
     )
     verified_sequence = {

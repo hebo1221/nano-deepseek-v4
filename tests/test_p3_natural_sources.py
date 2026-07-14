@@ -214,4 +214,6 @@ def test_reproduction_guide_separates_prefetch_from_gated_natural_execution() ->
     assert "--prefetch-only" in guide
     assert "acquired no\nbenchmark dataset" in guide
     assert "Do not run the default source-inventory mode" in guide
-    assert "until the primary P2 matrix and causal audit pass" in guide
+    assert "until the primary P2 matrix, its five-seed strict\ncore audit" in guide
+    assert "both five- and nine-seed\ncausal audits all pass" in guide
+    assert "hashes all five dependencies" in guide

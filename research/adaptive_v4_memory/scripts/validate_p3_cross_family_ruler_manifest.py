@@ -60,7 +60,13 @@ def validate_manifest(payload: dict[str, Any]) -> dict[str, Any]:
 
     sequence = payload.get("sequence_gate", {})
     _require(
-        sequence.get("required_nine_seed_causal_summary", "").endswith(
+        sequence.get("required_primary_core_summary", "").endswith(
+            "p2-core-quality-matrix.strict.summary.json"
+        )
+        and sequence.get("required_nine_seed_core_summary", "").endswith(
+            "p2-nine-seed-core.summary.json"
+        )
+        and sequence.get("required_nine_seed_causal_summary", "").endswith(
             "p2-nine-seed-causal.summary.json"
         )
         and sequence.get("required_fixed_selection", "").endswith("fixed-baseline-selection.json")

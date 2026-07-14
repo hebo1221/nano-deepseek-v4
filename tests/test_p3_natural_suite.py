@@ -79,7 +79,10 @@ def test_natural_suite_freezes_full_scale_and_sample_contract() -> None:
     result = validate_manifest(manifest)
 
     assert manifest["status"] == "amended_and_frozen_before_execution"
-    assert len(manifest["amendments"]) == 7
+    assert len(manifest["amendments"]) == 8
+    assert "digest-bound primary and nine-seed core audits" in manifest["amendments"][7][
+        "change"
+    ]
     assert "terminal nine-seed confirmatory causal audit" in manifest["amendments"][6][
         "change"
     ]

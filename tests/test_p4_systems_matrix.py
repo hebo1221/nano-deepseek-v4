@@ -495,11 +495,20 @@ def test_p4_requires_full_natural_suite_not_ruler_only(tmp_path: Path) -> None:
     with pytest.raises(RuntimeError, match="five-benchmark and safety"):
         systems.require_p3_audit(ruler_only)
 
+    child_summaries = {}
+    for name in (*systems.P3_BENCHMARKS, "safety", "natural-safety"):
+        child = tmp_path / f"{name}.summary.json"
+        child.write_text(json.dumps({"name": name}))
+        child_summaries[name] = {
+            "path": str(child),
+            "sha256": systems.sha256(child),
+        }
     natural = tmp_path / "natural.json"
     natural.write_text(
         json.dumps(
             {
                 "experiment_id": "p3-natural-language-suite-audit-v1",
+                "source": {"dirty": False},
                 "audit": {
                     "all_required_artifacts_verified": True,
                     "all_required_baseline_cells_terminal": True,
@@ -515,22 +524,34 @@ def test_p4_requires_full_natural_suite_not_ruler_only(tmp_path: Path) -> None:
                     "minimum_protocol_examples_accounted_per_arm": 45_289,
                 },
                 "benchmarks": {
-                    name: {"terminal": True, "native_and_fixed_terminal": True}
+                    name: {
+                        "terminal": True,
+                        "native_and_fixed_terminal": True,
+                        "summary": child_summaries[name],
+                    }
                     for name in systems.P3_BENCHMARKS
                 },
                 "supplemental_safety": {
                     "terminal": True,
                     "protected_prefix_physical_budget_verified": True,
+                    "summary": child_summaries["safety"],
                 },
                 "supplemental_natural_safety": {
                     "terminal": True,
                     "longsafety_official_judge_status": "blocked",
                     "comparative_long_context_safety_claim_available": False,
+                    "summary": child_summaries["natural-safety"],
                 },
             }
         )
     )
     assert systems.require_p3_audit(natural)["audit"]["benchmarks_terminal"] == 5
+
+    first_child = Path(child_summaries[systems.P3_BENCHMARKS[0]]["path"])
+    first_child.write_text('{"drifted": true}')
+    with pytest.raises(RuntimeError, match="Digest-bound P3 .* summary drifted"):
+        systems.require_p3_audit(natural)
+    first_child.write_text(json.dumps({"name": systems.P3_BENCHMARKS[0]}))
 
     drifted = json.loads(natural.read_text())
     drifted["audit"]["all_runtime_kvpress_bindings_verified"] = False

@@ -38,15 +38,22 @@
       "date": "2026-07-15",
       "change": "require the terminal nine-seed confirmatory causal audit before benchmark payload acquisition, baseline selection, dataset generation, or prediction",
       "reason": "the common executable gate previously accepted the five-seed primary cohort alone even though the frozen watcher placed the natural suite after confirmatory P2; no natural benchmark outcome existed"
+    },
+    {
+      "date": "2026-07-15",
+      "change": "require digest-bound primary and nine-seed core audits with verified raw-matrix bindings before any natural-suite execution",
+      "reason": "prevent complete-but-unaudited Tier-S core artifacts from authorizing benchmark acquisition or prediction; no natural benchmark outcome existed"
     }
   ],
   "protocol": "research/adaptive_v4_memory/paper_grade_protocol.md",
   "sequence_gate": {
     "implementation": "research/adaptive_v4_memory/scripts/p3_sequence_gate.py",
     "p2_matrix": "artifacts/adaptive_v4_memory/paper_grade/p2-core-quality-matrix.json",
+    "primary_core_audit": "artifacts/adaptive_v4_memory/paper_grade/p2-core-quality-matrix.strict.summary.json",
+    "nine_seed_core_audit": "artifacts/adaptive_v4_memory/paper_grade/p2-nine-seed-core.summary.json",
     "causal_gate": "artifacts/adaptive_v4_memory/paper_grade/p2-causal-ablation.summary.json",
     "nine_seed_causal_gate": "artifacts/adaptive_v4_memory/paper_grade/p2-nine-seed-causal.summary.json",
-    "policy": "The exact preregistered immutable model snapshot and pinned public code dependencies may be prefetched and cryptographically verified without inference. P2 core plus the five-seed and nine-seed confirmatory causal audits must finish before natural-suite benchmark payload acquisition, baseline selection, dataset generation, or any prediction. Native and fixed external baselines still run if the calibrated candidate does not qualify."
+    "policy": "The exact preregistered immutable model snapshot and pinned public code dependencies may be prefetched and cryptographically verified without inference. Digest-bound five-seed and nine-seed P2 core audits plus the five-seed and nine-seed confirmatory causal audits must finish before natural-suite benchmark payload acquisition, baseline selection, dataset generation, or any prediction. Native and fixed external baselines still run if the calibrated candidate does not qualify."
   },
   "execution_order": [
     "RULER",

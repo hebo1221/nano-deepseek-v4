@@ -112,9 +112,11 @@ def _dependency(path: Path) -> dict[str, str]:
 def require_p3_adaptive_audit(path: Path) -> dict[str, Any]:
     payload = json.loads(path.read_text())
     audit = payload.get("audit", {})
+    arm_cells = payload.get("arm_cells", {})
     _require(
         payload.get("experiment_id") == "p3-natural-adaptive-quota-ruler-audit-v1"
         and payload.get("status") == "terminal"
+        and payload.get("source", {}).get("dirty") is False
         and audit.get("total_predictions") == 65_000
         and audit.get("paired_examples") == 32_500
         and audit.get("all_raw_records_verified") is True
@@ -124,6 +126,18 @@ def require_p3_adaptive_audit(path: Path) -> dict[str, Any]:
         and audit.get("outcome_dependent_execution") is False,
         "Adaptive production requires the terminal natural adaptive-quota audit.",
     )
+    _require(
+        set(arm_cells) == {"fixed+pins", "natural-adaptive-quota+pins"},
+        "Adaptive production requires both natural adaptive-quota arm cells.",
+    )
+    for arm, metadata in arm_cells.items():
+        _require(
+            isinstance(metadata, dict)
+            and Path(metadata.get("path", "")).is_file()
+            and metadata.get("sha256")
+            == production.sha256(Path(metadata.get("path", ""))),
+            f"Adaptive production P3 arm cell drifted: {arm}.",
+        )
     return payload
 
 

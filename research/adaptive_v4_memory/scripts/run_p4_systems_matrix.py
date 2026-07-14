@@ -116,12 +116,21 @@ def _head() -> str:
     ).stdout.strip()
 
 
+def _require_bound_artifact(metadata: Any, label: str) -> None:
+    if not isinstance(metadata, dict):
+        raise RuntimeError(f"Missing digest-bound P3 {label} metadata.")
+    path = Path(metadata.get("path", ""))
+    if not path.is_file() or metadata.get("sha256") != sha256(path):
+        raise RuntimeError(f"Digest-bound P3 {label} drifted: {path}")
+
+
 def require_p3_audit(path: Path) -> dict[str, Any]:
     payload = json.loads(path.read_text())
     audit = payload.get("audit", {})
     benchmarks = payload.get("benchmarks", {})
     if (
         payload.get("experiment_id") != "p3-natural-language-suite-audit-v1"
+        or payload.get("source", {}).get("dirty") is not False
         or audit.get("all_required_artifacts_verified") is not True
         or audit.get("all_required_baseline_cells_terminal") is not True
         or audit.get("all_failure_accounting_complete") is not True
@@ -154,6 +163,15 @@ def require_p3_audit(path: Path) -> dict[str, Any]:
         raise RuntimeError(
             "P4 is deferred until the complete digest-bound five-benchmark and safety P3 audit."
         )
+    for name in P3_BENCHMARKS:
+        _require_bound_artifact(benchmarks[name].get("summary"), f"{name} summary")
+    _require_bound_artifact(
+        payload["supplemental_safety"].get("summary"), "synthetic-safety summary"
+    )
+    _require_bound_artifact(
+        payload["supplemental_natural_safety"].get("summary"),
+        "natural-safety summary",
+    )
     return payload
 
 

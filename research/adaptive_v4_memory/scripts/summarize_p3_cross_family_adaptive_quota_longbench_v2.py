@@ -113,7 +113,13 @@ def _verify_transfer_cell(
     _require(
         isinstance(dependencies, dict)
         and set(dependencies)
-        == {"primary_core", "primary_causal", "nine_seed_causal", "fixed_selection"},
+        == {
+            "primary_core",
+            "nine_seed_core",
+            "primary_causal",
+            "nine_seed_causal",
+            "fixed_selection",
+        },
         f"Phi LongBench-v2 sequence dependency set drifted for {arm}.",
     )
     verified_sequence = {

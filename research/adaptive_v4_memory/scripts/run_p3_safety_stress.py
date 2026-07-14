@@ -93,11 +93,17 @@ def load_contracts(
     _require(
         safety.get("experiment_id") == "p3-qwen3-4b-safety-stress-v1"
         and safety.get("status") == "amended_and_frozen_before_execution"
-        and len(safety.get("amendments", [])) == 1
+        and len(safety.get("amendments", [])) == 2
         and "terminal nine-seed confirmatory causal audit"
         in safety.get("amendments", [])[0].get("change", "")
+        and "digest-bound primary and nine-seed core audits"
+        in safety.get("amendments", [])[1].get("change", "")
         and safety.get("sequence_gate", {}).get("nine_seed_causal_gate")
         == "artifacts/adaptive_v4_memory/paper_grade/p2-nine-seed-causal.summary.json"
+        and safety.get("sequence_gate", {}).get("primary_core_audit")
+        == "artifacts/adaptive_v4_memory/paper_grade/p2-core-quality-matrix.strict.summary.json"
+        and safety.get("sequence_gate", {}).get("nine_seed_core_audit")
+        == "artifacts/adaptive_v4_memory/paper_grade/p2-nine-seed-core.summary.json"
         and tuple(safety.get("arms", ())) == ARMS
         and tuple(safety.get("families", {})) == FAMILIES
         and safety.get("expected_examples_per_arm") == 1200,

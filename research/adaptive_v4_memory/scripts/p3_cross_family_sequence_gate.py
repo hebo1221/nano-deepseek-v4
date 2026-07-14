@@ -5,6 +5,7 @@ from itertools import product
 from pathlib import Path
 from typing import Any
 
+from p3_sequence_gate import DEFAULT_NINE_SEED_CORE, require_core_audits
 from verify_p3_natural_model import sha256
 
 SCALES = ("s55", "s151")
@@ -70,9 +71,16 @@ def require_cross_family_sequence_gate(
     primary_causal: Path,
     nine_seed_causal: Path,
     fixed_selection: Path,
+    nine_seed_core: Path = DEFAULT_NINE_SEED_CORE,
 ) -> dict[str, Any]:
     """Require all pre-outcome evidence frozen for the Phi transfer cohort."""
     core = _load(primary_core, "primary P2 core audit")
+    primary_matrix = Path(core.get("raw_matrix", {}).get("path", ""))
+    core, _confirmatory_core = require_core_audits(
+        primary_matrix,
+        primary_core,
+        nine_seed_core,
+    )
     _require(
         core.get("experiment_id") == "p2-core-quality-matrix-audit-v1"
         and _audited(core, shards=4_500, seeds=5)
@@ -128,6 +136,10 @@ def require_cross_family_sequence_gate(
         "selected_compression_ratio": selection["selected_compression_ratio"],
         "dependencies": {
             "primary_core": {"path": str(primary_core), "sha256": sha256(primary_core)},
+            "nine_seed_core": {
+                "path": str(nine_seed_core),
+                "sha256": sha256(nine_seed_core),
+            },
             "primary_causal": {
                 "path": str(primary_causal),
                 "sha256": sha256(primary_causal),

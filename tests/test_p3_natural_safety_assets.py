@@ -28,7 +28,10 @@ def test_natural_safety_manifest_freezes_official_counts_and_paid_judge_guard() 
     manifest = json.loads(path.read_text())
 
     assert manifest["status"] == "amended_and_frozen_before_execution"
-    assert len(manifest["amendments"]) == 4
+    assert len(manifest["amendments"]) == 5
+    assert "digest-bound primary and nine-seed core audits" in manifest["amendments"][4][
+        "change"
+    ]
     assert "terminal nine-seed confirmatory causal audit" in manifest["amendments"][3][
         "change"
     ]

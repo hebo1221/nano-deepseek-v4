@@ -25,6 +25,7 @@
   },
   "sequence_gate": {
     "required_primary_core_summary": "artifacts/adaptive_v4_memory/paper_grade/p2-core-quality-matrix.strict.summary.json",
+    "required_nine_seed_core_summary": "artifacts/adaptive_v4_memory/paper_grade/p2-nine-seed-core.summary.json",
     "required_primary_causal_summary": "artifacts/adaptive_v4_memory/paper_grade/p2-causal-ablation.summary.json",
     "required_nine_seed_causal_summary": "artifacts/adaptive_v4_memory/paper_grade/p2-nine-seed-causal.summary.json",
     "required_fixed_selection": "artifacts/adaptive_v4_memory/paper_grade/p3/fixed-baseline-selection.json",

@@ -46,7 +46,7 @@ def validate_manifest(manifest: dict[str, Any]) -> dict[str, Any]:
     amendments = manifest.get("amendments", [])
     _require(
         isinstance(amendments, list)
-        and len(amendments) == 4
+        and len(amendments) == 5
         and "canonical snapshot digest set" in amendments[0].get("change", "")
         and "before any natural-safety generation" in amendments[0].get("reason", ""),
         "Natural safety pre-execution correction record drifted.",
@@ -75,9 +75,18 @@ def validate_manifest(manifest: dict[str, Any]) -> dict[str, Any]:
         and "before any natural-safety dataset" in amendments[3].get("reason", "")
         and manifest.get("sequence_gate", {}).get("nine_seed_causal_gate")
         == "artifacts/adaptive_v4_memory/paper_grade/p2-nine-seed-causal.summary.json"
+        and manifest.get("sequence_gate", {}).get("primary_core_audit")
+        == "artifacts/adaptive_v4_memory/paper_grade/p2-core-quality-matrix.strict.summary.json"
+        and manifest.get("sequence_gate", {}).get("nine_seed_core_audit")
+        == "artifacts/adaptive_v4_memory/paper_grade/p2-nine-seed-core.summary.json"
         and "nine-seed confirmatory"
         in manifest.get("sequence_gate", {}).get("policy", ""),
         "Natural safety confirmatory sequence boundary drifted.",
+    )
+    _require(
+        "digest-bound primary and nine-seed core audits"
+        in amendments[4].get("change", ""),
+        "Natural safety core-audit sequence boundary drifted.",
     )
     _require(tuple(manifest.get("required_arms", ())) == EXPECTED_ARMS, "Arm set drifted.")
     model = manifest.get("model", {})

@@ -82,10 +82,11 @@ benchmark dataset, selected no baseline, generated no dataset, and ran no infere
 ```
 
 Do not run the default source-inventory mode, any dataset preparation, baseline
-selection, or prediction command until the primary P2 matrix and causal audit pass
-the frozen sequence gate and the nine-seed confirmatory causal audit is terminal.
-The common executable gate reopens and hashes all three dependencies, so direct
-runner invocation cannot bypass this order. After that gate, the default source
+selection, or prediction command until the primary P2 matrix, its five-seed strict
+core audit, the nine-seed confirmatory core audit, and both five- and nine-seed
+causal audits all pass the frozen sequence gate. The common executable gate reopens
+and hashes all five dependencies, including both core audits' raw-matrix bindings,
+so direct runner invocation cannot bypass this order. After that gate, the default source
 command re-verifies every prefetched checkout and binds the prefetch inventory
 digest into the final source inventory.
 

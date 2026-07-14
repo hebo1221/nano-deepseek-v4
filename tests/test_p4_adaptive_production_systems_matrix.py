@@ -30,6 +30,40 @@ def _arms() -> dict[str, object]:
     return {policy: arm for policy in runner.POLICIES}
 
 
+def test_adaptive_production_rehashes_both_p3_arm_cells(tmp_path: Path) -> None:
+    arm_cells = {}
+    for arm in ("fixed+pins", "natural-adaptive-quota+pins"):
+        cell = tmp_path / f"{arm}.json"
+        cell.write_text(json.dumps({"arm": arm}))
+        arm_cells[arm] = {"path": str(cell), "sha256": runner.production.sha256(cell)}
+    payload = {
+        "experiment_id": "p3-natural-adaptive-quota-ruler-audit-v1",
+        "status": "terminal",
+        "source": {"dirty": False},
+        "audit": {
+            "total_predictions": 65_000,
+            "paired_examples": 32_500,
+            "all_raw_records_verified": True,
+            "all_dependency_digests_verified": True,
+            "quota_physical_audits_verified": True,
+            "same_global_token_budget_verified": True,
+            "outcome_dependent_execution": False,
+        },
+        "arm_cells": arm_cells,
+    }
+    audit = tmp_path / "adaptive-p3.json"
+    audit.write_text(json.dumps(payload))
+
+    assert runner.require_p3_adaptive_audit(audit) == payload
+    Path(arm_cells["fixed+pins"]["path"]).write_text('{"drifted": true}')
+    try:
+        runner.require_p3_adaptive_audit(audit)
+    except ValueError as error:
+        assert "P3 arm cell drifted" in str(error)
+    else:
+        raise AssertionError("P3 arm-cell digest drift was accepted")
+
+
 def _policy_run(cell: runner.Cell, policy: str, *, prediction: str) -> dict[str, object]:
     _scale, _budget, _context, generation, _profile, batch, concurrency = cell
     requests = [

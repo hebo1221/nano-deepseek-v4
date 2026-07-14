@@ -228,7 +228,13 @@ def _load_arm(
     dependencies = decision.get("dependencies", {})
     _require(
         set(dependencies)
-        == {"primary_core", "primary_causal", "nine_seed_causal", "fixed_selection"},
+        == {
+            "primary_core",
+            "nine_seed_core",
+            "primary_causal",
+            "nine_seed_causal",
+            "fixed_selection",
+        },
         f"Adaptive RULER sequence dependencies drifted for {arm}.",
     )
     for label, metadata in dependencies.items():

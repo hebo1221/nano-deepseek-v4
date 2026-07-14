@@ -81,7 +81,13 @@ def verify_sequence_dependencies(dependencies: Any, *, arm: str) -> None:
     _require(
         isinstance(dependencies, dict)
         and set(dependencies)
-        == {"primary_core", "primary_causal", "nine_seed_causal", "fixed_selection"},
+        == {
+            "primary_core",
+            "nine_seed_core",
+            "primary_causal",
+            "nine_seed_causal",
+            "fixed_selection",
+        },
         f"Phi RULER sequence dependencies drifted for {arm}.",
     )
     for name, metadata in dependencies.items():

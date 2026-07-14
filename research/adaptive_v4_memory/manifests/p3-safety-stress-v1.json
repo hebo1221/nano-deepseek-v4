@@ -8,6 +8,12 @@
       "timing": "before any synthetic-safety prompt generation, model prediction, or result cell existed",
       "change": "require the terminal nine-seed confirmatory causal audit in addition to the five-seed primary P2 gate",
       "reason": "prevent direct safety-runner invocation from bypassing the frozen confirmatory-first P3 execution order"
+    },
+    {
+      "date": "2026-07-15",
+      "timing": "before any synthetic-safety prompt generation, model prediction, or result cell existed",
+      "change": "require digest-bound primary and nine-seed core audits with verified raw-matrix bindings",
+      "reason": "prevent complete-but-unaudited Tier-S core artifacts from authorizing safety execution"
     }
   ],
   "evidence_tier": "supplemental-synthetic-safety-transfer-on-compatible-model",
@@ -25,9 +31,11 @@
   "sequence_gate": {
     "implementation": "research/adaptive_v4_memory/scripts/p3_sequence_gate.py",
     "p2_matrix": "artifacts/adaptive_v4_memory/paper_grade/p2-core-quality-matrix.json",
+    "primary_core_audit": "artifacts/adaptive_v4_memory/paper_grade/p2-core-quality-matrix.strict.summary.json",
+    "nine_seed_core_audit": "artifacts/adaptive_v4_memory/paper_grade/p2-nine-seed-core.summary.json",
     "causal_gate": "artifacts/adaptive_v4_memory/paper_grade/p2-causal-ablation.summary.json",
     "nine_seed_causal_gate": "artifacts/adaptive_v4_memory/paper_grade/p2-nine-seed-causal.summary.json",
-    "policy": "model prefetch is allowed without inference; safety generation requires terminal five-seed and nine-seed confirmatory P2 causal audits"
+    "policy": "model prefetch is allowed without inference; safety generation requires digest-bound five-seed and nine-seed P2 core audits plus terminal five-seed and nine-seed confirmatory P2 causal audits"
   },
   "seed": 9171401,
   "context_targets_tokens": [8192, 32768, 131072],

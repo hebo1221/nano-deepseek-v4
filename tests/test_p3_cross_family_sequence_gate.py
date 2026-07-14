@@ -14,6 +14,7 @@ from p3_cross_family_sequence_gate import (  # noqa: E402
     require_cross_family_sequence_gate,
 )
 from prepare_p3_cross_family_ruler_dataset import inspect_task_rows  # noqa: E402
+from verify_p3_natural_model import sha256  # noqa: E402
 
 
 class WordTokenizer:
@@ -55,15 +56,61 @@ def _causal_audit(shards: int, seeds: int) -> dict:
     }
 
 
+def _core_audit(shards: int, seeds: int) -> dict:
+    return {
+        **_audit(shards, seeds),
+        "held_out_seed_contract_verified": True,
+        "paired_conversation_coverage_verified": True,
+        "execution_order_coverage_verified": True,
+        "exact_record_schema_verified": True,
+        "exact_execution_rotation_verified": True,
+        "exact_statistical_cell_coverage_verified": True,
+        "aggregate_recomputed": True,
+        "batch_coverage_verified": True,
+        "exact_seed_randomization_verified": True,
+        "family_holm_bonferroni_verified": True,
+        "paired_units_per_seed_scale_family": 1_000,
+        "seed_p_values_used_as_success_gate": False,
+        "family_holm_p_values_used_as_success_gate": False,
+    }
+
+
 def _gate_inputs(tmp_path: Path) -> dict[str, Path]:
-    core_audit = _audit(4_500, 5)
-    core_audit.update(
-        exact_seed_randomization_verified=True,
-        exact_statistical_cell_coverage_verified=True,
-    )
+    primary_matrix = _write(tmp_path / "primary-core-matrix.json", {"completed": 4_500})
     primary_core = _write(
         tmp_path / "core.json",
-        {"experiment_id": "p2-core-quality-matrix-audit-v1", "audit": core_audit},
+        {
+            "experiment_id": "p2-core-quality-matrix-audit-v1",
+            "source": {"dirty": False},
+            "raw_matrix": {
+                "path": str(primary_matrix),
+                "sha256": sha256(primary_matrix),
+            },
+            "audit": _core_audit(4_500, 5),
+        },
+    )
+    combined_matrix = _write(tmp_path / "nine-seed-core-matrix.json", {"completed": 8_100})
+    nine_seed_core = _write(
+        tmp_path / "nine-seed-core.json",
+        {
+            "experiment_id": "p2-nine-seed-core-matrix-audit-v1",
+            "source": {"dirty": False},
+            "raw_matrix": {
+                "path": str(combined_matrix),
+                "sha256": sha256(combined_matrix),
+            },
+            "audit": _core_audit(8_100, 9),
+            "pooling_audit": {
+                "identical_frozen_contracts": True,
+                "disjoint_training_seeds": True,
+                "outcome_dependent_early_stopping": False,
+            },
+            "confirmatory_inference": {
+                "independent_training_seeds_per_scale": 9,
+                "exact_sign_assignments": 512,
+                "outcome_dependent_early_stopping": False,
+            },
+        },
     )
     primary_causal = _write(
         tmp_path / "causal.json",
@@ -111,6 +158,7 @@ def _gate_inputs(tmp_path: Path) -> dict[str, Path]:
     )
     return {
         "primary_core": primary_core,
+        "nine_seed_core": nine_seed_core,
         "primary_causal": primary_causal,
         "nine_seed_causal": nine_seed_causal,
         "fixed_selection": fixed_selection,
@@ -131,7 +179,10 @@ def test_cross_family_gate_runs_even_when_causal_outcome_is_negative(tmp_path: P
     assert all(len(row["sha256"]) == 64 for row in result["dependencies"].values())
 
 
-@pytest.mark.parametrize("dependency", ["primary_core", "primary_causal", "nine_seed_causal"])
+@pytest.mark.parametrize(
+    "dependency",
+    ["primary_core", "nine_seed_core", "primary_causal", "nine_seed_causal"],
+)
 def test_cross_family_gate_rejects_incomplete_audit(tmp_path: Path, dependency: str) -> None:
     inputs = _gate_inputs(tmp_path)
     payload = json.loads(inputs[dependency].read_text())

@@ -35,7 +35,7 @@ def test_paper_grade_protocol_requires_complete_outcome_independent_p2() -> None
         ).read_text()
     )
 
-    assert manifest["protocol_version"] == "2.2"
+    assert manifest["protocol_version"] == "2.3"
     sequence_amendments = [
         amendment
         for amendment in manifest["amendments"]
@@ -44,6 +44,14 @@ def test_paper_grade_protocol_requires_complete_outcome_independent_p2() -> None
     ]
     assert len(sequence_amendments) == 1
     assert "before any P3 model prediction" in sequence_amendments[0]["timing"]
+    core_audit_amendments = [
+        amendment
+        for amendment in manifest["amendments"]
+        if "digest-bound five-seed strict core audit" in amendment["change"]
+        and "nine-seed confirmatory core audit" in amendment["change"]
+    ]
+    assert len(core_audit_amendments) == 1
+    assert "before any P3 dataset acquisition" in core_audit_amendments[0]["timing"]
     stop = manifest["controller_early_stop"]
     assert stop["enabled"] is False
     assert stop["outcome_dependent"] is False

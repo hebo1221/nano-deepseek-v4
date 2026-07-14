@@ -124,7 +124,13 @@ def test_cross_family_summary_preserves_paper_table_schema(monkeypatch: pytest.M
 
 def test_cross_family_sequence_dependencies_are_rehashed(tmp_path: Path) -> None:
     dependencies = {}
-    for name in ("primary_core", "primary_causal", "nine_seed_causal", "fixed_selection"):
+    for name in (
+        "primary_core",
+        "nine_seed_core",
+        "primary_causal",
+        "nine_seed_causal",
+        "fixed_selection",
+    ):
         path = tmp_path / f"{name}.json"
         path.write_text("{}")
         dependencies[name] = {

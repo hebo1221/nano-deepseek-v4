@@ -929,7 +929,7 @@ def _validate_boundary_manifest(name: str, path: Path) -> dict[str, Any]:
         extension = payload.get("confirmatory_seed_extension", {})
         amendments = payload.get("amendments", [])
         _require(
-            payload.get("protocol_version") == "2.2"
+            payload.get("protocol_version") == "2.3"
             and payload.get("scales") == ["s55", "s151"]
             and payload.get("training_seeds")
             == [6071401, 6071402, 6071403, 6071404, 6071405]
@@ -954,6 +954,19 @@ def _validate_boundary_manifest(name: str, path: Path) -> dict[str, Any]:
                 for amendment in amendments
             ),
             "Paper-grade P3 sequence-gate amendment drifted.",
+        )
+        _require(
+            any(
+                isinstance(amendment, dict)
+                and "digest-bound five-seed strict core audit"
+                in amendment.get("change", "")
+                and "nine-seed confirmatory core audit"
+                in amendment.get("change", "")
+                and "before any P3 dataset acquisition"
+                in amendment.get("timing", "")
+                for amendment in amendments
+            ),
+            "Paper-grade P3 core-audit amendment drifted.",
         )
         _require(
             payload.get("required_ablations")
@@ -1186,12 +1199,14 @@ def _validate_boundary_manifest(name: str, path: Path) -> dict[str, Any]:
         _require(
             payload.get("status") == "amended_and_frozen_before_execution"
             and isinstance(amendments, list)
-            and len(amendments) == 1
+            and len(amendments) == 2
             and amendments[0].get("date") == "2026-07-15"
             and "before any synthetic-safety prompt generation"
             in amendments[0].get("timing", "")
             and "terminal nine-seed confirmatory causal audit"
             in amendments[0].get("change", "")
+            and "digest-bound primary and nine-seed core audits"
+            in amendments[1].get("change", "")
             and model.get("repo_id") == "Qwen/Qwen3-4B-Instruct-2507"
             and model.get("revision") == "cdbee75f17c01a7cc42f958dc650907174af0554"
             and payload.get("context_targets_tokens") == [8192, 32768, 131072]
@@ -1206,6 +1221,10 @@ def _validate_boundary_manifest(name: str, path: Path) -> dict[str, Any]:
             ]
             and sequence.get("nine_seed_causal_gate")
             == "artifacts/adaptive_v4_memory/paper_grade/p2-nine-seed-causal.summary.json"
+            and sequence.get("primary_core_audit")
+            == "artifacts/adaptive_v4_memory/paper_grade/p2-core-quality-matrix.strict.summary.json"
+            and sequence.get("nine_seed_core_audit")
+            == "artifacts/adaptive_v4_memory/paper_grade/p2-nine-seed-core.summary.json"
             and "nine-seed confirmatory" in sequence.get("policy", ""),
             "P3 synthetic-safety matrix boundary drifted.",
         )
@@ -1238,6 +1257,10 @@ def _validate_boundary_manifest(name: str, path: Path) -> dict[str, Any]:
             and "no natural-safety dataset/source" in sequence.get("policy", "")
             and sequence.get("nine_seed_causal_gate")
             == "artifacts/adaptive_v4_memory/paper_grade/p2-nine-seed-causal.summary.json"
+            and sequence.get("primary_core_audit")
+            == "artifacts/adaptive_v4_memory/paper_grade/p2-core-quality-matrix.strict.summary.json"
+            and sequence.get("nine_seed_core_audit")
+            == "artifacts/adaptive_v4_memory/paper_grade/p2-nine-seed-core.summary.json"
             and "nine-seed confirmatory" in sequence.get("policy", "")
             and payload.get("required_arms")
             == ["native-dense", "strongest-memory-matched-fixed"]
@@ -1267,11 +1290,13 @@ def _validate_boundary_manifest(name: str, path: Path) -> dict[str, Any]:
         _require(
             payload.get("status") == "amended_and_frozen_before_execution"
             and isinstance(amendments, list)
-            and len(amendments) == 5
-            and amendments[-1].get("date") == "2026-07-15"
+            and len(amendments) == 6
+            and amendments[-2].get("date") == "2026-07-15"
             and "before any complete RULER dataset manifest"
-            in amendments[-1].get("timing", "")
+            in amendments[-2].get("timing", "")
             and "terminal nine-seed confirmatory causal audit"
+            in amendments[-2].get("change", "")
+            and "digest-bound primary and nine-seed core audits"
             in amendments[-1].get("change", ""),
             "P3 RULER pre-execution amendment record drifted.",
         )
@@ -1289,6 +1314,10 @@ def _validate_boundary_manifest(name: str, path: Path) -> dict[str, Any]:
         _require(
             sequence.get("nine_seed_causal_gate")
             == "artifacts/adaptive_v4_memory/paper_grade/p2-nine-seed-causal.summary.json"
+            and sequence.get("primary_core_audit")
+            == "artifacts/adaptive_v4_memory/paper_grade/p2-core-quality-matrix.strict.summary.json"
+            and sequence.get("nine_seed_core_audit")
+            == "artifacts/adaptive_v4_memory/paper_grade/p2-nine-seed-core.summary.json"
             and "nine-seed confirmatory" in sequence.get("policy", ""),
             "P3 RULER confirmatory sequence boundary drifted.",
         )
@@ -1502,6 +1531,10 @@ def _validate_boundary_manifest(name: str, path: Path) -> dict[str, Any]:
         _require(
             sequence.get("nine_seed_causal_gate")
             == "artifacts/adaptive_v4_memory/paper_grade/p2-nine-seed-causal.summary.json"
+            and sequence.get("primary_core_audit")
+            == "artifacts/adaptive_v4_memory/paper_grade/p2-core-quality-matrix.strict.summary.json"
+            and sequence.get("nine_seed_core_audit")
+            == "artifacts/adaptive_v4_memory/paper_grade/p2-nine-seed-core.summary.json"
             and "nine-seed confirmatory" in sequence.get("policy", ""),
             "P3 natural-suite confirmatory sequence boundary drifted.",
         )

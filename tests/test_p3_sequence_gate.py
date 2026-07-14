@@ -11,6 +11,81 @@ SCRIPTS = Path(__file__).resolve().parents[1] / "research/adaptive_v4_memory/scr
 sys.path.insert(0, str(SCRIPTS))
 
 from p3_sequence_gate import require_p3_sequence_gate  # noqa: E402
+from verify_p3_natural_model import sha256  # noqa: E402
+
+
+def _core_audits(tmp_path: Path, matrix: Path) -> tuple[Path, Path]:
+    required_true = {
+        name: True
+        for name in (
+            "all_raw_shards_verified",
+            "all_dependency_digests_verified",
+            "all_record_digests_verified",
+            "no_budget_violations",
+            "held_out_seed_contract_verified",
+            "paired_conversation_coverage_verified",
+            "execution_order_coverage_verified",
+            "exact_record_schema_verified",
+            "exact_execution_rotation_verified",
+            "exact_statistical_cell_coverage_verified",
+            "aggregate_recomputed",
+            "batch_coverage_verified",
+            "exact_seed_randomization_verified",
+            "family_holm_bonferroni_verified",
+        )
+    }
+    primary = tmp_path / "primary-core-audit.json"
+    primary.write_text(
+        json.dumps(
+            {
+                "experiment_id": "p2-core-quality-matrix-audit-v1",
+                "source": {"dirty": False},
+                "raw_matrix": {"path": str(matrix), "sha256": sha256(matrix)},
+                "audit": {
+                    **required_true,
+                    "unique_shards": 4_500,
+                    "independent_seed_clusters_per_cell": 5,
+                    "paired_units_per_seed_scale_family": 1_000,
+                    "seed_p_values_used_as_success_gate": False,
+                    "family_holm_p_values_used_as_success_gate": False,
+                },
+            }
+        )
+    )
+    combined_matrix = tmp_path / "nine-seed-core-matrix.json"
+    combined_matrix.write_text('{"completed_shards": 8100}\n')
+    confirmatory = tmp_path / "nine-seed-core-audit.json"
+    confirmatory.write_text(
+        json.dumps(
+            {
+                "experiment_id": "p2-nine-seed-core-matrix-audit-v1",
+                "source": {"dirty": False},
+                "raw_matrix": {
+                    "path": str(combined_matrix),
+                    "sha256": sha256(combined_matrix),
+                },
+                "audit": {
+                    **required_true,
+                    "unique_shards": 8_100,
+                    "independent_seed_clusters_per_cell": 9,
+                    "paired_units_per_seed_scale_family": 1_000,
+                    "seed_p_values_used_as_success_gate": False,
+                    "family_holm_p_values_used_as_success_gate": False,
+                },
+                "pooling_audit": {
+                    "identical_frozen_contracts": True,
+                    "disjoint_training_seeds": True,
+                    "outcome_dependent_early_stopping": False,
+                },
+                "confirmatory_inference": {
+                    "independent_training_seeds_per_scale": 9,
+                    "exact_sign_assignments": 512,
+                    "outcome_dependent_early_stopping": False,
+                },
+            }
+        )
+    )
+    return primary, confirmatory
 
 
 def test_ruler_dataset_generation_is_blocked_until_p2_and_causal_gate(
@@ -77,6 +152,7 @@ def test_p3_gate_requires_each_budget_scale_causal_cell(tmp_path: Path) -> None:
             }
         )
     )
+    primary_core, nine_seed_core = _core_audits(tmp_path, matrix)
     cells = [
         {
             "scale": scale,
@@ -136,13 +212,17 @@ def test_p3_gate_requires_each_budget_scale_causal_cell(tmp_path: Path) -> None:
     confirmatory["primary_causal_gate"]["seeds_per_scale"] = 9
     nine_seed.write_text(json.dumps(confirmatory))
 
-    decision = require_p3_sequence_gate(matrix, causal, nine_seed)
+    decision = require_p3_sequence_gate(
+        matrix, causal, nine_seed, primary_core, nine_seed_core
+    )
     assert decision["causal_candidate_qualified"] is True
     assert decision["baseline_evaluation_required"] is True
     assert decision["causal_statistical_audit_verified"] is True
     assert decision["confirmatory_seed_clusters_per_cell"] == 9
     assert set(decision["dependencies"]) == {
         "p2_matrix",
+        "primary_core",
+        "nine_seed_core",
         "primary_causal",
         "nine_seed_causal",
     }
@@ -151,7 +231,9 @@ def test_p3_gate_requires_each_budget_scale_causal_cell(tmp_path: Path) -> None:
     payload["primary_causal_gate"]["cells"][0]["pooled_effect_positive"] = False
     payload["primary_causal_gate"]["passed"] = False
     causal.write_text(json.dumps(payload))
-    decision = require_p3_sequence_gate(matrix, causal, nine_seed)
+    decision = require_p3_sequence_gate(
+        matrix, causal, nine_seed, primary_core, nine_seed_core
+    )
     assert decision["causal_candidate_qualified"] is False
     assert decision["baseline_evaluation_required"] is True
 
@@ -160,7 +242,7 @@ def test_p3_gate_requires_each_budget_scale_causal_cell(tmp_path: Path) -> None:
     with pytest.raises(
         RuntimeError, match="complete preregistered 5-seed, 2-scale causal audit"
     ):
-        require_p3_sequence_gate(matrix, causal, nine_seed)
+        require_p3_sequence_gate(matrix, causal, nine_seed, primary_core, nine_seed_core)
 
     payload["audit"]["outcome_dependent_early_stopping"] = False
     payload["audit"]["family_holm_bonferroni_verified"] = False
@@ -168,14 +250,14 @@ def test_p3_gate_requires_each_budget_scale_causal_cell(tmp_path: Path) -> None:
     with pytest.raises(
         RuntimeError, match="complete preregistered 5-seed, 2-scale causal audit"
     ):
-        require_p3_sequence_gate(matrix, causal, nine_seed)
+        require_p3_sequence_gate(matrix, causal, nine_seed, primary_core, nine_seed_core)
 
     payload["audit"]["family_holm_bonferroni_verified"] = True
     causal.write_text(json.dumps(payload))
     confirmatory["pooling_audit"]["disjoint_training_seeds"] = False
     nine_seed.write_text(json.dumps(confirmatory))
     with pytest.raises(RuntimeError, match="nine-seed, two-scale confirmatory causal audit"):
-        require_p3_sequence_gate(matrix, causal, nine_seed)
+        require_p3_sequence_gate(matrix, causal, nine_seed, primary_core, nine_seed_core)
 
     confirmatory["pooling_audit"]["disjoint_training_seeds"] = True
     confirmatory["primary_causal_gate"]["cells"][0][
@@ -183,4 +265,10 @@ def test_p3_gate_requires_each_budget_scale_causal_cell(tmp_path: Path) -> None:
     ] = False
     nine_seed.write_text(json.dumps(confirmatory))
     with pytest.raises(RuntimeError, match="nine-seed, two-scale confirmatory causal audit"):
-        require_p3_sequence_gate(matrix, causal, nine_seed)
+        require_p3_sequence_gate(matrix, causal, nine_seed, primary_core, nine_seed_core)
+
+    primary_payload = json.loads(primary_core.read_text())
+    primary_payload["raw_matrix"]["sha256"] = "0" * 64
+    primary_core.write_text(json.dumps(primary_payload))
+    with pytest.raises(RuntimeError, match="raw-matrix binding is missing or drifted"):
+        require_p3_sequence_gate(matrix, causal, nine_seed, primary_core, nine_seed_core)
