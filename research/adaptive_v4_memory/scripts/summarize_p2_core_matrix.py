@@ -504,13 +504,16 @@ def _statistics(
         adjusted = holm_bonferroni(
             {
                 row["family"]: row["seed_cluster_inference"][
-                    "two_sided_seed_cluster_bootstrap_p"
+                    "paired_randomization_two_sided_p"
                 ]
                 for row in family_rows
             }
         )
         for row in family_rows:
             row["holm_adjusted_p"] = adjusted[row["family"]]
+            row["holm_source_p"] = (
+                "seed_cluster_exact_paired_randomization_two_sided_p"
+            )
         families.extend(family_rows)
         for scale in shard.CHUNK_SIZE_BY_SCALE:
             for family in shard.PAPER_GRADE_WORKLOAD_FAMILIES:
@@ -599,13 +602,16 @@ def _statistics(
             adjusted = holm_bonferroni(
                 {
                     row["family"]: row["seed_cluster_inference"][
-                        "two_sided_seed_cluster_bootstrap_p"
+                        "paired_randomization_two_sided_p"
                     ]
                     for row in scale_rows
                 }
             )
             for row in scale_rows:
                 row["holm_adjusted_p"] = adjusted[row["family"]]
+                row["holm_source_p"] = (
+                    "seed_cluster_exact_paired_randomization_two_sided_p"
+                )
     worst = min(slices, key=lambda row: row["mean_difference"])
     worst_by_budget_scale = [
         min(

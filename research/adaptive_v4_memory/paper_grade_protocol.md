@@ -1,6 +1,6 @@
 # Paper-grade expansion protocol
 
-Protocol version: 1.4
+Protocol version: 1.5
 Frozen: 2026-07-14  
 Amended: 2026-07-14, before causal-factorial held-out execution
 Status: active; P2 synthetic core runs first, followed by causal ablations,
@@ -34,6 +34,13 @@ physical hot-memory matching and all-16-arm sequential/chunked equivalence.
 The 7,200-shard extension and 9,000-shard primary causal cohorts remain
 separately reportable; a 16,200-shard nine-seed analysis is emitted only after
 their frozen contracts and base evaluator digest are proven identical.
+
+Version 1.5 corrects the analysis implementation and prose before any primary
+or extension outcome summary is inspected. Family-level and cross-contrast
+Holm-Bonferroni adjustments use the exact seed-cluster paired-randomization
+p-values, while cluster-bootstrap intervals remain the effect-uncertainty
+summary. It also replaces the stale count of 12 causal contrasts with all 15
+implemented preregistered contrasts; no arm, example, seed, or gate changes.
 
 ## 1. Primary questions
 
@@ -245,8 +252,9 @@ native is at most 1 percentage point, no primary family regresses by more than
 2 points, and the lower confidence bound of its improvement over the strongest
 fixed policy is non-negative on at least two families at both scales.
 All five training-seed effects must also be positive at each scale; the
-family-level improvement count uses seed-cluster intervals and Holm-adjusted
-seed-cluster bootstrap p-values rather than treating examples as independent.
+family-level improvement count uses seed-cluster intervals; separately reported
+Holm adjustments use exact seed-cluster paired-randomization p-values rather
+than treating examples as independent. Holm p-values are not a success gate.
 
 The central causal claim has a separate, stricter gate. At the same measured
 hot-memory footprint, `calibrated+pins` must beat `fixed+pins` on both S55 and
@@ -259,7 +267,7 @@ other. The four primary scale-by-budget cells use a Bonferroni-corrected 98.75%
 training-seed-cluster bootstrap interval over the five independent seed means;
 conversation-paired intervals remain descriptive within a seed. Family slices
 use Holm-Bonferroni separately within each contrast, scale, and budget, and the
-12 pooled preregistered contrasts form a second Holm family within each scale
+15 pooled preregistered contrasts form a second Holm family within each scale
 and budget. The
 contrasts `fixed+pins - fixed` and `calibrated+pins - calibrated-no-pins`
 estimate the pin contribution; `calibrated-no-pins - fixed` and

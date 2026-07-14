@@ -517,6 +517,9 @@ def contrast_statistics(
             )
             for row in cell_families:
                 row["holm_adjusted_p"] = adjusted[row["family"]]
+                row["holm_source_p"] = (
+                    "seed_cluster_exact_paired_randomization_two_sided_p"
+                )
             families.extend(cell_families)
             for family in PAPER_GRADE_WORKLOAD_FAMILIES:
                 for context in shard.CONTEXTS:
@@ -1027,6 +1030,9 @@ def main() -> None:
             )
             for name, row in cell_rows.items():
                 row["holm_adjusted_p_across_contrasts"] = adjusted[name]
+                row["holm_across_contrasts_source_p"] = (
+                    "seed_cluster_exact_paired_randomization_two_sided_p"
+                )
     primary = contrast_payload["adaptive_quota_with_pins"]
     for cell in primary["cells"]:
         seed_means = [

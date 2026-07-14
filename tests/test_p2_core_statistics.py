@@ -257,6 +257,53 @@ def test_statistical_coverage_requires_exact_1000_examples_per_family() -> None:
         core.verify_statistical_coverage(differences)
 
 
+def test_family_holm_uses_exact_seed_randomization_not_bootstrap(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(core, "BUDGETS", (1,))
+    monkeypatch.setattr(core.shard, "CHUNK_SIZE_BY_SCALE", {"s55": 2})
+    monkeypatch.setattr(core.shard, "TRAINING_SEEDS", (101, 102))
+    monkeypatch.setattr(core.shard, "PAPER_GRADE_WORKLOAD_FAMILIES", ("f0", "f1"))
+    monkeypatch.setattr(core.shard, "CONTEXTS", (80,))
+    monkeypatch.setattr(
+        core,
+        "bootstrap_paired_mean",
+        lambda values, *, label: {
+            "paired_units": len(tuple(values)),
+            "mean_difference": 0.1,
+            "two_sided_bootstrap_p": 0.9,
+        },
+    )
+
+    def fake_seed_statistics(values: Any, *, label: str) -> dict[str, object]:
+        return {
+            "seed_means": list(values),
+            "seed_cluster_bootstrap_ci": [0.01, 0.2],
+            "two_sided_seed_cluster_bootstrap_p": 0.9,
+            "paired_randomization_two_sided_p": 0.01 if "f0" in label else 0.04,
+        }
+
+    monkeypatch.setattr(core, "seed_cluster_statistics", fake_seed_statistics)
+    differences = {
+        (1, "s55", seed, family, 80): [0.1]
+        for seed in (101, 102)
+        for family in ("f0", "f1")
+    }
+
+    result = core._statistics(
+        differences,
+        comparison="candidate-minus-fixed",
+        namespace="unit",
+    )
+
+    for key in ("by_family_with_holm_bonferroni", "by_scale_family"):
+        rows = sorted(result[key], key=lambda row: row["family"])
+        assert [row["holm_adjusted_p"] for row in rows] == pytest.approx([0.02, 0.04])
+        assert {row["holm_source_p"] for row in rows} == {
+            "seed_cluster_exact_paired_randomization_two_sided_p"
+        }
+
+
 def test_quality_gate_requires_corrected_families_on_each_scale() -> None:
     fixed: dict[str, Any] = {
         "pooled_by_scale": [
