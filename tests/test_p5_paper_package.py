@@ -278,7 +278,28 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
         "table-p2-causal-physical-memory.csv",
         "table-p2-causal-offline-oracle.csv",
         "table-requirement-traceability.csv",
+        "reproduction-guide.md",
     }.issubset(manifest["generated_files"])
+    guide = Path(manifest["reproduction_guide"]["path"])
+    assert guide.name == "reproduction.md"
+
+
+def test_p5_reproduction_guide_binds_every_stage_and_failure_boundary(tmp_path: Path) -> None:
+    root = Path(__file__).resolve().parents[1]
+    guide = root / "research/adaptive_v4_memory/reproduction.md"
+
+    rendered = package._validate_reproduction_guide(guide)
+    normalized = " ".join(rendered.split())
+
+    assert "resume-safe" in normalized
+    assert "do not report CI as passed" in normalized
+    assert "does not waive it" in normalized
+    assert all(marker in rendered for marker in package.REPRODUCTION_REQUIRED_MARKERS)
+
+    incomplete = tmp_path / "reproduction.md"
+    incomplete.write_text("# incomplete\n")
+    with pytest.raises(ValueError, match="Reproduction guide is incomplete"):
+        package._validate_reproduction_guide(incomplete)
 
 
 def test_p5_traceability_covers_every_requirement_and_fails_closed() -> None:

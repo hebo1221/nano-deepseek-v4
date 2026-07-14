@@ -231,6 +231,7 @@
       "sources": [
         {"kind": "generated-output", "name": "artifact-index.json"},
         {"kind": "generated-output", "name": "paper-report.md"},
+        {"kind": "generated-output", "name": "reproduction-guide.md"},
         {"kind": "boundary-manifest", "name": "paper_grade_study"}
       ]
     },
@@ -280,6 +281,7 @@
       "sources": [
         {"kind": "generated-output", "name": "paper-report.md"},
         {"kind": "generated-output", "name": "artifact-index.json"},
+        {"kind": "generated-output", "name": "reproduction-guide.md"},
         {"kind": "verification-contract", "name": "final-local-release-gate"}
       ]
     }

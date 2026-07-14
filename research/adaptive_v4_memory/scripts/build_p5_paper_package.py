@@ -36,6 +36,28 @@ FINAL_RELEASE_COMMANDS = [
     ".venv/bin/python -m build",
     ".venv/bin/twine check dist/*",
 ]
+REPRODUCTION_REQUIRED_MARKERS = [
+    "run_p2_core_parallel.py --scale s55 --workers 3",
+    "run_p2_core_parallel.py --scale s151 --workers 3",
+    "summarize_p2_core_matrix.py",
+    "run_p2_causal_prerequisites.py",
+    "run_p2_causal_parallel.py --workers 3",
+    "summarize_p2_causal_factorial.py",
+    "run_p3_natural_ruler.py",
+    "run_p3_scbench.py",
+    "run_p3_longbench_v2.py",
+    "run_p3_longmemeval.py",
+    "run_p3_mrcr.py",
+    "run_p3_safety_stress.py",
+    "run_p4_500k_context_preflight.py",
+    "run_p4_systems_matrix.py",
+    "run_p4_production_systems_matrix.py",
+    "run_p1_online_lookahead_parallel.py --workers 3",
+    "build_p5_paper_package.py",
+    *FINAL_RELEASE_COMMANDS,
+    "A successful final GitHub Actions CI run remains mandatory before goal completion",
+    "Official DeepSeek-V4 boundary",
+]
 BOUNDARY_EXPERIMENT_IDS = {
     "paper_grade_study": "adaptive-v4-memory-paper-grade-v1",
     "experiment_scale_audit": "adaptive-v4-memory-experiment-scale-audit-v1",
@@ -240,6 +262,22 @@ def _validate_execution_audit(name: str, path: Path, contract: dict[str, Any]) -
                 f"{name} {artifact_field} artifact {coordinate}",
             )
     return payload
+
+
+def _validate_reproduction_guide(path: Path) -> str:
+    _require(path.is_file(), f"Missing reproduction guide: {path}")
+    guide = path.read_text()
+    normalized_guide = " ".join(guide.split())
+    missing = [marker for marker in REPRODUCTION_REQUIRED_MARKERS if marker not in guide]
+    _require(not missing, f"Reproduction guide is incomplete: {missing}")
+    _require(
+        "resume-safe" in normalized_guide
+        and "Never delete a terminal failure artifact" in normalized_guide
+        and "do not report CI as passed" in normalized_guide
+        and "does not waive it" in normalized_guide,
+        "Reproduction failure and CI boundaries drifted.",
+    )
+    return guide
 
 
 def _traceability_rows(
@@ -1292,7 +1330,8 @@ def _report(
     evidence_lines = "\n".join(
         f"| {row['name']} | {classifications.get(row['name'], 'unverified')} | `{row['sha256']}` |"
         for row in inputs
-        if row.get("kind") not in {"execution-audit", "traceability-contract"}
+        if row.get("kind")
+        not in {"execution-audit", "traceability-contract", "reproduction-guide"}
     )
     execution_lines = "\n".join(
         f"| {row['name']} | verified | `{row['sha256']}` |"
@@ -1422,10 +1461,14 @@ frozen resource contract is satisfied.
 
 ## Reproduction
 
+The dependency-ordered commands, resume rules, failure policy, external resource boundary,
+and final local release checks are frozen in [the reproduction guide](reproduction-guide.md).
 The CSV tables next to this report are generated from the same frozen audits. Their digests,
-the input digests, source commit, and protocol manifests are recorded in
+the input digests, source commit, protocol manifests, and reproduction guide are recorded in
 `artifact-index.json`; missing or incomplete evidence causes generation to fail rather than
-being imputed.
+being imputed. GitHub Actions is currently disabled manually and is not reported as passed;
+a successful final CI run remains mandatory before goal completion, and package generation
+does not waive it.
 """
 
 
@@ -1437,6 +1480,16 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
     )
     loaded: dict[str, dict[str, Any]] = {}
     inputs: list[dict[str, Any]] = []
+    reproduction_path = Path(manifest.get("reproduction_guide", {}).get("path", ""))
+    reproduction_guide = _validate_reproduction_guide(reproduction_path)
+    inputs.append(
+        {
+            "name": "reproduction_guide",
+            "kind": "reproduction-guide",
+            "path": str(reproduction_path),
+            "sha256": sha256(reproduction_path),
+        }
+    )
     traceability_contract = manifest.get("requirement_traceability", {})
     traceability_path = Path(traceability_contract.get("path", ""))
     traceability = _load(traceability_path)
@@ -1494,10 +1547,12 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
     )
     traceability_rows = _traceability_rows(traceability, manifest, classes)
     output_root.mkdir(parents=True, exist_ok=True)
+    (output_root / "reproduction-guide.md").write_text(reproduction_guide)
     evidence_rows = [
         {**row, "classification": classes.get(row["name"], "unverified")}
         for row in inputs
-        if row.get("kind") not in {"execution-audit", "traceability-contract"}
+        if row.get("kind")
+        not in {"execution-audit", "traceability-contract", "reproduction-guide"}
     ]
     _write_csv(
         output_root / "table-evidence.csv",

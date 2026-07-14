@@ -6,6 +6,9 @@
     "path": "research/adaptive_v4_memory/manifests/p5-requirement-traceability-v1.json",
     "experiment_id": "adaptive-v4-memory-p5-requirement-traceability-v1"
   },
+  "reproduction_guide": {
+    "path": "research/adaptive_v4_memory/reproduction.md"
+  },
   "evidence": {
     "p2_core": {
       "path": "artifacts/adaptive_v4_memory/paper_grade/p2-core-quality-matrix.summary.json",
@@ -261,6 +264,7 @@
   "generated_files": [
     "table-evidence.csv",
     "table-requirement-traceability.csv",
+    "reproduction-guide.md",
     "table-p2-quality-gate.csv",
     "table-p2-core-policy-summary.csv",
     "table-p2-core-effects.csv",
