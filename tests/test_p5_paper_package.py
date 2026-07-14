@@ -373,6 +373,16 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
     ):
         assert manifest["evidence"][name]["required_artifacts"] == ["raw_matrix"]
 
+    graph_bound = {
+        "m5_one_token_pilot",
+        "m3_offline_learned_risk_pilot",
+        *(name for name in manifest["evidence"] if name.startswith("p3_")),
+    }
+    assert all(
+        manifest["evidence"][name]["required_declared_artifact_graph"] is True
+        for name in graph_bound
+    )
+
     assert set(manifest["evidence"]) == {
         "p2_core",
         "p2_core_confirmatory",
@@ -611,6 +621,9 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
         == 512
     )
     assert manifest["evidence"]["p3_ruler"]["required_audit"]["total_predictions"] == 370500
+    assert manifest["evidence"]["p3_ruler"]["required_artifact_collections"] == {
+        "cell_artifacts": 57
+    }
     assert (
         manifest["evidence"]["p3_ruler"]["required_audit"]["all_runtime_kvpress_bindings_verified"]
         is True
@@ -1017,6 +1030,111 @@ def test_p2_evidence_rejects_raw_matrix_digest_drift(tmp_path: Path) -> None:
     raw_matrix.write_text('{"completed_shards": 0}\n')
     with pytest.raises(ValueError, match="Digest mismatch"):
         package._validate_evidence("p2_core_confirmatory", path, contract)
+
+
+def test_evidence_rejects_nested_declared_artifact_drift(tmp_path: Path) -> None:
+    records = tmp_path / "records.jsonl"
+    records.write_text('{"prediction": "ok"}\n')
+    cell = tmp_path / "cell.json"
+    cell.write_text(
+        json.dumps(
+            {
+                "raw_records": {
+                    "path": str(records),
+                    "sha256": package.sha256(records),
+                }
+            }
+        )
+    )
+    evidence = {
+        "experiment_id": "nested-artifact-audit-v1",
+        "source": {"dirty": False},
+        "audit": {"terminal": True},
+        "arm_cells": {
+            "native": {"path": str(cell), "sha256": package.sha256(cell)}
+        },
+    }
+    summary = tmp_path / "summary.json"
+    summary.write_text(json.dumps(evidence))
+    contract = {
+        "experiment_id": "nested-artifact-audit-v1",
+        "required_audit": {"terminal": True},
+        "required_declared_artifact_graph": True,
+    }
+
+    assert package._validate_evidence("nested", summary, contract) == evidence
+    records.write_text('{"prediction": "drifted"}\n')
+    with pytest.raises(ValueError, match="Digest mismatch"):
+        package._validate_evidence("nested", summary, contract)
+
+
+def test_evidence_requires_a_declared_artifact_graph(tmp_path: Path) -> None:
+    summary = tmp_path / "summary.json"
+    summary.write_text(
+        json.dumps(
+            {
+                "experiment_id": "missing-artifact-graph-v1",
+                "source": {"dirty": False},
+                "audit": {"terminal": True},
+            }
+        )
+    )
+    contract = {
+        "experiment_id": "missing-artifact-graph-v1",
+        "required_audit": {"terminal": True},
+        "required_declared_artifact_graph": True,
+    }
+
+    with pytest.raises(ValueError, match="declared artifact coverage is incomplete"):
+        package._validate_evidence("missing", summary, contract)
+
+
+def test_evidence_requires_exact_artifact_collection_cardinality(tmp_path: Path) -> None:
+    artifact = tmp_path / "cell.json"
+    artifact.write_text("{}\n")
+    evidence = {
+        "experiment_id": "artifact-collection-audit-v1",
+        "source": {"dirty": False},
+        "audit": {"terminal": True},
+        "cell_artifacts": [
+            {"path": str(artifact), "sha256": package.sha256(artifact)}
+        ],
+    }
+    summary = tmp_path / "summary.json"
+    summary.write_text(json.dumps(evidence))
+    contract = {
+        "experiment_id": "artifact-collection-audit-v1",
+        "required_audit": {"terminal": True},
+        "required_declared_artifact_graph": True,
+        "required_artifact_collections": {"cell_artifacts": 2},
+    }
+
+    with pytest.raises(ValueError, match="artifact collection cell_artifacts drifted"):
+        package._validate_evidence("collection", summary, contract)
+
+
+def test_evidence_rejects_an_incomplete_artifact_binding(tmp_path: Path) -> None:
+    artifact = tmp_path / "cell.json"
+    artifact.write_text("{}\n")
+    summary = tmp_path / "summary.json"
+    summary.write_text(
+        json.dumps(
+            {
+                "experiment_id": "incomplete-artifact-binding-v1",
+                "source": {"dirty": False},
+                "audit": {"terminal": True},
+                "raw_cell": {"path": str(artifact)},
+            }
+        )
+    )
+    contract = {
+        "experiment_id": "incomplete-artifact-binding-v1",
+        "required_audit": {"terminal": True},
+        "required_declared_artifact_graph": True,
+    }
+
+    with pytest.raises(ValueError, match="Incomplete digest-bound artifact metadata"):
+        package._validate_evidence("incomplete", summary, contract)
 
 
 def test_confirmatory_causal_requires_pooling_and_exact_inference(
@@ -2026,11 +2144,17 @@ def test_adaptive_longmemeval_evidence_rejects_an_available_confirmation_gate(
         ).read_text()
     )
     contract = manifest["evidence"]["p3_natural_adaptive_quota_longmemeval"]
+    adaptive_manifest = tmp_path / "adaptive-manifest.json"
+    adaptive_manifest.write_text('{"status": "frozen"}\n')
     evidence = {
         "experiment_id": contract["experiment_id"],
         "source": {"dirty": False},
         "audit": dict(contract["required_audit"]),
         "confirmation_gate": dict(contract["required_sections"]["confirmation_gate"]),
+        "adaptive_manifest": {
+            "path": str(adaptive_manifest),
+            "sha256": package.sha256(adaptive_manifest),
+        },
     }
     path = tmp_path / "adaptive-longmemeval-summary.json"
     path.write_text(json.dumps(evidence))

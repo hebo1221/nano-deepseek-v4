@@ -1798,6 +1798,23 @@ def _validate_evidence(name: str, path: Path, contract: dict[str, Any]) -> dict[
             )
     for artifact_field in contract.get("required_artifacts", []):
         _bound_artifact(payload.get(artifact_field), f"{name} {artifact_field}")
+    declared_artifacts = _verify_declared_artifact_tree(payload, name)
+    minimum_declared_artifacts = contract.get(
+        "minimum_declared_artifacts",
+        1 if contract.get("required_declared_artifact_graph") is True else 0,
+    )
+    _require(
+        declared_artifacts >= minimum_declared_artifacts,
+        f"{name} declared artifact coverage is incomplete.",
+    )
+    for collection_name, expected_count in contract.get(
+        "required_artifact_collections", {}
+    ).items():
+        collection = payload.get(collection_name)
+        _require(
+            isinstance(collection, (dict, list)) and len(collection) == expected_count,
+            f"{name} artifact collection {collection_name} drifted.",
+        )
     analysis_paths = P2_ANALYSIS_PATHS.get(name)
     if analysis_paths is not None:
         _require(
@@ -1810,10 +1827,56 @@ def _validate_evidence(name: str, path: Path, contract: dict[str, Any]) -> dict[
 
 def _bound_artifact(metadata: Any, label: str) -> Path:
     _require(isinstance(metadata, dict), f"Missing {label} metadata.")
-    path = Path(metadata.get("path", ""))
+    path_value = metadata.get("path")
+    digest_value = metadata.get("sha256")
+    _require(
+        isinstance(path_value, str)
+        and bool(path_value)
+        and isinstance(digest_value, str)
+        and len(digest_value) == 64
+        and set(digest_value) <= set("0123456789abcdef"),
+        f"Invalid {label} artifact binding.",
+    )
+    path = Path(path_value)
     _require(path.is_file(), f"Missing {label}: {path}")
-    _require(metadata.get("sha256") == sha256(path), f"Digest mismatch for {label}: {path}")
+    _require(digest_value == sha256(path), f"Digest mismatch for {label}: {path}")
     return path
+
+
+def _verify_declared_artifact_tree(payload: Any, label: str) -> int:
+    """Re-open every path/SHA declaration, including declarations in child JSON files."""
+
+    seen_json: set[Path] = set()
+
+    def visit(value: Any, location: str) -> int:
+        verified = 0
+        if isinstance(value, dict):
+            declares_path = "path" in value
+            declares_digest = "sha256" in value
+            if declares_path or declares_digest:
+                _require(
+                    declares_path and declares_digest,
+                    f"Incomplete digest-bound artifact metadata for {location}.",
+                )
+                artifact = _bound_artifact(value, location)
+                verified += 1
+                resolved = artifact.resolve()
+                if artifact.suffix == ".json" and resolved not in seen_json:
+                    seen_json.add(resolved)
+                    try:
+                        child = json.loads(artifact.read_text())
+                    except (OSError, json.JSONDecodeError) as error:
+                        raise ValueError(f"Invalid declared JSON artifact for {location}.") from error
+                    verified += visit(child, f"{location} -> {artifact}")
+            for key, child in value.items():
+                if key not in {"path", "sha256"}:
+                    verified += visit(child, f"{location}.{key}")
+        elif isinstance(value, list):
+            for index, child in enumerate(value):
+                verified += visit(child, f"{location}[{index}]")
+        return verified
+
+    return visit(payload, label)
 
 
 def _validate_execution_audit(name: str, path: Path, contract: dict[str, Any]) -> dict[str, Any]:

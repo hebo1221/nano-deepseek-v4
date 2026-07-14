@@ -192,9 +192,20 @@ def main() -> None:
         )
 
     cell_summary: list[dict[str, Any]] = []
+    cell_artifacts: list[dict[str, Any]] = []
     comparisons: list[dict[str, Any]] = []
     raw_digests: list[str] = []
     for (length, arm, ratio), (audit, predictions) in sorted(loaded.items()):
+        audit_path = cell_dir(args.output_root, length, arm, ratio) / "audit.json"
+        cell_artifacts.append(
+            {
+                "length_tokens": length,
+                "arm": arm,
+                "compression_ratio": ratio,
+                "path": str(audit_path),
+                "sha256": sha256(audit_path),
+            }
+        )
         raw_digests.append(_records_digest(predictions))
         tasks = [
             {
@@ -262,6 +273,7 @@ def main() -> None:
             ).hexdigest(),
         },
         "cell_summary": cell_summary,
+        "cell_artifacts": cell_artifacts,
         "paired_vs_native": comparisons,
         "benchmark_complete": len(loaded) == EXPECTED_CELLS,
         "environment": {"python": platform.python_version(), "pandas": pd.__version__},

@@ -265,7 +265,10 @@ the digest-bound package:
 
 The final package is valid only from a clean source tree. Check
 `artifacts/adaptive_v4_memory/paper_grade/p5/artifact-index.json` for every input
-and generated SHA-256. GitHub Actions remains disabled by user request and must not be
+and generated SHA-256. During generation, every declared `path`/`sha256` pair in the
+P3 evidence graph is reopened and rehashed, including bindings reached through linked
+JSON cell artifacts; a missing half-binding, missing file, or nested digest drift fails
+closed. GitHub Actions remains disabled by user request and must not be
 reported as passed. It is outside the completion gate; the five digest-bound local release
 checks above are the final source-verification contract. The release-gate artifact also
 requires `HEAD` to have an `origin/*` upstream with zero locally tracked ahead/behind

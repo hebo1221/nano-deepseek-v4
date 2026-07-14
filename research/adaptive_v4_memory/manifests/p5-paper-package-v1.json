@@ -97,6 +97,7 @@
     "m5_one_token_pilot": {
       "path": "artifacts/adaptive_v4_memory/paper_grade/p1/m5-pilot-baseline.summary.json",
       "experiment_id": "m5-one-token-pilot-baseline-audit-v1",
+      "required_declared_artifact_graph": true,
       "required_audit": {
         "raw_artifacts_verified": true,
         "scales_verified": 2,
@@ -109,6 +110,7 @@
     "m3_offline_learned_risk_pilot": {
       "path": "artifacts/adaptive_v4_memory/paper_grade/p1/m3-offline-learned-risk-pilot.summary.json",
       "experiment_id": "m3-offline-learned-risk-pilot-audit-v1",
+      "required_declared_artifact_graph": true,
       "required_audit": {
         "raw_summaries_verified": true,
         "scales_verified": 2,
@@ -283,11 +285,14 @@
     "p3_ruler": {
       "path": "artifacts/adaptive_v4_memory/paper_grade/p3/ruler-qwen3-1.7b.summary.json",
       "experiment_id": "p3-ruler-qwen3-1.7b-audit-v1",
+      "required_declared_artifact_graph": true,
+      "required_artifact_collections": {"cell_artifacts": 57},
       "required_audit": {"completed_cells": 57, "total_predictions": 370500, "all_runtime_kvpress_bindings_verified": true}
     },
     "p3_cross_family": {
       "path": "artifacts/adaptive_v4_memory/paper_grade/p3/cross-family/phi4-mini-ruler.summary.json",
       "experiment_id": "p3-cross-family-ruler-transfer-audit-v1",
+      "required_declared_artifact_graph": true,
       "required_audit": {
         "required_arms_terminal": true,
         "terminal_arms": 2,
@@ -323,6 +328,7 @@
     "p3_cross_family_adaptive_quota": {
       "path": "artifacts/adaptive_v4_memory/paper_grade/p3/cross-family/phi4-mini-adaptive-quota-ruler.summary.json",
       "experiment_id": "p3-cross-family-adaptive-quota-ruler-audit-v1",
+      "required_declared_artifact_graph": true,
       "required_audit": {
         "required_arms_terminal": true,
         "terminal_arms": 2,
@@ -352,6 +358,7 @@
     "p3_cross_family_adaptive_quota_longbench_v2": {
       "path": "artifacts/adaptive_v4_memory/paper_grade/p3/cross-family/phi4-mini-adaptive-quota-longbench-v2.summary.json",
       "experiment_id": "p3-cross-family-adaptive-quota-longbench-v2-audit-v1",
+      "required_declared_artifact_graph": true,
       "required_audit": {
         "required_arms_terminal": true,
         "terminal_arms": 2,
@@ -386,6 +393,7 @@
     "p3_natural_adaptive_quota": {
       "path": "artifacts/adaptive_v4_memory/paper_grade/p3/natural-adaptive-quota/ruler-qwen3-4b.summary.json",
       "experiment_id": "p3-natural-adaptive-quota-ruler-audit-v1",
+      "required_declared_artifact_graph": true,
       "required_audit": {
         "required_arms_terminal": true,
         "terminal_arms": 2,
@@ -425,6 +433,7 @@
     "p3_natural_adaptive_quota_longmemeval": {
       "path": "artifacts/adaptive_v4_memory/paper_grade/p3/natural-adaptive-quota/longmemeval-qwen3-4b.summary.json",
       "experiment_id": "p3-natural-adaptive-quota-longmemeval-audit-v1",
+      "required_declared_artifact_graph": true,
       "required_audit": {
         "required_arms_terminal": true,
         "terminal_arms": 2,
@@ -462,6 +471,7 @@
     "p3_natural_adaptive_quota_scbench": {
       "path": "artifacts/adaptive_v4_memory/paper_grade/p3/natural-adaptive-quota/scbench-qwen3-4b.summary.json",
       "experiment_id": "p3-natural-adaptive-quota-scbench-audit-v1",
+      "required_declared_artifact_graph": true,
       "required_audit": {
         "required_arms_terminal": true,
         "terminal_arms": 2,
@@ -492,6 +502,7 @@
     "p3_natural_adaptive_quota_longbench_v2": {
       "path": "artifacts/adaptive_v4_memory/paper_grade/p3/natural-adaptive-quota/longbench-v2-qwen3-4b.summary.json",
       "experiment_id": "p3-natural-adaptive-quota-longbench-v2-audit-v1",
+      "required_declared_artifact_graph": true,
       "required_audit": {
         "required_arms_terminal": true,
         "terminal_arms": 2,
@@ -524,6 +535,7 @@
     "p3_natural_adaptive_quota_mrcr": {
       "path": "artifacts/adaptive_v4_memory/paper_grade/p3/natural-adaptive-quota/mrcr-qwen3-4b.summary.json",
       "experiment_id": "p3-natural-adaptive-quota-mrcr-audit-v1",
+      "required_declared_artifact_graph": true,
       "required_audit": {
         "required_arms_terminal": true,
         "terminal_arms": 2,
@@ -555,6 +567,7 @@
     "p3_natural_adaptive_quota_suite": {
       "path": "artifacts/adaptive_v4_memory/paper_grade/p3/natural-adaptive-quota/suite.summary.json",
       "experiment_id": "p3-natural-adaptive-quota-suite-audit-v1",
+      "required_declared_artifact_graph": true,
       "required_audit": {
         "terminal_components": 4,
         "predictions_per_arm": 44789,
@@ -579,6 +592,7 @@
     "p3_natural": {
       "path": "artifacts/adaptive_v4_memory/paper_grade/p3/natural-suite.summary.json",
       "experiment_id": "p3-natural-language-suite-audit-v1",
+      "required_declared_artifact_graph": true,
       "required_audit": {
         "benchmarks_terminal": 5,
         "minimum_protocol_examples_accounted_per_arm": 45289,
@@ -611,6 +625,7 @@
     "p3_safety": {
       "path": "artifacts/adaptive_v4_memory/paper_grade/p3/safety-stress.summary.json",
       "experiment_id": "p3-safety-stress-audit-v1",
+      "required_declared_artifact_graph": true,
       "required_audit": {
         "required_arms_terminal": true,
         "failure_accounting_complete": true,
@@ -632,6 +647,7 @@
     "p3_natural_safety": {
       "path": "artifacts/adaptive_v4_memory/paper_grade/p3/natural-safety.summary.json",
       "experiment_id": "p3-natural-safety-suite-audit-v1",
+      "required_declared_artifact_graph": true,
       "required_audit": {
         "required_arms": 2,
         "longsafety_generation_terminal": true,
@@ -655,6 +671,7 @@
     "p3_ifeval": {
       "path": "artifacts/adaptive_v4_memory/paper_grade/p3/natural-safety/ifeval.summary.json",
       "experiment_id": "p3-natural-safety-ifeval-official-audit-v1",
+      "required_declared_artifact_graph": true,
       "required_audit": {
         "required_arms_terminal": true,
         "input_pairing_verified": true,
@@ -671,6 +688,7 @@
     "p3_longsafety": {
       "path": "artifacts/adaptive_v4_memory/paper_grade/p3/natural-safety/longsafety.summary.json",
       "experiment_id": "p3-natural-safety-longsafety-generation-audit-v1",
+      "required_declared_artifact_graph": true,
       "required_audit": {
         "generation_arms_terminal": true,
         "input_pairing_verified": true,
