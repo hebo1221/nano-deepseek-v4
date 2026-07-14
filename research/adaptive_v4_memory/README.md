@@ -150,6 +150,15 @@ checked P1 report and summary. Calibration-only non-uniform quotas, protected
 pinning, learned lookahead, and the preregistered five-seed matrix remain active
 work.
 
+The follow-up calibration pilot now fits same-token layer quotas from a disjoint
+707-series seed using all nine P2 families and five context lengths. The 1x
+point retains the uniform fixed-policy floor; S55 selected non-uniform 2x/4x
+quotas while S151 remained uniform. Protected end positions are also inherited
+by the physical tier store rather than being repeatedly fetched. These are
+mechanism checks only: the two-scale pilot used 32 conversations per family and
+did not inspect held-out quality. See the checked layer-quota calibration report
+and digest-bound summary.
+
 ## P2 training matrix
 
 The preregistered 5-seed × 2-scale Tier-S training matrix is complete. All ten

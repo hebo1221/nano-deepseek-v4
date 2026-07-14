@@ -1,0 +1,610 @@
+{
+  "experiment_id": "p1-layer-quota-calibration-pilot-audit-v1",
+  "interpretation": "two-scale calibration-only pilot; no held-out quality result",
+  "runs": [
+    {
+      "calibrations": {
+        "1x": {
+          "calibration_digest": "ffc5a42d8d4dd052b7f47ad5c3264aef4d8c776d9966d716a2faba0fd930756e",
+          "candidate_demand_quantiles": [
+            [
+              2,
+              255
+            ],
+            [
+              4,
+              255
+            ],
+            [
+              6,
+              255
+            ],
+            [
+              8,
+              255
+            ],
+            [
+              10,
+              255
+            ]
+          ],
+          "dense_layer_budgets": [
+            [
+              2,
+              4
+            ],
+            [
+              4,
+              4
+            ],
+            [
+              6,
+              4
+            ],
+            [
+              8,
+              4
+            ],
+            [
+              10,
+              4
+            ]
+          ],
+          "layer_budgets": [
+            [
+              2,
+              1
+            ],
+            [
+              4,
+              1
+            ],
+            [
+              6,
+              1
+            ],
+            [
+              8,
+              1
+            ],
+            [
+              10,
+              1
+            ]
+          ],
+          "score_demand_quantiles": [
+            [
+              2,
+              3
+            ],
+            [
+              4,
+              3
+            ],
+            [
+              6,
+              3
+            ],
+            [
+              8,
+              3
+            ],
+            [
+              10,
+              2
+            ]
+          ],
+          "signal_config": {
+            "cross_layer_weight": 0.2,
+            "dense_cardinality_threshold": 0.9,
+            "dense_fallback_block_budget": 20,
+            "enable_dense_fallback": true,
+            "entropy_weight": 0.35,
+            "global_block_budget": 5,
+            "margin_weight": 0.2,
+            "max_extra_blocks_per_layer": 0,
+            "max_refresh_interval": 4,
+            "min_blocks_per_layer": 1,
+            "min_refresh_interval": 1,
+            "stable_reuse_threshold": 0.8,
+            "temporal_weight": 0.25,
+            "top_p": 0.8,
+            "uncertainty_threshold": 0.8
+          }
+        },
+        "2x": {
+          "calibration_digest": "293513e0b3bc9788fb4b23c9efa9a48c51fd16e5d8425b2f66a8abaa3515ed8c",
+          "candidate_demand_quantiles": [
+            [
+              2,
+              255
+            ],
+            [
+              4,
+              255
+            ],
+            [
+              6,
+              255
+            ],
+            [
+              8,
+              255
+            ],
+            [
+              10,
+              255
+            ]
+          ],
+          "dense_layer_budgets": [
+            [
+              2,
+              4
+            ],
+            [
+              4,
+              4
+            ],
+            [
+              6,
+              4
+            ],
+            [
+              8,
+              4
+            ],
+            [
+              10,
+              4
+            ]
+          ],
+          "layer_budgets": [
+            [
+              2,
+              2
+            ],
+            [
+              4,
+              2
+            ],
+            [
+              6,
+              2
+            ],
+            [
+              8,
+              2
+            ],
+            [
+              10,
+              2
+            ]
+          ],
+          "score_demand_quantiles": [
+            [
+              2,
+              4
+            ],
+            [
+              4,
+              4
+            ],
+            [
+              6,
+              4
+            ],
+            [
+              8,
+              4
+            ],
+            [
+              10,
+              3
+            ]
+          ],
+          "signal_config": {
+            "cross_layer_weight": 0.2,
+            "dense_cardinality_threshold": 0.9,
+            "dense_fallback_block_budget": 20,
+            "enable_dense_fallback": true,
+            "entropy_weight": 0.35,
+            "global_block_budget": 10,
+            "margin_weight": 0.2,
+            "max_extra_blocks_per_layer": 1,
+            "max_refresh_interval": 4,
+            "min_blocks_per_layer": 1,
+            "min_refresh_interval": 1,
+            "stable_reuse_threshold": 0.8,
+            "temporal_weight": 0.25,
+            "top_p": 0.8,
+            "uncertainty_threshold": 0.8
+          }
+        },
+        "4x": {
+          "calibration_digest": "4f937a981a3ad1228abefd2b9260f41cae313a485199bbb7e5f984c7f0ebcae1",
+          "candidate_demand_quantiles": [
+            [
+              2,
+              255
+            ],
+            [
+              4,
+              255
+            ],
+            [
+              6,
+              255
+            ],
+            [
+              8,
+              255
+            ],
+            [
+              10,
+              255
+            ]
+          ],
+          "dense_layer_budgets": [
+            [
+              2,
+              4
+            ],
+            [
+              4,
+              4
+            ],
+            [
+              6,
+              4
+            ],
+            [
+              8,
+              4
+            ],
+            [
+              10,
+              4
+            ]
+          ],
+          "layer_budgets": [
+            [
+              2,
+              4
+            ],
+            [
+              4,
+              4
+            ],
+            [
+              6,
+              4
+            ],
+            [
+              8,
+              4
+            ],
+            [
+              10,
+              4
+            ]
+          ],
+          "score_demand_quantiles": [
+            [
+              2,
+              5
+            ],
+            [
+              4,
+              5
+            ],
+            [
+              6,
+              5
+            ],
+            [
+              8,
+              5
+            ],
+            [
+              10,
+              4
+            ]
+          ],
+          "signal_config": {
+            "cross_layer_weight": 0.2,
+            "dense_cardinality_threshold": 0.9,
+            "dense_fallback_block_budget": 20,
+            "enable_dense_fallback": true,
+            "entropy_weight": 0.35,
+            "global_block_budget": 20,
+            "margin_weight": 0.2,
+            "max_extra_blocks_per_layer": 3,
+            "max_refresh_interval": 4,
+            "min_blocks_per_layer": 1,
+            "min_refresh_interval": 1,
+            "stable_reuse_threshold": 0.8,
+            "temporal_weight": 0.25,
+            "top_p": 0.8,
+            "uncertainty_threshold": 0.8
+          }
+        }
+      },
+      "captured_queries_per_layer": 896,
+      "captured_query_count": 4480,
+      "checkpoint": {
+        "bytes": 606450713,
+        "path": "artifacts/adaptive_v4_memory/paper_grade/training/s151/seed-6071401/s151-step-1000.pt",
+        "sha256": "3eca7b855c477718e4af0b37fc6ad4b6a546c5a65abd201f1b1e77edbc19dfec"
+      },
+      "examples_per_family": 32,
+      "raw_artifact": {
+        "path": "artifacts/adaptive_v4_memory/paper_grade/calibration/s151/seed-6071401/p1-layer-quotas-scaled-v3.json",
+        "sha256": "a624761653180fdbb0fb3fe5311193375b4efa05efbbbb3e4a1373a5d42d676d"
+      },
+      "scale": "s151",
+      "seed": 7071401,
+      "source": {
+        "commit": "a8dd5d7163f8f2e30a6785c342824509472bd0d3",
+        "dirty": false
+      }
+    },
+    {
+      "calibrations": {
+        "1x": {
+          "calibration_digest": "60bf3ae02f916321c02b0fc3c6ae8a12650eb56e02c552834def0b3918ec8647",
+          "candidate_demand_quantiles": [
+            [
+              2,
+              255
+            ],
+            [
+              4,
+              255
+            ],
+            [
+              6,
+              255
+            ]
+          ],
+          "dense_layer_budgets": [
+            [
+              2,
+              8
+            ],
+            [
+              4,
+              8
+            ],
+            [
+              6,
+              8
+            ]
+          ],
+          "layer_budgets": [
+            [
+              2,
+              2
+            ],
+            [
+              4,
+              2
+            ],
+            [
+              6,
+              2
+            ]
+          ],
+          "score_demand_quantiles": [
+            [
+              2,
+              2
+            ],
+            [
+              4,
+              3
+            ],
+            [
+              6,
+              2
+            ]
+          ],
+          "signal_config": {
+            "cross_layer_weight": 0.2,
+            "dense_cardinality_threshold": 0.9,
+            "dense_fallback_block_budget": 24,
+            "enable_dense_fallback": true,
+            "entropy_weight": 0.35,
+            "global_block_budget": 6,
+            "margin_weight": 0.2,
+            "max_extra_blocks_per_layer": 0,
+            "max_refresh_interval": 4,
+            "min_blocks_per_layer": 2,
+            "min_refresh_interval": 1,
+            "stable_reuse_threshold": 0.8,
+            "temporal_weight": 0.25,
+            "top_p": 0.8,
+            "uncertainty_threshold": 0.8
+          }
+        },
+        "2x": {
+          "calibration_digest": "594e614ad06cc495f82ddd050b6fa012405bca83a7939f0cdc783b029f1374db",
+          "candidate_demand_quantiles": [
+            [
+              2,
+              255
+            ],
+            [
+              4,
+              255
+            ],
+            [
+              6,
+              255
+            ]
+          ],
+          "dense_layer_budgets": [
+            [
+              2,
+              8
+            ],
+            [
+              4,
+              8
+            ],
+            [
+              6,
+              8
+            ]
+          ],
+          "layer_budgets": [
+            [
+              2,
+              4
+            ],
+            [
+              4,
+              4
+            ],
+            [
+              6,
+              3
+            ]
+          ],
+          "score_demand_quantiles": [
+            [
+              2,
+              4
+            ],
+            [
+              4,
+              4
+            ],
+            [
+              6,
+              3
+            ]
+          ],
+          "signal_config": {
+            "cross_layer_weight": 0.2,
+            "dense_cardinality_threshold": 0.9,
+            "dense_fallback_block_budget": 24,
+            "enable_dense_fallback": true,
+            "entropy_weight": 0.35,
+            "global_block_budget": 12,
+            "margin_weight": 0.2,
+            "max_extra_blocks_per_layer": 2,
+            "max_refresh_interval": 4,
+            "min_blocks_per_layer": 2,
+            "min_refresh_interval": 1,
+            "stable_reuse_threshold": 0.8,
+            "temporal_weight": 0.25,
+            "top_p": 0.8,
+            "uncertainty_threshold": 0.8
+          }
+        },
+        "4x": {
+          "calibration_digest": "4078d5d783def80e59e5a8d7a14cfeb7ded2294ed042fa8431bab1c833473b7c",
+          "candidate_demand_quantiles": [
+            [
+              2,
+              255
+            ],
+            [
+              4,
+              255
+            ],
+            [
+              6,
+              255
+            ]
+          ],
+          "dense_layer_budgets": [
+            [
+              2,
+              8
+            ],
+            [
+              4,
+              8
+            ],
+            [
+              6,
+              8
+            ]
+          ],
+          "layer_budgets": [
+            [
+              2,
+              5
+            ],
+            [
+              4,
+              6
+            ],
+            [
+              6,
+              5
+            ]
+          ],
+          "score_demand_quantiles": [
+            [
+              2,
+              5
+            ],
+            [
+              4,
+              6
+            ],
+            [
+              6,
+              5
+            ]
+          ],
+          "signal_config": {
+            "cross_layer_weight": 0.2,
+            "dense_cardinality_threshold": 0.9,
+            "dense_fallback_block_budget": 24,
+            "enable_dense_fallback": true,
+            "entropy_weight": 0.35,
+            "global_block_budget": 24,
+            "margin_weight": 0.2,
+            "max_extra_blocks_per_layer": 6,
+            "max_refresh_interval": 4,
+            "min_blocks_per_layer": 2,
+            "min_refresh_interval": 1,
+            "stable_reuse_threshold": 0.8,
+            "temporal_weight": 0.25,
+            "top_p": 0.8,
+            "uncertainty_threshold": 0.8
+          }
+        }
+      },
+      "captured_queries_per_layer": 896,
+      "captured_query_count": 2688,
+      "checkpoint": {
+        "bytes": 222269497,
+        "path": "artifacts/adaptive_v4_memory/paper_grade/training/s55/seed-6071401/s55-step-1000.pt",
+        "sha256": "0a8330ed5c2bec8372eb32b575414e9b65509d9a597f8911b546bc31be8c360d"
+      },
+      "examples_per_family": 32,
+      "raw_artifact": {
+        "path": "artifacts/adaptive_v4_memory/paper_grade/calibration/s55/seed-6071401/p1-layer-quotas-scaled-v3.json",
+        "sha256": "7442dccc4255400da68d28cbd317098cc3631017f72ea73b132861d71d0372f9"
+      },
+      "scale": "s55",
+      "seed": 7071401,
+      "source": {
+        "commit": "a8dd5d7163f8f2e30a6785c342824509472bd0d3",
+        "dirty": false
+      }
+    }
+  ],
+  "schema_version": 1,
+  "validation": {
+    "all_budget_bounds_verified": true,
+    "all_checkpoint_digests_verified": true,
+    "all_sources_clean": true,
+    "both_scales_present": true,
+    "targets_used_for_fit": false
+  }
+}
