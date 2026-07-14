@@ -277,12 +277,13 @@ def _translate_positions(source_ids: Sequence[str], query: ReplayQuery) -> tuple
     )
 
 
-def _signal(
+def compute_controller_layer_signal(
     query: ReplayQuery,
     config: TrainingFreeControllerConfig,
-    previous_ids: tuple[str, ...],
-    prior_layer_ids: tuple[str, ...],
+    previous_ids: tuple[str, ...] = (),
+    prior_layer_ids: tuple[str, ...] = (),
 ) -> ControllerLayerSignal:
+    """Compute M2's layer signal for replay or causal runtime control."""
     probabilities = _probabilities(query.ranked_blocks)
     count = len(probabilities)
     if count == 0:
@@ -405,7 +406,9 @@ def run_training_free_controller(
         for query in group:
             key = (query.layer_index, query.batch_index)
             previous = previous_hot.get(key, ())
-            signal = _signal(query, config, previous, prior_layer_desired)
+            signal = compute_controller_layer_signal(
+                query, config, previous, prior_layer_desired
+            )
             ranked_ids = tuple(block.block_id for block in query.ranked_blocks)
             pinned = tuple(block_id for block_id in ranked_ids if block_id in protected_set)
             since_refresh = query.query_position - last_refresh.get(key, -(10**9))

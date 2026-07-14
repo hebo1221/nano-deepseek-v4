@@ -18,6 +18,12 @@ from .adaptive_memory_data import (
     generate_associative_recall_batch,
     generate_associative_recall_training_batch,
 )
+from .causal_memory_controller import (
+    SameTokenControllerConfig,
+    SameTokenControllerStats,
+    SameTokenLayerAction,
+    SameTokenTrainingFreeController,
+)
 from .checkpoint import (
     CheckpointLoadReport,
     OfficialCheckpointLoadEvidenceReport,
@@ -68,6 +74,7 @@ from .memory_controller import (
     TrainingFreeControllerConfig,
     TrainingFreeControllerResult,
     build_csa_selection_plan,
+    compute_controller_layer_signal,
     run_training_free_controller,
     validate_controller_replay,
 )
@@ -158,6 +165,10 @@ __all__ = [
     "DeepSeekV4ForCausalLM",
     "DeepSeekV4Model",
     "CausalLMOutput",
+    "SameTokenControllerConfig",
+    "SameTokenControllerStats",
+    "SameTokenLayerAction",
+    "SameTokenTrainingFreeController",
     # Adaptive V4 Memory M0 trace
     "MEMORY_TRACE_SCHEMA_VERSION",
     "AdaptiveMemoryTraceCollector",
@@ -205,6 +216,7 @@ __all__ = [
     "TrainingFreeControllerResult",
     "CSASelectionPlan",
     "build_csa_selection_plan",
+    "compute_controller_layer_signal",
     "OnlineControllerStats",
     "OnlineTrainingFreeController",
     # Adaptive V4 Memory M3 learned risk controller

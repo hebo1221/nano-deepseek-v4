@@ -1543,6 +1543,11 @@ def save_deepseek_v4_cache(cache: DeepSeekV4Cache, cache_dir: str | Path) -> Non
             if cache.online_memory_controller is not None
             else None
         ),
+        "same_token_memory_controller": (
+            cache.same_token_memory_controller.to_dict()
+            if cache.same_token_memory_controller is not None
+            else None
+        ),
     }
     for layer_idx, layer in enumerate(cache.layers):
         prefix = f"layers.{layer_idx}"
@@ -1717,6 +1722,21 @@ def load_deepseek_v4_cache(
         except (KeyError, TypeError, ValueError) as exc:
             raise ValueError("Cache manifest online memory controller is invalid.") from exc
         cache._attach_online_controller(controller)
+    same_token_payload = manifest.get("same_token_memory_controller")
+    if same_token_payload is not None:
+        if controller_payload is not None:
+            raise ValueError("Cache manifest contains multiple memory controllers.")
+        if not isinstance(same_token_payload, dict):
+            raise ValueError("Cache manifest same_token_memory_controller must be an object.")
+        from .causal_memory_controller import SameTokenTrainingFreeController
+
+        try:
+            same_token_controller = SameTokenTrainingFreeController.from_dict(
+                same_token_payload
+            )
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError("Cache manifest same-token controller is invalid.") from exc
+        cache._attach_same_token_controller(same_token_controller)
     _validate_cache_structure(cache)
     return cache
 

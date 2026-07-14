@@ -7,6 +7,11 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
+from .causal_memory_controller import (
+    SameTokenControllerConfig,
+    SameTokenControllerStats,
+    SameTokenTrainingFreeController,
+)
 from .config import DeepSeekV4Config
 from .memory_controller import CSASelectionPlan, TrainingFreeControllerConfig
 from .memory_probe import CSASelectionProbe
@@ -184,6 +189,7 @@ class DeepSeekV4LayerCache:
         self.overlap_positions: dict[str, torch.Tensor | None] = {}
         self.tiered_compressor: TieredBlockStore | None = None
         self.online_memory_controller: OnlineTrainingFreeController | None = None
+        self.same_token_memory_controller: SameTokenTrainingFreeController | None = None
 
     def update_local(
         self,
@@ -511,6 +517,7 @@ class DeepSeekV4Cache:
         self.seen_tokens = 0
         self.memory_trace = memory_trace
         self.online_memory_controller: OnlineTrainingFreeController | None = None
+        self.same_token_memory_controller: SameTokenTrainingFreeController | None = None
 
     def _attach_online_controller(
         self, controller: OnlineTrainingFreeController | None
@@ -519,6 +526,13 @@ class DeepSeekV4Cache:
         for layer in self.layers:
             layer.online_memory_controller = controller
 
+    def _attach_same_token_controller(
+        self, controller: SameTokenTrainingFreeController | None
+    ) -> None:
+        self.same_token_memory_controller = controller
+        for layer in self.layers:
+            layer.same_token_memory_controller = controller
+
     def get_seq_length(self) -> int:
         return self.seen_tokens
 
@@ -526,6 +540,8 @@ class DeepSeekV4Cache:
         seen_tokens_before = self.seen_tokens
         if self.online_memory_controller is not None:
             self.online_memory_controller.finalize()
+        if self.same_token_memory_controller is not None:
+            self.same_token_memory_controller.finalize()
         self.seen_tokens += tokens
         if self.memory_trace is not None:
             self.memory_trace.record_cache_advance(self, tokens, seen_tokens_before)
@@ -541,6 +557,11 @@ class DeepSeekV4Cache:
             if self.online_memory_controller is not None
             else None
         )
+        other._attach_same_token_controller(
+            self.same_token_memory_controller.clone()
+            if self.same_token_memory_controller is not None
+            else None
+        )
         return other
 
     def select_batch(self, index: int) -> DeepSeekV4Cache:
@@ -552,6 +573,11 @@ class DeepSeekV4Cache:
         other._attach_online_controller(
             self.online_memory_controller.select_batch(index)
             if self.online_memory_controller is not None
+            else None
+        )
+        other._attach_same_token_controller(
+            self.same_token_memory_controller.select_batch(index)
+            if self.same_token_memory_controller is not None
             else None
         )
         return other
@@ -591,6 +617,23 @@ class DeepSeekV4Cache:
             )
         else:
             other._attach_online_controller(None)
+        same_token_controllers = [cache.same_token_memory_controller for cache in caches]
+        if any(controller is not None for controller in same_token_controllers):
+            if not all(controller is not None for controller in same_token_controllers):
+                raise ValueError(
+                    "Cannot stack caches with partially enabled same-token controllers."
+                )
+            other._attach_same_token_controller(
+                SameTokenTrainingFreeController.stack(
+                    [
+                        controller
+                        for controller in same_token_controllers
+                        if controller is not None
+                    ]
+                )
+            )
+        else:
+            other._attach_same_token_controller(None)
         return other
 
     def crop(self, max_length: int, config: DeepSeekV4Config) -> None:
@@ -603,6 +646,8 @@ class DeepSeekV4Cache:
             layer.crop(max_length, config.sliding_window, layer_type, config.compress_rates)
         if self.online_memory_controller is not None:
             self.online_memory_controller.crop(max_length)
+        if self.same_token_memory_controller is not None:
+            self.same_token_memory_controller.crop(max_length)
         self.seen_tokens = max_length
 
     def enable_online_memory_controller(
@@ -613,8 +658,11 @@ class DeepSeekV4Cache:
         trace_id: str = "online-m2",
         request_id: str = "request-0",
     ) -> None:
-        if self.online_memory_controller is not None:
-            raise RuntimeError("Online memory controller is already enabled.")
+        if (
+            self.online_memory_controller is not None
+            or self.same_token_memory_controller is not None
+        ):
+            raise RuntimeError("A memory controller is already enabled.")
         layer_types = self.config.layer_types
         if layer_types is None:
             raise RuntimeError("config.layer_types was not initialized.")
@@ -637,6 +685,45 @@ class DeepSeekV4Cache:
         if self.online_memory_controller is None:
             return None
         return self.online_memory_controller.stats()
+
+    def enable_same_token_memory_controller(
+        self,
+        config: SameTokenControllerConfig,
+        *,
+        protected_end_positions: tuple[int, ...] = (),
+        trace_id: str = "same-token-m2",
+        request_id: str = "request-0",
+    ) -> None:
+        if (
+            self.online_memory_controller is not None
+            or self.same_token_memory_controller is not None
+        ):
+            raise RuntimeError("A memory controller is already enabled.")
+        layer_types = self.config.layer_types
+        if layer_types is None:
+            raise RuntimeError("config.layer_types was not initialized.")
+        csa_layers = tuple(
+            index
+            for index, layer_type in enumerate(layer_types)
+            if layer_type == "compressed_sparse_attention"
+        )
+        if config.csa_layer_indices != csa_layers:
+            raise ValueError(
+                "Same-token layer quotas do not match the model's CSA layer schedule."
+            )
+        self._attach_same_token_controller(
+            SameTokenTrainingFreeController(
+                config,
+                trace_id=trace_id,
+                request_id=request_id,
+                protected_end_positions=protected_end_positions,
+            )
+        )
+
+    def same_token_controller_stats(self) -> SameTokenControllerStats | None:
+        if self.same_token_memory_controller is None:
+            return None
+        return self.same_token_memory_controller.stats()
 
     def enable_csa_tiering(
         self,
@@ -852,7 +939,19 @@ class CSAIndexer(nn.Module):
         indexer_started = perf_counter_ns() if memory_trace is not None else 0
         compressed, end_positions = self._compress(hidden_states, position_ids, cache)
         if compressed.shape[1] == 0:
-            if cache is not None and cache.online_memory_controller is not None:
+            if cache is not None and cache.same_token_memory_controller is not None:
+                empty_scores = hidden_states.new_empty(
+                    (*position_ids.shape, end_positions.shape[1]), dtype=torch.float32
+                )
+                cache.same_token_memory_controller.select(
+                    layer_index=layer_index,
+                    query_positions=position_ids,
+                    block_end_positions=end_positions,
+                    scores=empty_scores,
+                    native_mask=torch.zeros_like(empty_scores, dtype=torch.bool),
+                    block_bytes=measure_csa_block_bytes(cache, end_positions.shape[1]),
+                )
+            elif cache is not None and cache.online_memory_controller is not None:
                 empty_scores = hidden_states.new_empty(
                     (*position_ids.shape, end_positions.shape[1]), dtype=torch.float32
                 )
@@ -920,7 +1019,16 @@ class CSAIndexer(nn.Module):
                 ),
                 indexer_wall_time_ns=perf_counter_ns() - indexer_started,
             )
-        if cache is not None and cache.online_memory_controller is not None:
+        if cache is not None and cache.same_token_memory_controller is not None:
+            sparse_mask = cache.same_token_memory_controller.select(
+                layer_index=layer_index,
+                query_positions=position_ids,
+                block_end_positions=end_positions,
+                scores=scores,
+                native_mask=traced_mask,
+                block_bytes=measure_csa_block_bytes(cache, end_positions.shape[1]),
+            )
+        elif cache is not None and cache.online_memory_controller is not None:
             sparse_mask = cache.online_memory_controller.apply(
                 layer_index=layer_index,
                 query_positions=position_ids,

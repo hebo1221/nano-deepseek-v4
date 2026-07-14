@@ -169,7 +169,10 @@ def _save_checkpoint_atomically(
 def train(args: argparse.Namespace) -> dict:
     if not torch.cuda.is_available():
         raise RuntimeError("Tier-S training requires a CUDA device.")
-    torch.manual_seed(args.seed)
+    initialization_seed = args.seed
+    data_order_seed = args.seed + 1
+    training_evaluation_seed = args.seed + 10_000
+    torch.manual_seed(initialization_seed)
     device = torch.device("cuda")
     config = build_config(args.scale)
     task_config = AssociativeRecallConfig(
@@ -194,7 +197,7 @@ def train(args: argparse.Namespace) -> dict:
         weight_decay=args.weight_decay,
         fused=True,
     )
-    generator = torch.Generator().manual_seed(args.seed + 1)
+    generator = torch.Generator().manual_seed(data_order_seed)
     history = []
     started = time.time()
     stopped_early = False
@@ -255,7 +258,7 @@ def train(args: argparse.Namespace) -> dict:
                 sequence_lengths=SEQUENCE_LENGTHS,
                 batches_per_length=args.eval_batches,
                 batch_size=args.eval_batch_size,
-                seed=args.seed + 10_000,
+                seed=training_evaluation_seed,
                 topk=args.training_topk,
                 device=device,
             )
@@ -265,7 +268,7 @@ def train(args: argparse.Namespace) -> dict:
                 sequence_lengths=SEQUENCE_LENGTHS,
                 batches_per_length=args.eval_batches,
                 batch_size=args.eval_batch_size,
-                seed=args.seed + 10_000,
+                seed=training_evaluation_seed,
                 topk=config.index_topk,
                 device=device,
             )
@@ -275,7 +278,7 @@ def train(args: argparse.Namespace) -> dict:
                 sequence_lengths=SEQUENCE_LENGTHS,
                 batches_per_length=args.eval_batches,
                 batch_size=args.eval_batch_size,
-                seed=args.seed + 10_000,
+                seed=training_evaluation_seed,
                 topk=0,
                 device=device,
             )
@@ -321,9 +324,12 @@ def train(args: argparse.Namespace) -> dict:
     torch.cuda.synchronize()
     result = {
         "schema_version": 1,
-        "experiment_id": "m1-tier-s-associative-recall-v1",
+        "experiment_id": args.experiment_id,
         "scale": args.scale,
         "seed": args.seed,
+        "initialization_seed": initialization_seed,
+        "data_order_seed": data_order_seed,
+        "training_evaluation_seed": training_evaluation_seed,
         "parameters": parameter_count,
         "auxiliary_parameters": auxiliary_parameter_count,
         "config": asdict(config),
@@ -359,6 +365,9 @@ def train(args: argparse.Namespace) -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--experiment-id", default="m1-tier-s-associative-recall-v1"
+    )
     parser.add_argument("--scale", choices=tuple(SCALE_OVERRIDES), required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--steps", type=int, default=1000)
