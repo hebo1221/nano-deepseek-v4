@@ -222,6 +222,17 @@ Dataset commit/version, license, preprocessing, tokenizer, prompt template, and
 scorer digest are pinned. Unsupported context lengths are marked unsupported,
 not silently truncated.
 
+The operational freeze for these requirements is
+`manifests/p3-natural-suite-v1.json`. It selects the pinned 262,144-token
+Qwen3-4B-Instruct-2507 snapshot as the primary compatible transfer model while
+retaining the earlier Qwen3-1.7B run as a 32K-limited small-model tier. The
+minimum matrix contains 45,289 predictions per arm: 32,500 RULER predictions,
+10,286 SCBench turn predictions across both modes, all 503 LongBench v2 items,
+all 500 LongMemEval_S-cleaned questions, and 1,500 MRCR items through 128K. The
+dataset inventory contains 20 digest-bound files totaling 2,391,718,372 bytes.
+Dataset acquisition is sequence-gated after P2 and the causal audit, so this
+freeze does not modify or compete with the running synthetic core.
+
 Official DeepSeek-V4 Flash evaluation is a separate evidence tier. If the
 pinned checkpoint and supported runtime cannot be provisioned, the report must
 provide the exact revision, launch command, minimum accelerator/storage

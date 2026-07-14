@@ -143,6 +143,12 @@ and [execution manifest](manifests/p3-flashmemory-deepseek-v4-v1.json) therefore
 freeze both the resource and checkpoint blockers without claiming an official
 run.
 
+The [P3 natural-suite freeze](reports/2026-07-14-p3-natural-suite-freeze.md)
+pins the Qwen3-4B 262K transfer model, all five natural benchmark revisions,
+20 dataset files, official scorer contracts, the 45,289-prediction-per-arm
+minimum, and the sequence-gated acquisition path. Oversized examples are
+reported as unsupported and are never head-tail truncated.
+
 ## P1 causal-controller pilot
 
 `nano_deepseek_v4/causal_memory_controller.py` now applies a layer-local action

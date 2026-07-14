@@ -1,0 +1,327 @@
+{
+  "schema_version": 1,
+  "experiment_id": "p3-natural-language-suite-v1",
+  "status": "frozen_before_execution",
+  "frozen_date": "2026-07-14",
+  "protocol": "research/adaptive_v4_memory/paper_grade_protocol.md",
+  "sequence_gate": {
+    "implementation": "research/adaptive_v4_memory/scripts/p3_sequence_gate.py",
+    "p2_matrix": "artifacts/adaptive_v4_memory/paper_grade/p2-core-quality-matrix.json",
+    "causal_gate": "artifacts/adaptive_v4_memory/paper_grade/p2-causal-ablation.summary.json",
+    "policy": "P2 and the full causal audit must finish first. Native and fixed external baselines still run if the calibrated candidate does not qualify."
+  },
+  "execution_order": [
+    "RULER",
+    "SCBench",
+    "LongBench-v2",
+    "LongMemEval",
+    "MRCR"
+  ],
+  "model": {
+    "role": "primary-compatible-long-context-transfer-model",
+    "repo_id": "Qwen/Qwen3-4B-Instruct-2507",
+    "revision": "cdbee75f17c01a7cc42f958dc650907174af0554",
+    "license": "apache-2.0",
+    "dtype": "bfloat16",
+    "architecture": "Qwen3ForCausalLM",
+    "parameter_scale": "4B",
+    "maximum_supported_context_tokens": 262144,
+    "minimum_transformers_version": "4.51.0",
+    "checkpoint_bytes": 8060917568,
+    "snapshot_files_sha256": {
+      ".gitattributes": "34448b82c17d60fec9b65b1f093c115ddbaadc04beb1b0140b6bfed2e012a930",
+      "LICENSE": "832dd9e00a68dd83b3c3fb9f5588dad7dcf337a0db50f7d9483f310cd292e92e",
+      "README.md": "8e3dd0c3b5b11897cc71092ccfe517bb7a9783479baa3665aad73c8d1a2041cd",
+      "config.json": "5beea1a4a34c62782bfb2f911c606741a3bab8f92d80a118fa053c28af12e8ba",
+      "generation_config.json": "835fffe355c9438e7a25be099b3fccaa98350b83451f9fd2d99512e74f1ade48",
+      "merges.txt": "599bab54075088774b1733fde865d5bd747cbcc7a547c5bc12610e874e26f5e3",
+      "model-00001-of-00003.safetensors": "75311d91bb08cf0b882913da464a1e722a31fb44db35208663487efb7a3d8ed6",
+      "model-00002-of-00003.safetensors": "0b48adbb1f60e901153d91907ba11ce63bd4b8b584482e730f48808d055dfba1",
+      "model-00003-of-00003.safetensors": "7dd39ccca5e4de123c74c14af44c9bf2eb75df33b4614382af0134528e060d5d",
+      "model.safetensors.index.json": "d6c42883a895dfef5b0080ed2116a1bcd764f558406b98923d675978a1abf29c",
+      "tokenizer.json": "9ec507f98e2a5da7ea342682b833d7283b4f0d7661692075ecb048aa083ee203",
+      "tokenizer_config.json": "a62ff0a2472a0fa1b8eaabcb57c59b58afa42a22831dc141400b6e0cf2b65ce3",
+      "vocab.json": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910"
+    },
+    "preflight": {
+      "required_lengths_tokens": [8192, 16384, 32768, 65536, 131072],
+      "action_on_oom": "record_oom_as_tail_failure_and_mark_cell_unsupported_without_substituting_truncation",
+      "small_model_reference": "research/adaptive_v4_memory/manifests/p3-ruler-qwen3-1.7b-v1.json"
+    }
+  },
+  "common_protocol": {
+    "overflow_action": "report_unsupported_without_truncation",
+    "context_fit_rule": "tokenized_prompt_plus_generation_reserve_must_not_exceed_model_maximum",
+    "paired_unit": "complete-example-or-complete-shared-context-conversation",
+    "generation": {
+      "do_sample": false,
+      "temperature": 0.0,
+      "top_p": 1.0,
+      "record_stop_reason": true
+    },
+    "required_arms": [
+      "native-dense",
+      "strongest-memory-matched-fixed",
+      "fixed+pins",
+      "synthetic-qualified-calibrated+pins"
+    ],
+    "conditional_arm_rule": "calibrated+pins is withheld if the P2 central causal gate fails; native and fixed arms remain mandatory",
+    "quality_memory_pairing": "quality comparisons use the same example and measured hot-resident-byte target",
+    "failure_accounting": [
+      "unsupported-context",
+      "oom",
+      "timeout",
+      "empty-generation",
+      "invalid-answer-format",
+      "runtime-error"
+    ],
+    "raw_record_required": [
+      "benchmark-and-example-id",
+      "arm-and-budget",
+      "exact-input-token-count",
+      "generation-reserve",
+      "raw-prompt-digest",
+      "raw-response",
+      "parsed-response",
+      "per-example-score",
+      "latency-and-peak-hbm",
+      "failure-or-stop-reason",
+      "model-dataset-code-and-scorer-revisions"
+    ]
+  },
+  "benchmarks": {
+    "RULER": {
+      "existing_manifest": "research/adaptive_v4_memory/manifests/p3-ruler-qwen3-1.7b-v1.json",
+      "upstream_repository": "https://github.com/hsiehjackson/RULER",
+      "upstream_revision": "38da79d79519ef87aa46ae804f838e1eab7f86d7",
+      "license": "apache-2.0",
+      "lengths_tokens": [8192, 16384, 32768, 65536, 131072],
+      "task_count": 13,
+      "samples_per_task": 500,
+      "expected_predictions_per_arm": 32500,
+      "generation_seed": 42,
+      "scorer": {
+        "path": "evaluation/benchmarks/ruler/calculate_metrics.py",
+        "sha256": "1df51402a3948f14d96e1fe87b1a4aff10f619f81f80f8840d8e0118fc9b"
+      },
+      "migration": "Regenerate the same frozen tasks with the Qwen3-4B tokenizer; do not reuse Qwen3-1.7B token-length labels for 64K or 128K."
+    },
+    "SCBench": {
+      "dataset": {
+        "repo_id": "microsoft/SCBench",
+        "revision": "283310bb8c5ba6909dd9a6b1be087d2937f76f6d",
+        "license": "mit",
+        "card_sha256": "dd526ece8692709bdc700b3aa937db9934c9b688d14cabda4987b8ae605e3204",
+        "files": [
+          {"path": "scbench_choice_eng/test-00000-of-00001.parquet", "bytes": 28590613, "sha256": "fe2fb1fe5d00d76477f826fc7c8c0c8d81595848125c715293393e7ad71c89b0", "rows": 58},
+          {"path": "scbench_kv/test-00000-of-00001.parquet", "bytes": 18278186, "sha256": "d1d2d29a6679732e9d51444f43a7ae9d211eea3d7596e3301019218cd2740ed0", "rows": 100},
+          {"path": "scbench_many_shot/test-00000-of-00001.parquet", "bytes": 99406, "sha256": "d71cf40655ba9b81a837833f57abe782dc4eba95496ade4bd3641f214e25377c", "rows": 54},
+          {"path": "scbench_mf/test-00000-of-00001.parquet", "bytes": 3766479, "sha256": "87598e9495b25f95782f4d155bba4677b09881fc2475c2f4cd57c5eef4bcf5b3", "rows": 100},
+          {"path": "scbench_prefix_suffix/test-00000-of-00001.parquet", "bytes": 16417345, "sha256": "21a09083667ff1e6a802626b88ae56c48072abc9a270a7881ea61f527ed62865", "rows": 100},
+          {"path": "scbench_qa_chn/test-00000-of-00001.parquet", "bytes": 115936454, "sha256": "6624dce9ac83359255e1a39cafb22cbe303b884681466baa8f62e24a9c8a9c2b", "rows": 35},
+          {"path": "scbench_qa_eng/test-00000-of-00001.parquet", "bytes": 35648660, "sha256": "2e14868394702c05f228523c2e58d09689698f5e043ff8e9a641b3ed4e9d8534", "rows": 69},
+          {"path": "scbench_repoqa/test-00000-of-00001.parquet", "bytes": 4427455, "sha256": "dce1a8bacd1ffc6adcfe54d82db2be03fe5df3c091fc841c0c1aa5c340479436", "rows": 88},
+          {"path": "scbench_repoqa_and_kv/test-00000-of-00001.parquet", "bytes": 8583589, "sha256": "8b8235ec39a1f7a84e4633fe28e78e806d0c8b73ba6a299014f9ffac242fce86", "rows": 88},
+          {"path": "scbench_summary/test-00000-of-00001.parquet", "bytes": 14245669, "sha256": "c22343533e3917a60857b9e9dab88c1b84a6cc8c0558464d37c4b6a9cf5dd8df", "rows": 70},
+          {"path": "scbench_summary_with_needles/test-00000-of-00001.parquet", "bytes": 14233691, "sha256": "f7240ae7fb16c088de20b103b75d76ec1ab9746b78012a6c25243e64658bf736", "rows": 70},
+          {"path": "scbench_vt/test-00000-of-00001.parquet", "bytes": 2160077, "sha256": "061e8b032e6f08b8e488617bb35eb87f96c7392b9c332905697cdeeaada83c7f", "rows": 90}
+        ]
+      },
+      "upstream_code": {
+        "repository": "https://github.com/microsoft/MInference",
+        "revision": "a4eb395f949ea39e871f9bc586d683390692c6be",
+        "license": "mit",
+        "license_sha256": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383",
+        "files_sha256": {
+          "scbench/compute_scores.py": "5d6c242fedaaf9b2a60d0a7f50b9d256eed38610b6bcf1f8720b675f5f08b776",
+          "scbench/eval_utils.py": "d777e36d0dd20faaef0c421b3f1bd4ddfdc8cbbb76fff74194c063183f5ec3fc",
+          "scbench/repo_qa_utils.py": "f428c51310c66427a65defee029d7de8378633abf50fa49d7ef0da3199783502",
+          "scbench/run_scbench.py": "b003cac89b3d75c47ba708078dce812770aa9cb47c18180342eb14a5cdfb018e"
+        }
+      },
+      "modes": ["multi-turn", "multi-request"],
+      "mode_flag": {"multi-turn": "default", "multi-request": "--same_context_different_query"},
+      "tasks": {
+        "scbench_choice_eng": {"rows": 58, "turns": 229, "turns_min": 2, "turns_max": 4},
+        "scbench_kv": {"rows": 100, "turns": 500, "turns_min": 5, "turns_max": 5},
+        "scbench_many_shot": {"rows": 54, "turns": 270, "turns_min": 5, "turns_max": 5},
+        "scbench_mf": {"rows": 100, "turns": 600, "turns_min": 6, "turns_max": 6},
+        "scbench_prefix_suffix": {"rows": 100, "turns": 500, "turns_min": 5, "turns_max": 5},
+        "scbench_qa_chn": {"rows": 35, "turns": 189, "turns_min": 2, "turns_max": 11},
+        "scbench_qa_eng": {"rows": 69, "turns": 351, "turns_min": 5, "turns_max": 7},
+        "scbench_repoqa": {"rows": 88, "turns": 440, "turns_min": 5, "turns_max": 5},
+        "scbench_repoqa_and_kv": {"rows": 88, "turns": 704, "turns_min": 8, "turns_max": 8},
+        "scbench_summary": {"rows": 70, "turns": 350, "turns_min": 5, "turns_max": 5},
+        "scbench_summary_with_needles": {"rows": 70, "turns": 560, "turns_min": 8, "turns_max": 8},
+        "scbench_vt": {"rows": 90, "turns": 450, "turns_min": 5, "turns_max": 5}
+      },
+      "expected_shared_contexts_per_mode": 922,
+      "expected_turn_predictions_per_mode": 5143,
+      "expected_predictions_per_arm": 10286,
+      "scoring": "Use the pinned task-specific official scorers; report every task and turn before any macro average."
+    },
+    "LongBench-v2": {
+      "dataset": {
+        "repo_id": "zai-org/LongBench-v2",
+        "legacy_repo_id": "THUDM/LongBench-v2",
+        "revision": "2b48e494f2c7a2f0af81aae178e05c7e1dde0fe9",
+        "license": "apache-2.0",
+        "card_sha256": "9fdd1a3ebe86507253c124a18e9f78c898ce6341c12990af17ab868b8f600c35",
+        "files": [
+          {"path": "data.json", "bytes": 465490535, "sha256": "15d61c22d92c96900b3c4948b6aeea218d3214b676a65df48e7b8555604c7fe2", "rows": 503}
+        ]
+      },
+      "upstream_code": {
+        "repository": "https://github.com/THUDM/LongBench",
+        "revision": "2e00731f8d0bff23dc4325161044d0ed8af94c1e",
+        "license": "mit",
+        "license_sha256": "bf7f05f274d65931bdf14f060b6855f1c359b8424eb74fd3091d25de89d700c3",
+        "files_sha256": {
+          "pred.py": "ab63f77866a1c0dc770582bc3fe6b014c3b4be4667399b0ee267075780c6a138",
+          "result.py": "b6675c1c0b72090c01e12c94d3b176c4991fe38ceed9a301d24d22b1997465bd",
+          "prompts/0shot.txt": "68a162252bc9ff71d5d7abca3d69bb31aac3c35f832d657a2866f2018b8a6950"
+        }
+      },
+      "expected_examples": 503,
+      "categories": [
+        "single-document-qa",
+        "multi-document-qa",
+        "long-in-context-learning",
+        "long-dialogue-history-understanding",
+        "code-repository-understanding",
+        "long-structured-data-understanding"
+      ],
+      "prompt": "pinned upstream direct 0-shot template",
+      "generation_reserve_tokens": 128,
+      "answer_parser": "research/adaptive_v4_memory/scripts/p3_natural_metrics.py",
+      "primary_metric": "exact multiple-choice accuracy",
+      "overflow_action": "report_unsupported_without_truncation",
+      "upstream_deviation": "Disable pred.py head-tail truncation and deterministic sampling; report fit-only strata separately until all 503 examples fit."
+    },
+    "LongMemEval": {
+      "dataset": {
+        "repo_id": "xiaowu0162/longmemeval-cleaned",
+        "revision": "98d7416c24c778c2fee6e6f3006e7a073259d48f",
+        "license": "mit",
+        "card_sha256": "fe31783d4e5d132681a25e4192e85def8edd214094939879f5283818c0a4a3e0",
+        "files": [
+          {"path": "longmemeval_s_cleaned.json", "bytes": 277383467, "sha256": "d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442", "rows": 500}
+        ]
+      },
+      "upstream_code": {
+        "repository": "https://github.com/xiaowu0162/LongMemEval",
+        "revision": "9e0b455f4ef0e2ab8f2e582289761153549043fc",
+        "license": "mit",
+        "license_sha256": "d3c4b9aa54759df6ded337978a6f3b55b75615e5e4525c3b82d7e2627d4b9732",
+        "files_sha256": {
+          "src/evaluation/evaluate_qa.py": "ecce9c4c79dc89d99534ac17b383a5cbb5b9f0c69ee98adaf0684742e3d95251",
+          "src/evaluation/print_qa_metrics.py": "e9283933a0cefb7a0ded7365e436ae3d1be5aac41853325e6155d83bf07607f0",
+          "src/generation/run_generation.py": "4f1eb3c69d7ad40f04065b9c0bc86f6582441018fc6ff751d162d66c95baf672"
+        }
+      },
+      "expected_examples": 500,
+      "history_protocol": {
+        "source": "full LongMemEval_S cleaned history",
+        "retriever_type": "orig-session",
+        "user_only": false,
+        "history_format": "natural-language",
+        "no_external_retriever_or_context_compression": true,
+        "overflow_action": "report_unsupported_without_truncation"
+      },
+      "generation_reserve_tokens": 512,
+      "official_judge": {
+        "implementation": "src/evaluation/evaluate_qa.py",
+        "model_alias": "gpt-4o",
+        "model": "gpt-4o-2024-08-06",
+        "temperature": 0,
+        "max_tokens": 10,
+        "record_raw_judge_prompt_and_response": true,
+        "unavailable_action": "report_official_metric_blocked; auxiliary deterministic metrics may not replace it"
+      },
+      "primary_metric": "official LLM-judge accuracy overall and by question type"
+    },
+    "MRCR": {
+      "dataset": {
+        "repo_id": "openai/mrcr",
+        "revision": "f4c69fae7cf81f7ca26b9fee34b392a50f6b8a1d",
+        "license": "mit",
+        "card_sha256": "88c53574f0bb4baf877df69ac2523e8991460a516866bda21698a02d8f7d6986",
+        "files": [
+          {"path": "2needle/2needle_0.parquet", "bytes": 190822058, "sha256": "1c297b254bf64a31856b74918cd7db889a214503e0b67daa834e84f20df6aa93", "rows": 400},
+          {"path": "2needle/2needle_1.parquet", "bytes": 266519980, "sha256": "a5a1dc9ccc945623253d04d33c03d89aee2d676c88955ce368da2ab16a0ce94d", "rows": 400},
+          {"path": "4needle/4needle_0.parquet", "bytes": 195679287, "sha256": "4d4fa3d11ce064749de3cd039eef1a621e30a81c2c9b3e64f1df37f8afeaf312", "rows": 400},
+          {"path": "4needle/4needle_1.parquet", "bytes": 271975546, "sha256": "8dfdb94a208cf3eee73c4e7ac6ee8a5ccb7236c6934c13c6c5f67c0a9928cdf3", "rows": 400},
+          {"path": "8needle/8needle_0.parquet", "bytes": 192087758, "sha256": "65df601a2e0ae4a3cfb56920a6ef99f26c0de37c6b1018695e8aed684e6a94c1", "rows": 400},
+          {"path": "8needle/8needle_1.parquet", "bytes": 269372117, "sha256": "c80b19573bff1d38e1c157d6a0bdf9cfd1a8ab6372296174c9a7015e164189e3", "rows": 400}
+        ]
+      },
+      "needle_counts": [2, 4, 8],
+      "samples_per_bin_per_needle_count": 100,
+      "bin_boundaries_tokens": [
+        [4096, 8192],
+        [8193, 16384],
+        [16385, 32768],
+        [32769, 65536],
+        [65537, 131072],
+        [131073, 262144],
+        [262145, 524288],
+        [524289, 1048576]
+      ],
+      "primary_bins_through_128k": 5,
+      "expected_examples_all_bins": 2400,
+      "expected_examples_through_128k": 1500,
+      "tokenizer_for_official_bins": "tiktoken-o200k_base",
+      "generation_reserve_rule": "ground-truth answer token count plus 32 tokens",
+      "scorer": {
+        "specification": "pinned dataset README implementation details",
+        "implementation": "research/adaptive_v4_memory/scripts/p3_natural_metrics.py",
+        "metric": "difflib.SequenceMatcher ratio after exact alphanumeric-prefix gate",
+        "missing_or_incorrect_prefix_score": 0.0
+      },
+      "reporting": "Report every needle-count by token-bin cell; do not allow shorter bins to hide 64K-128K failure."
+    }
+  },
+  "external_baselines": {
+    "kvpress": {
+      "repository": "https://github.com/NVIDIA/kvpress",
+      "revision": "6d965557a5b9f0201a2301b23c454473dd681d0d",
+      "compatible_qwen3_methods": [
+        "streaming-llm",
+        "snapkv",
+        "expected-attention",
+        "critical-expected-attention"
+      ]
+    },
+    "FlashMemory-DeepSeek-V4": {
+      "manifest": "research/adaptive_v4_memory/manifests/p3-flashmemory-deepseek-v4-v1.json",
+      "compatible_with_primary_qwen3_model": false,
+      "action": "run only in the separately provisioned official DSA evidence tier; never project its result onto Qwen3"
+    },
+    "IndexCache": {
+      "paper": "https://arxiv.org/abs/2603.12201",
+      "repository": "https://github.com/THUDM/IndexCache",
+      "revision": "08d22d69b1aa2aa0a3de23df6d6b88dbd5b5d044",
+      "license": "apache-2.0",
+      "files_sha256": {
+        "LICENSE": "7ecd8ce1d30b8aa26232f5c7c878cca53bc273547ce52f1678f955154746e64f",
+        "README.md": "b925cec609200200d1f5d076083589d3b19fb78a32b9f5c541db09baf70b5b49",
+        "indexcache.patch": "aa0e78e6e7ffd25e9d98f45fd608dc3547af937e5f77e01b5c01f1aaaf5df5b7",
+        "indexcache_vllm.patch": "2044f07ecd65b2bebe0b770bbc3f0246785b6eb5026311345722ef7d271ce356"
+      },
+      "compatible_with_primary_qwen3_model": false,
+      "supported_architecture_boundary": "DeepSeek Sparse Attention models such as DeepSeek-V3.2 or GLM-5",
+      "action": "compare only on a supported DSA runtime in the official/large-model tier"
+    }
+  },
+  "execution_totals": {
+    "ruler_predictions_per_arm": 32500,
+    "scbench_predictions_per_arm": 10286,
+    "longbench_v2_predictions_per_arm": 503,
+    "longmemeval_predictions_per_arm": 500,
+    "mrcr_predictions_per_arm_through_128k": 1500,
+    "minimum_predictions_per_arm": 45289,
+    "dataset_files_to_verify": 20,
+    "dataset_bytes_to_acquire": 2391718372
+  },
+  "claim_boundary": "This suite tests transfer on a pinned compatible Qwen3 model. It is not official DeepSeek-V4 evidence, and unsupported or incompatible cells remain explicit rather than being imputed."
+}
