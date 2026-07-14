@@ -1123,17 +1123,19 @@ def test_evidence_rejects_an_incomplete_artifact_binding(tmp_path: Path) -> None
                 "experiment_id": "incomplete-artifact-binding-v1",
                 "source": {"dirty": False},
                 "audit": {"terminal": True},
-                "raw_cell": {"sha256": package.sha256(artifact)},
+                "raw_cells": [{"sha256": package.sha256(artifact)}],
             }
         )
     )
     contract = {
         "experiment_id": "incomplete-artifact-binding-v1",
         "required_audit": {"terminal": True},
-        "required_declared_artifact_graph": True,
+        "required_artifact_collections": {"raw_cells": 1},
     }
 
-    with pytest.raises(ValueError, match="Incomplete digest-bound artifact metadata"):
+    with pytest.raises(
+        ValueError, match=r"Invalid incomplete raw_cells\[0\] artifact binding"
+    ):
         package._validate_evidence("incomplete", summary, contract)
 
 

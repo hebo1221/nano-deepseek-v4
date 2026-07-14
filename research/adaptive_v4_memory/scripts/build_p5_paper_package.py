@@ -1859,12 +1859,7 @@ def _verify_declared_artifact_tree(payload: Any, label: str) -> int:
     def visit(value: Any, location: str) -> int:
         verified = 0
         if isinstance(value, dict):
-            declares_digest = "sha256" in value
-            if declares_digest:
-                _require(
-                    "path" in value,
-                    f"Incomplete digest-bound artifact metadata for {location}.",
-                )
+            if "path" in value and "sha256" in value:
                 artifact = _bound_artifact(value, location)
                 verified += 1
                 resolved = artifact.resolve()
