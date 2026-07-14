@@ -284,6 +284,51 @@ def holm_bonferroni(p_values: dict[str, float]) -> dict[str, float]:
     return adjusted
 
 
+def validate_family_holm_contract(
+    families: list[dict[str, Any]], scale_families: list[dict[str, Any]]
+) -> dict[str, Any]:
+    """Verify every preregistered core family-wise correction group."""
+
+    family_names = set(shard.PAPER_GRADE_WORKLOAD_FAMILIES)
+    expected_pooled = {
+        (budget, family) for budget in BUDGETS for family in family_names
+    }
+    expected_scale = {
+        (budget, scale, family)
+        for budget in BUDGETS
+        for scale in shard.CHUNK_SIZE_BY_SCALE
+        for family in family_names
+    }
+    source = "seed_cluster_exact_paired_randomization_two_sided_p"
+    _require(
+        {(row["budget_multiplier"], row["family"]) for row in families}
+        == expected_pooled
+        and all(
+            "holm_adjusted_p" in row and row.get("holm_source_p") == source
+            for row in families
+        ),
+        "Core pooled-family Holm coverage drifted.",
+    )
+    _require(
+        {
+            (row["budget_multiplier"], row["scale"], row["family"])
+            for row in scale_families
+        }
+        == expected_scale
+        and all(
+            "holm_adjusted_p" in row and row.get("holm_source_p") == source
+            for row in scale_families
+        ),
+        "Core scale-family Holm coverage drifted.",
+    )
+    return {
+        "family_holm_bonferroni_verified": True,
+        "families_per_holm_group": len(family_names),
+        "family_holm_groups_per_comparison": len(BUDGETS)
+        * (1 + len(shard.CHUNK_SIZE_BY_SCALE)),
+    }
+
+
 def _require(condition: bool, message: str) -> None:
     if not condition:
         raise ValueError(message)
@@ -765,6 +810,9 @@ def _statistics(
         "by_scale_family_context": slices,
         "worst_slice": worst,
         "worst_slice_by_budget_scale": worst_by_budget_scale,
+        "multiplicity_audit": validate_family_holm_contract(
+            families, scale_families
+        ),
     }
 
 
@@ -1002,6 +1050,11 @@ def main() -> None:
         comparison="calibrated-hierarchical-minus-native",
         namespace="native",
     )
+    multiplicity_audit = fixed_statistics["multiplicity_audit"]
+    _require(
+        multiplicity_audit == native_statistics["multiplicity_audit"],
+        "P2 comparison multiplicity contracts drifted.",
+    )
     dirty = bool(
         subprocess.run(
             ["git", "status", "--porcelain"], check=True, capture_output=True, text=True
@@ -1037,6 +1090,7 @@ def main() -> None:
             / (1 << len(shard.TRAINING_SEEDS)),
             "seed_p_values_used_as_success_gate": False,
             "family_holm_p_values_used_as_success_gate": False,
+            **multiplicity_audit,
             "exact_record_schema_verified": True,
             "exact_execution_rotation_verified": True,
             "exact_statistical_cell_coverage_verified": True,

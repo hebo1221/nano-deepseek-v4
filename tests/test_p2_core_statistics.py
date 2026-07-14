@@ -304,6 +304,43 @@ def test_holm_bonferroni_is_monotone_in_sorted_hypothesis_order() -> None:
     assert adjusted == pytest.approx({"first": 0.03, "second": 0.06, "third": 0.06})
 
 
+def test_core_family_holm_contract_requires_every_preregistered_group() -> None:
+    source = "seed_cluster_exact_paired_randomization_two_sided_p"
+    families = [
+        {
+            "budget_multiplier": budget,
+            "family": family,
+            "holm_adjusted_p": 1.0,
+            "holm_source_p": source,
+        }
+        for budget in core.BUDGETS
+        for family in core.shard.PAPER_GRADE_WORKLOAD_FAMILIES
+    ]
+    scale_families = [
+        {
+            "budget_multiplier": budget,
+            "scale": scale,
+            "family": family,
+            "holm_adjusted_p": 1.0,
+            "holm_source_p": source,
+        }
+        for budget in core.BUDGETS
+        for scale in core.shard.CHUNK_SIZE_BY_SCALE
+        for family in core.shard.PAPER_GRADE_WORKLOAD_FAMILIES
+    ]
+
+    audit = core.validate_family_holm_contract(families, scale_families)
+
+    assert audit == {
+        "family_holm_bonferroni_verified": True,
+        "families_per_holm_group": 9,
+        "family_holm_groups_per_comparison": 9,
+    }
+    scale_families.pop()
+    with pytest.raises(ValueError, match="scale-family Holm coverage drifted"):
+        core.validate_family_holm_contract(families, scale_families)
+
+
 def test_seed_cluster_statistics_use_five_independent_training_seeds() -> None:
     result = seed_cluster_statistics([0.1] * 5, label="core-seeds", resamples=1_000)
 
