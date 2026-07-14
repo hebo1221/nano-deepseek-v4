@@ -67,7 +67,12 @@ def _policy_run(cell: tuple[str, int, int, str, int, int], policy: str) -> dict[
             "process_total_hbm_bytes": 1,
             "process_total_hbm_availability": "measured-nvidia-smi",
         },
-        "cache": {key: 1 for key in production.CACHE_KEYS},
+        "cache": {
+            "logical_cache_bytes": 1,
+            "hot_resident_bytes": 1,
+            "cold_resident_bytes": 0,
+            "pinned_host_bytes": 1,
+        },
         "transfer": {key: 1 for key in production.TRANSFER_KEYS},
         "timing": {key: 1 for key in production.TIMING_KEYS},
         "tail_failures": [],
@@ -213,6 +218,26 @@ def test_production_adapter_rejects_false_warmup_completion() -> None:
         production.validate_adapter_payload(payload, cell=cell, executable_digest=digest)
 
 
+def test_production_adapter_binds_backend_revision_to_parent_commit() -> None:
+    cell = next(cell for cell in production.frozen_cells() if cell[5] == 1)
+    digest = "a" * 64
+    payload = _adapter_payload(cell, digest)
+
+    production.validate_adapter_payload(
+        payload,
+        cell=cell,
+        executable_digest=digest,
+        source_commit="2" * 40,
+    )
+    with pytest.raises(ValueError, match="source revision drifted"):
+        production.validate_adapter_payload(
+            payload,
+            cell=cell,
+            executable_digest=digest,
+            source_commit="4" * 40,
+        )
+
+
 def test_production_adapter_accepts_explicitly_unavailable_process_hbm() -> None:
     cell = next(cell for cell in production.frozen_cells() if cell[5] == 8)
     digest = "a" * 64
@@ -333,6 +358,40 @@ def test_production_adapter_rejects_fabricated_batch_identity() -> None:
         production.validate_adapter_payload(payload, cell=cell, executable_digest=digest)
 
 
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("generated_token_throughput_per_second", float("inf"), "throughput"),
+        ("decode_step_latency_ms", [float("inf")], "latency coverage"),
+    ],
+)
+def test_production_adapter_rejects_nonfinite_measurements(
+    field: str, value: object, message: str
+) -> None:
+    cell = next(cell for cell in production.frozen_cells() if cell[5] == 1)
+    digest = "a" * 64
+    payload = _adapter_payload(cell, digest)
+    payload["repetitions"][0]["policies"]["resident-native"][field] = value
+
+    with pytest.raises(ValueError, match=message):
+        production.validate_adapter_payload(payload, cell=cell, executable_digest=digest)
+
+
+def test_production_adapter_rejects_inconsistent_memory_and_transfer_accounting() -> None:
+    cell = next(cell for cell in production.frozen_cells() if cell[5] == 1)
+    digest = "a" * 64
+    payload = _adapter_payload(cell, digest)
+    run = payload["repetitions"][0]["policies"]["resident-native"]
+    run["cache"]["cold_resident_bytes"] = 1
+    with pytest.raises(ValueError, match="Cache residency accounting"):
+        production.validate_adapter_payload(payload, cell=cell, executable_digest=digest)
+
+    run["cache"]["cold_resident_bytes"] = 0
+    run["transfer"]["useful_h2d_bytes"] = 2
+    with pytest.raises(ValueError, match="Transfer accounting"):
+        production.validate_adapter_payload(payload, cell=cell, executable_digest=digest)
+
+
 def test_production_adapter_rejects_overlapping_autoregressive_tokens() -> None:
     cell = next(cell for cell in production.frozen_cells() if cell[5] == 8)
     digest = "a" * 64
@@ -365,7 +424,11 @@ def test_orchestrator_failure_is_terminal_and_resumable(tmp_path: Path) -> None:
         "experiment_id": "p4-production-systems-cell-v1",
         "cell": production.cell_dict(cell),
         "cell_timeout_seconds": production.CELL_TIMEOUT_SECONDS,
-        "source": {"dirty": False, "implementation_digest": "implementation"},
+        "source": {
+            "commit": "2" * 40,
+            "dirty": False,
+            "implementation_digest": "implementation",
+        },
         "manifest": {"sha256": "manifest"},
         "p3_audit": {"sha256": "p3"},
         "adapter": {"sha256": adapter_digest},

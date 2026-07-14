@@ -142,12 +142,18 @@ def cell_path(root: Path, cell: tuple[str, int, int, str, int, int]) -> Path:
     return root / scale / f"context-{context}" / f"generation-{generation}" / profile
 
 
-def _nonnegative_metrics(payload: Any, keys: tuple[str, ...], label: str) -> None:
+def _nonnegative_metrics(
+    payload: Any, keys: tuple[str, ...], label: str, *, integer: bool = False
+) -> None:
     _require(isinstance(payload, dict), f"Missing {label} metrics.")
     for key in keys:
         value = payload.get(key)
+        if not isinstance(value, (int, float)) or isinstance(value, bool):
+            raise ValueError(f"Invalid {label}.{key} metric.")
         _require(
-            isinstance(value, (int, float)) and not isinstance(value, bool) and value >= 0,
+            math.isfinite(value)
+            and value >= 0
+            and (not integer or type(value) is int),
             f"Invalid {label}.{key} metric.",
         )
 
@@ -155,6 +161,15 @@ def _nonnegative_metrics(payload: Any, keys: tuple[str, ...], label: str) -> Non
 def _sha256_value(value: Any, label: str) -> None:
     _require(isinstance(value, str) and len(value) == 64, f"Invalid {label} digest.")
     int(value, 16)
+
+
+def _finite_nonnegative(value: Any) -> bool:
+    return (
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and math.isfinite(value)
+        and value >= 0
+    )
 
 
 def maximum_request_overlap(requests: list[dict[str, Any]]) -> int:
@@ -333,33 +348,60 @@ def validate_policy_run(
     _require(
         isinstance(steps, list)
         and len(steps) == concurrency * generation
-        and all(isinstance(value, (int, float)) and value >= 0 for value in steps),
+        and all(_finite_nonnegative(value) for value in steps),
         "Raw decode-step latency coverage is incomplete.",
     )
     throughput = payload.get("generated_token_throughput_per_second")
+    if not isinstance(throughput, (int, float)) or isinstance(throughput, bool):
+        raise ValueError("Generated-token throughput must be measured and positive.")
     _require(
-        isinstance(throughput, (int, float)) and throughput > 0,
+        math.isfinite(throughput) and throughput > 0,
         "Generated-token throughput must be measured and positive.",
     )
     _sha256_value(payload.get("prediction_digest"), "prediction")
     cuda = payload.get("cuda")
     if not isinstance(cuda, dict):
         raise ValueError("Missing cuda measurements.")
-    _nonnegative_metrics(cuda, CUDA_KEYS, "cuda")
+    _nonnegative_metrics(cuda, CUDA_KEYS, "cuda", integer=True)
+    _require(
+        cuda["allocated_after_prefill_bytes"] <= cuda["reserved_after_prefill_bytes"]
+        and cuda["allocated_after_prefill_bytes"] <= cuda["peak_allocated_bytes"]
+        and cuda["reserved_after_prefill_bytes"] <= cuda["peak_reserved_bytes"]
+        and cuda["peak_allocated_bytes"] <= cuda["device_total_hbm_bytes"]
+        and cuda["peak_reserved_bytes"] <= cuda["device_total_hbm_bytes"],
+        "CUDA allocator accounting is inconsistent.",
+    )
     process_total = cuda.get("process_total_hbm_bytes")
     process_total_availability = cuda.get("process_total_hbm_availability")
     _require(
         (
             process_total_availability == "measured-nvidia-smi"
-            and isinstance(process_total, (int, float))
+            and type(process_total) is int
             and process_total > 0
         )
         or (process_total_availability == "unavailable-nvidia-smi" and process_total is None),
         "Process-total HBM availability contract drifted.",
     )
-    _nonnegative_metrics(payload.get("cache"), CACHE_KEYS, "cache")
-    _nonnegative_metrics(payload.get("transfer"), TRANSFER_KEYS, "transfer")
-    _nonnegative_metrics(payload.get("timing"), TIMING_KEYS, "timing")
+    cache = payload.get("cache")
+    transfer = payload.get("transfer")
+    if not isinstance(cache, dict):
+        raise ValueError("Missing cache metrics.")
+    if not isinstance(transfer, dict):
+        raise ValueError("Missing transfer metrics.")
+    _nonnegative_metrics(cache, CACHE_KEYS, "cache", integer=True)
+    _require(
+        cache["logical_cache_bytes"]
+        == cache["hot_resident_bytes"] + cache["cold_resident_bytes"],
+        "Cache residency accounting is inconsistent.",
+    )
+    _nonnegative_metrics(transfer, TRANSFER_KEYS, "transfer", integer=True)
+    _require(
+        transfer["useful_h2d_bytes"] <= transfer["h2d_bytes"]
+        and transfer["misses"] == transfer["h2d_count"]
+        and transfer["late_misses"] <= transfer["misses"],
+        "Transfer accounting is inconsistent.",
+    )
+    _nonnegative_metrics(payload.get("timing"), TIMING_KEYS, "timing", integer=True)
     _require(isinstance(payload.get("tail_failures"), list), "Tail failures must be explicit.")
     _require(
         payload.get("tail_failure_accounting_complete") is True,
@@ -397,6 +439,7 @@ def validate_adapter_payload(
     *,
     cell: tuple[str, int, int, str, int, int],
     executable_digest: str,
+    source_commit: str | None = None,
 ) -> None:
     _require(
         payload.get("experiment_id") == "p4-production-adapter-cell-v1",
@@ -433,6 +476,11 @@ def validate_adapter_payload(
         "Production repetition count drifted.",
     )
     validate_backend(payload.get("backend"), executable_digest=executable_digest)
+    if source_commit is not None:
+        _require(
+            payload["backend"].get("source_revision") == source_commit,
+            "Serving adapter source revision drifted from the parent artifact.",
+        )
     repetitions = payload.get("repetitions")
     if not isinstance(repetitions, list) or len(repetitions) > MEASURED_REPETITIONS:
         raise ValueError("Invalid production repetition coverage.")
@@ -525,10 +573,14 @@ def _artifact_valid(
         return False
     try:
         payload = json.loads(path.read_text())
+        source_commit = payload.get("source", {}).get("commit")
         if (
             payload.get("experiment_id") != "p4-production-systems-cell-v1"
             or payload.get("cell") != cell_dict(cell)
             or payload.get("source", {}).get("dirty") is not False
+            or not isinstance(source_commit, str)
+            or len(source_commit) != 40
+            or any(character not in "0123456789abcdef" for character in source_commit)
             or payload.get("source", {}).get("implementation_digest") != implementation
             or payload.get("manifest", {}).get("sha256") != manifest_digest
             or payload.get("p3_audit", {}).get("sha256") != p3_digest
@@ -563,7 +615,12 @@ def _artifact_valid(
             ):
                 return False
         else:
-            validate_adapter_payload(adapter_payload, cell=cell, executable_digest=adapter_digest)
+            validate_adapter_payload(
+                adapter_payload,
+                cell=cell,
+                executable_digest=adapter_digest,
+                source_commit=source_commit,
+            )
     except (KeyError, TypeError, ValueError, json.JSONDecodeError):
         return False
     return True
@@ -710,6 +767,7 @@ def main() -> None:
     )
     if _dirty():
         raise RuntimeError("P4 production execution requires a clean source tree.")
+    source_commit = _head()
     require_p3_audit(args.p3_audit)
     manifest = json.loads(args.manifest.read_text())
     _require(
@@ -783,7 +841,12 @@ def main() -> None:
                 raw_output=raw_output,
                 timeout_seconds=args.cell_timeout_seconds,
             )
-            validate_adapter_payload(adapter_payload, cell=cell, executable_digest=adapter_digest)
+            validate_adapter_payload(
+                adapter_payload,
+                cell=cell,
+                executable_digest=adapter_digest,
+                source_commit=source_commit,
+            )
         except Exception as error:
             adapter_payload = _terminal_failure(cell=cell, error=error)
         artifact = root / "cell.json"
@@ -793,7 +856,7 @@ def main() -> None:
             "cell": cell_dict(cell),
             "cell_timeout_seconds": args.cell_timeout_seconds,
             "source": {
-                "commit": _head(),
+                "commit": source_commit,
                 "dirty": False,
                 "implementation_digest": implementation,
             },

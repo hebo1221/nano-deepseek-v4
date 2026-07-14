@@ -23,6 +23,9 @@ METRICS = {
     "decode_step_p99_ms": lambda run: run["decode_step_ms"]["p99_ms"],
     "throughput_tokens_per_second": lambda run: run["generated_token_throughput_per_second"],
     "end_to_end_ms": lambda run: run["end_to_end_ms"],
+    "cache_allocated_delta_bytes": lambda run: run["cuda"][
+        "cache_allocated_delta_bytes"
+    ],
     "allocated_after_prefill_bytes": lambda run: run["cuda"][
         "allocated_after_prefill_bytes"
     ],
@@ -40,6 +43,7 @@ METRICS = {
     "hot_resident_bytes": lambda run: run["cache"]["hot_resident_bytes"],
     "cold_resident_bytes": lambda run: run["cache"]["cold_resident_bytes"],
     "pinned_host_bytes": lambda run: run["cache"]["pinned_host_bytes"],
+    "tier_hot_bytes": lambda run: run["cache"]["tier_hot_bytes"],
     "h2d_bytes": lambda run: run["cache"]["h2d_bytes"],
     "d2h_bytes": lambda run: run["cache"]["d2h_bytes"],
     "useful_h2d_bytes": lambda run: run["cache"]["useful_h2d_bytes"],
