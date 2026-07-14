@@ -164,20 +164,20 @@ def test_exact_config_reuse_audit_counts_forwards_without_double_counting() -> N
         {
             "schedule_batch_index": 3,
             "arm": "fixed",
+            "execution_index": 1,
+            "execution_mode": "reused-exact-config",
+            "reused_from_arm": "calibrated",
+            "config_sha256": "a" * 64,
+            "wall_ms": 0.0,
+        },
+        {
+            "schedule_batch_index": 3,
+            "arm": "calibrated",
             "execution_index": 0,
             "execution_mode": "executed",
             "reused_from_arm": None,
             "config_sha256": "a" * 64,
             "wall_ms": 1.5,
-        },
-        {
-            "schedule_batch_index": 3,
-            "arm": "calibrated",
-            "execution_index": 1,
-            "execution_mode": "reused-exact-config",
-            "reused_from_arm": "fixed",
-            "config_sha256": "a" * 64,
-            "wall_ms": 0.0,
         },
     ]
 
@@ -186,7 +186,7 @@ def test_exact_config_reuse_audit_counts_forwards_without_double_counting() -> N
         "reused_exact_config": 1,
     }
 
-    rows[1]["config_sha256"] = "b" * 64
+    rows[0]["config_sha256"] = "b" * 64
     with pytest.raises(ValueError, match="reuse source drifted"):
         summary.validate_exact_config_reuse(rows, expected_arms=("fixed", "calibrated"))
 
