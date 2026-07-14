@@ -26,6 +26,9 @@ def _p2_core_evidence(*, passed: bool = False) -> dict[str, object]:
             "exact_record_schema_verified": True,
             "exact_execution_rotation_verified": True,
             "exact_statistical_cell_coverage_verified": True,
+            "raw_execution_commits_are_ancestors": True,
+            "raw_execution_commit_trees_verified": True,
+            "parallel_orchestration_verified": True,
             "paired_units_per_seed_scale_family_context": 200,
             "paired_units_per_seed_scale_family": 1_000,
             "statistical_cells_per_comparison": 1_350,
@@ -405,6 +408,9 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
             "exact_record_schema_verified",
             "exact_execution_rotation_verified",
             "exact_statistical_cell_coverage_verified",
+            "raw_execution_commits_are_ancestors",
+            "raw_execution_commit_trees_verified",
+            "parallel_orchestration_verified",
             "aggregate_recomputed",
             "batch_coverage_verified",
         )
@@ -796,6 +802,34 @@ def test_p2_summary_rejects_analysis_implementation_drift(tmp_path: Path) -> Non
 
     with pytest.raises(ValueError, match="analysis implementation drifted"):
         package._validate_evidence("p2_core_confirmatory", path, contract)
+
+
+def test_p2_core_evidence_requires_execution_provenance(tmp_path: Path) -> None:
+    root = Path(__file__).resolve().parents[1]
+    manifest = json.loads(
+        (root / "research/adaptive_v4_memory/manifests/p5-paper-package-v1.json").read_text()
+    )
+    contract = manifest["evidence"]["p2_core"]
+    evidence = _p2_core_evidence()
+    evidence.update(
+        {
+            "experiment_id": contract["experiment_id"],
+            "source": {"dirty": False},
+            "analysis_implementation": package._analysis_implementation_metadata(
+                package.P2_ANALYSIS_PATHS["p2_core"]
+            ),
+        }
+    )
+    path = tmp_path / "p2-core.json"
+    path.write_text(json.dumps(evidence))
+
+    assert package._validate_evidence("p2_core", path, contract) == evidence
+    audit = evidence["audit"]
+    assert isinstance(audit, dict)
+    audit.pop("raw_execution_commit_trees_verified")
+    path.write_text(json.dumps(evidence))
+    with pytest.raises(ValueError, match="raw_execution_commit_trees_verified drifted"):
+        package._validate_evidence("p2_core", path, contract)
 
 
 def test_confirmatory_causal_requires_pooling_and_exact_inference(
