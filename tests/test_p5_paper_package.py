@@ -1301,9 +1301,51 @@ def test_official_v4_boundary_validation_fails_closed(tmp_path: Path) -> None:
             ),
             "matrix or claim boundary",
         ),
+        (
+            "safety_stress",
+            "p3-safety-stress-v1.json",
+            lambda payload: payload.update({"expected_examples_per_arm": 12}),
+            "synthetic-safety matrix boundary",
+        ),
+        (
+            "natural_safety",
+            "p3-natural-safety-v1.json",
+            lambda payload: payload["benchmarks"]["LongSafety"]["judge"].update(
+                {"default_mode": "proxy"}
+            ),
+            "natural-safety scoring or claim boundary",
+        ),
+        (
+            "p4_reference_systems",
+            "p4-reference-systems-matrix-v1.json",
+            lambda payload: payload.update({"measured_repetitions_per_paired_cell": 3}),
+            "frozen systems matrix",
+        ),
+        (
+            "p4_adaptive_systems",
+            "p4-adaptive-systems-matrix-v1.json",
+            lambda payload: payload.update(
+                {"execution_policy": "run only favorable P2 cells"}
+            ),
+            "adaptive-controller claim boundary",
+        ),
+        (
+            "p4_adaptive_production_systems",
+            "p4-adaptive-production-systems-matrix-v1.json",
+            lambda payload: payload["load_profiles"][4].update({"concurrency": 7}),
+            "actual-concurrency claim boundary",
+        ),
+        (
+            "p4_production_systems",
+            "p4-production-systems-matrix-v1.json",
+            lambda payload: payload["execution"].update(
+                {"failure_is_terminal_and_reported": False}
+            ),
+            "measurement or failure contract",
+        ),
     ],
 )
-def test_primary_design_boundary_manifests_fail_closed(
+def test_frozen_design_boundary_manifests_fail_closed(
     tmp_path: Path,
     name: str,
     manifest_name: str,

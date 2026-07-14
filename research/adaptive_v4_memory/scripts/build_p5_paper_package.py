@@ -1163,6 +1163,74 @@ def _validate_boundary_manifest(name: str, path: Path) -> dict[str, Any]:
             in payload.get("claim_boundary", ""),
             "P3 cross-family matrix or claim boundary drifted.",
         )
+    elif name == "safety_stress":
+        model = payload.get("model", {})
+        prefix = payload.get("protected_prefix_contract", {})
+        scoring = payload.get("scoring", {})
+        _require(
+            payload.get("status") == "frozen_before_execution"
+            and model.get("repo_id") == "Qwen/Qwen3-4B-Instruct-2507"
+            and model.get("revision") == "cdbee75f17c01a7cc42f958dc650907174af0554"
+            and payload.get("context_targets_tokens") == [8192, 32768, 131072]
+            and len(payload.get("families", {})) == 4
+            and payload.get("examples_per_family_context") == 100
+            and payload.get("expected_examples_per_arm") == 1_200
+            and payload.get("arms")
+            == [
+                "native-dense",
+                "strongest-memory-matched-fixed",
+                "strongest-memory-matched-fixed+protected-prefix",
+            ],
+            "P3 synthetic-safety matrix boundary drifted.",
+        )
+        _require(
+            "never increase n_kept" in prefix.get("budget", "")
+            and "fail closed" in prefix.get("unsupported", "")
+            and "every operational failure scored zero" in scoring.get("primary", "")
+            and set(payload.get("failure_accounting", []))
+            == {"unsupported-context", "oom", "empty-generation", "runtime-error"}
+            and "not a comprehensive safety evaluation"
+            in payload.get("claim_boundary", "")
+            and "not" in payload.get("claim_boundary", "")
+            and "official DeepSeek-V4 evidence" in payload.get("claim_boundary", ""),
+            "P3 synthetic-safety accounting or claim boundary drifted.",
+        )
+    elif name == "natural_safety":
+        model = payload.get("model", {})
+        sequence = payload.get("sequence_gate", {})
+        benchmarks = payload.get("benchmarks", {})
+        longsafety = benchmarks.get("LongSafety", {})
+        ifeval = benchmarks.get("IFEval", {})
+        long_protocol = longsafety.get("prompt_protocol", {})
+        judge = longsafety.get("judge", {})
+        ifeval_protocol = ifeval.get("protocol", {})
+        statistics = payload.get("statistics", {})
+        _require(
+            payload.get("status") == "amended_and_frozen_before_execution"
+            and model.get("repo_id") == "Qwen/Qwen3-4B-Instruct-2507"
+            and model.get("revision") == "cdbee75f17c01a7cc42f958dc650907174af0554"
+            and "no natural-safety dataset/source" in sequence.get("policy", "")
+            and payload.get("required_arms")
+            == ["native-dense", "strongest-memory-matched-fixed"]
+            and long_protocol.get("expected_rows") == 1_543
+            and long_protocol.get("expected_predictions_per_arm") == 3_086
+            and ifeval_protocol.get("expected_prompts_per_arm") == 541,
+            "P3 natural-safety sequence or matrix boundary drifted.",
+        )
+        _require(
+            judge.get("default_mode") == "blocked"
+            and judge.get("paid_api_mode") == "explicit-opt-in-only"
+            and judge.get("judge_failures_are_never_imputed") is True
+            and "never counted as long-context evidence"
+            in ifeval_protocol.get("boundary", "")
+            and statistics.get("paired_bootstrap_replicates") == 10_000
+            and statistics.get("paired_bootstrap_seed") == 9_171_403
+            and "failure is explicit" in statistics.get("failure_policy", "")
+            and "Neither is official DeepSeek-V4 evidence"
+            in payload.get("claim_boundary", "")
+            and "comprehensive safety certification" in payload.get("claim_boundary", ""),
+            "P3 natural-safety scoring or claim boundary drifted.",
+        )
     elif name == "p3_ruler":
         amendments = payload.get("amendments", [])
         observed = payload.get("sequence_gate", {}).get("observed_before_gate", {})
@@ -1450,6 +1518,91 @@ def _validate_boundary_manifest(name: str, path: Path) -> dict[str, Any]:
             and "uninterruptible native CUDA" in execution.get("timeout_enforcement", ""),
             "P4 500K timeout claim boundary drifted.",
         )
+    elif name in {
+        "p4_reference_systems",
+        "p4_adaptive_systems",
+        "p4_adaptive_production_systems",
+        "p4_production_systems",
+    }:
+        adaptive = name in {
+            "p4_adaptive_systems",
+            "p4_adaptive_production_systems",
+        }
+        production = name in {
+            "p4_adaptive_production_systems",
+            "p4_production_systems",
+        }
+        expected_status = {
+            "p4_reference_systems": "amended_and_frozen_before_execution",
+            "p4_adaptive_systems": "frozen_before_any_adaptive_systems_cell",
+            "p4_adaptive_production_systems": (
+                "frozen_before_any_adaptive_production_cell"
+            ),
+            "p4_production_systems": "amended_and_frozen_before_execution",
+        }[name]
+        expected_cells = 432 if adaptive else 216
+        execution = payload.get("execution", {})
+        policies = payload.get("paired_policies") if adaptive else payload.get("policies")
+        _require(
+            payload.get("status") == expected_status
+            and payload.get("scales") == ["s55", "s151"]
+            and payload.get("budgets") == (["2x", "4x"] if adaptive else None)
+            and payload.get("contexts_tokens") == [8192, 32768, 131072]
+            and payload.get("generation_tokens") == [128, 512, 2048]
+            and len(payload.get("load_profiles", [])) == 12
+            and payload.get("warmups_per_paired_cell") == 5
+            and payload.get("measured_repetitions_per_paired_cell") == 30
+            and payload.get("primary_paired_cells") == expected_cells
+            and payload.get("primary_measured_policy_runs") == expected_cells * 60
+            and policies
+            == (["fixed+pins", "calibrated+pins"] if adaptive else ["resident-native", "tiered-native"]),
+            f"{name} frozen systems matrix drifted.",
+        )
+        _require(
+            execution.get("maximum_cell_timeout_seconds") == 21_600
+            and execution.get("failure_is_terminal_and_reported") is True
+            and len(payload.get("required_measurements", payload.get("measurements", [])))
+            >= 10,
+            f"{name} measurement or failure contract drifted.",
+        )
+        if adaptive:
+            _require(
+                "every frozen cell" in payload.get("execution_policy", "")
+                and "interpretation, never cell selection"
+                in payload.get("execution_policy", "")
+                and "exact P2 fixed+pins and calibrated+pins controllers"
+                in payload.get("claim_boundary", ""),
+                f"{name} adaptive-controller claim boundary drifted.",
+            )
+        if production:
+            claim_boundary = payload.get("claim_boundary", "")
+            _require(
+                all(
+                    profile.get("concurrency") in {1, 8, 32}
+                    for profile in payload.get("load_profiles", [])
+                )
+                and (
+                    "static full-request" in claim_boundary
+                    or "admits every request at cell start" in claim_boundary
+                )
+                and "dynamic arrivals" in claim_boundary
+                and "continuous admission" in claim_boundary,
+                f"{name} actual-concurrency claim boundary drifted.",
+            )
+        else:
+            claim_boundary = payload.get("claim_boundary", "").lower()
+            _require(
+                all(
+                    profile.get("active_requests") in {1, 8, 32}
+                    for profile in payload.get("load_profiles", [])
+                )
+                and "serial-interleaved reference" in claim_boundary
+                and (
+                    "not actual-concurrency" in claim_boundary
+                    or "not actual concurrent" in claim_boundary
+                ),
+                f"{name} serial-reference claim boundary drifted.",
+            )
     elif name == "experiment_scale_audit":
         _validate_experiment_scale_audit(payload)
     elif name == "official_deepseek_v4":
@@ -1608,6 +1761,8 @@ def _validate_boundary_manifest(name: str, path: Path) -> dict[str, Any]:
             "multi-GPU" in payload.get("claim_boundary", ""),
             "External production runtime claim boundary is incomplete.",
         )
+    else:
+        _require(False, f"Missing semantic boundary validator for {name}.")
     return payload
 
 
