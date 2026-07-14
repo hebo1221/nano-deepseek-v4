@@ -404,6 +404,31 @@ def test_p4_adaptive_artifact_recomputes_schedule_and_dependencies(tmp_path: Pat
         p2_gate_passed=False,
     )
 
+    artifact.write_text(json.dumps(payload))
+    manifest_path = Path(dependency_metadata["manifest"]["path"])
+    manifest_path.write_text('{"drifted": true}')
+    assert not adaptive._artifact_valid(
+        artifact,
+        cell=cell,
+        implementation="implementation",
+        dependencies=dependencies,
+        arms=arms,
+        p2_gate_passed=False,
+    )
+
+    manifest_path.write_text("{}")
+    false_warmup_accounting = deepcopy(payload)
+    false_warmup_accounting["warmup_policy_runs_completed"][adaptive.POLICIES[0]] = 0
+    artifact.write_text(json.dumps(false_warmup_accounting))
+    assert not adaptive._artifact_valid(
+        artifact,
+        cell=cell,
+        implementation="implementation",
+        dependencies=dependencies,
+        arms=arms,
+        p2_gate_passed=False,
+    )
+
 
 def test_p4_requires_full_natural_suite_not_ruler_only(tmp_path: Path) -> None:
     ruler_only = tmp_path / "ruler.json"
