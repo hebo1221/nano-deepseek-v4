@@ -463,6 +463,18 @@ def validate_failure_record(
         )
 
 
+def valid_orchestrator_failure(payload: Any) -> bool:
+    return (
+        isinstance(payload, dict)
+        and payload.get("failure_type") == "adapter-contract-or-execution-failure"
+        and payload.get("phase") == "orchestrator"
+        and isinstance(payload.get("error_type"), str)
+        and bool(payload["error_type"])
+        and isinstance(payload.get("error"), str)
+        and bool(payload["error"])
+    )
+
+
 def validate_adapter_payload(
     payload: dict[str, Any],
     *,
@@ -704,8 +716,16 @@ def _artifact_valid(
         adapter_payload = payload["adapter_payload"]
         if adapter_payload.get("orchestrator_failure") is True:
             policy_status = adapter_payload.get("policy_status")
+            failure_records = (
+                [status.get("failure") for status in policy_status.values()]
+                if isinstance(policy_status, dict)
+                else []
+            )
             if (
-                adapter_payload.get("status") != "failed"
+                adapter_payload.get("experiment_id")
+                != "p4-production-adapter-cell-v1"
+                or adapter_payload.get("cell") != cell_dict(cell)
+                or adapter_payload.get("status") != "failed"
                 or adapter_payload.get("repetitions") != []
                 or adapter_payload.get("warmups") != WARMUPS
                 or adapter_payload.get("warmup_accounting_available") is not False
@@ -719,11 +739,13 @@ def _artifact_valid(
                 or set(policy_status) != set(POLICIES)
                 or any(
                     not isinstance(status, dict)
+                    or status.get("status") != "failed"
                     or status.get("measured_repetitions") != 0
-                    or not isinstance(status.get("failure"), dict)
-                    or status["failure"].get("phase") != "orchestrator"
+                    or not valid_orchestrator_failure(status.get("failure"))
                     for status in policy_status.values()
                 )
+                or len(failure_records) != len(POLICIES)
+                or any(failure != failure_records[0] for failure in failure_records[1:])
             ):
                 return False
         else:
@@ -762,7 +784,12 @@ def _terminal_failure(
         "measured_repetitions": MEASURED_REPETITIONS,
         "repetitions": [],
         "policy_status": {
-            policy: {"measured_repetitions": 0, "failure": failure} for policy in POLICIES
+            policy: {
+                "status": "failed",
+                "measured_repetitions": 0,
+                "failure": failure,
+            }
+            for policy in POLICIES
         },
     }
 

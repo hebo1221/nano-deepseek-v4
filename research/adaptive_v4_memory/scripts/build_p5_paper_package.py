@@ -960,6 +960,7 @@ def classify_evidence(
         and all(type(value) is int and value >= 0 for value in production_counts)
         and sum(production_counts) == P4_EXPECTED_CELLS
         and production_audit.get("tail_failure_accounting_complete") is True
+        and production_audit.get("failure_provenance_verified") is True
     )
     production_full = (
         production_accounted
@@ -1670,7 +1671,13 @@ def _p4_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
                 ),
                 "resident_peak_hbm_mean": _metric_mean(cell, "peak_allocated_bytes", "resident"),
                 "tiered_peak_hbm_mean": _metric_mean(cell, "peak_allocated_bytes", "tiered"),
-                "failure": "",
+                "failure": (
+                    ""
+                    if cell["status"] == "complete"
+                    else json.dumps(
+                        cell["policy_status"], sort_keys=True, separators=(",", ":")
+                    )
+                ),
             }
         )
         rows.append(row)

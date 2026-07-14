@@ -229,6 +229,7 @@
         "warmup_accounting_status_recorded": true,
         "whole_cell_timeout_contract_verified": true,
         "tail_failure_accounting_complete": true,
+        "failure_provenance_verified": true,
         "allocator_hbm_metrics_verified": true,
         "process_total_hbm_availability_accounted": true,
         "checked_static_full_request_batching_adapter": true,

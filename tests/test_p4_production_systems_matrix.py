@@ -520,7 +520,8 @@ def test_orchestrator_failure_is_terminal_and_resumable(tmp_path: Path) -> None:
     assert terminal["warmup_paired_repetitions_completed"] is None
     assert terminal["warmup_failures"] == []
     assert all(
-        status["failure"]["phase"] == "orchestrator"
+        status["status"] == "failed"
+        and status["failure"]["phase"] == "orchestrator"
         for status in terminal["policy_status"].values()
     )
     payload = {
@@ -541,6 +542,18 @@ def test_orchestrator_failure_is_terminal_and_resumable(tmp_path: Path) -> None:
     artifact.write_text(json.dumps(payload))
 
     assert production._artifact_valid(
+        artifact,
+        cell=cell,
+        implementation="implementation",
+        manifest_digest="manifest",
+        p3_digest="p3",
+        adapter_digest=adapter_digest,
+    )
+
+    terminal["warmup_repetitions_attempted"] = None
+    terminal["policy_status"]["resident-native"]["failure"]["error"] = ""
+    artifact.write_text(json.dumps(payload))
+    assert not production._artifact_valid(
         artifact,
         cell=cell,
         implementation="implementation",

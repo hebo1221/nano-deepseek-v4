@@ -296,6 +296,12 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
         is True
     )
     assert (
+        manifest["evidence"]["p4_production_systems"]["required_audit"][
+            "failure_provenance_verified"
+        ]
+        is True
+    )
+    assert (
         manifest["evidence"]["p4_reference_systems"]["required_audit"][
             "all_artifact_digests_verified"
         ]
@@ -637,6 +643,7 @@ def test_p5_classification_preserves_claim_boundaries() -> None:
                 "process_total_hbm_availability_accounted": True,
                 "backend_provenance_consistent": True,
                 "tail_failure_accounting_complete": True,
+                "failure_provenance_verified": True,
                 "all_paired_predictions_identical": True,
                 "checked_static_full_request_batching_adapter": True,
                 "external_fused_dynamic_runtime_verified": False,
@@ -717,6 +724,7 @@ def test_p5_success_requires_full_system_coverage() -> None:
                 "process_total_hbm_availability_accounted": True,
                 "backend_provenance_consistent": True,
                 "tail_failure_accounting_complete": True,
+                "failure_provenance_verified": True,
                 "all_paired_predictions_identical": True,
                 "checked_static_full_request_batching_adapter": True,
                 "external_fused_dynamic_runtime_verified": False,
@@ -855,6 +863,54 @@ def test_p5_p4_table_retains_terminal_failure() -> None:
     assert rows[0]["warmup_repetitions_attempted"] == 1
     assert "warmup" in rows[0]["warmup_failures"]
     assert "oom" in rows[0]["failure"]
+
+
+def test_p5_p4_table_retains_partial_policy_failure() -> None:
+    rows = package._p4_rows(
+        {
+            "complete_cell_statistics": [],
+            "partial_cell_statistics": [
+                {
+                    "cell": {
+                        "scale": "s55",
+                        "context": 32_768,
+                        "generation": 512,
+                        "profile": "serving-b4-c8",
+                        "batch": 4,
+                        "concurrency": 8,
+                    },
+                    "status": "partial",
+                    "cell_timeout_seconds": 21_600.0,
+                    "policy_status": {
+                        "resident-native": {
+                            "status": "complete",
+                            "failure": None,
+                        },
+                        "tiered-native": {
+                            "status": "failed",
+                            "failure": {
+                                "failure_type": "oom",
+                                "phase": "measured",
+                                "repetition": 7,
+                            },
+                        },
+                    },
+                    "warmup_accounting_available": True,
+                    "warmup_repetitions_attempted": 5,
+                    "warmup_paired_repetitions_completed": 5,
+                    "warmup_failures": [],
+                    "paired_repetitions": 7,
+                    "metrics": {},
+                }
+            ],
+            "failure_table": [],
+        }
+    )
+
+    assert rows[0]["status"] == "partial"
+    assert "tiered-native" in rows[0]["failure"]
+    assert "oom" in rows[0]["failure"]
+    assert '"repetition":7' in rows[0]["failure"]
 
 
 def test_p5_p4_table_does_not_invent_warmup_counts_for_orchestrator_failure() -> None:

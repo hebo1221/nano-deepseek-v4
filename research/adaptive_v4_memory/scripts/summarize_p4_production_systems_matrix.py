@@ -390,6 +390,7 @@ def summarize(matrix_path: Path) -> dict[str, Any]:
             "process_total_hbm_measured_runs": process_total_hbm_measured_runs,
             "process_total_hbm_unavailable_runs": process_total_hbm_unavailable_runs,
             "tail_failure_accounting_complete": all_tail_accounted,
+            "failure_provenance_verified": True,
             "all_paired_predictions_identical": all_complete
             and all_predictions_identical,
             "backend_provenance_consistent": backend_consistent,
