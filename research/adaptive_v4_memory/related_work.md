@@ -38,6 +38,8 @@ heterogeneous demand, but their action space does not transfer directly.
 | [KVzip](https://arxiv.org/abs/2505.23416) | evict | query-agnostic token importance via context reconstruction | none | A reusable cache should not depend on one known question; reconstruction provides an offline oracle candidate |
 | [KVzap](https://arxiv.org/abs/2601.07891) | evict | fast input-adaptive approximation of KVzip | none | An expensive oracle can supervise a practical controller, but approximation error must be stress-tested |
 | [Self-Pruned KV Attention](https://arxiv.org/abs/2605.14037) | learned write | token/layer/KV-head utility threshold | continued pretraining | Learned utility exposes true non-uniform memory demand; irreversible write suppression remains risky under query shift |
+| [IndexMem](https://arxiv.org/abs/2605.25475) | learned index + latent residual memory | token, periodic decode refresh | learned indexer and memory | Future-importance prediction can work, but lossy latent recovery and exact cold-tier recovery are different evidence tiers |
+| [KVReviver](https://arxiv.org/abs/2512.17917) | evict + reconstruct | compressed sketches | none | Approximate reversibility is a useful baseline; reconstruction error must be separated from residency misses |
 
 The relevant negative lesson is that deletion and residency are not equivalent.
 Adaptive V4 Memory keeps compressed entries recoverable and treats an omitted
@@ -57,6 +59,8 @@ GPU entry as a cache miss, not permanent information loss.
 | [DuoAttention](https://arxiv.org/abs/2410.10819) | head | optimization on synthetic retrieval data | full retrieval heads + constant streaming heads | Demonstrates data-driven hybrid layouts and the need for retrieval-focused calibration |
 | [CompressKV](https://arxiv.org/abs/2508.02401) | head/layer/token | semantic retrieval heads and layer-wise eviction error | task-sensitive retained set | Supports layer-specific error budgets and retrieval-head signals |
 | [KV-CoRE](https://arxiv.org/abs/2602.05929) | layer/data/domain | normalized effective rank | evaluation framework | Shows compressibility is data- and layer-dependent; useful as an analysis metric, not a controller alone |
+| [PolyKV](https://arxiv.org/abs/2606.15157) | layer, phase, policy | calibration perturbation and entropy/PPL sensitivity | calibrated prefill/decode policies | Policy heterogeneity can matter more than budget heterogeneity; very small non-uniform budgets can starve layers |
+| [ARKV](https://arxiv.org/abs/2603.08727) | layer/precision/retention | prefill attention entropy, variance, and kurtosis | prompt-calibrated tri-state action | Supports jointly measuring retain/quantize/evict choices, but precision is deferred here to avoid a residency confound |
 
 ## 4. Sparse reads and index computation
 
@@ -67,6 +71,9 @@ GPU entry as a cache miss, not permanent information loss.
 | [RetrievalAttention](https://arxiv.org/abs/2409.10516) | CPU ANN over KV vectors | query adaptive | Preserves full logical history but query/key OOD complicates retrieval | Strong precedent for reversible cold retrieval and explicit transfer costs |
 | [IndexCache](https://arxiv.org/abs/2603.12201) | reuse Lightning Indexer top-k across layers | calibrated static pattern or training-aware sharing | Removing 75% of indexers can preserve quality; uniform removal fails without adaptation | Direct baseline for indexer-compute reduction; our policy must add time/query adaptation |
 | [You Only Index Once](https://arxiv.org/abs/2606.06467) | share KV and one routing index across cross-decoder layers | architectural/static | Amortizes fine-grained routing in a KV-sharing model | Defines the upper end of architectural sharing but requires retraining a different backbone |
+| [LaProx](https://arxiv.org/abs/2605.07234) | output-aware cache scoring | query/layer adaptive | Attention mass alone can mis-rank entries whose projected values dominate the output | Add projected value/output contribution as a baseline signal instead of relying only on index scores |
+| [Expected Attention](https://arxiv.org/abs/2510.00636) | expected future-query importance | training-free future-query distribution | Combines future attention probability with output contribution | Provides a training-free lookahead baseline between current-score control and a learned predictor |
+| [SAGE-KV](https://arxiv.org/abs/2503.08879) | one-shot head/token selection after prefill | prompt observation only | Avoids decode-time updates but cannot react to query shift | Useful static post-prefill baseline; multi-turn stress is required |
 
 Sparse-read work establishes that storing a logical cache and reading a physical
 working set are separate decisions. Adaptive V4 Memory focuses on their joint
@@ -78,6 +85,7 @@ control under the native V4 architecture.
 | --- | --- | --- | --- | --- |
 | [FlashMemory-DeepSeek-V4](https://arxiv.org/abs/2606.09079) | CPU cold pool, lookahead Memory Indexer, GPU working set, native second-stage top-k | refresh interval 64, threshold 0.5, layers 10/12/20, OR aggregation | False positives grow with irrelevant context; dense MRCR memory fails | Can uncertainty-controlled budgets, refresh, and fallback handle both sparse and dense demand? |
 | [Tangram](https://arxiv.org/abs/2606.06302) | static reservation, ragged paging, ahead-of-time load balancing for non-uniform budgets | calibrated head ranking and bounded ratios | Dynamic heterogeneity otherwise causes fragmentation, reclamation, and load imbalance | How should V4 block classes and adaptive layer budgets map to real pages and batches? |
+| [NOSA](https://arxiv.org/abs/2510.13602) | query-aware and query-agnostic locality for CPU offload | learned transfer selection | Targets long generation by reducing unnecessary transfers | Strong P4 transfer-aware comparison; useful bytes and late misses must accompany quality |
 
 FlashMemory is the minimum direct baseline. A method that only replaces its
 threshold with another fixed threshold is not a research contribution.
@@ -100,6 +108,13 @@ source of gains.
 | [SCBench](https://arxiv.org/abs/2412.10319) | Single-query compression can collapse in later turns; importance distributions shift during long generation | Evaluate shared-prefix multi-turn and multi-request workloads; preserve cold logical memory |
 | [The Pitfalls of KV Cache Compression](https://arxiv.org/abs/2510.00231) | Compression can selectively erase instructions and increase system-prompt leakage | Pin and separately score instructions; report worst instruction and leakage results |
 | [Key, Value, Compress](https://arxiv.org/abs/2503.11816) | Existing comparisons mix models, data, batch sizes, hardware, and incomplete latency metrics | Run all core policies in one harness and report memory, throughput, and quality together |
+| [The Risk of KV Cache Compression](https://arxiv.org/abs/2607.01520) | Causal masking creates workload-dependent intrinsic compressibility and minimax risk | State bounded or negative claims and report worst slices instead of assuming universal safe compression |
+
+For conventional-model baselines, the official
+[KVPress](https://github.com/NVIDIA/kvpress) library supplies a common interface
+for more than twenty compression methods, RULER/NIAH evaluation, per-layer
+compression, and threshold policies. P3 will pin a repository revision and use
+it rather than reimplementing selected baselines with incompatible harnesses.
 
 ## 8. Novelty boundary matrix
 
@@ -135,6 +150,15 @@ The final row is a research specification, not an achieved feature list.
    transfers, ragged pages, and scheduling can erase theoretical gains.
 7. **Keep a native fallback.** The controller must widen rather than confidently
    discard when score density or disagreement signals a hard case.
+8. **Avoid layer starvation at the minimum budget.** Keep the 1x allocation
+   uniform and test calibration-only non-uniform quotas at 2x and 4x, where a
+   floor can be preserved for every CSA layer.
+9. **Score output consequence, not attention alone.** Compare Lightning Indexer
+   concentration with projected value/output contribution and expected-future
+   attention before attributing gains to a learned controller.
+10. **Separate phase-specific policy from budget.** Prefill policy, decode
+    policy, and layer budget are distinct ablations; a gain from one cannot be
+    credited to the others.
 
 ## 10. Reading queue
 

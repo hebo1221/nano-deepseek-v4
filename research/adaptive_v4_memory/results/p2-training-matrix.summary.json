@@ -1,0 +1,360 @@
+{
+  "experiment_id": "paper-grade-tier-s-training-audit-v1",
+  "interpretation": "Training-matrix audit only; controller quality conclusions require the frozen P2 held-out workload evaluation.",
+  "matrix": {
+    "path": "artifacts/adaptive_v4_memory/paper_grade/training-matrix.json",
+    "sha256": "853fa823ec681eb89710cf286e66a547fad7ef37c879d51a9dc67050fc4515d0"
+  },
+  "runs": [
+    {
+      "checkpoint": {
+        "bytes": 222269497,
+        "path": "artifacts/adaptive_v4_memory/paper_grade/training/s55/seed-6071401/s55-step-1000.pt",
+        "sha256": "0a8330ed5c2bec8372eb32b575414e9b65509d9a597f8911b546bc31be8c360d"
+      },
+      "data_order_seed": 6071402,
+      "final_native_accuracy": 0.6614583333333334,
+      "final_native_accuracy_by_length": {
+        "48": 0.609375,
+        "64": 0.65625,
+        "80": 0.71875
+      },
+      "initialization_seed": 6071401,
+      "peak_allocated_bytes": 1527040512,
+      "peak_reserved_bytes": 1642070016,
+      "reported_stopped_early": false,
+      "scale": "s55",
+      "seed": 6071401,
+      "summary": {
+        "path": "artifacts/adaptive_v4_memory/paper_grade/training/s55/seed-6071401/s55-training.summary.json",
+        "sha256": "2aa9ece0ac9e791907cd48d8b843dffee530a5fbe44061775ebcc3a207f05194"
+      },
+      "training_elapsed_seconds": 121.20281744003296,
+      "training_evaluation_seed": 6081401
+    },
+    {
+      "checkpoint": {
+        "bytes": 222269497,
+        "path": "artifacts/adaptive_v4_memory/paper_grade/training/s55/seed-6071402/s55-step-1000.pt",
+        "sha256": "cf1b9dad4cb00370be2268306b872635ae02eb5ca26aaf4b641753ecabab4f55"
+      },
+      "data_order_seed": 6071403,
+      "final_native_accuracy": 0.734375,
+      "final_native_accuracy_by_length": {
+        "48": 0.765625,
+        "64": 0.59375,
+        "80": 0.84375
+      },
+      "initialization_seed": 6071402,
+      "peak_allocated_bytes": 1525805568,
+      "peak_reserved_bytes": 1639972864,
+      "reported_stopped_early": false,
+      "scale": "s55",
+      "seed": 6071402,
+      "summary": {
+        "path": "artifacts/adaptive_v4_memory/paper_grade/training/s55/seed-6071402/s55-training.summary.json",
+        "sha256": "ffa11f4d3025ec3a9ee87a0a28d35f9f3319b928a74b66f0bdce436d5f671e13"
+      },
+      "training_elapsed_seconds": 122.28116130828857,
+      "training_evaluation_seed": 6081402
+    },
+    {
+      "checkpoint": {
+        "bytes": 222269497,
+        "path": "artifacts/adaptive_v4_memory/paper_grade/training/s55/seed-6071403/s55-step-1000.pt",
+        "sha256": "b0043170cd2ee43f3c091efafaa17d804a2e0ec67f2b66eaf41042806ea38c02"
+      },
+      "data_order_seed": 6071404,
+      "final_native_accuracy": 0.7552083333333334,
+      "final_native_accuracy_by_length": {
+        "48": 0.828125,
+        "64": 0.734375,
+        "80": 0.703125
+      },
+      "initialization_seed": 6071403,
+      "peak_allocated_bytes": 1527095296,
+      "peak_reserved_bytes": 1616904192,
+      "reported_stopped_early": false,
+      "scale": "s55",
+      "seed": 6071403,
+      "summary": {
+        "path": "artifacts/adaptive_v4_memory/paper_grade/training/s55/seed-6071403/s55-training.summary.json",
+        "sha256": "17f2e46bbd537fe8f5ec873de35843f0198540342cfb946db41c0207dab96aeb"
+      },
+      "training_elapsed_seconds": 123.21335411071777,
+      "training_evaluation_seed": 6081403
+    },
+    {
+      "checkpoint": {
+        "bytes": 222269497,
+        "path": "artifacts/adaptive_v4_memory/paper_grade/training/s55/seed-6071404/s55-step-1000.pt",
+        "sha256": "6b5fd547cd42fa983abb6c1c2866c60f84bf1449bfecdef8780485d0027de3b9"
+      },
+      "data_order_seed": 6071405,
+      "final_native_accuracy": 0.9166666666666666,
+      "final_native_accuracy_by_length": {
+        "48": 0.9375,
+        "64": 0.890625,
+        "80": 0.921875
+      },
+      "initialization_seed": 6071404,
+      "peak_allocated_bytes": 1524420608,
+      "peak_reserved_bytes": 1623195648,
+      "reported_stopped_early": true,
+      "scale": "s55",
+      "seed": 6071404,
+      "summary": {
+        "path": "artifacts/adaptive_v4_memory/paper_grade/training/s55/seed-6071404/s55-training.summary.json",
+        "sha256": "8d2127eb8532d20f4f3879d276239f9ea5ae508991629403bdf8d2da49682346"
+      },
+      "training_elapsed_seconds": 122.15968060493469,
+      "training_evaluation_seed": 6081404
+    },
+    {
+      "checkpoint": {
+        "bytes": 222269497,
+        "path": "artifacts/adaptive_v4_memory/paper_grade/training/s55/seed-6071405/s55-step-1000.pt",
+        "sha256": "488f7f0f7dadeeb4c13fe1fb7d357b4fdad88599611a1dd7bcfa04107418732a"
+      },
+      "data_order_seed": 6071406,
+      "final_native_accuracy": 0.703125,
+      "final_native_accuracy_by_length": {
+        "48": 0.75,
+        "64": 0.65625,
+        "80": 0.703125
+      },
+      "initialization_seed": 6071405,
+      "peak_allocated_bytes": 1526470144,
+      "peak_reserved_bytes": 1644167168,
+      "reported_stopped_early": false,
+      "scale": "s55",
+      "seed": 6071405,
+      "summary": {
+        "path": "artifacts/adaptive_v4_memory/paper_grade/training/s55/seed-6071405/s55-training.summary.json",
+        "sha256": "e9bd77edee826ed9181dc37d96ee74988c37307f7eed09bd632dcd77b690c44c"
+      },
+      "training_elapsed_seconds": 118.55737233161926,
+      "training_evaluation_seed": 6081405
+    },
+    {
+      "checkpoint": {
+        "bytes": 606450713,
+        "path": "artifacts/adaptive_v4_memory/paper_grade/training/s151/seed-6071401/s151-step-1000.pt",
+        "sha256": "3eca7b855c477718e4af0b37fc6ad4b6a546c5a65abd201f1b1e77edbc19dfec"
+      },
+      "data_order_seed": 6071402,
+      "final_native_accuracy": 0.640625,
+      "final_native_accuracy_by_length": {
+        "48": 0.59375,
+        "64": 0.71875,
+        "80": 0.609375
+      },
+      "initialization_seed": 6071401,
+      "peak_allocated_bytes": 3524049408,
+      "peak_reserved_bytes": 3825205248,
+      "reported_stopped_early": false,
+      "scale": "s151",
+      "seed": 6071401,
+      "summary": {
+        "path": "artifacts/adaptive_v4_memory/paper_grade/training/s151/seed-6071401/s151-training.summary.json",
+        "sha256": "c29be25717154e8a4b291d99de497e49d606fb40456a3be5d308478bd787e08d"
+      },
+      "training_elapsed_seconds": 201.48001170158386,
+      "training_evaluation_seed": 6081401
+    },
+    {
+      "checkpoint": {
+        "bytes": 606450713,
+        "path": "artifacts/adaptive_v4_memory/paper_grade/training/s151/seed-6071402/s151-step-1000.pt",
+        "sha256": "1095b9b757ff5b939388e7af585190d195077b67baf48a861794596ab019c73d"
+      },
+      "data_order_seed": 6071403,
+      "final_native_accuracy": 0.8541666666666666,
+      "final_native_accuracy_by_length": {
+        "48": 0.921875,
+        "64": 0.75,
+        "80": 0.890625
+      },
+      "initialization_seed": 6071402,
+      "peak_allocated_bytes": 3527049728,
+      "peak_reserved_bytes": 3829399552,
+      "reported_stopped_early": true,
+      "scale": "s151",
+      "seed": 6071402,
+      "summary": {
+        "path": "artifacts/adaptive_v4_memory/paper_grade/training/s151/seed-6071402/s151-training.summary.json",
+        "sha256": "109469e27b2669e4fede0c12dae2bd72d24a8051306aa5d3b4903193693177fa"
+      },
+      "training_elapsed_seconds": 211.06027674674988,
+      "training_evaluation_seed": 6081402
+    },
+    {
+      "checkpoint": {
+        "bytes": 606450713,
+        "path": "artifacts/adaptive_v4_memory/paper_grade/training/s151/seed-6071403/s151-step-1000.pt",
+        "sha256": "015649bb949a5574e3c2fe355a5600ecb1f673f4a13441cd0fa2f9e542e9b7ed"
+      },
+      "data_order_seed": 6071404,
+      "final_native_accuracy": 0.8125,
+      "final_native_accuracy_by_length": {
+        "48": 0.8125,
+        "64": 0.828125,
+        "80": 0.796875
+      },
+      "initialization_seed": 6071403,
+      "peak_allocated_bytes": 3528225792,
+      "peak_reserved_bytes": 3802136576,
+      "reported_stopped_early": false,
+      "scale": "s151",
+      "seed": 6071403,
+      "summary": {
+        "path": "artifacts/adaptive_v4_memory/paper_grade/training/s151/seed-6071403/s151-training.summary.json",
+        "sha256": "b3f864796497c32144fb29fda805b1587b271d4d0ee577ba972a17b6c989e162"
+      },
+      "training_elapsed_seconds": 210.39931654930115,
+      "training_evaluation_seed": 6081403
+    },
+    {
+      "checkpoint": {
+        "bytes": 606450713,
+        "path": "artifacts/adaptive_v4_memory/paper_grade/training/s151/seed-6071404/s151-step-1000.pt",
+        "sha256": "df52806703d965d5d268cc789461a2de1a64c1cb5b0523eb566e1e77b0248fa1"
+      },
+      "data_order_seed": 6071405,
+      "final_native_accuracy": 0.859375,
+      "final_native_accuracy_by_length": {
+        "48": 0.953125,
+        "64": 0.75,
+        "80": 0.875
+      },
+      "initialization_seed": 6071404,
+      "peak_allocated_bytes": 3525441536,
+      "peak_reserved_bytes": 3835691008,
+      "reported_stopped_early": true,
+      "scale": "s151",
+      "seed": 6071404,
+      "summary": {
+        "path": "artifacts/adaptive_v4_memory/paper_grade/training/s151/seed-6071404/s151-training.summary.json",
+        "sha256": "a32ff2a008fd8333539cd11166e5763ef42bbf7ae58ac204e873f4b39fb6793f"
+      },
+      "training_elapsed_seconds": 213.89585304260254,
+      "training_evaluation_seed": 6081404
+    },
+    {
+      "checkpoint": {
+        "bytes": 606450713,
+        "path": "artifacts/adaptive_v4_memory/paper_grade/training/s151/seed-6071405/s151-step-1000.pt",
+        "sha256": "6e07f069f3b55ddbde1952a926d6c26f17c8e6482a0efb9d3a2aad361eed0a25"
+      },
+      "data_order_seed": 6071406,
+      "final_native_accuracy": 0.9010416666666666,
+      "final_native_accuracy_by_length": {
+        "48": 0.875,
+        "64": 0.9375,
+        "80": 0.890625
+      },
+      "initialization_seed": 6071405,
+      "peak_allocated_bytes": 3528276480,
+      "peak_reserved_bytes": 3833593856,
+      "reported_stopped_early": true,
+      "scale": "s151",
+      "seed": 6071405,
+      "summary": {
+        "path": "artifacts/adaptive_v4_memory/paper_grade/training/s151/seed-6071405/s151-training.summary.json",
+        "sha256": "36132cd65588e126ecc85297a9efedc1bb61ce355aad9f9fd5344e2f34612d17"
+      },
+      "training_elapsed_seconds": 211.12858605384827,
+      "training_evaluation_seed": 6081405
+    }
+  ],
+  "scales": {
+    "s151": {
+      "final_native_accuracy": {
+        "maximum": 0.9010416666666666,
+        "mean": 0.8135416666666666,
+        "minimum": 0.640625,
+        "range": 0.26041666666666663,
+        "sample_standard_deviation": 0.10162257838443187
+      },
+      "final_native_accuracy_by_length": {
+        "48": {
+          "maximum": 0.953125,
+          "mean": 0.83125,
+          "minimum": 0.59375,
+          "range": 0.359375,
+          "sample_standard_deviation": 0.1429495376435335
+        },
+        "64": {
+          "maximum": 0.9375,
+          "mean": 0.796875,
+          "minimum": 0.71875,
+          "range": 0.21875,
+          "sample_standard_deviation": 0.08838834764831845
+        },
+        "80": {
+          "maximum": 0.890625,
+          "mean": 0.8125,
+          "minimum": 0.609375,
+          "range": 0.28125,
+          "sample_standard_deviation": 0.120017902310447
+        }
+      },
+      "training_elapsed_seconds": {
+        "maximum": 213.89585304260254,
+        "mean": 209.59280881881713,
+        "minimum": 201.48001170158386,
+        "range": 12.415841341018677,
+        "sample_standard_deviation": 4.730121436383081
+      }
+    },
+    "s55": {
+      "final_native_accuracy": {
+        "maximum": 0.9166666666666666,
+        "mean": 0.7541666666666667,
+        "minimum": 0.6614583333333334,
+        "range": 0.25520833333333326,
+        "sample_standard_deviation": 0.09746683018397134
+      },
+      "final_native_accuracy_by_length": {
+        "48": {
+          "maximum": 0.9375,
+          "mean": 0.778125,
+          "minimum": 0.609375,
+          "range": 0.328125,
+          "sample_standard_deviation": 0.11971238318361221
+        },
+        "64": {
+          "maximum": 0.890625,
+          "mean": 0.70625,
+          "minimum": 0.59375,
+          "range": 0.296875,
+          "sample_standard_deviation": 0.11450044350350788
+        },
+        "80": {
+          "maximum": 0.921875,
+          "mean": 0.778125,
+          "minimum": 0.703125,
+          "range": 0.21875,
+          "sample_standard_deviation": 0.09968211192335363
+        }
+      },
+      "training_elapsed_seconds": {
+        "maximum": 123.21335411071777,
+        "mean": 121.48287715911866,
+        "minimum": 118.55737233161926,
+        "range": 4.655981779098511,
+        "sample_standard_deviation": 1.7837378527320649
+      }
+    }
+  },
+  "schema_version": 1,
+  "source_commit": "ff57ccadb513dba8b687ed113ad0eda338278b54",
+  "validation": {
+    "all_checkpoint_digests_verified": true,
+    "all_runs_complete": true,
+    "all_sources_clean": true,
+    "expected_runs": 10,
+    "low_quality_runs_excluded": 0,
+    "observed_runs": 10
+  }
+}

@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "experiment_id": "p3-ruler-qwen3-1.7b-v1",
+  "status": "frozen_before_execution",
+  "evidence_tier": "compatible_conventional_model_not_deepseek_v4",
+  "model": {
+    "repo_id": "Qwen/Qwen3-1.7B",
+    "revision": "70d244cc86ccca08cf5af4e1e306ecf908b1ad5e",
+    "license": "apache-2.0",
+    "dtype": "bfloat16",
+    "attn_implementation": null,
+    "maximum_supported_context_tokens": 32768
+  },
+  "benchmark": {
+    "name": "RULER",
+    "upstream_repository": "https://github.com/hsiehjackson/RULER",
+    "upstream_revision": "38da79d79519ef87aa46ae804f838e1eab7f86d7",
+    "dataset_repo_id": "simonjegou/ruler",
+    "dataset_revision": "24adceac8a0e6532936e8d721cd9e9084d2e4686",
+    "tasks": "all_13_tasks_in_four_categories",
+    "fraction": 1.0,
+    "lengths_tokens": [8192, 16384, 32768],
+    "unsupported_protocol_lengths_tokens": [65536, 131072],
+    "unsupported_action": "report_unsupported_without_truncation",
+    "scorer": {
+      "implementation": "evaluation/benchmarks/ruler/calculate_metrics.py",
+      "sha256": "1df51402a394b1348f14d96e1fe87b1a4aff10f619f81f80f8840d8e0118fc9b"
+    }
+  },
+  "harness": {
+    "repository": "https://github.com/NVIDIA/kvpress",
+    "revision": "6d965557a5b9f0201a2301b23c454473dd681d0d",
+    "version_at_revision": "0.5.4",
+    "requirements": "research/adaptive_v4_memory/requirements-p3-ruler.txt"
+  },
+  "arms": [
+    {
+      "name": "native",
+      "press": "no_press",
+      "compression_ratios": [0.0]
+    },
+    {
+      "name": "streaming_llm",
+      "press": "streaming_llm",
+      "compression_ratios": [0.25, 0.5, 0.75]
+    },
+    {
+      "name": "snapkv",
+      "press": "snapkv",
+      "compression_ratios": [0.25, 0.5, 0.75]
+    },
+    {
+      "name": "expected_attention",
+      "press": "expected_attention",
+      "compression_ratios": [0.25, 0.5, 0.75]
+    },
+    {
+      "name": "critical_expected_attention",
+      "press": "critical_expected_attention",
+      "compression_ratios": [0.25, 0.5, 0.75]
+    }
+  ],
+  "execution": {
+    "evaluation_order": "length_then_arm_then_compression_ratio",
+    "resume_unit": "one_length_arm_ratio_cell",
+    "raw_output_root": "artifacts/adaptive_v4_memory/paper_grade/p3/ruler-qwen3-1.7b",
+    "record_required": [
+      "exact_command",
+      "source_commit_and_dirty_state",
+      "model_and_dataset_snapshot_revisions",
+      "environment_freeze",
+      "per_example_predictions_and_scores",
+      "timeouts_and_failures",
+      "elapsed_time_and_peak_hbm"
+    ]
+  },
+  "claim_boundary": "This matrix tests transfer on a compatible GQA model and cannot be described as official DeepSeek-V4 evidence."
+}

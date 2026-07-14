@@ -149,3 +149,17 @@ This is a directional single-seed result, not paper-grade evidence. See the
 checked P1 report and summary. Calibration-only non-uniform quotas, protected
 pinning, learned lookahead, and the preregistered five-seed matrix remain active
 work.
+
+## P2 training matrix
+
+The preregistered 5-seed × 2-scale Tier-S training matrix is complete. All ten
+runs reached exactly 1,000 steps from one clean source commit, and an independent
+audit revalidated every checkpoint byte count and SHA-256 digest. No low-quality
+seed was excluded. Final native validation varied substantially (S55 mean
+0.7542, sample SD 0.0975, range 0.2552; S151 mean 0.8135, sample SD 0.1016,
+range 0.2604), confirming that the previous one-seed evidence was not adequate
+for a paper-level claim. See the checked P2 training report and summary.
+
+This completes only the training prerequisite. The nine-family, 1,000-example,
+multi-context, multi-budget held-out policy matrix and its paired statistical
+analysis remain active P2 work.
