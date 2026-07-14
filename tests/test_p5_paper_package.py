@@ -330,6 +330,7 @@ def test_p5_traceability_covers_every_requirement_and_fails_closed() -> None:
     ]
     final_gate = traceability["verification_contracts"]["final-local-release-gate"]
     assert final_gate["runner"].endswith("run_p5_release_gate.py")
+    assert (root / final_gate["runner"]).is_file()
     assert final_gate["github_actions_passed"] is False
 
     incomplete = json.loads(json.dumps(traceability))

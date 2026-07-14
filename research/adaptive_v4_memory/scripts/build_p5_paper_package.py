@@ -1341,7 +1341,12 @@ def _report(
         f"| {row['name']} | {classifications.get(row['name'], 'unverified')} | `{row['sha256']}` |"
         for row in inputs
         if row.get("kind")
-        not in {"execution-audit", "traceability-contract", "reproduction-guide"}
+        not in {
+            "execution-audit",
+            "traceability-contract",
+            "reproduction-guide",
+            "verification-runner",
+        }
     )
     execution_lines = "\n".join(
         f"| {row['name']} | verified | `{row['sha256']}` |"
@@ -1515,6 +1520,18 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
             "sha256": sha256(traceability_path),
         }
     )
+    release_runner = Path(
+        traceability["verification_contracts"]["final-local-release-gate"]["runner"]
+    )
+    _require(release_runner.is_file(), f"Missing P5 release-gate runner: {release_runner}")
+    inputs.append(
+        {
+            "name": "local_release_gate_runner",
+            "kind": "verification-runner",
+            "path": str(release_runner),
+            "sha256": sha256(release_runner),
+        }
+    )
     for name, contract in manifest["evidence"].items():
         path = Path(contract["path"])
         loaded[name] = _validate_evidence(name, path, contract)
@@ -1562,7 +1579,12 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         {**row, "classification": classes.get(row["name"], "unverified")}
         for row in inputs
         if row.get("kind")
-        not in {"execution-audit", "traceability-contract", "reproduction-guide"}
+        not in {
+            "execution-audit",
+            "traceability-contract",
+            "reproduction-guide",
+            "verification-runner",
+        }
     ]
     _write_csv(
         output_root / "table-evidence.csv",
