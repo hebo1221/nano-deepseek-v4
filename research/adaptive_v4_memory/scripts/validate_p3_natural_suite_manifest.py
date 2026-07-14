@@ -75,7 +75,7 @@ def validate_manifest(payload: dict[str, Any]) -> dict[str, Any]:
     amendments = payload.get("amendments", [])
     if (
         not isinstance(amendments, list)
-        or len(amendments) != 6
+        or len(amendments) != 7
         or "RULER scorer SHA-256" not in amendments[0].get("change", "")
         or "tokenizer.json SHA-256" not in amendments[1].get("change", "")
         or "pinned public code dependencies" not in amendments[2].get("change", "")
@@ -90,8 +90,18 @@ def validate_manifest(payload: dict[str, Any]) -> dict[str, Any]:
         or "pinned KVPress checkout" not in amendments[5].get("change", "")
         or "site-packages press import" not in amendments[5].get("reason", "")
         or "no P3 prediction" not in amendments[5].get("reason", "")
+        or "terminal nine-seed confirmatory causal audit"
+        not in amendments[6].get("change", "")
+        or "no natural benchmark outcome" not in amendments[6].get("reason", "")
     ):
         raise ValueError("Natural-suite pre-execution correction record drifted.")
+    sequence = payload.get("sequence_gate", {})
+    if (
+        sequence.get("nine_seed_causal_gate")
+        != "artifacts/adaptive_v4_memory/paper_grade/p2-nine-seed-causal.summary.json"
+        or "nine-seed confirmatory" not in sequence.get("policy", "")
+    ):
+        raise ValueError("Natural-suite confirmatory sequence boundary drifted.")
     if tuple(payload.get("execution_order", ())) != EXPECTED_ORDER:
         raise ValueError("Natural benchmark order drifted from the preregistration.")
     if payload["model"]["revision"] != EXPECTED_REVISIONS["model"]:

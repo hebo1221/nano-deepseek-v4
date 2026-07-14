@@ -79,7 +79,13 @@ def test_natural_suite_freezes_full_scale_and_sample_contract() -> None:
     result = validate_manifest(manifest)
 
     assert manifest["status"] == "amended_and_frozen_before_execution"
-    assert len(manifest["amendments"]) == 6
+    assert len(manifest["amendments"]) == 7
+    assert "terminal nine-seed confirmatory causal audit" in manifest["amendments"][6][
+        "change"
+    ]
+    assert manifest["sequence_gate"]["nine_seed_causal_gate"].endswith(
+        "p2-nine-seed-causal.summary.json"
+    )
     assert result["generation_seed"] == 42
     assert {
         contract["generation_seed"] for contract in manifest["benchmarks"].values()

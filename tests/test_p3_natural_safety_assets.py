@@ -28,7 +28,13 @@ def test_natural_safety_manifest_freezes_official_counts_and_paid_judge_guard() 
     manifest = json.loads(path.read_text())
 
     assert manifest["status"] == "amended_and_frozen_before_execution"
-    assert len(manifest["amendments"]) == 3
+    assert len(manifest["amendments"]) == 4
+    assert "terminal nine-seed confirmatory causal audit" in manifest["amendments"][3][
+        "change"
+    ]
+    assert manifest["sequence_gate"]["nine_seed_causal_gate"].endswith(
+        "p2-nine-seed-causal.summary.json"
+    )
     assert manifest["statistics"]["generation_seed"] == 9_171_402
     assert manifest["statistics"]["paired_bootstrap_seed"] == 9_171_403
     assert validate_manifest(manifest) == {

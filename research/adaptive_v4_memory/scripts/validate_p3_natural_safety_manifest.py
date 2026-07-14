@@ -46,7 +46,7 @@ def validate_manifest(manifest: dict[str, Any]) -> dict[str, Any]:
     amendments = manifest.get("amendments", [])
     _require(
         isinstance(amendments, list)
-        and len(amendments) == 3
+        and len(amendments) == 4
         and "canonical snapshot digest set" in amendments[0].get("change", "")
         and "before any natural-safety generation" in amendments[0].get("reason", ""),
         "Natural safety pre-execution correction record drifted.",
@@ -68,6 +68,16 @@ def validate_manifest(manifest: dict[str, Any]) -> dict[str, Any]:
         and manifest.get("statistics", {}).get("paired_bootstrap_seed") == 9_171_403
         and manifest.get("statistics", {}).get("confidence_level") == 0.95,
         "Natural safety statistical preregistration drifted.",
+    )
+    _require(
+        "terminal nine-seed confirmatory causal audit"
+        in amendments[3].get("change", "")
+        and "before any natural-safety dataset" in amendments[3].get("reason", "")
+        and manifest.get("sequence_gate", {}).get("nine_seed_causal_gate")
+        == "artifacts/adaptive_v4_memory/paper_grade/p2-nine-seed-causal.summary.json"
+        and "nine-seed confirmatory"
+        in manifest.get("sequence_gate", {}).get("policy", ""),
+        "Natural safety confirmatory sequence boundary drifted.",
     )
     _require(tuple(manifest.get("required_arms", ())) == EXPECTED_ARMS, "Arm set drifted.")
     model = manifest.get("model", {})
