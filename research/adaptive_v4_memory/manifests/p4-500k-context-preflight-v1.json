@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "experiment_id": "p4-500k-context-preflight-v1",
+  "status": "frozen_before_execution",
+  "evidence_tier": "single-accelerator-reference-pytorch-feasibility",
+  "prerequisite": "complete digest-bound five-benchmark P3 natural-suite audit",
+  "scales": ["s55", "s151"],
+  "checkpoint_training_seed": 6071401,
+  "policies": ["resident-native", "tiered-native"],
+  "context_tokens": 500000,
+  "generation_tokens": 128,
+  "batch": 1,
+  "active_requests": 1,
+  "attempts_per_scale_policy": 1,
+  "prefill_chunk_tokens": 256,
+  "expected_scale_cells": 2,
+  "expected_policy_attempts": 4,
+  "paired_input": "both policies receive the same deterministic prompt and teacher-forced decode tokens within a scale",
+  "execution_order": "resident-first on s55 and tiered-first on s151",
+  "terminal_outcomes": ["success", "oom", "timeout", "error"],
+  "required_success_semantics": [
+    "complete 500000-token prefill",
+    "complete 128 teacher-forced decode steps",
+    "return cache and CUDA memory accounting",
+    "return a prediction digest"
+  ],
+  "execution": {
+    "runner": "research/adaptive_v4_memory/scripts/run_p4_500k_context_preflight.py",
+    "audit_runner": "research/adaptive_v4_memory/scripts/summarize_p4_500k_context_preflight.py",
+    "raw_output_root": "artifacts/adaptive_v4_memory/paper_grade/p4/500k-context-preflight",
+    "matrix_progress": "artifacts/adaptive_v4_memory/paper_grade/p4/500k-context-preflight-matrix.json",
+    "audit_output": "artifacts/adaptive_v4_memory/paper_grade/p4/500k-context-preflight.summary.json",
+    "resume_unit": "one scale containing isolated terminal attempts for both policies",
+    "failure_is_terminal_and_reported": true
+  },
+  "claim_boundary": "Feasibility evidence only. One attempt per scale-policy cannot support latency, throughput, tail, variance, or production-serving claims. A failed attempt is retained as bounded negative evidence, not silently dropped."
+}
