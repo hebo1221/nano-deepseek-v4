@@ -22,6 +22,7 @@ from select_p3_fixed_baseline import ELIGIBLE_ARMS, ELIGIBLE_LENGTHS, select_fix
 from summarize_p3_natural_benchmark import (  # noqa: E402
     RUNNER_PATHS,
     audit_arm,
+    expected_record_revisions,
     summarize_benchmark,
 )
 from summarize_p3_natural_suite import (  # noqa: E402
@@ -862,11 +863,17 @@ def test_natural_benchmark_summary_reports_paired_quality_and_physical_contrasts
     manifest_path = tmp_path / "natural-manifest.json"
     manifest_path.write_text(json.dumps(manifest))
     native_cell, native_raw, _causal = _raw_arm_cell(tmp_path)
+    native_records = [json.loads(line) for line in native_raw.read_text().splitlines()]
+    revisions = expected_record_revisions("LongBench-v2", manifest)
+    for row in native_records:
+        row["revisions"] = revisions
+    native_raw.write_text("".join(json.dumps(row) + "\n" for row in native_records))
     native_payload = json.loads(native_cell.read_text())
     native_payload["experiment_manifest"]["sha256"] = _digest(manifest_path)
     native_payload["model_snapshot_digest_set_sha256"] = manifest["model"][
         "snapshot_digest_set_sha256"
     ]
+    native_payload["raw_records"]["sha256"] = _digest(native_raw)
     native_cell.write_text(json.dumps(native_payload))
 
     fixed_raw = tmp_path / "fixed-records.jsonl"
@@ -908,6 +915,25 @@ def test_natural_benchmark_summary_reports_paired_quality_and_physical_contrasts
     assert result["paired_measurement_contrasts"]["hot_resident_bytes"][
         "paired_examples"
     ] == 2
+    assert result["audit"]["all_record_revisions_verified"] is True
+
+    fixed_records[0]["revisions"]["model_revision"] = "wrong-revision"
+    fixed_raw.write_text("".join(json.dumps(row) + "\n" for row in fixed_records))
+    fixed_payload["raw_records"]["sha256"] = _digest(fixed_raw)
+    fixed_cell.write_text(json.dumps(fixed_payload))
+    with pytest.raises(ValueError, match="Frozen record revisions drifted"):
+        summarize_benchmark(
+            benchmark="LongBench-v2",
+            manifest_path=manifest_path,
+            arm_artifacts={
+                "native-dense": native_cell,
+                "strongest-memory-matched-fixed": fixed_cell,
+            },
+            conditional_arms={
+                "fixed+pins": "incompatible",
+                "synthetic-qualified-calibrated+pins": "withheld-by-causal-gate",
+            },
+        )
 
 
 def test_natural_arm_audit_rejects_runner_digest_not_bound_to_commit(

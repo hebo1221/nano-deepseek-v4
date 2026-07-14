@@ -58,6 +58,62 @@ def _unit_interval_number(value: Any) -> bool:
     )
 
 
+def expected_record_revisions(
+    benchmark: str, manifest: dict[str, Any]
+) -> dict[str, str]:
+    contract = manifest["benchmarks"][benchmark]
+    model_revision = manifest["model"]["revision"]
+    if benchmark == "RULER":
+        upstream_revision = contract["upstream_revision"]
+        return {
+            "model_revision": model_revision,
+            "dataset_revision": upstream_revision,
+            "code_revision": upstream_revision,
+            "scorer_sha256": sha256(Path(__file__).with_name("run_p3_ruler_matrix.py")),
+            "official_scorer_sha256": contract["scorer"]["sha256"],
+        }
+    dataset_revision = contract["dataset"]["revision"]
+    if benchmark == "SCBench":
+        scorer_bundle = hashlib.sha256(
+            "\n".join(
+                sorted(
+                    [
+                        sha256(Path(__file__).with_name("p3_scbench_metrics.py")),
+                        sha256(Path(__file__).with_name("p3_scbench_official.py")),
+                        contract["rouge_metric"]["script_sha256"],
+                        *contract["upstream_code"]["files_sha256"].values(),
+                    ]
+                )
+            ).encode()
+        ).hexdigest()
+        return {
+            "model_revision": model_revision,
+            "dataset_revision": dataset_revision,
+            "code_revision": contract["upstream_code"]["revision"],
+            "scorer_sha256": scorer_bundle,
+            "rouge_revision": contract["rouge_metric"]["revision"],
+            "rouge_script_sha256": contract["rouge_metric"]["script_sha256"],
+        }
+    if benchmark == "LongMemEval":
+        scorer_digest = contract["upstream_code"]["files_sha256"][
+            "src/evaluation/evaluate_qa.py"
+        ]
+        code_revision = contract["upstream_code"]["revision"]
+    else:
+        scorer_digest = sha256(Path(__file__).with_name("p3_natural_metrics.py"))
+        code_revision = (
+            contract["upstream_code"]["revision"]
+            if benchmark == "LongBench-v2"
+            else f"dataset-readme@{dataset_revision}"
+        )
+    return {
+        "model_revision": model_revision,
+        "dataset_revision": dataset_revision,
+        "code_revision": code_revision,
+        "scorer_sha256": scorer_digest,
+    }
+
+
 def _dependency(metadata: Any, label: str) -> dict[str, str]:
     _require(isinstance(metadata, dict), f"Missing {label} dependency.")
     path = Path(metadata.get("path", ""))
@@ -258,6 +314,7 @@ def audit_arm(
     expected_examples: int,
     manifest_digest: str,
     allowed_failures: set[str],
+    expected_revisions: dict[str, str] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     artifact = json.loads(artifact_path.read_text())
     _require(
@@ -354,6 +411,11 @@ def audit_arm(
             f"Incomplete revision provenance: {identifier}",
         )
         assert isinstance(revisions, dict)
+        if expected_revisions is not None:
+            _require(
+                revisions == expected_revisions,
+                f"Frozen record revisions drifted: {identifier}",
+            )
         _require(isinstance(row.get("arm_config"), dict), f"Missing arm config: {identifier}")
         for metric in measurement_values:
             measurement_values[metric].append(row[metric])
@@ -491,6 +553,7 @@ def summarize_benchmark(
     _require(set(arm_artifacts) == set(required), "Required natural arm set drifted.")
     allowed_failures = set(manifest["common_protocol"]["failure_accounting"])
     expected = manifest["suite_audit"]["per_arm_minimum_accounted_examples"][benchmark]
+    expected_revisions = expected_record_revisions(benchmark, manifest)
     arms: dict[str, Any] = {}
     dependencies: list[dict[str, Any]] = []
     for arm in required:
@@ -501,6 +564,7 @@ def summarize_benchmark(
             expected_examples=expected,
             manifest_digest=manifest_digest,
             allowed_failures=allowed_failures,
+            expected_revisions=expected_revisions,
         )
         dependencies.append(dependency)
     causal = {row["causal_gate"]["sha256"] for row in dependencies}
@@ -552,6 +616,7 @@ def summarize_benchmark(
             "all_failure_accounting_complete": True,
             "all_required_arms_input_paired": True,
             "all_source_implementations_verified": True,
+            "all_record_revisions_verified": True,
             "raw_record_digest_set_sha256": hashlib.sha256(
                 "\n".join(
                     sorted(row["raw_record_digest_set_sha256"] for row in arms.values())
