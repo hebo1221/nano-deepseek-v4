@@ -39,6 +39,15 @@
       "paired_arms": 3,
       "examples_per_family_context_arm": 100
     },
+    "p3_natural_safety_qwen3_4b": {
+      "actual_model_generations": 7254,
+      "longsafety_generations": 6172,
+      "ifeval_generations_and_official_scores": 1082,
+      "paired_arms": 2,
+      "longsafety_source_examples": 1543,
+      "ifeval_prompts_per_arm": 541,
+      "official_longsafety_judge": "blocked_pending_explicit_paid_api_opt_in"
+    },
     "p4_reference": {
       "cells": 108,
       "warmups_per_cell": 5,

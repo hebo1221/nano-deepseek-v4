@@ -53,6 +53,7 @@ def test_p4_requires_full_natural_suite_not_ruler_only(tmp_path: Path) -> None:
                     "all_required_baseline_cells_terminal": True,
                     "all_failure_accounting_complete": True,
                     "safety_stress_terminal": True,
+                    "natural_safety_terminal": True,
                     "benchmarks_terminal": 5,
                     "minimum_protocol_examples_accounted_per_arm": 45_289,
                 },
@@ -63,6 +64,11 @@ def test_p4_requires_full_natural_suite_not_ruler_only(tmp_path: Path) -> None:
                 "supplemental_safety": {
                     "terminal": True,
                     "protected_prefix_physical_budget_verified": True,
+                },
+                "supplemental_natural_safety": {
+                    "terminal": True,
+                    "longsafety_official_judge_status": "blocked",
+                    "comparative_long_context_safety_claim_available": False,
                 },
             }
         )

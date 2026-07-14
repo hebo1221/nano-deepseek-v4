@@ -302,15 +302,70 @@ def _safety_summary(tmp_path: Path, manifest_path: Path) -> Path:
     return path
 
 
+def _natural_safety_summary(tmp_path: Path, manifest_path: Path) -> Path:
+    manifest = json.loads(manifest_path.read_text())
+    contract = manifest["suite_audit"]["natural_safety"]
+    safety_manifest = Path(contract["manifest"])
+    longsafety = tmp_path / "natural-safety-longsafety-child.json"
+    ifeval = tmp_path / "natural-safety-ifeval-child.json"
+    longsafety.write_text(json.dumps({"benchmark": "LongSafety"}))
+    ifeval.write_text(json.dumps({"benchmark": "IFEval"}))
+    path = tmp_path / "natural-safety-summary.json"
+    path.write_text(
+        json.dumps(
+            {
+                "experiment_id": "p3-natural-safety-suite-audit-v1",
+                "source": {"dirty": False},
+                "manifest": {
+                    "path": str(safety_manifest),
+                    "sha256": _digest(safety_manifest),
+                },
+                "audit": {
+                    "required_arms": contract["required_arms"],
+                    "longsafety_generation_terminal": True,
+                    "longsafety_input_pairing_verified": True,
+                    "longsafety_expected_generations_per_arm": contract[
+                        "longsafety_generations_per_arm"
+                    ],
+                    "longsafety_official_judge_status": contract[
+                        "longsafety_official_judge_status"
+                    ],
+                    "longsafety_safety_scores_reported": False,
+                    "ifeval_official_terminal": True,
+                    "ifeval_input_pairing_verified": True,
+                    "ifeval_expected_prompts_per_arm": contract["ifeval_prompts_per_arm"],
+                    "failure_accounting_complete": True,
+                    "comparative_long_context_safety_claim_available": contract[
+                        "comparative_long_context_safety_claim_available"
+                    ],
+                },
+                "longsafety": {
+                    "summary": {"path": str(longsafety), "sha256": _digest(longsafety)}
+                },
+                "ifeval": {"summary": {"path": str(ifeval), "sha256": _digest(ifeval)}},
+                "classification": "bounded-generation-and-control-result-with-paid-judge-blocker",
+                "claim_boundary": "compatible model only",
+            }
+        )
+    )
+    return path
+
+
 def test_natural_suite_audit_requires_all_examples_and_baselines(tmp_path: Path) -> None:
     root = Path(__file__).resolve().parents[1]
     manifest = root / "research/adaptive_v4_memory/manifests/p3-natural-suite-v1.json"
     paths = _natural_benchmark_summaries(tmp_path, manifest)
 
-    payload = summarize(manifest, paths, _safety_summary(tmp_path, manifest))
+    payload = summarize(
+        manifest,
+        paths,
+        _safety_summary(tmp_path, manifest),
+        _natural_safety_summary(tmp_path, manifest),
+    )
 
     assert payload["audit"]["benchmarks_terminal"] == 5
     assert payload["audit"]["safety_stress_terminal"] is True
+    assert payload["audit"]["natural_safety_terminal"] is True
     assert payload["supplemental_safety"]["examples_per_required_arm"] == 1200
     assert payload["audit"]["minimum_protocol_examples_accounted_per_arm"] == 45_289
     assert payload["audit"]["accounted_examples_by_required_arm"] == {
@@ -333,7 +388,12 @@ def test_natural_suite_audit_rejects_unaccounted_failure(tmp_path: Path) -> None
     paths["MRCR"].write_text(json.dumps(payload))
 
     with pytest.raises(ValueError, match="do not close"):
-        summarize(manifest, paths, _safety_summary(tmp_path, manifest))
+        summarize(
+            manifest,
+            paths,
+            _safety_summary(tmp_path, manifest),
+            _natural_safety_summary(tmp_path, manifest),
+        )
 
 
 def _raw_arm_cell(tmp_path: Path) -> tuple[Path, Path, Path]:
@@ -656,7 +716,12 @@ def test_natural_suite_audit_rejects_wrong_model_snapshot(tmp_path: Path) -> Non
     paths["SCBench"].write_text(json.dumps(payload))
 
     with pytest.raises(ValueError, match="does not match the frozen manifest"):
-        summarize(manifest, paths, _safety_summary(tmp_path, manifest))
+        summarize(
+            manifest,
+            paths,
+            _safety_summary(tmp_path, manifest),
+            _natural_safety_summary(tmp_path, manifest),
+        )
 
 
 def test_natural_suite_audit_rejects_mixed_fixed_baseline_selection(
@@ -683,7 +748,12 @@ def test_natural_suite_audit_rejects_mixed_fixed_baseline_selection(
     paths["MRCR"].write_text(json.dumps(payload))
 
     with pytest.raises(ValueError, match="different fixed baseline selections"):
-        summarize(manifest, paths, _safety_summary(tmp_path, manifest))
+        summarize(
+            manifest,
+            paths,
+            _safety_summary(tmp_path, manifest),
+            _natural_safety_summary(tmp_path, manifest),
+        )
 
 
 def test_natural_suite_audit_rejects_incomplete_safety_pairing(tmp_path: Path) -> None:
@@ -696,4 +766,9 @@ def test_natural_suite_audit_rejects_incomplete_safety_pairing(tmp_path: Path) -
     safety.write_text(json.dumps(payload))
 
     with pytest.raises(ValueError, match="coverage, pairing, or failure accounting"):
-        summarize(manifest, paths, safety)
+        summarize(
+            manifest,
+            paths,
+            safety,
+            _natural_safety_summary(tmp_path, manifest),
+        )

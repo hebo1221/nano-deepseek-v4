@@ -61,6 +61,8 @@ def _fixture(tmp_path: Path) -> tuple[Path, dict[str, Path]]:
             "arm": arm,
             "status": "terminal",
             "source": {"dirty": False},
+            "manifest": {"sha256": _digest(manifest)},
+            "asset_inventory": {"sha256": "e" * 64},
             "expected_generations": 2,
             "raw_records": {"path": str(records_path), "sha256": _digest(records_path)},
         }
@@ -81,6 +83,8 @@ def test_longsafety_generation_audit_is_paired_and_does_not_invent_scores(
     assert result["audit"] == {
         "generation_arms_terminal": True,
         "input_pairing_verified": True,
+        "generation_failure_accounting_complete": True,
+        "official_judge_status": "blocked",
         "expected_generations_per_arm": 2,
         "expected_generations_total": 4,
         "source_examples": 1,
@@ -106,4 +110,17 @@ def test_longsafety_generation_audit_rejects_cross_arm_prompt_drift(
     cells[ARMS[1]].write_text(json.dumps(cell))
 
     with pytest.raises(ValueError, match="not prompt/token paired"):
+        longsafety.summarize(manifest, cells)
+
+
+def test_longsafety_generation_audit_rejects_cell_manifest_drift(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manifest, cells = _fixture(tmp_path)
+    monkeypatch.setattr(longsafety, "validate_manifest", lambda _manifest: {"test": True})
+    cell = json.loads(cells[ARMS[0]].read_text())
+    cell["manifest"]["sha256"] = "0" * 64
+    cells[ARMS[0]].write_text(json.dumps(cell))
+
+    with pytest.raises(ValueError, match="generation provenance drifted"):
         longsafety.summarize(manifest, cells)

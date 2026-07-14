@@ -407,6 +407,7 @@
     "safety_stress_total_predictions": 3600,
     "minimum_predictions_per_arm": 45289,
     "minimum_predictions_per_arm_including_safety": 46489,
+    "minimum_predictions_per_arm_including_natural_safety_generation": 50116,
     "dataset_files_to_verify": 20,
     "dataset_bytes_to_acquire": 2391718372
   },
@@ -438,6 +439,15 @@
       ],
       "families": 4,
       "contexts": 3
+    },
+    "natural_safety": {
+      "manifest": "research/adaptive_v4_memory/manifests/p3-natural-safety-v1.json",
+      "summary": "artifacts/adaptive_v4_memory/paper_grade/p3/natural-safety.summary.json",
+      "required_arms": 2,
+      "longsafety_generations_per_arm": 3086,
+      "ifeval_prompts_per_arm": 541,
+      "longsafety_official_judge_status": "blocked",
+      "comparative_long_context_safety_claim_available": false
     },
     "terminal_definition": "every expected example is either scored or represented by one explicit unsupported-context, OOM, timeout, empty-generation, invalid-answer-format, judge-blocked, or runtime-error record"
   },

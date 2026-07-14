@@ -158,6 +158,13 @@ leakage rates, worst-slice reporting, and layer-level proof that pinning neither
 adds kept tokens nor increases resident KV bytes. This remains synthetic
 transfer evidence, not a comprehensive safety certification.
 
+The natural-safety extension adds 7,254 paired Qwen3-4B generations: 6,172
+LongSafety front/end placements and 1,082 IFEval prompts across native and the
+strongest memory-matched fixed arm. IFEval is scored with its pinned official
+deterministic implementation. LongSafety generations are digest-bound and
+failure-accounted, but its official three-agent paid judge is blocked pending
+explicit opt-in, so no comparative LongSafety safety score is claimed.
+
 The suite RULER evidence is regenerated separately with the pinned Qwen3-4B
 tokenizer at 8K/16K/32K/64K/128K, then executed as 32,500 paired records per
 required arm. The earlier Qwen3-1.7B RULER matrix remains the leakage-safe
@@ -219,7 +226,8 @@ After all audits finish, the strict P5 package can be regenerated with:
 
 The command requires a clean tree and complete 4,500-shard P2 core,
 9,000-shard causal, 253,500-prediction small-model RULER, five-benchmark natural,
-3,600-prediction safety-retention, 108-cell reference-system, and separate
+3,600-prediction safety-retention, 7,254-generation natural-safety, 108-cell
+reference-system, and separate
 108-cell actual-concurrency production audits. It writes digest-indexed CSV
 tables and a paper-style report under
 `artifacts/adaptive_v4_memory/paper_grade/p5/`; missing evidence is never

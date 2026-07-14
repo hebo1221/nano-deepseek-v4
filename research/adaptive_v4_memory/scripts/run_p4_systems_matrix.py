@@ -104,6 +104,7 @@ def require_p3_audit(path: Path) -> dict[str, Any]:
         or audit.get("all_required_baseline_cells_terminal") is not True
         or audit.get("all_failure_accounting_complete") is not True
         or audit.get("safety_stress_terminal") is not True
+        or audit.get("natural_safety_terminal") is not True
         or audit.get("benchmarks_terminal") != len(P3_BENCHMARKS)
         or audit.get("minimum_protocol_examples_accounted_per_arm") != 45_289
         or set(benchmarks) != set(P3_BENCHMARKS)
@@ -112,6 +113,15 @@ def require_p3_audit(path: Path) -> dict[str, Any]:
             "protected_prefix_physical_budget_verified"
         )
         is not True
+        or payload.get("supplemental_natural_safety", {}).get("terminal") is not True
+        or payload.get("supplemental_natural_safety", {}).get(
+            "longsafety_official_judge_status"
+        )
+        != "blocked"
+        or payload.get("supplemental_natural_safety", {}).get(
+            "comparative_long_context_safety_claim_available"
+        )
+        is not False
         or any(
             benchmarks[name].get("terminal") is not True
             or benchmarks[name].get("native_and_fixed_terminal") is not True

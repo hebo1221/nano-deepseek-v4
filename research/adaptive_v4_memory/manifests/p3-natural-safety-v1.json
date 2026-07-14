@@ -162,6 +162,8 @@
     "generation_runner": "research/adaptive_v4_memory/scripts/run_p3_natural_safety_generation.py",
     "ifeval_official_scorer": "research/adaptive_v4_memory/scripts/score_p3_ifeval.py",
     "longsafety_generation_audit": "research/adaptive_v4_memory/scripts/summarize_p3_longsafety.py",
+    "suite_summary": "research/adaptive_v4_memory/scripts/summarize_p3_natural_safety_suite.py",
+    "suite_audit_output": "artifacts/adaptive_v4_memory/paper_grade/p3/natural-safety.summary.json",
     "asset_inventory": "artifacts/adaptive_v4_memory/paper_grade/p3/natural-safety/assets/inventory.json",
     "default_judge_mode": "blocked"
   },

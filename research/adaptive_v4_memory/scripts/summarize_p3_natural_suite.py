@@ -244,10 +244,71 @@ def audit_safety_stress(
     }
 
 
+def audit_natural_safety(
+    *, path: Path, manifest: dict[str, Any], model_snapshot_digest: str
+) -> dict[str, Any]:
+    _require(path.is_file(), f"Missing natural safety summary: {path}")
+    payload = json.loads(path.read_text())
+    _require(
+        payload.get("experiment_id") == "p3-natural-safety-suite-audit-v1"
+        and payload.get("source", {}).get("dirty") is False,
+        "Natural safety suite audit is missing, dirty, or has the wrong id.",
+    )
+    contract = manifest["suite_audit"]["natural_safety"]
+    safety_manifest_path = Path(contract["manifest"])
+    _require(safety_manifest_path.is_file(), "Missing frozen natural safety manifest.")
+    safety_manifest = json.loads(safety_manifest_path.read_text())
+    _require(
+        safety_manifest.get("model", {}).get("snapshot_digest_set_sha256")
+        == model_snapshot_digest
+        and payload.get("manifest", {}).get("path") == str(safety_manifest_path)
+        and payload.get("manifest", {}).get("sha256") == sha256(safety_manifest_path),
+        "Natural safety manifest or model dependency drifted.",
+    )
+    audit = payload.get("audit", {})
+    _require(
+        audit.get("required_arms") == contract["required_arms"]
+        and audit.get("longsafety_generation_terminal") is True
+        and audit.get("longsafety_input_pairing_verified") is True
+        and audit.get("longsafety_expected_generations_per_arm")
+        == contract["longsafety_generations_per_arm"]
+        and audit.get("longsafety_official_judge_status")
+        == contract["longsafety_official_judge_status"]
+        and audit.get("longsafety_safety_scores_reported") is False
+        and audit.get("ifeval_official_terminal") is True
+        and audit.get("ifeval_input_pairing_verified") is True
+        and audit.get("ifeval_expected_prompts_per_arm")
+        == contract["ifeval_prompts_per_arm"]
+        and audit.get("failure_accounting_complete") is True
+        and audit.get("comparative_long_context_safety_claim_available")
+        is contract["comparative_long_context_safety_claim_available"],
+        "Natural safety coverage or claim boundary is incomplete.",
+    )
+    for section in ("longsafety", "ifeval"):
+        artifact = payload.get(section, {}).get("summary", {})
+        artifact_path = Path(artifact.get("path", ""))
+        _require(
+            artifact_path.is_file() and artifact.get("sha256") == sha256(artifact_path),
+            f"Natural safety child summary drifted: {section}.",
+        )
+    return {
+        "terminal": True,
+        "required_arms": contract["required_arms"],
+        "longsafety_generations_per_arm": contract["longsafety_generations_per_arm"],
+        "ifeval_prompts_per_arm": contract["ifeval_prompts_per_arm"],
+        "longsafety_official_judge_status": audit["longsafety_official_judge_status"],
+        "comparative_long_context_safety_claim_available": False,
+        "summary": {"path": str(path), "sha256": sha256(path)},
+        "classification": payload.get("classification"),
+        "claim_boundary": payload.get("claim_boundary"),
+    }
+
+
 def summarize(
     manifest_path: Path,
     summary_paths: dict[str, Path],
     safety_summary_path: Path,
+    natural_safety_summary_path: Path,
 ) -> dict[str, Any]:
     manifest = json.loads(manifest_path.read_text())
     _require(
@@ -298,6 +359,11 @@ def summarize(
         natural_manifest_digest=manifest_digest,
         model_snapshot_digest=model_snapshot_digest,
     )
+    natural_safety = audit_natural_safety(
+        path=natural_safety_summary_path,
+        manifest=manifest,
+        model_snapshot_digest=model_snapshot_digest,
+    )
     totals = {
         arm: sum(
             benchmarks[name]["required_arms"][arm]["expected_examples"]
@@ -328,6 +394,7 @@ def summarize(
             "all_required_baseline_cells_terminal": True,
             "all_failure_accounting_complete": True,
             "safety_stress_terminal": True,
+            "natural_safety_terminal": True,
             "benchmarks_terminal": len(benchmarks),
             "minimum_protocol_examples_accounted_per_arm": minimum,
             "accounted_examples_by_required_arm": totals,
@@ -340,6 +407,7 @@ def summarize(
         },
         "benchmarks": benchmarks,
         "supplemental_safety": safety,
+        "supplemental_natural_safety": natural_safety,
         "claim_boundary": (
             "Five-benchmark and synthetic safety-retention evidence on one pinned compatible "
             "Qwen3 model. The primary "
@@ -367,7 +435,15 @@ def main() -> None:
         name: Path(path) for name, path in manifest["suite_audit"]["benchmark_summaries"].items()
     }
     safety_summary_path = Path(manifest["suite_audit"]["safety_stress"]["summary"])
-    payload = summarize(args.manifest, summary_paths, safety_summary_path)
+    natural_safety_summary_path = Path(
+        manifest["suite_audit"]["natural_safety"]["summary"]
+    )
+    payload = summarize(
+        args.manifest,
+        summary_paths,
+        safety_summary_path,
+        natural_safety_summary_path,
+    )
     commit = subprocess.run(
         ["git", "rev-parse", "HEAD"], check=True, capture_output=True, text=True
     ).stdout.strip()

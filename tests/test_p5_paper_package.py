@@ -24,6 +24,47 @@ def _safety_evidence() -> dict[str, object]:
     }
 
 
+def _ifeval_evidence() -> dict[str, object]:
+    return {
+        "audit": {
+            "required_arms_terminal": True,
+            "input_pairing_verified": True,
+            "official_scoring_accounted": True,
+            "expected_prompts_per_arm": 541,
+        }
+    }
+
+
+def _natural_safety_evidence() -> dict[str, object]:
+    return {
+        "audit": {
+            "required_arms": 2,
+            "longsafety_generation_terminal": True,
+            "longsafety_input_pairing_verified": True,
+            "longsafety_expected_generations_per_arm": 3_086,
+            "longsafety_official_judge_status": "blocked",
+            "longsafety_safety_scores_reported": False,
+            "ifeval_official_terminal": True,
+            "ifeval_input_pairing_verified": True,
+            "ifeval_expected_prompts_per_arm": 541,
+            "failure_accounting_complete": True,
+            "comparative_long_context_safety_claim_available": False,
+        }
+    }
+
+
+def _longsafety_evidence(judge_status: str = "blocked") -> dict[str, object]:
+    return {
+        "audit": {
+            "generation_arms_terminal": True,
+            "input_pairing_verified": True,
+            "generation_failure_accounting_complete": True,
+            "official_judge_status": judge_status,
+            "expected_generations_total": 6_172,
+        }
+    }
+
+
 def test_p5_manifest_requires_every_digest_bound_stage() -> None:
     root = Path(__file__).resolve().parents[1]
     manifest = json.loads(
@@ -36,6 +77,9 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
         "p3_ruler",
         "p3_natural",
         "p3_safety",
+        "p3_natural_safety",
+        "p3_ifeval",
+        "p3_longsafety",
         "p4_reference_systems",
         "p4_production_systems",
     }
@@ -78,11 +122,15 @@ def test_p5_classification_preserves_claim_boundaries() -> None:
                 "all_required_baseline_cells_terminal": True,
                 "all_failure_accounting_complete": True,
                 "safety_stress_terminal": True,
+                "natural_safety_terminal": True,
                 "benchmarks_terminal": 5,
                 "minimum_protocol_examples_accounted_per_arm": 45_289,
             }
         },
         _safety_evidence(),
+        _natural_safety_evidence(),
+        _ifeval_evidence(),
+        _longsafety_evidence(),
         {
             "audit": {
                 "terminal_cells": 108,
@@ -111,6 +159,9 @@ def test_p5_classification_preserves_claim_boundaries() -> None:
         "p3_ruler": "bounded-result",
         "p3_natural": "bounded-result",
         "p3_safety": "bounded-result",
+        "p3_natural_safety": "bounded-result",
+        "p3_ifeval": "bounded-result",
+        "p3_longsafety": "unverified",
         "p4_reference_systems": "bounded-result",
         "p4_production_systems": "bounded-result",
         "production_runtime_blocker": "unverified",
@@ -129,11 +180,15 @@ def test_p5_success_requires_full_system_coverage() -> None:
                 "all_required_baseline_cells_terminal": True,
                 "all_failure_accounting_complete": True,
                 "safety_stress_terminal": True,
+                "natural_safety_terminal": True,
                 "benchmarks_terminal": 5,
                 "minimum_protocol_examples_accounted_per_arm": 45_289,
             }
         },
         _safety_evidence(),
+        _natural_safety_evidence(),
+        _ifeval_evidence(),
+        _longsafety_evidence(),
         {
             "audit": {
                 "terminal_cells": 108,
@@ -173,11 +228,15 @@ def test_p5_marks_all_failed_production_coverage_unverified() -> None:
                 "all_required_baseline_cells_terminal": True,
                 "all_failure_accounting_complete": True,
                 "safety_stress_terminal": True,
+                "natural_safety_terminal": True,
                 "benchmarks_terminal": 5,
                 "minimum_protocol_examples_accounted_per_arm": 45_289,
             }
         },
         _safety_evidence(),
+        _natural_safety_evidence(),
+        _ifeval_evidence(),
+        _longsafety_evidence(),
         {"audit": {"terminal_cells": 108}},
         {
             "audit": {

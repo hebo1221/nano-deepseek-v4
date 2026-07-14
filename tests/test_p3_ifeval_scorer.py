@@ -1,13 +1,24 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 SCRIPTS = Path(__file__).resolve().parents[1] / "research/adaptive_v4_memory/scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-from score_p3_ifeval import aggregate, paired_effect, score_arm  # noqa: E402
+from score_p3_ifeval import (  # noqa: E402
+    _records as load_cell_records,
+)
+from score_p3_ifeval import (  # noqa: E402
+    aggregate,
+    paired_effect,
+    score_arm,
+)
 
 
 class FakeOfficial:
@@ -95,3 +106,49 @@ def test_ifeval_paired_effect_preserves_prompt_pairing() -> None:
     assert result["paired_prompts"] == 2
     assert result["mean_difference"] == 0.5
     assert (result["wins"], result["ties"], result["losses"]) == (1, 1, 0)
+
+
+def test_ifeval_main_contract_exposes_p5_audit_fields() -> None:
+    source = (SCRIPTS / "score_p3_ifeval.py").read_text()
+    for field in (
+        "required_arms_terminal",
+        "input_pairing_verified",
+        "official_scoring_accounted",
+        "expected_prompts_per_arm",
+    ):
+        assert f'"{field}"' in source
+
+
+def test_ifeval_cell_rejects_record_arm_drift(tmp_path: Path) -> None:
+    records = tmp_path / "records.jsonl"
+    records.write_text(
+        '{"source_id":1,"benchmark":"IFEval","arm":"wrong",'
+        f'"raw_prompt_sha256":"{"a" * 64}",'
+        f'"input_token_ids_sha256":"{"b" * 64}"}}\n'
+    )
+    digest = hashlib.sha256(records.read_bytes()).hexdigest()
+    cell = tmp_path / "cell.json"
+    cell.write_text(
+        json.dumps(
+            {
+                "experiment_id": "p3-natural-safety-generation-arm-cell-v1",
+                "benchmark": "IFEval",
+                "arm": "native-dense",
+                "status": "terminal",
+                "source": {"dirty": False},
+                "expected_generations": 1,
+                "manifest": {"sha256": "c" * 64},
+                "asset_inventory": {"sha256": "d" * 64},
+                "raw_records": {"path": str(records), "sha256": digest},
+            }
+        )
+    )
+
+    with pytest.raises(ValueError, match="record provenance drifted"):
+        load_cell_records(
+            cell,
+            "native-dense",
+            1,
+            manifest_digest="c" * 64,
+            inventory_digest="d" * 64,
+        )

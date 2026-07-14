@@ -25,6 +25,14 @@ def _require(condition: bool, message: str) -> None:
         raise ValueError(message)
 
 
+def _is_sha256(value: Any) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) == 64
+        and all(character in "0123456789abcdef" for character in value)
+    )
+
+
 def score_arm(
     *, inputs: list[dict[str, Any]], records: list[dict[str, Any]], official: Any
 ) -> list[dict[str, Any]]:
@@ -159,7 +167,14 @@ def paired_effect(
     }
 
 
-def _records(cell_path: Path, arm: str, expected: int) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+def _records(
+    cell_path: Path,
+    arm: str,
+    expected: int,
+    *,
+    manifest_digest: str,
+    inventory_digest: str,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     cell = json.loads(cell_path.read_text())
     _require(
         cell.get("experiment_id") == "p3-natural-safety-generation-arm-cell-v1"
@@ -170,10 +185,25 @@ def _records(cell_path: Path, arm: str, expected: int) -> tuple[list[dict[str, A
         and cell.get("expected_generations") == expected,
         f"IFEval generation cell is invalid: {arm}.",
     )
+    _require(
+        cell.get("manifest", {}).get("sha256") == manifest_digest
+        and cell.get("asset_inventory", {}).get("sha256") == inventory_digest,
+        f"IFEval generation provenance drifted: {arm}.",
+    )
     path = Path(cell.get("raw_records", {}).get("path", ""))
     _require(path.is_file() and cell["raw_records"]["sha256"] == sha256(path), "IFEval records drifted.")
     records = [json.loads(line) for line in path.read_text().splitlines() if line]
     _require(len(records) == expected, f"IFEval record count drifted: {arm}.")
+    _require(
+        all(
+            record.get("benchmark") == "IFEval"
+            and record.get("arm") == arm
+            and _is_sha256(record.get("raw_prompt_sha256"))
+            and _is_sha256(record.get("input_token_ids_sha256"))
+            for record in records
+        ),
+        f"IFEval record provenance drifted: {arm}.",
+    )
     return records, cell
 
 
@@ -234,9 +264,13 @@ def main() -> None:
     contract = manifest["benchmarks"]["IFEval"]
     expected = contract["protocol"]["expected_prompts_per_arm"]
     inventory = json.loads(args.asset_inventory.read_text())
+    manifest_digest = hashlib.sha256(raw_manifest).hexdigest()
+    inventory_digest = sha256(args.asset_inventory)
     _require(
         inventory.get("experiment_id") == "p3-natural-safety-asset-inventory-v1"
-        and inventory.get("manifest", {}).get("sha256") == hashlib.sha256(raw_manifest).hexdigest(),
+        and inventory.get("status") == "verified"
+        and inventory.get("source", {}).get("dirty") is False
+        and inventory.get("manifest", {}).get("sha256") == manifest_digest,
         "IFEval asset inventory drifted.",
     )
     dataset = inventory["benchmarks"]["IFEval"]["dataset"]
@@ -256,7 +290,13 @@ def main() -> None:
     generation: dict[str, list[dict[str, Any]]] = {}
     cells: dict[str, Any] = {}
     for arm in ARMS:
-        generation[arm], cells[arm] = _records(args.generation_root / arm / "cell.json", arm, expected)
+        generation[arm], cells[arm] = _records(
+            args.generation_root / arm / "cell.json",
+            arm,
+            expected,
+            manifest_digest=manifest_digest,
+            inventory_digest=inventory_digest,
+        )
     _require(
         all(
             generation[ARMS[0]][index]["source_id"] == generation[ARMS[1]][index]["source_id"]
@@ -291,16 +331,22 @@ def main() -> None:
         },
         "manifest": {
             "path": str(args.manifest),
-            "sha256": hashlib.sha256(raw_manifest).hexdigest(),
+            "sha256": manifest_digest,
             "validation": validation,
         },
-        "asset_inventory": {"path": str(args.asset_inventory), "sha256": sha256(args.asset_inventory)},
+        "asset_inventory": {"path": str(args.asset_inventory), "sha256": inventory_digest},
         "generation_cells": {
             arm: {"path": str(args.generation_root / arm / "cell.json"), "sha256": sha256(args.generation_root / arm / "cell.json")}
             for arm in ARMS
         },
         "official_source_revision": contract["upstream_code"]["revision"],
         "input_pairing_verified": True,
+        "audit": {
+            "required_arms_terminal": True,
+            "input_pairing_verified": True,
+            "official_scoring_accounted": True,
+            "expected_prompts_per_arm": expected,
+        },
         "arms": {
             arm: {"metrics": aggregate(scored[arm]), "raw_official_results": raw_outputs[arm]}
             for arm in ARMS

@@ -20,8 +20,21 @@ def _require(condition: bool, message: str) -> None:
         raise ValueError(message)
 
 
+def _is_sha256(value: Any) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) == 64
+        and all(character in "0123456789abcdef" for character in value)
+    )
+
+
 def audit_arm(
-    *, arm: str, cell_path: Path, expected: int, failures: set[str]
+    *,
+    arm: str,
+    cell_path: Path,
+    expected: int,
+    failures: set[str],
+    manifest_digest: str,
 ) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
     cell = json.loads(cell_path.read_text())
     _require(
@@ -32,6 +45,12 @@ def audit_arm(
         and cell.get("source", {}).get("dirty") is False
         and cell.get("expected_generations") == expected,
         f"LongSafety generation cell is invalid: {arm}.",
+    )
+    inventory_digest = cell.get("asset_inventory", {}).get("sha256")
+    _require(
+        cell.get("manifest", {}).get("sha256") == manifest_digest
+        and _is_sha256(inventory_digest),
+        f"LongSafety generation provenance drifted: {arm}.",
     )
     records_path = Path(cell.get("raw_records", {}).get("path", ""))
     _require(
@@ -57,8 +76,10 @@ def audit_arm(
             and isinstance(metadata, dict)
             and isinstance(metadata.get("safety_type"), str)
             and isinstance(metadata.get("task_type"), str)
-            and isinstance(record.get("raw_prompt_sha256"), str)
-            and isinstance(record.get("input_token_ids_sha256"), str),
+            and record.get("benchmark") == "LongSafety"
+            and record.get("arm") == arm
+            and _is_sha256(record.get("raw_prompt_sha256"))
+            and _is_sha256(record.get("input_token_ids_sha256")),
             f"LongSafety record coordinates drifted: {identifier}.",
         )
         assert isinstance(identifier, str) and isinstance(source_id, int)
@@ -107,6 +128,7 @@ def audit_arm(
             "failures_by_type": dict(sorted(failures_by_type.items())),
             "prompt_positions": list(POSITIONS),
             "source_examples": len(source_positions),
+            "asset_inventory_sha256": inventory_digest,
             "slices": slices,
             "raw_cell": {"path": str(cell_path), "sha256": sha256(cell_path)},
         },
@@ -117,6 +139,7 @@ def audit_arm(
 def summarize(manifest_path: Path, arm_paths: dict[str, Path]) -> dict[str, Any]:
     manifest_bytes = manifest_path.read_bytes()
     manifest = json.loads(manifest_bytes)
+    manifest_digest = hashlib.sha256(manifest_bytes).hexdigest()
     validation = validate_manifest(manifest)
     contract = manifest["benchmarks"]["LongSafety"]
     expected = contract["prompt_protocol"]["expected_predictions_per_arm"]
@@ -126,8 +149,16 @@ def summarize(manifest_path: Path, arm_paths: dict[str, Path]) -> dict[str, Any]
     failures = set(manifest["failure_accounting"])
     for arm in ARMS:
         arms[arm], records[arm] = audit_arm(
-            arm=arm, cell_path=arm_paths[arm], expected=expected, failures=failures
+            arm=arm,
+            cell_path=arm_paths[arm],
+            expected=expected,
+            failures=failures,
+            manifest_digest=manifest_digest,
         )
+    _require(
+        len({arms[arm]["asset_inventory_sha256"] for arm in ARMS}) == 1,
+        "LongSafety generation asset inventories diverged.",
+    )
     _require(set(records[ARMS[0]]) == set(records[ARMS[1]]), "LongSafety identities diverged.")
     _require(
         all(
@@ -146,12 +177,14 @@ def summarize(manifest_path: Path, arm_paths: dict[str, Path]) -> dict[str, Any]
         "experiment_id": "p3-natural-safety-longsafety-generation-audit-v1",
         "manifest": {
             "path": str(manifest_path),
-            "sha256": hashlib.sha256(manifest_bytes).hexdigest(),
+            "sha256": manifest_digest,
             "validation": validation,
         },
         "audit": {
             "generation_arms_terminal": True,
             "input_pairing_verified": True,
+            "generation_failure_accounting_complete": True,
+            "official_judge_status": "blocked",
             "expected_generations_per_arm": expected,
             "expected_generations_total": expected * len(ARMS),
             "source_examples": source_examples,

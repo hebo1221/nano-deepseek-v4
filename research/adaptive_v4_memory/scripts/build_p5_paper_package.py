@@ -63,6 +63,9 @@ def classify_evidence(
     p3_ruler: dict[str, Any],
     p3_natural: dict[str, Any],
     p3_safety: dict[str, Any],
+    p3_natural_safety: dict[str, Any],
+    p3_ifeval: dict[str, Any],
+    p3_longsafety: dict[str, Any],
     p4_reference_systems: dict[str, Any],
     p4_production_systems: dict[str, Any],
 ) -> dict[str, str]:
@@ -77,6 +80,7 @@ def classify_evidence(
         and natural_audit.get("all_required_baseline_cells_terminal") is True
         and natural_audit.get("all_failure_accounting_complete") is True
         and natural_audit.get("safety_stress_terminal") is True
+        and natural_audit.get("natural_safety_terminal") is True
         and natural_audit.get("benchmarks_terminal") == 5
         and natural_audit.get("minimum_protocol_examples_accounted_per_arm") == 45_289
     )
@@ -89,6 +93,36 @@ def classify_evidence(
         and safety_audit.get("examples_accounted_per_arm") == 1_200
         and safety_audit.get("families_terminal") == 4
         and safety_audit.get("contexts_terminal") == 3
+    )
+    natural_safety_audit = p3_natural_safety["audit"]
+    natural_safety_complete = (
+        natural_safety_audit.get("required_arms") == 2
+        and natural_safety_audit.get("longsafety_generation_terminal") is True
+        and natural_safety_audit.get("longsafety_input_pairing_verified") is True
+        and natural_safety_audit.get("longsafety_expected_generations_per_arm") == 3_086
+        and natural_safety_audit.get("longsafety_official_judge_status") == "blocked"
+        and natural_safety_audit.get("longsafety_safety_scores_reported") is False
+        and natural_safety_audit.get("ifeval_official_terminal") is True
+        and natural_safety_audit.get("ifeval_input_pairing_verified") is True
+        and natural_safety_audit.get("ifeval_expected_prompts_per_arm") == 541
+        and natural_safety_audit.get("failure_accounting_complete") is True
+        and natural_safety_audit.get("comparative_long_context_safety_claim_available")
+        is False
+    )
+    ifeval_audit = p3_ifeval["audit"]
+    ifeval_complete = (
+        ifeval_audit.get("required_arms_terminal") is True
+        and ifeval_audit.get("input_pairing_verified") is True
+        and ifeval_audit.get("official_scoring_accounted") is True
+        and ifeval_audit.get("expected_prompts_per_arm") == 541
+    )
+    longsafety_audit = p3_longsafety["audit"]
+    longsafety_judged = (
+        longsafety_audit.get("generation_arms_terminal") is True
+        and longsafety_audit.get("input_pairing_verified") is True
+        and longsafety_audit.get("generation_failure_accounting_complete") is True
+        and longsafety_audit.get("expected_generations_total") == 6_172
+        and longsafety_audit.get("official_judge_status") == "complete"
     )
     reference_audit = p4_reference_systems["audit"]
     reference_complete = reference_audit.get("terminal_cells") == 108
@@ -118,6 +152,11 @@ def classify_evidence(
         "p3_ruler": "bounded-result" if p3_complete else "unverified",
         "p3_natural": "bounded-result" if natural_complete else "unverified",
         "p3_safety": "bounded-result" if safety_complete else "unverified",
+        "p3_natural_safety": (
+            "bounded-result" if natural_safety_complete else "unverified"
+        ),
+        "p3_ifeval": "bounded-result" if ifeval_complete else "unverified",
+        "p3_longsafety": "bounded-result" if longsafety_judged else "unverified",
         "p4_reference_systems": "bounded-result" if reference_complete else "unverified",
         "p4_production_systems": production_class,
         "production_runtime_blocker": "unverified",
@@ -236,6 +275,9 @@ def _report(
     p3_ruler: dict[str, Any],
     p3_natural: dict[str, Any],
     p3_safety: dict[str, Any],
+    p3_natural_safety: dict[str, Any],
+    p3_ifeval: dict[str, Any],
+    p3_longsafety: dict[str, Any],
     p4_reference_systems: dict[str, Any],
     p4_production_systems: dict[str, Any],
     inputs: list[dict[str, Any]],
@@ -273,6 +315,14 @@ mechanical and deliberately narrower than the motivating hypothesis.
 - P3 safety stress: {p3_safety["audit"]["examples_accounted_per_arm"]:,} examples per arm,
   {p3_safety["audit"]["families_terminal"]} families, and
   {p3_safety["audit"]["contexts_terminal"]} context lengths with paired inputs.
+- P3 natural safety suite: {p3_natural_safety["audit"]["required_arms"]} paired arms;
+  LongSafety generation and IFEval official scoring are terminal, while the paid
+  LongSafety judge remains **{p3_natural_safety["audit"]["longsafety_official_judge_status"]}**.
+- P3 IFEval control: {p3_ifeval["audit"]["expected_prompts_per_arm"]:,} officially scored
+  prompts per required arm.
+- P3 LongSafety: {p3_longsafety["audit"]["expected_generations_total"]:,} digest-bound
+  generations; official paid judge status is **{p3_longsafety["audit"]["official_judge_status"]}**,
+  so no comparative LongSafety safety score is claimed.
 - P4 reference systems: {p4_reference["terminal_cells"]} terminal serial-interleaved cells,
   {p4_reference["complete_cells"]} complete, {p4_reference["partial_cells"]} partial, and
   {p4_reference["failed_cells"]} failed.
@@ -322,6 +372,9 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         loaded["p3_ruler"],
         loaded["p3_natural"],
         loaded["p3_safety"],
+        loaded["p3_natural_safety"],
+        loaded["p3_ifeval"],
+        loaded["p3_longsafety"],
         loaded["p4_reference_systems"],
         loaded["p4_production_systems"],
     )
@@ -383,6 +436,9 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         p3_ruler=loaded["p3_ruler"],
         p3_natural=loaded["p3_natural"],
         p3_safety=loaded["p3_safety"],
+        p3_natural_safety=loaded["p3_natural_safety"],
+        p3_ifeval=loaded["p3_ifeval"],
+        p3_longsafety=loaded["p3_longsafety"],
         p4_reference_systems=loaded["p4_reference_systems"],
         p4_production_systems=loaded["p4_production_systems"],
         inputs=inputs,

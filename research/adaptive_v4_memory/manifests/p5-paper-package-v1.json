@@ -39,6 +39,44 @@
         "contexts_terminal": 3
       }
     },
+    "p3_natural_safety": {
+      "path": "artifacts/adaptive_v4_memory/paper_grade/p3/natural-safety.summary.json",
+      "experiment_id": "p3-natural-safety-suite-audit-v1",
+      "required_audit": {
+        "required_arms": 2,
+        "longsafety_generation_terminal": true,
+        "longsafety_input_pairing_verified": true,
+        "longsafety_expected_generations_per_arm": 3086,
+        "longsafety_official_judge_status": "blocked",
+        "longsafety_safety_scores_reported": false,
+        "ifeval_official_terminal": true,
+        "ifeval_input_pairing_verified": true,
+        "ifeval_expected_prompts_per_arm": 541,
+        "failure_accounting_complete": true,
+        "comparative_long_context_safety_claim_available": false
+      }
+    },
+    "p3_ifeval": {
+      "path": "artifacts/adaptive_v4_memory/paper_grade/p3/natural-safety/ifeval.summary.json",
+      "experiment_id": "p3-natural-safety-ifeval-official-audit-v1",
+      "required_audit": {
+        "required_arms_terminal": true,
+        "input_pairing_verified": true,
+        "official_scoring_accounted": true,
+        "expected_prompts_per_arm": 541
+      }
+    },
+    "p3_longsafety": {
+      "path": "artifacts/adaptive_v4_memory/paper_grade/p3/natural-safety/longsafety.summary.json",
+      "experiment_id": "p3-natural-safety-longsafety-generation-audit-v1",
+      "required_audit": {
+        "generation_arms_terminal": true,
+        "input_pairing_verified": true,
+        "generation_failure_accounting_complete": true,
+        "official_judge_status": "blocked",
+        "expected_generations_total": 6172
+      }
+    },
     "p4_reference_systems": {
       "path": "artifacts/adaptive_v4_memory/paper_grade/p4/reference-systems.summary.json",
       "experiment_id": "p4-reference-systems-matrix-audit-v1",
@@ -66,6 +104,7 @@
     "p3_ruler": "research/adaptive_v4_memory/manifests/p3-ruler-qwen3-1.7b-v1.json",
     "natural_suite": "research/adaptive_v4_memory/manifests/p3-natural-suite-v1.json",
     "safety_stress": "research/adaptive_v4_memory/manifests/p3-safety-stress-v1.json",
+    "natural_safety": "research/adaptive_v4_memory/manifests/p3-natural-safety-v1.json",
     "p4_reference_systems": "research/adaptive_v4_memory/manifests/p4-reference-systems-matrix-v1.json",
     "p4_production_systems": "research/adaptive_v4_memory/manifests/p4-production-systems-matrix-v1.json",
     "official_deepseek_v4": "research/adaptive_v4_memory/manifests/p3-flashmemory-deepseek-v4-v1.json",
