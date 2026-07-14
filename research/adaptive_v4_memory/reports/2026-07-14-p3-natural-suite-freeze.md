@@ -3,6 +3,9 @@
 Status: amended and frozen before execution. Exact-revision snapshot verification
 corrected transcription errors in the RULER scorer and tokenizer digests before
 any natural prediction; the amendments are recorded in the authoritative manifest.
+Only the already frozen model revision was prefetched and hash-verified. Benchmark
+data/source acquisition, baseline selection, generated datasets, and inference
+remain blocked on the P2 causal sequence gate.
 
 ## Outcome
 

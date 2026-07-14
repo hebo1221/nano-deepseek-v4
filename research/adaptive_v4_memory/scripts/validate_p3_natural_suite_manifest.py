@@ -74,10 +74,11 @@ def validate_manifest(payload: dict[str, Any]) -> dict[str, Any]:
     amendments = payload.get("amendments", [])
     if (
         not isinstance(amendments, list)
-        or len(amendments) != 2
+        or len(amendments) != 3
         or "RULER scorer SHA-256" not in amendments[0].get("change", "")
         or "tokenizer.json SHA-256" not in amendments[1].get("change", "")
-        or any("no P3 natural prediction had run" not in row.get("reason", "") for row in amendments)
+        or "immutable model revision" not in amendments[2].get("change", "")
+        or "no model inference" not in amendments[2].get("reason", "")
     ):
         raise ValueError("Natural-suite pre-execution correction record drifted.")
     if tuple(payload.get("execution_order", ())) != EXPECTED_ORDER:
@@ -118,6 +119,13 @@ def validate_manifest(payload: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("P4 must remain gated on both compatible natural baselines.")
     if "judge-blocked" not in payload["common_protocol"]["failure_accounting"]:
         raise ValueError("Natural failure accounting must retain blocked official judges.")
+    sequence_policy = payload.get("sequence_gate", {}).get("policy", "")
+    if (
+        "prefetched and cryptographically verified without inference" not in sequence_policy
+        or "before benchmark dataset/source acquisition" not in sequence_policy
+        or "any prediction" not in sequence_policy
+    ):
+        raise ValueError("Natural prefetch and execution sequence boundary drifted.")
     conditional_rule = payload["common_protocol"]["conditional_arm_rule"]
     if (
         "architecture-preserving port" not in conditional_rule

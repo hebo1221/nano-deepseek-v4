@@ -13,6 +13,11 @@
       "date": "2026-07-14",
       "change": "correct tokenizer.json SHA-256 to aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4, recompute the canonical snapshot digest set, and distinguish full snapshot, weight-shard file, and indexed-tensor byte totals",
       "reason": "two independent downloads of exact model revision cdbee75f17c01a7cc42f958dc650907174af0554 and the existing Qwen3 tokenizer snapshot agreed; no P3 natural prediction had run"
+    },
+    {
+      "date": "2026-07-14",
+      "change": "permit prefetch and cryptographic verification only for the already preregistered immutable model revision before the P2 causal gate; retain the gate for benchmark dataset/source acquisition, baseline selection, dataset generation, and every prediction",
+      "reason": "record the exact pre-execution infrastructure action transparently; no benchmark payload was acquired and no model inference or outcome inspection occurred"
     }
   ],
   "protocol": "research/adaptive_v4_memory/paper_grade_protocol.md",
@@ -20,7 +25,7 @@
     "implementation": "research/adaptive_v4_memory/scripts/p3_sequence_gate.py",
     "p2_matrix": "artifacts/adaptive_v4_memory/paper_grade/p2-core-quality-matrix.json",
     "causal_gate": "artifacts/adaptive_v4_memory/paper_grade/p2-causal-ablation.summary.json",
-    "policy": "P2 and the full causal audit must finish first. Native and fixed external baselines still run if the calibrated candidate does not qualify."
+    "policy": "The exact preregistered immutable model snapshot may be prefetched and cryptographically verified without inference. P2 and the full causal audit must finish before benchmark dataset/source acquisition, baseline selection, dataset generation, or any prediction. Native and fixed external baselines still run if the calibrated candidate does not qualify."
   },
   "execution_order": [
     "RULER",

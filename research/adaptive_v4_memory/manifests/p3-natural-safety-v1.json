@@ -7,6 +7,11 @@
       "date": "2026-07-14",
       "change": "bind the corrected exact-revision Qwen3-4B tokenizer and canonical snapshot digest set from the natural-suite manifest",
       "reason": "pre-execution snapshot verification corrected a manifest transcription error before any natural-safety generation"
+    },
+    {
+      "date": "2026-07-14",
+      "change": "permit prefetch and cryptographic verification only for the already preregistered immutable model revision before the P2 causal gate",
+      "reason": "record the exact infrastructure action; natural-safety dataset/source acquisition, scoring assets, and every generation remain gated and none had run"
     }
   ],
   "evidence_tier": "official-and-derived-natural-safety-transfer-on-compatible-model",
@@ -20,7 +25,7 @@
   "sequence_gate": {
     "p2_matrix": "artifacts/adaptive_v4_memory/paper_grade/p2-core-quality-matrix.json",
     "causal_gate": "artifacts/adaptive_v4_memory/paper_grade/p2-causal-ablation.summary.json",
-    "policy": "no acquisition or execution before the frozen P2 sequence gate passes"
+    "policy": "the exact preregistered immutable model snapshot may be prefetched and cryptographically verified without inference; no natural-safety dataset/source or scoring-asset acquisition and no generation may occur before the frozen P2 sequence gate passes"
   },
   "required_arms": [
     "native-dense",

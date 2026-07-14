@@ -46,10 +46,18 @@ def validate_manifest(manifest: dict[str, Any]) -> dict[str, Any]:
     amendments = manifest.get("amendments", [])
     _require(
         isinstance(amendments, list)
-        and len(amendments) == 1
+        and len(amendments) == 2
         and "canonical snapshot digest set" in amendments[0].get("change", "")
         and "before any natural-safety generation" in amendments[0].get("reason", ""),
         "Natural safety pre-execution correction record drifted.",
+    )
+    _require(
+        "immutable model revision" in amendments[1].get("change", "")
+        and "none had run" in amendments[1].get("reason", "")
+        and "prefetched and cryptographically verified without inference"
+        in manifest.get("sequence_gate", {}).get("policy", "")
+        and "no generation" in manifest.get("sequence_gate", {}).get("policy", ""),
+        "Natural safety prefetch and execution sequence boundary drifted.",
     )
     _require(tuple(manifest.get("required_arms", ())) == EXPECTED_ARMS, "Arm set drifted.")
     model = manifest.get("model", {})
