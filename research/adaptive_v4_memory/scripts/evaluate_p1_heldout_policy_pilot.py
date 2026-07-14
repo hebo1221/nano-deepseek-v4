@@ -142,6 +142,75 @@ def _query_columns(workload: AdaptiveMemoryWorkloadBatch) -> dict[int, int]:
 
 
 @torch.inference_mode()
+def _run_policy_full_forward(
+    model: DeepSeekV4ForCausalLM,
+    workload: AdaptiveMemoryWorkloadBatch,
+    *,
+    policy: PolicySpec,
+    calibration: dict[str, Any],
+    fixed_topk: int,
+) -> dict[str, Any]:
+    """Run the causal policy in one quality-only full-sequence forward.
+
+    This path preserves logical selection masks but intentionally does not
+    enable the physical CPU/GPU tier. Its predictions must be validated against
+    the sequential-cache path before it is used for the large quality matrix.
+    """
+
+    controller_config: SameTokenControllerConfig | None = None
+    cache: DeepSeekV4Cache | None = None
+    if policy.kind == "native":
+        pilot._set_topk(model, model.config.index_topk)
+    elif policy.kind == "fixed":
+        if policy.multiplier is None:
+            raise ValueError("Fixed policy requires a multiplier.")
+        pilot._set_topk(model, fixed_topk * policy.multiplier)
+    else:
+        pilot._set_topk(model, model.config.index_topk)
+        controller_config = _controller_config(calibration, policy)
+        cache = DeepSeekV4Cache(model.config)
+        cache.enable_same_token_memory_controller(
+            controller_config,
+            protected_end_positions=workload.protected_end_positions,
+            trace_id=f"heldout-full:{workload.family}:{policy.name}",
+            request_id=workload.conversation_ids[0],
+        )
+
+    torch.cuda.synchronize()
+    started = time.perf_counter_ns()
+    output = model(
+        workload.input_ids,
+        past_key_values=cache,
+        use_cache=cache is not None,
+    )
+    torch.cuda.synchronize()
+    wall_ms = (time.perf_counter_ns() - started) / 1_000_000.0
+    batch_indices = torch.arange(workload.input_ids.shape[0], device=workload.input_ids.device)
+    predictions = torch.stack(
+        [
+            output.logits[batch_indices, workload.query_positions[:, query_index]].argmax(
+                dim=-1
+            )
+            for query_index in range(workload.query_positions.shape[1])
+        ],
+        dim=1,
+    )
+    correct = predictions.eq(workload.targets)
+    returned_cache = output.past_key_values
+    if cache is not None and returned_cache is not cache:
+        raise RuntimeError("Full forward replaced the configured same-token cache.")
+    controller = cache.same_token_controller_stats() if cache is not None else None
+    return {
+        "predictions": predictions.cpu().tolist(),
+        "correct": correct.cpu().tolist(),
+        "wall_ms": wall_ms,
+        "controller": asdict(controller) if controller is not None else None,
+        "controller_config": asdict(controller_config) if controller_config is not None else None,
+        "budget_violations": 0,
+    }
+
+
+@torch.inference_mode()
 def _run_policy(
     model: DeepSeekV4ForCausalLM,
     workload: AdaptiveMemoryWorkloadBatch,
