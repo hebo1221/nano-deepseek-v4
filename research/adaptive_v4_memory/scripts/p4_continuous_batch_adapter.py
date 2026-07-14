@@ -16,7 +16,13 @@ from typing import Any
 
 import torch
 
-from nano_deepseek_v4 import DeepSeekV4Config, DeepSeekV4ForCausalLM, measure_cache_memory
+from nano_deepseek_v4 import (
+    DeepSeekV4Cache,
+    DeepSeekV4Config,
+    DeepSeekV4ForCausalLM,
+    SameTokenControllerConfig,
+    measure_cache_memory,
+)
 
 POLICIES = ("resident-native", "tiered-native")
 MAX_CELL_TIMEOUT_SECONDS = 21_600.0
@@ -240,21 +246,45 @@ def run_policy(
     batch: int,
     concurrency: int,
     device: torch.device,
+    controller_config: SameTokenControllerConfig | None = None,
+    protected_end_positions: tuple[int, ...] = (),
 ) -> dict[str, Any]:
-    _require(policy in POLICIES, f"Unknown policy: {policy}")
+    if controller_config is None:
+        _require(policy in POLICIES, f"Unknown policy: {policy}")
+    else:
+        _require(
+            policy in {"fixed+pins", "calibrated+pins"},
+            f"Unknown adaptive policy: {policy}",
+        )
     _cleanup()
     torch.cuda.reset_peak_memory_stats(device)
     scheduler_received = [time.perf_counter_ns() for _ in range(concurrency)]
     admitted = [time.perf_counter_ns() for _ in range(concurrency)]
     cache: Any = None
+    if controller_config is not None:
+        cache = DeepSeekV4Cache(model.config)
+        cache.enable_same_token_memory_controller(
+            controller_config,
+            protected_end_positions=protected_end_positions,
+            trace_id=f"p4-adaptive-production:{policy}",
+            request_id="static-full-request-batch",
+        )
     for start in range(0, prompt_cpu.shape[1], PREFILL_CHUNK):
         chunk = prompt_cpu[:, start : start + PREFILL_CHUNK].to(device)
         output = model(chunk, past_key_values=cache, use_cache=True)
         cache = output.past_key_values
         if cache is None:
             raise RuntimeError("Production prefill did not return a cache.")
-        if policy == "tiered-native" and start == 0:
-            cache.enable_csa_tiering(model.config.index_topk * prompt_cpu.shape[0])
+        if start == 0:
+            if policy == "tiered-native":
+                cache.enable_csa_tiering(model.config.index_topk * prompt_cpu.shape[0])
+            elif controller_config is not None:
+                cache.enable_csa_tiering(
+                    {
+                        layer: blocks_per_sequence * prompt_cpu.shape[0]
+                        for layer, blocks_per_sequence in controller_config.layer_budgets
+                    }
+                )
         del output, chunk
     torch.cuda.synchronize()
     allocated_after_prefill = torch.cuda.memory_allocated(device)
@@ -308,6 +338,36 @@ def run_policy(
         row["admitted_ns"] for row in request_records
     )
     totals = _cache_totals(cache)
+    controller_payload: dict[str, Any] | None = None
+    controller_time_ns = 0
+    if controller_config is not None:
+        stats = cache.same_token_controller_stats()
+        if stats is None:
+            raise RuntimeError("Adaptive production cache lost controller statistics.")
+        controller_time_ns = stats.controller_time_ns
+        layer_indices = controller_config.csa_layer_indices
+        tier_stats = cache.tiered_memory_stats()
+        if len(tier_stats) != len(layer_indices):
+            raise RuntimeError("Adaptive production tier statistics lost a CSA layer.")
+        physical_multiplier = batch * concurrency
+        controller_payload = {
+            "enabled": True,
+            "protected_end_positions": list(protected_end_positions),
+            "configured_blocks_per_sequence_by_layer": dict(controller_config.layer_budgets),
+            "configured_physical_hot_blocks_by_layer": {
+                layer: blocks * physical_multiplier
+                for layer, blocks in controller_config.layer_budgets
+            },
+            "observed_hot_blocks_by_layer": {
+                layer: stats.hot_blocks
+                for layer, stats in zip(layer_indices, tier_stats, strict=True)
+            },
+            "selected_queries": stats.selected_queries,
+            "finalized_control_points": stats.finalized_control_points,
+            "fallback_control_points": stats.fallback_control_points,
+            "telemetry_time_ns": stats.telemetry_time_ns,
+            "controller_time_ns": stats.controller_time_ns,
+        }
     process_hbm, process_hbm_availability = _process_hbm_bytes()
     trace = IndexerTimingTrace()
     cache.memory_trace = trace
@@ -368,9 +428,10 @@ def run_policy(
             "evictions": totals["evictions"],
         },
         "timing": {
-            "controller_time_ns": 0,
+            "controller_time_ns": controller_time_ns,
             "indexer_time_ns": asdict(trace)["indexer_time_ns"],
         },
+        "adaptive_controller": controller_payload,
         "tail_failures": [],
         "tail_failure_accounting_complete": True,
     }
@@ -534,9 +595,7 @@ def execute(spec: dict[str, Any], *, executable: Path) -> dict[str, Any]:
         "policy_status": {
             policy: {
                 "status": (
-                    "complete"
-                    if counts[policy] == spec["measured_repetitions"]
-                    else "failed"
+                    "complete" if counts[policy] == spec["measured_repetitions"] else "failed"
                 ),
                 "measured_repetitions": counts[policy],
                 "failure": failures[policy],
