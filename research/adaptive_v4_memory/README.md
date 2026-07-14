@@ -156,6 +156,14 @@ still measured and the cell is reported as partial instead of being discarded.
 Its c8/c32 profiles are serial round-robin active-request probes, not actual
 concurrent serving; they remain bounded reference evidence even at 108/108.
 
+The separate P4 production manifest freezes another 108 cells behind an
+external serving-adapter contract. Its c8/c32 cells pass only when raw request
+admission, first-token, and completion timestamps reconstruct the requested
+overlap. The adapter executable, runtime revision, deployment image or explicit
+bare-metal mode, accelerator, driver, P3 audit, and every cell artifact are
+digest-bound. A serial loop, projected metric, aggregate-only latency, or
+unreported failure cannot satisfy the production gate.
+
 After all audits finish, the strict P5 package can be regenerated with:
 
 ```bash

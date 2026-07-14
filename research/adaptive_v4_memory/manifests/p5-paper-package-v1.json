@@ -40,8 +40,11 @@
       "experiment_id": "p4-production-systems-matrix-audit-v1",
       "required_audit": {
         "terminal_cells": 108,
+        "all_terminal_cells_verified": true,
+        "all_artifact_digests_verified": true,
         "actual_concurrency_verified": true,
         "all_required_metrics_verified": true,
+        "backend_provenance_consistent": true,
         "tail_failure_accounting_complete": true
       }
     }

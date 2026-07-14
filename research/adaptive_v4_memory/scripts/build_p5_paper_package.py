@@ -88,6 +88,7 @@ def classify_evidence(
         and production_audit.get("failed_cells") == 0
         and production_audit.get("actual_concurrency_verified") is True
         and production_audit.get("all_required_metrics_verified") is True
+        and production_audit.get("backend_provenance_consistent") is True
         and production_audit.get("tail_failure_accounting_complete") is True
     )
     result = {
@@ -154,7 +155,15 @@ def _p4_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
         *payload["complete_cell_statistics"],
         *payload["partial_cell_statistics"],
     ]:
-        row = {**cell["cell"], "status": cell["status"]}
+        coordinates = cell["cell"]
+        row = {
+            **coordinates,
+            "active_requests": coordinates.get(
+                "active_requests", coordinates.get("concurrency", "")
+            ),
+            "concurrency": coordinates.get("concurrency", ""),
+            "status": cell["status"],
+        }
         row.update(
             {
                 "paired_repetitions": cell["paired_repetitions"],
@@ -176,6 +185,10 @@ def _p4_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
         rows.append(
             {
                 **failure["cell"],
+                "active_requests": failure["cell"].get(
+                    "active_requests", failure["cell"].get("concurrency", "")
+                ),
+                "concurrency": failure["cell"].get("concurrency", ""),
                 "status": "failed",
                 "paired_repetitions": 0,
                 "failure": json.dumps(failure.get("policy_status"), sort_keys=True),
@@ -300,6 +313,7 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         "profile",
         "batch",
         "active_requests",
+        "concurrency",
         "status",
         "paired_repetitions",
         "resident_ttft_p95_ms_mean",

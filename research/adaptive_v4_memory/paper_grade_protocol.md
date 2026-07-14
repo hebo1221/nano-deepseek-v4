@@ -270,6 +270,15 @@ outliers are retained in an explicit tail-failure table.
 Reference PyTorch and fused production runtimes are separate result tables.
 Projected kernel speedups are never mixed with measured results.
 
+The production matrix uses six controlled load profiles: b1/b4/b8/b16 at
+concurrency 1 and b1 at actual concurrency 8/32. This yields 108 paired cells
+across two scales, three contexts, and three generation lengths. Actual
+concurrency is reconstructed from request-level scheduler admission,
+first-token, and completion timestamps; all c8/c32 request lifetimes must share
+a positive overlap window. Runtime/source/container-or-bare-metal, executable,
+accelerator, and driver provenance are mandatory. Serial round-robin execution
+is invalid even if its aggregate throughput is reported as concurrency.
+
 ## 9. Evidence ladder and execution order
 
 The proof is deliberately sequential:

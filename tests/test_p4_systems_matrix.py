@@ -9,6 +9,7 @@ import pytest
 SCRIPTS = Path(__file__).resolve().parents[1] / "research/adaptive_v4_memory/scripts"
 sys.path.insert(0, str(SCRIPTS))
 
+import run_p4_production_systems_matrix as production  # noqa: E402
 import run_p4_systems_matrix as systems  # noqa: E402
 import summarize_p4_systems_matrix as summary  # noqa: E402
 
@@ -163,3 +164,27 @@ def test_production_manifest_requires_actual_overlap_and_backend_provenance() ->
     assert "request admission, first-token, and completion timestamps" in manifest[
         "required_measurements"
     ]
+
+
+def test_production_grid_has_108_cells_and_real_concurrency_profiles() -> None:
+    cells = production.frozen_cells()
+
+    assert len(cells) == production.EXPECTED_CELLS == 108
+    assert len(set(cells)) == len(cells)
+    assert {cell[-1] for cell in cells} == {1, 8, 32}
+
+
+def test_production_overlap_rejects_serial_round_robin() -> None:
+    overlapping = [
+        {"admitted_ns": 0, "completed_ns": 10},
+        {"admitted_ns": 2, "completed_ns": 11},
+        {"admitted_ns": 4, "completed_ns": 12},
+    ]
+    serial = [
+        {"admitted_ns": 0, "completed_ns": 4},
+        {"admitted_ns": 4, "completed_ns": 8},
+        {"admitted_ns": 8, "completed_ns": 12},
+    ]
+
+    assert production.maximum_request_overlap(overlapping) == 3
+    assert production.maximum_request_overlap(serial) == 1

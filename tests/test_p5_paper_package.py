@@ -40,6 +40,12 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
         ]
         is True
     )
+    assert (
+        manifest["evidence"]["p4_production_systems"]["required_audit"][
+            "all_artifact_digests_verified"
+        ]
+        is True
+    )
 
 
 def test_p5_classification_preserves_claim_boundaries() -> None:
@@ -71,6 +77,7 @@ def test_p5_classification_preserves_claim_boundaries() -> None:
                 "failed_cells": 2,
                 "actual_concurrency_verified": True,
                 "all_required_metrics_verified": True,
+                "backend_provenance_consistent": True,
                 "tail_failure_accounting_complete": True,
             }
         },
@@ -116,6 +123,7 @@ def test_p5_success_requires_full_system_coverage() -> None:
                 "failed_cells": 0,
                 "actual_concurrency_verified": True,
                 "all_required_metrics_verified": True,
+                "backend_provenance_consistent": True,
                 "tail_failure_accounting_complete": True,
             }
         },
@@ -138,9 +146,9 @@ def test_p5_p4_table_retains_terminal_failure() -> None:
                         "scale": "s151",
                         "context": 131072,
                         "generation": 2048,
-                        "profile": "batch-b16",
+                        "profile": "serving-b16-c1",
                         "batch": 16,
-                        "active_requests": 1,
+                        "concurrency": 1,
                     },
                     "policy_status": {"resident-native": {"failure": "oom"}},
                 }
@@ -149,4 +157,6 @@ def test_p5_p4_table_retains_terminal_failure() -> None:
     )
 
     assert rows[0]["status"] == "failed"
+    assert rows[0]["active_requests"] == 1
+    assert rows[0]["concurrency"] == 1
     assert "oom" in rows[0]["failure"]
