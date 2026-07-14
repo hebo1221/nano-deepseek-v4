@@ -358,6 +358,9 @@ def validate_manifest(payload: dict[str, Any]) -> dict[str, Any]:
         or "before any Qwen3-4B natural prediction" not in selection["freeze_rule"]
         or "not a claim that the selected algorithm uses fixed allocation"
         not in selection.get("label_semantics", "")
+        or "no winner-vs-runner-up significance claim"
+        not in selection.get("selection_inference_boundary", "")
+        or "held-out transfer" not in selection.get("selection_inference_boundary", "")
     ):
         raise ValueError("Fixed-baseline transfer selection drifted or leaks 4B results.")
 

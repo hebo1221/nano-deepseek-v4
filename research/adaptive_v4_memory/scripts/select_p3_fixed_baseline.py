@@ -75,9 +75,11 @@ def select_fixed(payload: dict[str, Any]) -> dict[str, Any]:
                 },
             }
         )
-    selected = sorted(
+    ranked = sorted(
         candidates, key=lambda row: (-row["row_weighted_mean_accuracy"], row["arm"])
-    )[0]
+    )
+    selected = ranked[0]
+    runner_up = ranked[1]
     return {
         "selected_arm": selected["arm"],
         "selected_compression_ratio": ELIGIBLE_RATIO,
@@ -86,6 +88,19 @@ def select_fixed(payload: dict[str, Any]) -> dict[str, Any]:
         ),
         "criterion": "maximum row-weighted mean RULER accuracy",
         "tie_break": "lexicographically smallest arm name",
+        "selection_diagnostics": {
+            "candidate_count": len(ranked),
+            "runner_up_arm": runner_up["arm"],
+            "best_minus_runner_up_accuracy": (
+                selected["row_weighted_mean_accuracy"]
+                - runner_up["row_weighted_mean_accuracy"]
+            ),
+            "inference_boundary": (
+                "descriptive tuning-set ranking only; no winner-vs-runner-up "
+                "significance claim; Qwen3-4B natural benchmarks are the held-out "
+                "transfer evaluation"
+            ),
+        },
         "candidates": candidates,
     }
 
@@ -123,6 +138,12 @@ def main() -> None:
         "not a claim that the selected algorithm uses fixed allocation"
         in contract.get("label_semantics", ""),
         "Fixed baseline legacy-label boundary drifted.",
+    )
+    _require(
+        "no winner-vs-runner-up significance claim"
+        in contract.get("selection_inference_boundary", "")
+        and "held-out transfer" in contract.get("selection_inference_boundary", ""),
+        "Fixed baseline selection-inference boundary drifted.",
     )
     source_commit = subprocess.run(
         ["git", "rev-parse", "HEAD"], check=True, capture_output=True, text=True

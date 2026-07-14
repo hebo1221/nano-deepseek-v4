@@ -633,6 +633,17 @@ def _validate_boundary_manifest(name: str, path: Path) -> dict[str, Any]:
             "P3 compatible baseline legacy-label boundary drifted.",
         )
         _require(
+            "no winner-vs-runner-up significance claim"
+            in kvpress.get("fixed_baseline_selection", {}).get(
+                "selection_inference_boundary", ""
+            )
+            and "held-out transfer"
+            in kvpress.get("fixed_baseline_selection", {}).get(
+                "selection_inference_boundary", ""
+            ),
+            "P3 compatible baseline selection-inference boundary drifted.",
+        )
+        _require(
             flashmemory.get("manifest")
             == "research/adaptive_v4_memory/manifests/p3-flashmemory-deepseek-v4-v1.json"
             and flashmemory.get("compatible_with_primary_qwen3_model") is False

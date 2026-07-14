@@ -428,7 +428,8 @@
         "eligible_lengths_tokens": [8192, 16384, 32768],
         "criterion": "maximum row-weighted mean RULER accuracy; lexicographic arm name breaks exact ties",
         "freeze_rule": "selection occurs on the completed 1.7B matrix before any Qwen3-4B natural prediction",
-        "label_semantics": "strongest-memory-matched-fixed is a legacy frozen-selection arm label, not a claim that the selected algorithm uses fixed allocation; PyramidKV and AdaKV candidates allocate adaptively"
+        "label_semantics": "strongest-memory-matched-fixed is a legacy frozen-selection arm label, not a claim that the selected algorithm uses fixed allocation; PyramidKV and AdaKV candidates allocate adaptively",
+        "selection_inference_boundary": "descriptive tuning-set ranking only; no winner-vs-runner-up significance claim; the Qwen3-4B natural suite is the held-out transfer evaluation"
       }
     },
     "FlashMemory-DeepSeek-V4": {

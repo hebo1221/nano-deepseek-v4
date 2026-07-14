@@ -48,6 +48,10 @@ then transferred unchanged. It does not assert that the selected method is
 globally strongest on Qwen3-4B or on each downstream natural benchmark. The
 legacy word `fixed` describes the frozen post-screen selection, not the allocation
 rule: PyramidKV and AdaKV candidates are layer- and head-adaptive, respectively.
+The selector records the runner-up and the point-estimate margin, but the 1.7B
+screen is descriptive tuning evidence rather than a winner-vs-runner-up
+significance test. The Qwen3-4B five-benchmark suite is the held-out transfer
+evaluation.
 
 ## Provenance and scoring boundaries
 

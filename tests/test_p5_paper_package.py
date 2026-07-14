@@ -866,6 +866,14 @@ def test_natural_suite_boundary_rejects_projected_dsa_baselines(tmp_path: Path) 
     with pytest.raises(ValueError, match="legacy-label boundary"):
         package._validate_boundary_manifest("natural_suite", tampered)
 
+    payload = json.loads(source.read_text())
+    payload["external_baselines"]["kvpress"]["fixed_baseline_selection"][
+        "selection_inference_boundary"
+    ] = "winner is significantly best"
+    tampered.write_text(json.dumps(payload))
+    with pytest.raises(ValueError, match="selection-inference boundary"):
+        package._validate_boundary_manifest("natural_suite", tampered)
+
 
 def test_experiment_scale_audit_recomputes_headline_counts(tmp_path: Path) -> None:
     root = Path(__file__).resolve().parents[1]
