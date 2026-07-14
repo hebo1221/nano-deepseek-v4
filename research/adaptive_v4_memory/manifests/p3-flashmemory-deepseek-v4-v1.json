@@ -1,0 +1,166 @@
+{
+  "schema_version": 1,
+  "experiment_id": "p3-official-flashmemory-deepseek-v4-v1",
+  "status": "blocked_before_execution",
+  "evidence_tier": "official_deepseek_v4_reproduction_manifest_not_an_executed_result",
+  "audited_at": "2026-07-14T15:41:48+09:00",
+  "upstream": {
+    "paper": {
+      "title": "FlashMemory-DeepSeek-V4: Lightning Index Ultra-Long Context via Lookahead Sparse Attention",
+      "arxiv_id": "2606.09079",
+      "url": "https://arxiv.org/abs/2606.09079"
+    },
+    "code": {
+      "repository": "https://github.com/libertywing/FlashMemory-Deepseek-V4",
+      "revision": "39fe54def633496cb2b1bd44898135e3547058b3",
+      "commit_date": "2026-07-13T14:35:45+08:00",
+      "license": "MIT",
+      "tracked_file_sha256": {
+        "start_server.sh": "ab1676da219f9f45d65bbc1858e1a7066048d6def2f0c302325f8fe2ec186c62",
+        "high_concurrency/launch_decode.sh": "5097ad4314146c8274e8d13fcb4305af3d3b14bd675b883ecfbfb7e43f113bc3",
+        "high_concurrency/launch_prefill.sh": "b41924a7bec08615c3b724af003fe0e663bbcbc22c150ec9e21fca06f5ff4fc5",
+        "high_concurrency/launch_router.sh": "57d04a3fec697d2b91c0948db0e59bf8ea8b923e9c98e5f182dd6505f336d4b9",
+        "requirements.txt": "61d6b06d553c240373a70e92c74e80fb5fbf9d530f3c34dbfcf44bfc6f86b163"
+      }
+    },
+    "base_model": {
+      "repository": "deepseek-ai/DeepSeek-V4-Flash",
+      "revision": "60d8d70770c6776ff598c94bb586a859a38244f1",
+      "safetensors_files": 46,
+      "safetensors_bytes": 159617149040,
+      "maximum_context_tokens": 1048576
+    },
+    "retriever": {
+      "repository": "libertywing/FlashMemory-Deepseek-V4",
+      "revision": "70431ba57bfcce00ffd9d0174aed1b8ca5c32a2e",
+      "files": 8,
+      "total_bytes": 509684108,
+      "weights": {
+        "path": "weights/flashmemory_ds_v4.safetensors",
+        "bytes": 509633992,
+        "sha256": "ba20d264c309246f824d4471ccc637061b3b0268fe8e4eecc121474a1e5cd02a"
+      }
+    }
+  },
+  "runtime_modes": {
+    "mode_a_score_masking": {
+      "purpose": "quality validation that changes selection but does not physically reduce KV residency",
+      "accelerator_slots": 4,
+      "tensor_parallel": 4,
+      "full_kv_remains_on_gpu": true,
+      "cuda_graph_disabled": true,
+      "launch": "MODEL=/models/deepseek-v4-flash CKPT=/weights/top3_R930_joint.pt TP=4 bash start_server.sh",
+      "claim_boundary": "Mode A cannot support a GPU-memory-saving or concurrency claim."
+    },
+    "mode_b_pd_disaggregated": {
+      "purpose": "production Path-P and Path-I offload, two-level recall, and concurrency measurement",
+      "prefill_accelerator_slots": 8,
+      "decode_accelerator_slots": 8,
+      "total_accelerator_slots": 16,
+      "tensor_parallel_per_server": 8,
+      "required_network_stack": [
+        "NIXL",
+        "UCX",
+        "cross-machine RDMA-capable connectivity"
+      ],
+      "startup_order": [
+        "TGT_CONC=60 TGT_CTX=524288 CTX_LEN=1100000 MODEL=/models/deepseek-v4-flash CKPT=/weights/top3_R930_joint.pt bash high_concurrency/launch_decode.sh",
+        "CTX_LEN=1100000 SWA_RATIO=0.1 HOST=<PREFILL_IP> MODEL=/models/deepseek-v4-flash bash high_concurrency/launch_prefill.sh",
+        "PREFILL_IP=<PREFILL_IP> DECODE_IP=<DECODE_IP> bash high_concurrency/launch_router.sh"
+      ],
+      "reported_hardware": "8x NVIDIA H20 TP8 for the measured decode side; the released launch topology separately allocates GPU 0-7 to both P and D machines",
+      "claim_boundary": "A faithful end-to-end deployment therefore needs two 8-GPU server allocations even though upstream result tables label the measured decode configuration as 8xH20."
+    }
+  },
+  "public_release_contract_audit": {
+    "serving_checkpoint_expected_path": "checkpoints/top3_R930_joint.pt",
+    "serving_loader": "torch.load(..., weights_only=True)",
+    "serving_architecture_constants": {
+      "num_heads": 64,
+      "q_lora_rank": 1024,
+      "hidden_dim": 4096
+    },
+    "published_checkpoint_format": "safetensors",
+    "published_model_card_architecture": {
+      "num_heads": 128,
+      "q_lora_rank": 2048,
+      "hidden_dim": 4096
+    },
+    "pt_checkpoint_present_in_published_hf_snapshot": false,
+    "documented_safetensors_to_serving_conversion_present": false,
+    "decision": "Do not claim that the public retriever checkpoint is connected to the released SGLang serving path until upstream publishes the expected PT checkpoint or an exact conversion plus parity test."
+  },
+  "local_resource_audit": {
+    "host": "NVIDIA GB10 unified-memory workstation",
+    "physical_memory_bytes": 130596753408,
+    "available_memory_bytes": 121765031936,
+    "available_memory_plus_swap_bytes": 138944569344,
+    "disk_free_bytes": 280269418496,
+    "base_weights_fit_physical_memory": false,
+    "base_weights_fit_available_memory_plus_swap": false,
+    "base_weights_fit_disk": true,
+    "mode_a_accelerator_topology_available": false,
+    "mode_b_accelerator_topology_available": false
+  },
+  "cost_proxy": {
+    "retrieved_at": "2026-07-14",
+    "currency": "USD",
+    "taxes_excluded": true,
+    "warning": "H20 availability and compatibility were not established. H100 SXM prices are a non-binding planning proxy, not evidence that the released H20 runtime works on H100.",
+    "provider": "Lambda",
+    "source": "https://lambda.ai/instances",
+    "h100_sxm_price_per_gpu_hour": {
+      "four_gpu_instance": 4.09,
+      "eight_gpu_instance": 3.99
+    },
+    "mode_a": {
+      "accelerator_slots": 4,
+      "estimated_usd_per_hour": 16.36,
+      "estimated_usd_for_8_hours": 130.88,
+      "estimated_usd_for_24_hours": 392.64
+    },
+    "mode_b": {
+      "accelerator_slots": 16,
+      "estimated_usd_per_hour": 63.84,
+      "estimated_usd_for_8_hours": 510.72,
+      "estimated_usd_for_24_hours": 1532.16,
+      "network_and_storage_surcharges_included": false
+    }
+  },
+  "frozen_acquisition_commands": [
+    "git clone https://github.com/libertywing/FlashMemory-Deepseek-V4.git",
+    "git -C FlashMemory-Deepseek-V4 checkout 39fe54def633496cb2b1bd44898135e3547058b3",
+    "hf download deepseek-ai/DeepSeek-V4-Flash --revision 60d8d70770c6776ff598c94bb586a859a38244f1 --local-dir /models/deepseek-v4-flash",
+    "hf download libertywing/FlashMemory-Deepseek-V4 --revision 70431ba57bfcce00ffd9d0174aed1b8ca5c32a2e --local-dir /weights/flashmemory-public"
+  ],
+  "execution_preconditions": [
+    "Obtain the exact top3_R930_joint.pt expected by the released SGLang integration, or a maintainer-supplied deterministic conversion from the published safetensors file.",
+    "Verify converted/public checkpoint logits and selected chunk IDs against an upstream golden fixture before serving.",
+    "Provision one four-GPU machine for Mode A or two eight-GPU RDMA-connected machines for Mode B.",
+    "Capture immutable container, driver, CUDA, torch, sgl_kernel, tilelang, TVM-FFI, SGLang, NIXL, and UCX versions.",
+    "Run native DeepSeek-V4 and FlashMemory with identical prompts, decoding parameters, concurrency, and measurement windows."
+  ],
+  "blockers": [
+    {
+      "id": "checkpoint-runtime-contract",
+      "severity": "hard",
+      "reason": "The published retriever artifact does not match the checkpoint format or architecture constants consumed by the released serving integration."
+    },
+    {
+      "id": "local-memory-capacity",
+      "severity": "hard",
+      "reason": "The 159.62 GB base tensor payload exceeds both physical and currently available unified memory plus swap."
+    },
+    {
+      "id": "accelerator-topology",
+      "severity": "hard",
+      "reason": "The local host has neither TP4 capacity for Mode A nor two TP8 RDMA-connected servers for Mode B."
+    },
+    {
+      "id": "h20-cloud-availability",
+      "severity": "planning",
+      "reason": "No public self-service H20 quote was found; the recorded H100 rate is only a cost proxy."
+    }
+  ],
+  "decision": "Official FlashMemory-DeepSeek-V4 remains unexecuted. Preserve this manifest as the P3 blocker record, run the frozen compatible-model RULER matrix separately, and do not mix its evidence with official V4 claims."
+}

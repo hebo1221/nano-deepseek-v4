@@ -133,6 +133,16 @@ unverified. The checked M5 report records the pilot negative result, official
 feasibility audit, minimum fused-kernel contract, and the retained bounded M4
 fixed-top-k result.
 
+The later P3 audit also pins the public FlashMemory paper, serving code, base
+weights, and retriever snapshot. It found a separate release-contract blocker:
+the serving path expects a 64-head/1024-rank PT checkpoint that is absent from
+the published retriever snapshot, while the public safetensors model card
+describes a 128-head/2048-rank artifact and provides no serving conversion.
+The [P3 feasibility report](reports/2026-07-14-p3-official-flashmemory-feasibility.md)
+and [execution manifest](manifests/p3-flashmemory-deepseek-v4-v1.json) therefore
+freeze both the resource and checkpoint blockers without claiming an official
+run.
+
 ## P1 causal-controller pilot
 
 `nano_deepseek_v4/causal_memory_controller.py` now applies a layer-local action
