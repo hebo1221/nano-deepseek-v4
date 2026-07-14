@@ -465,6 +465,20 @@ def _validate_boundary_manifest(name: str, path: Path) -> dict[str, Any]:
             and "zero result cells" in amendments[1].get("reason", ""),
             "P3 RULER sequence boundary drifted.",
         )
+    elif name == "p4_500k_context":
+        amendments = payload.get("protocol_amendments", [])
+        execution = payload.get("execution", {})
+        _require(
+            payload.get("status") == "amended_and_frozen_before_execution"
+            and isinstance(amendments, list)
+            and len(amendments) == 1,
+            "P4 500K pre-execution amendment record drifted.",
+        )
+        _require(
+            execution.get("maximum_cell_timeout_seconds") == 21_600
+            and "uninterruptible native CUDA" in execution.get("timeout_enforcement", ""),
+            "P4 500K timeout claim boundary drifted.",
+        )
     elif name == "experiment_scale_audit":
         _validate_experiment_scale_audit(payload)
     elif name == "official_deepseek_v4":
@@ -787,6 +801,7 @@ def _classify_500k_preflight(payload: dict[str, Any]) -> str:
         and successes >= 0
         and failures >= 0
         and successes + failures == 4
+        and audit.get("whole_cell_timeout_contract_verified") is True
         and audit.get("performance_claim_available") is False
     )
     if not terminal:
@@ -1733,6 +1748,7 @@ def _p4_500k_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
             "policy": policy,
             "context_tokens": payload["audit"]["context_tokens"],
             "generation_tokens": payload["audit"]["generation_tokens"],
+            "cell_timeout_seconds": cell["cell_timeout_seconds"],
             "status": attempt["status"],
             "prediction_digest": attempt.get("prediction_digest"),
             "peak_allocated_bytes": attempt.get("peak_allocated_bytes"),
@@ -1872,7 +1888,10 @@ manually, remains mandatory before goal completion, and is never reported as pas
 - P4 500K feasibility: {p4_500k["terminal_policy_attempts"]} terminal scale-policy
   attempts, {p4_500k["successful_policy_attempts"]} successful and
   {p4_500k["failed_policy_attempts"]} failed. This single-attempt preflight carries
-  no performance claim; {p4_500k_correctness["scales_with_both_policies_successful"]}
+  no performance claim. Recorded POSIX timer deadlines ranged from
+  {p4_500k["minimum_cell_timeout_seconds"]:,.0f} to
+  {p4_500k["maximum_cell_timeout_seconds"]:,.0f} seconds and do not establish native
+  CUDA-call preemption; {p4_500k_correctness["scales_with_both_policies_successful"]}
   paired-success scales had prediction equality
   **{p4_500k_correctness["all_successful_pair_predictions_identical"]}**.
 - P4 reference systems: {p4_reference["terminal_cells"]} terminal serial-interleaved cells,

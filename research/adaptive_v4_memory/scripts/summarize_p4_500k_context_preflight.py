@@ -34,6 +34,7 @@ def summarize(matrix_path: Path) -> dict[str, Any]:
     seen: set[str] = set()
     cells: list[dict[str, Any]] = []
     raw_digests: list[str] = []
+    cell_timeouts: list[float] = []
     for row in matrix.get("runs", []):
         scale = row.get("scale")
         _require(scale in preflight.SCALES and scale not in seen, f"Invalid scale: {scale}")
@@ -56,6 +57,7 @@ def summarize(matrix_path: Path) -> dict[str, Any]:
         )
         payload = json.loads(path.read_text())
         _require(payload.get("status") == row.get("status"), "Cell status drifted.")
+        cell_timeouts.append(float(payload["cell_timeout_seconds"]))
         _require(
             payload.get("source", {}).get("dirty") is False
             and payload.get("source", {}).get("implementation_digest")
@@ -68,6 +70,7 @@ def summarize(matrix_path: Path) -> dict[str, Any]:
             {
                 "scale": scale,
                 "status": payload["status"],
+                "cell_timeout_seconds": payload["cell_timeout_seconds"],
                 "elapsed_seconds": payload["elapsed_seconds"],
                 "policy_attempts": {
                     policy: {
@@ -119,6 +122,9 @@ def summarize(matrix_path: Path) -> dict[str, Any]:
             "terminal_policy_attempts": len(statuses),
             "successful_policy_attempts": sum(status == "success" for status in statuses),
             "failed_policy_attempts": sum(status != "success" for status in statuses),
+            "whole_cell_timeout_contract_verified": True,
+            "minimum_cell_timeout_seconds": min(cell_timeouts),
+            "maximum_cell_timeout_seconds": max(cell_timeouts),
             "raw_cell_digest_set_sha256": hashlib.sha256(
                 "\n".join(sorted(raw_digests)).encode()
             ).hexdigest(),
@@ -133,7 +139,8 @@ def summarize(matrix_path: Path) -> dict[str, Any]:
         "claim_boundary": (
             "500K-token prefill plus 128-token decode feasibility only, with one terminal "
             "attempt per scale-policy. No latency, throughput, tail, variance, production, "
-            "or broader-model claim is available."
+            "or broader-model claim is available. The POSIX timer does not prove preemption "
+            "of an uninterruptible native CUDA call."
         ),
     }
 

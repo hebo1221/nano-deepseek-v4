@@ -24,6 +24,11 @@ def test_500k_manifest_is_separate_feasibility_evidence() -> None:
     assert manifest["expected_scale_cells"] == preflight.EXPECTED_CELLS == 2
     assert manifest["expected_policy_attempts"] == 4
     assert manifest["attempts_per_scale_policy"] == 1
+    assert manifest["status"] == "amended_and_frozen_before_execution"
+    assert (
+        manifest["execution"]["maximum_cell_timeout_seconds"]
+        == preflight.CELL_TIMEOUT_SECONDS
+    )
     assert "cannot support latency" in manifest["claim_boundary"]
     assert "failed attempt is retained" in manifest["claim_boundary"]
     scale_audit = json.loads(
@@ -64,6 +69,8 @@ def test_500k_terminal_status_retains_partial_and_failed_results() -> None:
         )
         == "failed"
     )
+    assert preflight._failure_status(TimeoutError("deadline")) == "timeout"
+    assert preflight._failure_status(RuntimeError("failure")) == "error"
 
 
 def test_500k_audit_accepts_terminal_negative_evidence(tmp_path: Path) -> None:
@@ -107,6 +114,7 @@ def test_500k_audit_accepts_terminal_negative_evidence(tmp_path: Path) -> None:
                     "generation_tokens": preflight.GENERATION,
                     "batch": preflight.BATCH,
                     "active_requests": preflight.ACTIVE_REQUESTS,
+                    "cell_timeout_seconds": preflight.CELL_TIMEOUT_SECONDS,
                     "input_digest": input_digest,
                     "policy_attempts": attempts,
                     "elapsed_seconds": 1.0,
@@ -151,8 +159,23 @@ def test_500k_audit_accepts_terminal_negative_evidence(tmp_path: Path) -> None:
     assert audited["audit"]["successful_policy_attempts"] == 3
     assert audited["audit"]["failed_policy_attempts"] == 1
     assert audited["audit"]["performance_claim_available"] is False
+    assert audited["audit"]["whole_cell_timeout_contract_verified"] is True
+    assert audited["audit"]["minimum_cell_timeout_seconds"] == 21_600.0
+    assert audited["audit"]["maximum_cell_timeout_seconds"] == 21_600.0
     assert audited["correctness"] == {
         "scales_with_both_policies_successful": 1,
         "all_successful_pair_predictions_identical": False,
         "prediction_mismatch_scales": ["s151"],
     }
+
+    first_artifact = Path(rows[0]["artifact"]["path"])
+    without_timeout = json.loads(first_artifact.read_text())
+    without_timeout.pop("cell_timeout_seconds")
+    first_artifact.write_text(json.dumps(without_timeout))
+    assert not preflight._artifact_valid(
+        first_artifact,
+        scale=rows[0]["scale"],
+        digest=implementation,
+        manifest_digest="manifest",
+        p3_digest="p3",
+    )

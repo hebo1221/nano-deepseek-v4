@@ -1,7 +1,15 @@
 {
   "schema_version": 1,
   "experiment_id": "p4-500k-context-preflight-v1",
-  "status": "frozen_before_execution",
+  "status": "amended_and_frozen_before_execution",
+  "protocol_amendments": [
+    {
+      "date": "2026-07-14",
+      "timing": "before any P4 500K preflight cell was generated",
+      "change": "add a POSIX whole-cell timer, record the actual deadline, and retain timeout as a terminal policy outcome",
+      "reason": "the prior policy-boundary check could not observe a Python-visible timeout during a single 500K prefill or decode call; the timer does not claim to preempt uninterruptible native CUDA"
+    }
+  ],
   "evidence_tier": "single-accelerator-reference-pytorch-feasibility",
   "prerequisite": "complete digest-bound five-benchmark P3 natural-suite audit",
   "scales": ["s55", "s151"],
@@ -31,6 +39,8 @@
     "matrix_progress": "artifacts/adaptive_v4_memory/paper_grade/p4/500k-context-preflight-matrix.json",
     "audit_output": "artifacts/adaptive_v4_memory/paper_grade/p4/500k-context-preflight.summary.json",
     "resume_unit": "one scale containing isolated terminal attempts for both policies",
+    "maximum_cell_timeout_seconds": 21600,
+    "timeout_enforcement": "POSIX whole-cell timer at or below the preregistered maximum plus policy-boundary monotonic checks; the actual deadline is digest-bound in every cell, TimeoutError is retained as a terminal policy outcome, and no claim is made that Python signal delivery can preempt an uninterruptible native CUDA call",
     "failure_is_terminal_and_reported": true
   },
   "claim_boundary": "Feasibility evidence only. One attempt per scale-policy cannot support latency, throughput, tail, variance, or production-serving claims. A failed attempt is retained as bounded negative evidence, not silently dropped."

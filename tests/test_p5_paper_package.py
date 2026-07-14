@@ -145,6 +145,7 @@ def _p4_500k_evidence(successful: int = 2) -> dict[str, object]:
             "terminal_policy_attempts": 4,
             "successful_policy_attempts": successful,
             "failed_policy_attempts": 4 - successful,
+            "whole_cell_timeout_contract_verified": True,
             "performance_claim_available": False,
         }
     }
@@ -254,6 +255,7 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
         "generation_tokens": 128,
         "scales_attempted": 2,
         "terminal_policy_attempts": 4,
+        "whole_cell_timeout_contract_verified": True,
         "performance_claim_available": False,
     }
     assert manifest["evidence"]["p4_production_systems"]["required_audit"]["terminal_cells"] == 216
@@ -796,6 +798,29 @@ def test_p5_rejects_incomplete_500k_failure_accounting() -> None:
     assert package._classify_500k_preflight(evidence) == "unverified"
 
 
+def test_p5_rejects_unverified_500k_timeout_contract() -> None:
+    evidence = _p4_500k_evidence()
+    evidence["audit"]["whole_cell_timeout_contract_verified"] = False  # type: ignore[index]
+
+    assert package._classify_500k_preflight(evidence) == "unverified"
+
+
+def test_p5_rejects_relabelled_500k_timeout_boundary(tmp_path: Path) -> None:
+    root = Path(__file__).resolve().parents[1]
+    source = (
+        root
+        / "research/adaptive_v4_memory/manifests/p4-500k-context-preflight-v1.json"
+    )
+    payload = json.loads(source.read_text())
+    package._validate_boundary_manifest("p4_500k_context", source)
+
+    payload["execution"]["timeout_enforcement"] = "hard native CUDA preemption"
+    tampered = tmp_path / "p4-500k.json"
+    tampered.write_text(json.dumps(payload))
+    with pytest.raises(ValueError, match="timeout claim boundary drifted"):
+        package._validate_boundary_manifest("p4_500k_context", tampered)
+
+
 def test_p5_p4_table_retains_terminal_failure() -> None:
     rows = package._p4_rows(
         {
@@ -918,6 +943,7 @@ def test_p5_500k_table_reports_feasibility_without_latency() -> None:
             "cells": [
                 {
                     "scale": "s55",
+                    "cell_timeout_seconds": 21_600.0,
                     "policy_attempts": {
                         "resident-native": {
                             "status": "success",
@@ -942,6 +968,7 @@ def test_p5_500k_table_reports_feasibility_without_latency() -> None:
 
     assert len(rows) == 2
     assert rows[0]["context_tokens"] == 500_000
+    assert rows[0]["cell_timeout_seconds"] == 21_600.0
     assert rows[1]["status"] == "oom"
     assert rows[0]["prediction_digest"] == "a" * 64
     assert "latency" not in rows[0]

@@ -201,6 +201,7 @@
         "generation_tokens": 128,
         "scales_attempted": 2,
         "terminal_policy_attempts": 4,
+        "whole_cell_timeout_contract_verified": true,
         "performance_claim_available": false
       }
     },

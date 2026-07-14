@@ -20,6 +20,7 @@ CONTEXT = 500_000
 GENERATION = 128
 BATCH = 1
 ACTIVE_REQUESTS = 1
+CELL_TIMEOUT_SECONDS = systems.CELL_TIMEOUT_SECONDS
 EXPECTED_CELLS = len(SCALES)
 IMPLEMENTATION_PATHS = (
     *systems.IMPLEMENTATION_PATHS,
@@ -74,6 +75,14 @@ def _status(policy_attempts: dict[str, dict[str, Any]]) -> str:
     return "complete" if successes == len(POLICIES) else "partial" if successes else "failed"
 
 
+def _failure_status(error: Exception) -> str:
+    if isinstance(error, torch.cuda.OutOfMemoryError):
+        return "oom"
+    if isinstance(error, TimeoutError):
+        return "timeout"
+    return "error"
+
+
 def _artifact_valid(
     path: Path,
     *,
@@ -93,6 +102,8 @@ def _artifact_valid(
         and payload.get("generation_tokens") == GENERATION
         and payload.get("batch") == BATCH
         and payload.get("active_requests") == ACTIVE_REQUESTS
+        and type(payload.get("cell_timeout_seconds")) in (int, float)
+        and 0.0 < payload["cell_timeout_seconds"] <= CELL_TIMEOUT_SECONDS
         and set(attempts) == set(POLICIES)
         and all(
             row.get("status") in {"success", "oom", "timeout", "error"} for row in attempts.values()
@@ -157,7 +168,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Run the frozen P4 500K context preflight.")
     parser.add_argument("--scale", action="append", choices=SCALES)
     parser.add_argument("--max-new-cells", type=int)
-    parser.add_argument("--cell-timeout-seconds", type=float, default=21_600.0)
+    parser.add_argument(
+        "--cell-timeout-seconds", type=float, default=CELL_TIMEOUT_SECONDS
+    )
     parser.add_argument(
         "--training-root",
         type=Path,
@@ -188,8 +201,7 @@ def main() -> None:
     args = parser.parse_args()
     if args.max_new_cells is not None and args.max_new_cells <= 0:
         raise ValueError("max-new-cells must be positive.")
-    if args.cell_timeout_seconds <= 0:
-        raise ValueError("cell-timeout-seconds must be positive.")
+    systems.validate_cell_timeout(args.cell_timeout_seconds)
     if _dirty():
         raise RuntimeError("P4 500K execution requires a clean source tree.")
     systems.require_p3_audit(args.p3_audit)
@@ -199,6 +211,8 @@ def main() -> None:
         or manifest.get("context_tokens") != CONTEXT
         or manifest.get("expected_scale_cells") != EXPECTED_CELLS
         or manifest.get("expected_policy_attempts") != EXPECTED_CELLS * len(POLICIES)
+        or manifest.get("execution", {}).get("maximum_cell_timeout_seconds")
+        != CELL_TIMEOUT_SECONDS
     ):
         raise RuntimeError("The frozen P4 500K preflight manifest is required.")
     if not torch.cuda.is_available():
@@ -230,6 +244,7 @@ def main() -> None:
         started = time.monotonic()
         attempts: dict[str, dict[str, Any]] = {}
         input_digest: str | None = None
+        previous_alarm_handler = systems.arm_cell_timeout(args.cell_timeout_seconds)
         try:
             checkpoint = args.training_root / scale / "seed-6071401" / f"{scale}-step-1000.pt"
             model = systems._load_model(checkpoint, device)
@@ -262,9 +277,7 @@ def main() -> None:
                     attempts[policy] = {"status": "success", "run": run}
                 except Exception as error:
                     attempts[policy] = {
-                        "status": (
-                            "oom" if isinstance(error, torch.cuda.OutOfMemoryError) else "error"
-                        ),
+                        "status": _failure_status(error),
                         "error_type": type(error).__name__,
                         "error": str(error),
                     }
@@ -272,13 +285,15 @@ def main() -> None:
             del prompts, decode, model
             systems._cleanup()
         except Exception as error:
-            outcome = "oom" if isinstance(error, torch.cuda.OutOfMemoryError) else "error"
+            outcome = _failure_status(error)
             for policy in POLICIES:
                 attempts.setdefault(
                     policy,
                     {"status": outcome, "error_type": type(error).__name__, "error": str(error)},
                 )
             systems._cleanup()
+        finally:
+            systems.cancel_cell_timeout(previous_alarm_handler)
         payload = {
             "schema_version": 1,
             "experiment_id": "p4-500k-context-preflight-cell-v1",
@@ -288,6 +303,7 @@ def main() -> None:
             "generation_tokens": GENERATION,
             "batch": BATCH,
             "active_requests": ACTIVE_REQUESTS,
+            "cell_timeout_seconds": args.cell_timeout_seconds,
             "input_digest": input_digest,
             "policy_attempts": attempts,
             "elapsed_seconds": time.monotonic() - started,
@@ -305,7 +321,10 @@ def main() -> None:
                 "device": torch.cuda.get_device_name(device),
             },
             "command": [sys.executable, *sys.argv],
-            "claim_boundary": "One feasibility attempt per policy; no performance claim.",
+            "claim_boundary": (
+                "One feasibility attempt per policy; no performance claim. The POSIX timer "
+                "does not prove preemption of an uninterruptible native CUDA call."
+            ),
         }
         _write_json(path, payload)
         rows[scale] = _matrix_row(path, payload)
