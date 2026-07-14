@@ -58,6 +58,7 @@ IMPLEMENTATION_PATHS = (
     "research/adaptive_v4_memory/manifests/p4-reference-systems-matrix-v1.json",
     "research/adaptive_v4_memory/scripts/adaptive_v4_gpu_lock.py",
     "research/adaptive_v4_memory/scripts/run_p4_systems_matrix.py",
+    "research/adaptive_v4_memory/scripts/summarize_p4_systems_matrix.py",
 )
 
 
@@ -163,6 +164,14 @@ def frozen_cells() -> tuple[tuple[str, int, int, str, int, int], ...]:
             SCALES, CONTEXTS, GENERATIONS, LOAD_PROFILES
         )
     )
+
+
+def phase_repetition_index(repetition: int) -> int:
+    """Index warmup and measured policy-order rotations independently."""
+
+    if not 0 <= repetition < WARMUPS + MEASURED_REPETITIONS:
+        raise ValueError("P4 repetition is outside the frozen warmup/measured schedule.")
+    return repetition if repetition < WARMUPS else repetition - WARMUPS
 
 
 def _percentile(values: list[float], quantile: float) -> float:
@@ -354,9 +363,7 @@ def run_policy(
     end_to_end_ms = (time.perf_counter_ns() - cell_started) / 1_000_000.0
     totals = _cache_totals(caches)
     controller_stats = [
-        stats
-        for cache in caches
-        if (stats := cache.same_token_controller_stats()) is not None
+        stats for cache in caches if (stats := cache.same_token_controller_stats()) is not None
     ]
     controller_time_ns = sum(stats.controller_time_ns for stats in controller_stats)
     controller_payload: dict[str, Any] | None = None
@@ -372,9 +379,7 @@ def run_policy(
         controller_payload = {
             "enabled": True,
             "protected_end_positions": list(protected_end_positions),
-            "configured_blocks_per_sequence_by_layer": dict(
-                controller_config.layer_budgets
-            ),
+            "configured_blocks_per_sequence_by_layer": dict(controller_config.layer_budgets),
             "configured_physical_hot_blocks_by_layer": {
                 layer: blocks * prompts[0].shape[0] * len(prompts)
                 for layer, blocks in controller_config.layer_budgets
@@ -954,7 +959,8 @@ def main() -> None:
                     )
                     if repetition < WARMUPS:
                         warmup_repetitions_attempted += 1
-                    order = POLICIES if repetition % 2 == 0 else tuple(reversed(POLICIES))
+                    order_index = phase_repetition_index(repetition)
+                    order = POLICIES if order_index % 2 == 0 else tuple(reversed(POLICIES))
                     policy_runs: dict[str, dict[str, Any]] = {}
                     failures_this_repetition: dict[str, dict[str, Any]] = {}
                     for policy in order:

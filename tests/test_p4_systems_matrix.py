@@ -11,8 +11,10 @@ import pytest
 SCRIPTS = Path(__file__).resolve().parents[1] / "research/adaptive_v4_memory/scripts"
 sys.path.insert(0, str(SCRIPTS))
 
+import run_p4_adaptive_systems_matrix as adaptive  # noqa: E402
 import run_p4_production_systems_matrix as production  # noqa: E402
 import run_p4_systems_matrix as systems  # noqa: E402
+import summarize_p4_adaptive_systems_matrix as adaptive_summary  # noqa: E402
 import summarize_p4_systems_matrix as summary  # noqa: E402
 
 
@@ -119,13 +121,8 @@ def test_p4_adaptive_matrix_freezes_full_causal_systems_factorial() -> None:
     assert manifest["paired_policies"] == ["fixed+pins", "calibrated+pins"]
     assert manifest["protected_prefix_end_positions"] == [3]
     assert {
-        (profile["batch"], profile["active_requests"])
-        for profile in manifest["load_profiles"]
-    } == {
-        (batch, active_requests)
-        for batch in (1, 4, 8, 16)
-        for active_requests in (1, 8, 32)
-    }
+        (profile["batch"], profile["active_requests"]) for profile in manifest["load_profiles"]
+    } == {(batch, active_requests) for batch in (1, 4, 8, 16) for active_requests in (1, 8, 32)}
     cells = (
         len(manifest["scales"])
         * len(manifest["budgets"])
@@ -136,6 +133,98 @@ def test_p4_adaptive_matrix_freezes_full_causal_systems_factorial() -> None:
     assert cells == manifest["primary_paired_cells"] == 432
     assert manifest["primary_total_policy_runs_including_warmup"] == 30_240
     assert "regardless" in manifest["execution_policy"]
+    assert len(adaptive.frozen_cells()) == adaptive.EXPECTED_CELLS == 432
+
+
+def test_p4_reference_policy_order_restarts_after_warmups() -> None:
+    assert systems.phase_repetition_index(0) == 0
+    assert systems.phase_repetition_index(systems.WARMUPS - 1) == systems.WARMUPS - 1
+    assert systems.phase_repetition_index(systems.WARMUPS) == 0
+    assert systems.phase_repetition_index(systems.WARMUPS + 1) == 1
+    with pytest.raises(ValueError, match="outside"):
+        systems.phase_repetition_index(systems.WARMUPS + systems.MEASURED_REPETITIONS)
+
+
+def test_p4_adaptive_gate_is_complete_but_outcome_independent(tmp_path: Path) -> None:
+    path = tmp_path / "nine-seed.json"
+    path.write_text(
+        json.dumps(
+            {
+                "experiment_id": "p2-nine-seed-causal-ablation-audit-v1",
+                "audit": {
+                    "unique_shards": 16_200,
+                    "independent_seed_clusters_per_cell": 9,
+                    "all_raw_shards_verified": True,
+                    "all_dependency_digests_verified": True,
+                    "all_record_digests_verified": True,
+                    "no_budget_violations": True,
+                    "all_physical_predictions_identical": True,
+                    "exact_config_reuse_verified": True,
+                },
+                "pooling_audit": {
+                    "identical_frozen_contracts": True,
+                    "disjoint_training_seeds": True,
+                },
+                "primary_causal_gate": {
+                    "candidate": "calibrated+pins",
+                    "comparator": "fixed+pins",
+                    "required_cells": 4,
+                    "passed": False,
+                    "cells": [
+                        {"scale": scale, "budget": budget, "passed": False}
+                        for scale in adaptive.SCALES
+                        for budget in adaptive.BUDGETS
+                    ],
+                },
+            }
+        )
+    )
+
+    result = adaptive.require_nine_seed_causal_audit(path)
+
+    assert result["primary_causal_gate"]["passed"] is False
+
+
+def test_p4_adaptive_summary_preserves_paired_system_costs() -> None:
+    cell = adaptive.frozen_cells()[0]
+    reference_cell = (cell[0], cell[2], cell[3], cell[4], cell[5], cell[6])
+    fixed = _reference_policy_run(reference_cell, "fixed+pins", "a" * 64)
+    calibrated = _reference_policy_run(reference_cell, "calibrated+pins", "a" * 64)
+    calibrated["controller_time_ns"] = 2
+    payload = {
+        "cell": {
+            "scale": cell[0],
+            "budget": cell[1],
+            "context": cell[2],
+            "generation": cell[3],
+            "profile": cell[4],
+            "batch": cell[5],
+            "active_requests": cell[6],
+        },
+        "status": "partial",
+        "p2_causal_gate_passed": False,
+        "cell_timeout_seconds": adaptive.CELL_TIMEOUT_SECONDS,
+        "warmup_repetitions_attempted": adaptive.WARMUPS,
+        "warmup_paired_repetitions_completed": adaptive.WARMUPS,
+        "warmup_policy_runs_completed": {policy: adaptive.WARMUPS for policy in adaptive.POLICIES},
+        "warmup_failures": [],
+        "repetitions": [
+            {
+                "execution_order": list(adaptive.POLICIES),
+                "prediction_digests_equal": True,
+                "policies": {"fixed+pins": fixed, "calibrated+pins": calibrated},
+            }
+        ],
+    }
+
+    result = adaptive_summary.summarize_terminal_cell(payload)
+
+    assert result["paired_repetitions"] == 1
+    assert result["prediction_digest_matches"] == 1
+    assert result["metrics"]["controller_time_ns"]["paired_observations"] == 1
+    assert (
+        result["metrics"]["controller_time_ns"]["calibrated_minus_fixed"]["mean_difference"] == 2.0
+    )
 
 
 def test_p4_requires_full_natural_suite_not_ruler_only(tmp_path: Path) -> None:

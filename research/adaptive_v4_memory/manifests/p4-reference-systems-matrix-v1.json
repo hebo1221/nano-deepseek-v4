@@ -32,6 +32,12 @@
       "timing": "before any P4 reference cell was generated",
       "change": "retain every per-request prefill and TTFT sample plus every decode-step latency and independently recompute all stored latency summaries and throughput",
       "reason": "p50/p95/p99 values alone are derived results; digest-bound raw latency samples are required to regenerate and audit the paper tables"
+    },
+    {
+      "date": "2026-07-15",
+      "timing": "before any P4 reference cell was generated",
+      "change": "restart paired policy-order alternation at measured repetition zero after the five independent warmups",
+      "reason": "the prior combined loop shifted measured order by the odd warmup count while the frozen artifact auditor correctly indexed measured repetitions from zero"
     }
   ],
   "evidence_tier": "single-accelerator-serial-interleaved-reference-pytorch-runtime",
@@ -63,7 +69,7 @@
   "prefill_chunk_tokens": 256,
   "warmups_per_paired_cell": 5,
   "measured_repetitions_per_paired_cell": 30,
-  "paired_policy_order": "alternate resident-first and tiered-first by repetition",
+  "paired_policy_order": "alternate resident-first and tiered-first independently within warmup and measured phases, beginning each phase resident-first",
   "primary_paired_cells": 216,
   "primary_measured_policy_runs": 12960,
   "primary_total_policy_runs_including_warmup": 15120,
