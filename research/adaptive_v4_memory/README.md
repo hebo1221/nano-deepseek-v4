@@ -150,14 +150,17 @@ checked P1 report and summary. Calibration-only non-uniform quotas, protected
 pinning, learned lookahead, and the preregistered five-seed matrix remain active
 work.
 
-The follow-up calibration pilot now fits same-token layer quotas from a disjoint
-707-series seed using all nine P2 families and five context lengths. The 1x
-point retains the uniform fixed-policy floor; S55 selected non-uniform 2x/4x
-quotas while S151 remained uniform. Protected end positions are also inherited
-by the physical tier store rather than being repeatedly fetched. These are
-mechanism checks only: the two-scale pilot used 32 conversations per family and
-did not inspect held-out quality. See the checked layer-quota calibration report
-and digest-bound summary.
+The follow-up calibration matrix fits checkpoint-specific same-token layer
+quotas from disjoint 707-series seeds using all nine P2 families and five context
+lengths. All 5 seeds × 2 scales completed at 256 conversations per family:
+23,040 conversations and 286,720 query-layer observations. The digest-bound
+audit revalidated every raw file, checkpoint, family/context slice, budget, and
+leakage guard. S55 produced five distinct quota vectors at both 2x and 4x;
+S151 produced two at 2x and three at 4x. This checkpoint variation rules out
+reusing one seed's quota as a universal policy. The 1x point remains the uniform
+fixed-policy floor, and protected end positions are inherited by the physical
+tier store. This is still calibration-only evidence: held-out quality was not
+inspected. See the checked five-seed calibration report and summary.
 
 ## P2 training matrix
 

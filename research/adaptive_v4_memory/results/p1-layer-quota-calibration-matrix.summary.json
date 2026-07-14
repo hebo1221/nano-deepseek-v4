@@ -1,0 +1,2763 @@
+{
+  "aggregate": [
+    {
+      "budget": "1x",
+      "global_budget_utilization_mean": 1.0,
+      "non_uniform_runs": 0,
+      "normal_total_max": 5,
+      "normal_total_mean": 5.0,
+      "normal_total_min": 5,
+      "runs": 5,
+      "scale": "s151",
+      "unique_layer_budget_vectors": 1
+    },
+    {
+      "budget": "2x",
+      "global_budget_utilization_mean": 1.0,
+      "non_uniform_runs": 1,
+      "normal_total_max": 10,
+      "normal_total_mean": 10.0,
+      "normal_total_min": 10,
+      "runs": 5,
+      "scale": "s151",
+      "unique_layer_budget_vectors": 2
+    },
+    {
+      "budget": "4x",
+      "global_budget_utilization_mean": 1.0,
+      "non_uniform_runs": 2,
+      "normal_total_max": 20,
+      "normal_total_mean": 20.0,
+      "normal_total_min": 20,
+      "runs": 5,
+      "scale": "s151",
+      "unique_layer_budget_vectors": 3
+    },
+    {
+      "budget": "1x",
+      "global_budget_utilization_mean": 1.0,
+      "non_uniform_runs": 0,
+      "normal_total_max": 6,
+      "normal_total_mean": 6.0,
+      "normal_total_min": 6,
+      "runs": 5,
+      "scale": "s55",
+      "unique_layer_budget_vectors": 1
+    },
+    {
+      "budget": "2x",
+      "global_budget_utilization_mean": 0.95,
+      "non_uniform_runs": 3,
+      "normal_total_max": 12,
+      "normal_total_mean": 11.4,
+      "normal_total_min": 9,
+      "runs": 5,
+      "scale": "s55",
+      "unique_layer_budget_vectors": 5
+    },
+    {
+      "budget": "4x",
+      "global_budget_utilization_mean": 0.8,
+      "non_uniform_runs": 4,
+      "normal_total_max": 24,
+      "normal_total_mean": 19.2,
+      "normal_total_min": 15,
+      "runs": 5,
+      "scale": "s55",
+      "unique_layer_budget_vectors": 5
+    }
+  ],
+  "design": {
+    "calibration_seeds": [
+      7071401,
+      7071402,
+      7071403,
+      7071404,
+      7071405
+    ],
+    "contexts": [
+      80,
+      128,
+      256,
+      512,
+      1024
+    ],
+    "examples_per_family_per_run": 256,
+    "families": [
+      "single-remote-retrieval",
+      "multiple-independent-needles",
+      "associative-recall",
+      "multi-turn-query-shift",
+      "dense-global-aggregation",
+      "irrelevant-context-local-only",
+      "instruction-persistence",
+      "adversarial-lexical-distractors",
+      "long-generation-changing-evidence"
+    ],
+    "runs": 10,
+    "scales": [
+      "s55",
+      "s151"
+    ],
+    "total_captured_query_observations": 286720,
+    "total_conversations": 23040,
+    "training_seeds": [
+      6071401,
+      6071402,
+      6071403,
+      6071404,
+      6071405
+    ]
+  },
+  "experiment_id": "p1-layer-quota-calibration-matrix-audit-v1",
+  "interpretation": "five-seed, two-scale calibration-only result; no held-out quality claim",
+  "matrix_artifact": {
+    "path": "artifacts/adaptive_v4_memory/paper_grade/calibration-matrix.json",
+    "sha256": "1e8b70a3b6f1125af0b0d4bde782c36a547e527d4c7a4d02307f3600c6c52def"
+  },
+  "runs": [
+    {
+      "calibration_seed": 7071401,
+      "calibrations": {
+        "1x": {
+          "calibration_digest": "8046476b03d61fa8b3635f0f81925dd4a5667236e1533db5fcb99a62763bdc86",
+          "candidate_demand_quantiles": [
+            [
+              2,
+              255
+            ],
+            [
+              4,
+              255
+            ],
+            [
+              6,
+              255
+            ],
+            [
+              8,
+              255
+            ],
+            [
+              10,
+              255
+            ]
+          ],
+          "dense_layer_budgets": [
+            [
+              2,
+              4
+            ],
+            [
+              4,
+              4
+            ],
+            [
+              6,
+              4
+            ],
+            [
+              8,
+              4
+            ],
+            [
+              10,
+              4
+            ]
+          ],
+          "global_budget": 5,
+          "global_budget_utilization": 1.0,
+          "layer_budgets": [
+            [
+              2,
+              1
+            ],
+            [
+              4,
+              1
+            ],
+            [
+              6,
+              1
+            ],
+            [
+              8,
+              1
+            ],
+            [
+              10,
+              1
+            ]
+          ],
+          "non_uniform": false,
+          "normal_total": 5,
+          "score_demand_quantiles": [
+            [
+              2,
+              3
+            ],
+            [
+              4,
+              3
+            ],
+            [
+              6,
+              3
+            ],
+            [
+              8,
+              3
+            ],
+            [
+              10,
+              2
+            ]
+          ]
+        },
+        "2x": {
+          "calibration_digest": "8006d31733273a9b3520422e5412a8f96275c8cd3057034f863b708c18385f37",
+          "candidate_demand_quantiles": [
+            [
+              2,
+              255
+            ],
+            [
+              4,
+              255
+            ],
+            [
+              6,
+              255
+            ],
+            [
+              8,
+              255
+            ],
+            [
+              10,
+              255
+            ]
+          ],
+          "dense_layer_budgets": [
+            [
+              2,
+              4
+            ],
+            [
+              4,
+              4
+            ],
+            [
+              6,
+              4
+            ],
+            [
+              8,
+              4
+            ],
+            [
+              10,
+              4
+            ]
+          ],
+          "global_budget": 10,
+          "global_budget_utilization": 1.0,
+          "layer_budgets": [
+            [
+              2,
+              2
+            ],
+            [
+              4,
+              2
+            ],
+            [
+              6,
+              2
+            ],
+            [
+              8,
+              2
+            ],
+            [
+              10,
+              2
+            ]
+          ],
+          "non_uniform": false,
+          "normal_total": 10,
+          "score_demand_quantiles": [
+            [
+              2,
+              4
+            ],
+            [
+              4,
+              4
+            ],
+            [
+              6,
+              4
+            ],
+            [
+              8,
+              4
+            ],
+            [
+              10,
+              3
+            ]
+          ]
+        },
+        "4x": {
+          "calibration_digest": "ca13cab39e27e6fa142c46d2b5776fc4d07837ff1223e1c6ac6d618c3fc0b66b",
+          "candidate_demand_quantiles": [
+            [
+              2,
+              255
+            ],
+            [
+              4,
+              255
+            ],
+            [
+              6,
+              255
+            ],
+            [
+              8,
+              255
+            ],
+            [
+              10,
+              255
+            ]
+          ],
+          "dense_layer_budgets": [
+            [
+              2,
+              4
+            ],
+            [
+              4,
+              4
+            ],
+            [
+              6,
+              4
+            ],
+            [
+              8,
+              4
+            ],
+            [
+              10,
+              4
+            ]
+          ],
+          "global_budget": 20,
+          "global_budget_utilization": 1.0,
+          "layer_budgets": [
+            [
+              2,
+              4
+            ],
+            [
+              4,
+              4
+            ],
+            [
+              6,
+              4
+            ],
+            [
+              8,
+              4
+            ],
+            [
+              10,
+              4
+            ]
+          ],
+          "non_uniform": false,
+          "normal_total": 20,
+          "score_demand_quantiles": [
+            [
+              2,
+              5
+            ],
+            [
+              4,
+              5
+            ],
+            [
+              6,
+              5
+            ],
+            [
+              8,
+              5
+            ],
+            [
+              10,
+              4
+            ]
+          ]
+        }
+      },
+      "captured_queries_per_layer": 7168,
+      "captured_query_count": 35840,
+      "checkpoint": {
+        "bytes": 606450713,
+        "path": "artifacts/adaptive_v4_memory/paper_grade/training/s151/seed-6071401/s151-step-1000.pt",
+        "sha256": "3eca7b855c477718e4af0b37fc6ad4b6a546c5a65abd201f1b1e77edbc19dfec"
+      },
+      "conversations": 2304,
+      "examples_per_family": 256,
+      "layers": [
+        2,
+        4,
+        6,
+        8,
+        10
+      ],
+      "raw_artifact": {
+        "path": "artifacts/adaptive_v4_memory/paper_grade/calibration_matrix/s151/seed-6071401/p1-layer-quotas.json",
+        "sha256": "39fa896339e6b83ddccdddfc4f243b48093427b470ea3d10bf60843560a93eaa"
+      },
+      "scale": "s151",
+      "training_seed": 6071401
+    },
+    {
+      "calibration_seed": 7071402,
+      "calibrations": {
+        "1x": {
+          "calibration_digest": "1afc3ce276c75ecda5de2322ca36440ba84aa4f1db6f9e157295f8920a1ae53b",
+          "candidate_demand_quantiles": [
+            [
+              2,
+              255
+            ],
+            [
+              4,
+              255
+            ],
+            [
+              6,
+              255
+            ],
+            [
+              8,
+              255
+            ],
+            [
+              10,
+              255
+            ]
+          ],
+          "dense_layer_budgets": [
+            [
+              2,
+              4
+            ],
+            [
+              4,
+              4
+            ],
+            [
+              6,
+              4
+            ],
+            [
+              8,
+              4
+            ],
+            [
+              10,
+              4
+            ]
+          ],
+          "global_budget": 5,
+          "global_budget_utilization": 1.0,
+          "layer_budgets": [
+            [
+              2,
+              1
+            ],
+            [
+              4,
+              1
+            ],
+            [
+              6,
+              1
+            ],
+            [
+              8,
+              1
+            ],
+            [
+              10,
+              1
+            ]
+          ],
+          "non_uniform": false,
+          "normal_total": 5,
+          "score_demand_quantiles": [
+            [
+              2,
+              2
+            ],
+            [
+              4,
+              2
+            ],
+            [
+              6,
+              2
+            ],
+            [
+              8,
+              2
+            ],
+            [
+              10,
+              2
+            ]
+          ]
+        },
+        "2x": {
+          "calibration_digest": "f428dfcbe334f2e1706fcbe8afd7dd64078e8c96ac410ce8944210e10ec6a760",
+          "candidate_demand_quantiles": [
+            [
+              2,
+              255
+            ],
+            [
+              4,
+              255
+            ],
+            [
+              6,
+              255
+            ],
+            [
+              8,
+              255
+            ],
+            [
+              10,
+              255
+            ]
+          ],
+          "dense_layer_budgets": [
+            [
+              2,
+              4
+            ],
+            [
+              4,
+              4
+            ],
+            [
+              6,
+              4
+            ],
+            [
+              8,
+              4
+            ],
+            [
+              10,
+              4
+            ]
+          ],
+          "global_budget": 10,
+          "global_budget_utilization": 1.0,
+          "layer_budgets": [
+            [
+              2,
+              2
+            ],
+            [
+              4,
+              2
+            ],
+            [
+              6,
+              2
+            ],
+            [
+              8,
+              2
+            ],
+            [
+              10,
+              2
+            ]
+          ],
+          "non_uniform": false,
+          "normal_total": 10,
+          "score_demand_quantiles": [
+            [
+              2,
+              3
+            ],
+            [
+              4,
+              3
+            ],
+            [
+              6,
+              3
+            ],
+            [
+              8,
+              3
+            ],
+            [
+              10,
+              3
+            ]
+          ]
+        },
+        "4x": {
+          "calibration_digest": "f33529bad823408221f729b34e69727deb1756ba27e45d6fa292f9105fa8fec4",
+          "candidate_demand_quantiles": [
+            [
+              2,
+              255
+            ],
+            [
+              4,
+              255
+            ],
+            [
+              6,
+              255
+            ],
+            [
+              8,
+              255
+            ],
+            [
+              10,
+              255
+            ]
+          ],
+          "dense_layer_budgets": [
+            [
+              2,
+              4
+            ],
+            [
+              4,
+              4
+            ],
+            [
+              6,
+              4
+            ],
+            [
+              8,
+              4
+            ],
+            [
+              10,
+              4
+            ]
+          ],
+          "global_budget": 20,
+          "global_budget_utilization": 1.0,
+          "layer_budgets": [
+            [
+              2,
+              4
+            ],
+            [
+              4,
+              4
+            ],
+            [
+              6,
+              4
+            ],
+            [
+              8,
+              4
+            ],
+            [
+              10,
+              4
+            ]
+          ],
+          "non_uniform": false,
+          "normal_total": 20,
+          "score_demand_quantiles": [
+            [
+              2,
+              4
+            ],
+            [
+              4,
+              4
+            ],
+            [
+              6,
+              4
+            ],
+            [
+              8,
+              4
+            ],
+            [
+              10,
+              4
+            ]
+          ]
+        }
+      },
+      "captured_queries_per_layer": 7168,
+      "captured_query_count": 35840,
+      "checkpoint": {
+        "bytes": 606450713,
+        "path": "artifacts/adaptive_v4_memory/paper_grade/training/s151/seed-6071402/s151-step-1000.pt",
+        "sha256": "1095b9b757ff5b939388e7af585190d195077b67baf48a861794596ab019c73d"
+      },
+      "conversations": 2304,
+      "examples_per_family": 256,
+      "layers": [
+        2,
+        4,
+        6,
+        8,
+        10
+      ],
+      "raw_artifact": {
+        "path": "artifacts/adaptive_v4_memory/paper_grade/calibration_matrix/s151/seed-6071402/p1-layer-quotas.json",
+        "sha256": "b5f8b09dff6a117cb90fb0322c8f2476ac19179f80cc1d50cb2d1541b9d395ed"
+      },
+      "scale": "s151",
+      "training_seed": 6071402
+    },
+    {
+      "calibration_seed": 7071403,
+      "calibrations": {
+        "1x": {
+          "calibration_digest": "24bbbb68ba5ecc79e65a4bbb2cfa296195a56568d675b42e52d787f99022e4e0",
+          "candidate_demand_quantiles": [
+            [
+              2,
+              255
+            ],
+            [
+              4,
+              255
+            ],
+            [
+              6,
+              255
+            ],
+            [
+              8,
+              255
+            ],
+            [
+              10,
+              255
+            ]
+          ],
+          "dense_layer_budgets": [
+            [
+              2,
+              4
+            ],
+            [
+              4,
+              4
+            ],
+            [
+              6,
+              4
+            ],
+            [
+              8,
+              4
+            ],
+            [
+              10,
+              4
+            ]
+          ],
+          "global_budget": 5,
+          "global_budget_utilization": 1.0,
+          "layer_budgets": [
+            [
+              2,
+              1
+            ],
+            [
+              4,
+              1
+            ],
+            [
+              6,
+              1
+            ],
+            [
+              8,
+              1
+            ],
+            [
+              10,
+              1
+            ]
+          ],
+          "non_uniform": false,
+          "normal_total": 5,
+          "score_demand_quantiles": [
+            [
+              2,
+              2
+            ],
+            [
+              4,
+              2
+            ],
+            [
+              6,
+              4
+            ],
+            [
+              8,
+              2
+            ],
+            [
+              10,
+              3
+            ]
+          ]
+        },
+        "2x": {
+          "calibration_digest": "3af65abd4cc3c6d3fe8e071b59075a445b4a96943ae7b28be12123e729194261",
+          "candidate_demand_quantiles": [
+            [
+              2,
+              255
+            ],
+            [
+              4,
+              255
+            ],
+            [
+              6,
+              255
+            ],
+            [
+              8,
+              255
+            ],
+            [
+              10,
+              255
+            ]
+          ],
+          "dense_layer_budgets": [
+            [
+              2,
+              4
+            ],
+            [
+              4,
+              4
+            ],
+            [
+              6,
+              4
+            ],
+            [
+              8,
+              4
+            ],
+            [
+              10,
+              4
+            ]
+          ],
+          "global_budget": 10,
+          "global_budget_utilization": 1.0,
+          "layer_budgets": [
+            [
+              2,
+              2
+            ],
+            [
+              4,
+              2
+            ],
+            [
+              6,
+              2
+            ],
+            [
+              8,
+              2
+            ],
+            [
+              10,
+              2
+            ]
+          ],
+          "non_uniform": false,
+          "normal_total": 10,
+          "score_demand_quantiles": [
+            [
+              2,
+              3
+            ],
+            [
+              4,
+              3
+            ],
+            [
+              6,
+              5
+            ],
+            [
+              8,
+              3
+            ],
+            [
+              10,
+              4
+            ]
+          ]
+        },
+        "4x": {
+          "calibration_digest": "93581679d2d04fca277f45fad98a5a6d575f89aab5b2f3fe779be85fac7e228b",
+          "candidate_demand_quantiles": [
+            [
+              2,
+              255
+            ],
+            [
+              4,
+              255
+            ],
+            [
+              6,
+              255
+            ],
+            [
+              8,
+              255
+            ],
+            [
+              10,
+              255
+            ]
+          ],
+          "dense_layer_budgets": [
+            [
+              2,
+              4
+            ],
+            [
+              4,
+              4
+            ],
+            [
+              6,
+              5
+            ],
+            [
+              8,
+              3
+            ],
+            [
+              10,
+              4
+            ]
+          ],
+          "global_budget": 20,
+          "global_budget_utilization": 1.0,
+          "layer_budgets": [
+            [
+              2,
+              4
+            ],
+            [
+              4,
+              4
+            ],
+            [
+              6,
+              5
+            ],
+            [
+              8,
+              3
+            ],
+            [
+              10,
+              4
+            ]
+          ],
+          "non_uniform": true,
+          "normal_total": 20,
+          "score_demand_quantiles": [
+            [
+              2,
+              4
+            ],
+            [
+              4,
+              4
+            ],
+            [
+              6,
+              6
+            ],
+            [
+              8,
+              4
+            ],
+            [
+              10,
+              5
+            ]
+          ]
+        }
+      },
+      "captured_queries_per_layer": 7168,
+      "captured_query_count": 35840,
+      "checkpoint": {
+        "bytes": 606450713,
+        "path": "artifacts/adaptive_v4_memory/paper_grade/training/s151/seed-6071403/s151-step-1000.pt",
+        "sha256": "015649bb949a5574e3c2fe355a5600ecb1f673f4a13441cd0fa2f9e542e9b7ed"
+      },
+      "conversations": 2304,
+      "examples_per_family": 256,
+      "layers": [
+        2,
+        4,
+        6,
+        8,
+        10
+      ],
+      "raw_artifact": {
+        "path": "artifacts/adaptive_v4_memory/paper_grade/calibration_matrix/s151/seed-6071403/p1-layer-quotas.json",
+        "sha256": "4a26cc187438e0d1a45f5870b1fd51a01263eb7cc0ffd95570ca2df1964a49c1"
+      },
+      "scale": "s151",
+      "training_seed": 6071403
+    },
+    {
+      "calibration_seed": 7071404,
+      "calibrations": {
+        "1x": {
+          "calibration_digest": "2eebf8957c7caa5f8e9f71359e9380445b853b296feca5cec9e7f8546f36672e",
+          "candidate_demand_quantiles": [
+            [
+              2,
+              255
+            ],
+            [
+              4,
+              255
+            ],
+            [
+              6,
+              255
+            ],
+            [
+              8,
+              255
+            ],
+            [
+              10,
+              255
+            ]
+          ],
+          "dense_layer_budgets": [
+            [
+              2,
+              4
+            ],
+            [
+              4,
+              4
+            ],
+            [
+              6,
+              4
+            ],
+            [
+              8,
+              4
+            ],
+            [
+              10,
+              4
+            ]
+          ],
+          "global_budget": 5,
+          "global_budget_utilization": 1.0,
+          "layer_budgets": [
+            [
+              2,
+              1
+            ],
+            [
+              4,
+              1
+            ],
+            [
+              6,
+              1
+            ],
+            [
+              8,
+              1
+            ],
+            [
+              10,
+              1
+            ]
+          ],
+          "non_uniform": false,
+          "normal_total": 5,
+          "score_demand_quantiles": [
+            [
+              2,
+              2
+            ],
+            [
+              4,
+              3
+            ],
+            [
+              6,
+              2
+            ],
+            [
+              8,
+              3
+            ],
+            [
+              10,
+              3
+            ]
+          ]
+        },
+        "2x": {
+          "calibration_digest": "9058f89abf65a8461b85c75f2389613aefb99c4013c0dec53e90fd1c3687d31c",
+          "candidate_demand_quantiles": [
+            [
+              2,
+              255
+            ],
+            [
+              4,
+              255
+            ],
+            [
+              6,
+              255
+            ],
+            [
+              8,
+              255
+            ],
+            [
+              10,
+              255
+            ]
+          ],
+          "dense_layer_budgets": [
+            [
+              2,
+              4
+            ],
+            [
+              4,
+              4
+            ],
+            [
+              6,
+              4
+            ],
+            [
+              8,
+              4
+            ],
+            [
+              10,
+              4
+            ]
+          ],
+          "global_budget": 10,
+          "global_budget_utilization": 1.0,
+          "layer_budgets": [
+            [
+              2,
+              2
+            ],
+            [
+              4,
+              2
+            ],
+            [
+              6,
+              2
+            ],
+            [
+              8,
+              2
+            ],
+            [
+              10,
+              2
+            ]
+          ],
+          "non_uniform": false,
+          "normal_total": 10,
+          "score_demand_quantiles": [
+            [
+              2,
+              3
+            ],
+            [
+              4,
+              4
+            ],
+            [
+              6,
+              3
+            ],
+            [
+              8,
+              4
+            ],
+            [
+              10,
+              4
+            ]
+          ]
+        },
+        "4x": {
+          "calibration_digest": "48febc9c1f09b81be02cdb131fcfad5c77c4e5c37c126cb2b31a06d6c55f5b78",
+          "candidate_demand_quantiles": [
+            [
+              2,
+              255
+            ],
+            [
+              4,
+              255
+            ],
+            [
+              6,
+              255
+            ],
+            [
+              8,
+              255
+            ],
+            [
+              10,
+              255
+            ]
+          ],
+          "dense_layer_budgets": [
+            [
+              2,
+              4
+            ],
+            [
+              4,
+              4
+            ],
+            [
+              6,
+              4
+            ],
+            [
+              8,
+              4
+            ],
+            [
+              10,
+              4
+            ]
+          ],
+          "global_budget": 20,
+          "global_budget_utilization": 1.0,
+          "layer_budgets": [
+            [
+              2,
+              4
+            ],
+            [
+              4,
+              4
+            ],
+            [
+              6,
+              4
+            ],
+            [
+              8,
+              4
+            ],
+            [
+              10,
+              4
+            ]
+          ],
+          "non_uniform": false,
+          "normal_total": 20,
+          "score_demand_quantiles": [
+            [
+              2,
+              4
+            ],
+            [
+              4,
+              5
+            ],
+            [
+              6,
+              4
+            ],
+            [
+              8,
+              5
+            ],
+            [
+              10,
+              5
+            ]
+          ]
+        }
+      },
+      "captured_queries_per_layer": 7168,
+      "captured_query_count": 35840,
+      "checkpoint": {
+        "bytes": 606450713,
+        "path": "artifacts/adaptive_v4_memory/paper_grade/training/s151/seed-6071404/s151-step-1000.pt",
+        "sha256": "df52806703d965d5d268cc789461a2de1a64c1cb5b0523eb566e1e77b0248fa1"
+      },
+      "conversations": 2304,
+      "examples_per_family": 256,
+      "layers": [
+        2,
+        4,
+        6,
+        8,
+        10
+      ],
+      "raw_artifact": {
+        "path": "artifacts/adaptive_v4_memory/paper_grade/calibration_matrix/s151/seed-6071404/p1-layer-quotas.json",
+        "sha256": "712f3fea0cf33803a95ce0501b580941fa46f34d85dfe7d309eb9214d4f721d0"
+      },
+      "scale": "s151",
+      "training_seed": 6071404
+    },
+    {
+      "calibration_seed": 7071405,
+      "calibrations": {
+        "1x": {
+          "calibration_digest": "814e4928c10463c0c3beb77721616b4b21252c7b541e125cf8d3d9b8b1535e8a",
+          "candidate_demand_quantiles": [
+            [
+              2,
+              255
+            ],
+            [
+              4,
+              255
+            ],
+            [
+              6,
+              255
+            ],
+            [
+              8,
+              255
+            ],
+            [
+              10,
+              255
+            ]
+          ],
+          "dense_layer_budgets": [
+            [
+              2,
+              4
+            ],
+            [
+              4,
+              4
+            ],
+            [
+              6,
+              4
+            ],
+            [
+              8,
+              4
+            ],
+            [
+              10,
+              4
+            ]
+          ],
+          "global_budget": 5,
+          "global_budget_utilization": 1.0,
+          "layer_budgets": [
+            [
+              2,
+              1
+            ],
+            [
+              4,
+              1
+            ],
+            [
+              6,
+              1
+            ],
+            [
+              8,
+              1
+            ],
+            [
+              10,
+              1
+            ]
+          ],
+          "non_uniform": false,
+          "normal_total": 5,
+          "score_demand_quantiles": [
+            [
+              2,
+              2
+            ],
+            [
+              4,
+              3
+            ],
+            [
+              6,
+              3
+            ],
+            [
+              8,
+              8
+            ],
+            [
+              10,
+              3
+            ]
+          ]
+        },
+        "2x": {
+          "calibration_digest": "922444321b498ae7df39cd74c444f62c7d55807f82f1c83092a70eb310643a31",
+          "candidate_demand_quantiles": [
+            [
+              2,
+              255
+            ],
+            [
+              4,
+              255
+            ],
+            [
+              6,
+              255
+            ],
+            [
+              8,
+              255
+            ],
+            [
+              10,
+              255
+            ]
+          ],
+          "dense_layer_budgets": [
+            [
+              2,
+              3
+            ],
+            [
+              4,
+              4
+            ],
+            [
+              6,
+              4
+            ],
+            [
+              8,
+              5
+            ],
+            [
+              10,
+              4
+            ]
+          ],
+          "global_budget": 10,
+          "global_budget_utilization": 1.0,
+          "layer_budgets": [
+            [
+              2,
+              1
+            ],
+            [
+              4,
+              2
+            ],
+            [
+              6,
+              2
+            ],
+            [
+              8,
+              3
+            ],
+            [
+              10,
+              2
+            ]
+          ],
+          "non_uniform": true,
+          "normal_total": 10,
+          "score_demand_quantiles": [
+            [
+              2,
+              3
+            ],
+            [
+              4,
+              4
+            ],
+            [
+              6,
+              4
+            ],
+            [
+              8,
+              9
+            ],
+            [
+              10,
+              4
+            ]
+          ]
+        },
+        "4x": {
+          "calibration_digest": "cc344c518df5ef59990bc7f65bc7df5005335a0aa5261825cd2644a932a08d0e",
+          "candidate_demand_quantiles": [
+            [
+              2,
+              255
+            ],
+            [
+              4,
+              255
+            ],
+            [
+              6,
+              255
+            ],
+            [
+              8,
+              255
+            ],
+            [
+              10,
+              255
+            ]
+          ],
+          "dense_layer_budgets": [
+            [
+              2,
+              3
+            ],
+            [
+              4,
+              4
+            ],
+            [
+              6,
+              3
+            ],
+            [
+              8,
+              7
+            ],
+            [
+              10,
+              3
+            ]
+          ],
+          "global_budget": 20,
+          "global_budget_utilization": 1.0,
+          "layer_budgets": [
+            [
+              2,
+              3
+            ],
+            [
+              4,
+              4
+            ],
+            [
+              6,
+              3
+            ],
+            [
+              8,
+              7
+            ],
+            [
+              10,
+              3
+            ]
+          ],
+          "non_uniform": true,
+          "normal_total": 20,
+          "score_demand_quantiles": [
+            [
+              2,
+              4
+            ],
+            [
+              4,
+              5
+            ],
+            [
+              6,
+              5
+            ],
+            [
+              8,
+              10
+            ],
+            [
+              10,
+              5
+            ]
+          ]
+        }
+      },
+      "captured_queries_per_layer": 7168,
+      "captured_query_count": 35840,
+      "checkpoint": {
+        "bytes": 606450713,
+        "path": "artifacts/adaptive_v4_memory/paper_grade/training/s151/seed-6071405/s151-step-1000.pt",
+        "sha256": "6e07f069f3b55ddbde1952a926d6c26f17c8e6482a0efb9d3a2aad361eed0a25"
+      },
+      "conversations": 2304,
+      "examples_per_family": 256,
+      "layers": [
+        2,
+        4,
+        6,
+        8,
+        10
+      ],
+      "raw_artifact": {
+        "path": "artifacts/adaptive_v4_memory/paper_grade/calibration_matrix/s151/seed-6071405/p1-layer-quotas.json",
+        "sha256": "2630dc5f34539999f83d139d16a4595445209f61ee8f8ce4b6d9c046a49e0230"
+      },
+      "scale": "s151",
+      "training_seed": 6071405
+    },
+    {
+      "calibration_seed": 7071401,
+      "calibrations": {
+        "1x": {
+          "calibration_digest": "9f6c2cd383d9a8d5f0a6dca8764b695c115957c7c71ab45970f8b4cd10582054",
+          "candidate_demand_quantiles": [
+            [
+              2,
+              255
+            ],
+            [
+              4,
+              255
+            ],
+            [
+              6,
+              255
+            ]
+          ],
+          "dense_layer_budgets": [
+            [
+              2,
+              8
+            ],
+            [
+              4,
+              8
+            ],
+            [
+              6,
+              8
+            ]
+          ],
+          "global_budget": 6,
+          "global_budget_utilization": 1.0,
+          "layer_budgets": [
+            [
+              2,
+              2
+            ],
+            [
+              4,
+              2
+            ],
+            [
+              6,
+              2
+            ]
+          ],
+          "non_uniform": false,
+          "normal_total": 6,
+          "score_demand_quantiles": [
+            [
+              2,
+              2
+            ],
+            [
+              4,
+              3
+            ],
+            [
+              6,
+              2
+            ]
+          ]
+        },
+        "2x": {
+          "calibration_digest": "df3180bc14006c769c9c7199736748fb9936ce4327f3ca6f7b4ff4183f5eb512",
+          "candidate_demand_quantiles": [
+            [
+              2,
+              255
+            ],
+            [
+              4,
+              255
+            ],
+            [
+              6,
+              255
+            ]
+          ],
+          "dense_layer_budgets": [
+            [
+              2,
+              7
+            ],
+            [
+              4,
+              9
+            ],
+            [
+              6,
+              8
+            ]
+          ],
+          "global_budget": 12,
+          "global_budget_utilization": 1.0,
+          "layer_budgets": [
+            [
+              2,
+              3
+            ],
+            [
+              4,
+              5
+            ],
+            [
+              6,
+              4
+            ]
+          ],
+          "non_uniform": true,
+          "normal_total": 12,
+          "score_demand_quantiles": [
+            [
+              2,
+              3
+            ],
+            [
+              4,
+              5
+            ],
+            [
+              6,
+              4
+            ]
+          ]
+        },
+        "4x": {
+          "calibration_digest": "f2f3903265266eef67e679ce92ada23db31b6da829fbf2cc347b7a9e2d77245d",
+          "candidate_demand_quantiles": [
+            [
+              2,
+              255
+            ],
+            [
+              4,
+              255
+            ],
+            [
+              6,
+              255
+            ]
+          ],
+          "dense_layer_budgets": [
+            [
+              2,
+              7
+            ],
+            [
+              4,
+              9
+            ],
+            [
+              6,
+              8
+            ]
+          ],
+          "global_budget": 24,
+          "global_budget_utilization": 0.75,
+          "layer_budgets": [
+            [
+              2,
+              5
+            ],
+            [
+              4,
+              7
+            ],
+            [
+              6,
+              6
+            ]
+          ],
+          "non_uniform": true,
+          "normal_total": 18,
+          "score_demand_quantiles": [
+            [
+              2,
+              5
+            ],
+            [
+              4,
+              7
+            ],
+            [
+              6,
+              6
+            ]
+          ]
+        }
+      },
+      "captured_queries_per_layer": 7168,
+      "captured_query_count": 21504,
+      "checkpoint": {
+        "bytes": 222269497,
+        "path": "artifacts/adaptive_v4_memory/paper_grade/training/s55/seed-6071401/s55-step-1000.pt",
+        "sha256": "0a8330ed5c2bec8372eb32b575414e9b65509d9a597f8911b546bc31be8c360d"
+      },
+      "conversations": 2304,
+      "examples_per_family": 256,
+      "layers": [
+        2,
+        4,
+        6
+      ],
+      "raw_artifact": {
+        "path": "artifacts/adaptive_v4_memory/paper_grade/calibration_matrix/s55/seed-6071401/p1-layer-quotas.json",
+        "sha256": "202fc912cbf625701c2ec47d92d221da2a826c0a1a6b7527a3a86c473e09a716"
+      },
+      "scale": "s55",
+      "training_seed": 6071401
+    },
+    {
+      "calibration_seed": 7071402,
+      "calibrations": {
+        "1x": {
+          "calibration_digest": "d4c8813e3b5d7014eab1d4c35ba620c51a0c6c2b406dc8f926611989e6343ef3",
+          "candidate_demand_quantiles": [
+            [
+              2,
+              255
+            ],
+            [
+              4,
+              255
+            ],
+            [
+              6,
+              255
+            ]
+          ],
+          "dense_layer_budgets": [
+            [
+              2,
+              8
+            ],
+            [
+              4,
+              8
+            ],
+            [
+              6,
+              8
+            ]
+          ],
+          "global_budget": 6,
+          "global_budget_utilization": 1.0,
+          "layer_budgets": [
+            [
+              2,
+              2
+            ],
+            [
+              4,
+              2
+            ],
+            [
+              6,
+              2
+            ]
+          ],
+          "non_uniform": false,
+          "normal_total": 6,
+          "score_demand_quantiles": [
+            [
+              2,
+              2
+            ],
+            [
+              4,
+              6
+            ],
+            [
+              6,
+              10
+            ]
+          ]
+        },
+        "2x": {
+          "calibration_digest": "c99d8c2eaad67fbc97d2c428361a6aede948636457166b33247cceb8e947e1f5",
+          "candidate_demand_quantiles": [
+            [
+              2,
+              255
+            ],
+            [
+              4,
+              255
+            ],
+            [
+              6,
+              255
+            ]
+          ],
+          "dense_layer_budgets": [
+            [
+              2,
+              7
+            ],
+            [
+              4,
+              8
+            ],
+            [
+              6,
+              9
+            ]
+          ],
+          "global_budget": 12,
+          "global_budget_utilization": 1.0,
+          "layer_budgets": [
+            [
+              2,
+              3
+            ],
+            [
+              4,
+              4
+            ],
+            [
+              6,
+              5
+            ]
+          ],
+          "non_uniform": true,
+          "normal_total": 12,
+          "score_demand_quantiles": [
+            [
+              2,
+              4
+            ],
+            [
+              4,
+              8
+            ],
+            [
+              6,
+              12
+            ]
+          ]
+        },
+        "4x": {
+          "calibration_digest": "e432acd2b9f990e784b08403cf192e9e2c612f2db76ae13f160e21d9ac332404",
+          "candidate_demand_quantiles": [
+            [
+              2,
+              255
+            ],
+            [
+              4,
+              255
+            ],
+            [
+              6,
+              255
+            ]
+          ],
+          "dense_layer_budgets": [
+            [
+              2,
+              5
+            ],
+            [
+              4,
+              8
+            ],
+            [
+              6,
+              11
+            ]
+          ],
+          "global_budget": 24,
+          "global_budget_utilization": 1.0,
+          "layer_budgets": [
+            [
+              2,
+              5
+            ],
+            [
+              4,
+              8
+            ],
+            [
+              6,
+              11
+            ]
+          ],
+          "non_uniform": true,
+          "normal_total": 24,
+          "score_demand_quantiles": [
+            [
+              2,
+              6
+            ],
+            [
+              4,
+              10
+            ],
+            [
+              6,
+              14
+            ]
+          ]
+        }
+      },
+      "captured_queries_per_layer": 7168,
+      "captured_query_count": 21504,
+      "checkpoint": {
+        "bytes": 222269497,
+        "path": "artifacts/adaptive_v4_memory/paper_grade/training/s55/seed-6071402/s55-step-1000.pt",
+        "sha256": "cf1b9dad4cb00370be2268306b872635ae02eb5ca26aaf4b641753ecabab4f55"
+      },
+      "conversations": 2304,
+      "examples_per_family": 256,
+      "layers": [
+        2,
+        4,
+        6
+      ],
+      "raw_artifact": {
+        "path": "artifacts/adaptive_v4_memory/paper_grade/calibration_matrix/s55/seed-6071402/p1-layer-quotas.json",
+        "sha256": "a6ddea75e847490db84e23ccaada8c32a629a8d3df5936007bbfaafdea2da18c"
+      },
+      "scale": "s55",
+      "training_seed": 6071402
+    },
+    {
+      "calibration_seed": 7071403,
+      "calibrations": {
+        "1x": {
+          "calibration_digest": "9d2cb4d9a1659eb090427deb9332e0392a2f3859ddd1681a54bf0a7e772ce0ff",
+          "candidate_demand_quantiles": [
+            [
+              2,
+              255
+            ],
+            [
+              4,
+              255
+            ],
+            [
+              6,
+              255
+            ]
+          ],
+          "dense_layer_budgets": [
+            [
+              2,
+              8
+            ],
+            [
+              4,
+              8
+            ],
+            [
+              6,
+              8
+            ]
+          ],
+          "global_budget": 6,
+          "global_budget_utilization": 1.0,
+          "layer_budgets": [
+            [
+              2,
+              2
+            ],
+            [
+              4,
+              2
+            ],
+            [
+              6,
+              2
+            ]
+          ],
+          "non_uniform": false,
+          "normal_total": 6,
+          "score_demand_quantiles": [
+            [
+              2,
+              3
+            ],
+            [
+              4,
+              3
+            ],
+            [
+              6,
+              3
+            ]
+          ]
+        },
+        "2x": {
+          "calibration_digest": "3af25dab8e126d056ff0856cf5fe934812881c309719052557c321d95e6bf1f6",
+          "candidate_demand_quantiles": [
+            [
+              2,
+              255
+            ],
+            [
+              4,
+              255
+            ],
+            [
+              6,
+              255
+            ]
+          ],
+          "dense_layer_budgets": [
+            [
+              2,
+              8
+            ],
+            [
+              4,
+              8
+            ],
+            [
+              6,
+              8
+            ]
+          ],
+          "global_budget": 12,
+          "global_budget_utilization": 1.0,
+          "layer_budgets": [
+            [
+              2,
+              4
+            ],
+            [
+              4,
+              4
+            ],
+            [
+              6,
+              4
+            ]
+          ],
+          "non_uniform": false,
+          "normal_total": 12,
+          "score_demand_quantiles": [
+            [
+              2,
+              5
+            ],
+            [
+              4,
+              4
+            ],
+            [
+              6,
+              5
+            ]
+          ]
+        },
+        "4x": {
+          "calibration_digest": "5839cd76e8db31702a16582c96519e85b6dd212e29cb5c81bb3198a8fb27bb38",
+          "candidate_demand_quantiles": [
+            [
+              2,
+              255
+            ],
+            [
+              4,
+              255
+            ],
+            [
+              6,
+              255
+            ]
+          ],
+          "dense_layer_budgets": [
+            [
+              2,
+              8
+            ],
+            [
+              4,
+              8
+            ],
+            [
+              6,
+              8
+            ]
+          ],
+          "global_budget": 24,
+          "global_budget_utilization": 0.8333333333333334,
+          "layer_budgets": [
+            [
+              2,
+              7
+            ],
+            [
+              4,
+              6
+            ],
+            [
+              6,
+              7
+            ]
+          ],
+          "non_uniform": true,
+          "normal_total": 20,
+          "score_demand_quantiles": [
+            [
+              2,
+              7
+            ],
+            [
+              4,
+              6
+            ],
+            [
+              6,
+              7
+            ]
+          ]
+        }
+      },
+      "captured_queries_per_layer": 7168,
+      "captured_query_count": 21504,
+      "checkpoint": {
+        "bytes": 222269497,
+        "path": "artifacts/adaptive_v4_memory/paper_grade/training/s55/seed-6071403/s55-step-1000.pt",
+        "sha256": "b0043170cd2ee43f3c091efafaa17d804a2e0ec67f2b66eaf41042806ea38c02"
+      },
+      "conversations": 2304,
+      "examples_per_family": 256,
+      "layers": [
+        2,
+        4,
+        6
+      ],
+      "raw_artifact": {
+        "path": "artifacts/adaptive_v4_memory/paper_grade/calibration_matrix/s55/seed-6071403/p1-layer-quotas.json",
+        "sha256": "3d972839074336e1bcbe1840b8bca5a7a29ed824c51ae4831ef806ee503e4f13"
+      },
+      "scale": "s55",
+      "training_seed": 6071403
+    },
+    {
+      "calibration_seed": 7071404,
+      "calibrations": {
+        "1x": {
+          "calibration_digest": "ed188d22e31d6c0407fab60830bd6a52cac21d34c8eada61fcda87ea67137456",
+          "candidate_demand_quantiles": [
+            [
+              2,
+              255
+            ],
+            [
+              4,
+              255
+            ],
+            [
+              6,
+              255
+            ]
+          ],
+          "dense_layer_budgets": [
+            [
+              2,
+              8
+            ],
+            [
+              4,
+              8
+            ],
+            [
+              6,
+              8
+            ]
+          ],
+          "global_budget": 6,
+          "global_budget_utilization": 1.0,
+          "layer_budgets": [
+            [
+              2,
+              2
+            ],
+            [
+              4,
+              2
+            ],
+            [
+              6,
+              2
+            ]
+          ],
+          "non_uniform": false,
+          "normal_total": 6,
+          "score_demand_quantiles": [
+            [
+              2,
+              2
+            ],
+            [
+              4,
+              2
+            ],
+            [
+              6,
+              2
+            ]
+          ]
+        },
+        "2x": {
+          "calibration_digest": "3808a18f941e23218ee4d7b054a7b8c3c91ece7b6ad288db0af0c960c7f6bf51",
+          "candidate_demand_quantiles": [
+            [
+              2,
+              255
+            ],
+            [
+              4,
+              255
+            ],
+            [
+              6,
+              255
+            ]
+          ],
+          "dense_layer_budgets": [
+            [
+              2,
+              8
+            ],
+            [
+              4,
+              8
+            ],
+            [
+              6,
+              8
+            ]
+          ],
+          "global_budget": 12,
+          "global_budget_utilization": 0.75,
+          "layer_budgets": [
+            [
+              2,
+              3
+            ],
+            [
+              4,
+              3
+            ],
+            [
+              6,
+              3
+            ]
+          ],
+          "non_uniform": false,
+          "normal_total": 9,
+          "score_demand_quantiles": [
+            [
+              2,
+              3
+            ],
+            [
+              4,
+              3
+            ],
+            [
+              6,
+              3
+            ]
+          ]
+        },
+        "4x": {
+          "calibration_digest": "f73148b808cbee0e2938c8d3ccc82c171dc3a415f87db77de9e6dae4d8db2242",
+          "candidate_demand_quantiles": [
+            [
+              2,
+              255
+            ],
+            [
+              4,
+              255
+            ],
+            [
+              6,
+              255
+            ]
+          ],
+          "dense_layer_budgets": [
+            [
+              2,
+              8
+            ],
+            [
+              4,
+              8
+            ],
+            [
+              6,
+              8
+            ]
+          ],
+          "global_budget": 24,
+          "global_budget_utilization": 0.625,
+          "layer_budgets": [
+            [
+              2,
+              5
+            ],
+            [
+              4,
+              5
+            ],
+            [
+              6,
+              5
+            ]
+          ],
+          "non_uniform": false,
+          "normal_total": 15,
+          "score_demand_quantiles": [
+            [
+              2,
+              5
+            ],
+            [
+              4,
+              5
+            ],
+            [
+              6,
+              5
+            ]
+          ]
+        }
+      },
+      "captured_queries_per_layer": 7168,
+      "captured_query_count": 21504,
+      "checkpoint": {
+        "bytes": 222269497,
+        "path": "artifacts/adaptive_v4_memory/paper_grade/training/s55/seed-6071404/s55-step-1000.pt",
+        "sha256": "6b5fd547cd42fa983abb6c1c2866c60f84bf1449bfecdef8780485d0027de3b9"
+      },
+      "conversations": 2304,
+      "examples_per_family": 256,
+      "layers": [
+        2,
+        4,
+        6
+      ],
+      "raw_artifact": {
+        "path": "artifacts/adaptive_v4_memory/paper_grade/calibration_matrix/s55/seed-6071404/p1-layer-quotas.json",
+        "sha256": "6db7923b24886b39e7294e7bf14c998c6ddbd86bc718904bbd1e20081d883cbd"
+      },
+      "scale": "s55",
+      "training_seed": 6071404
+    },
+    {
+      "calibration_seed": 7071405,
+      "calibrations": {
+        "1x": {
+          "calibration_digest": "a45cb9f85185fa865eba32da72893cc781b9c83535ea34658d392301fb2ddd26",
+          "candidate_demand_quantiles": [
+            [
+              2,
+              255
+            ],
+            [
+              4,
+              255
+            ],
+            [
+              6,
+              255
+            ]
+          ],
+          "dense_layer_budgets": [
+            [
+              2,
+              8
+            ],
+            [
+              4,
+              8
+            ],
+            [
+              6,
+              8
+            ]
+          ],
+          "global_budget": 6,
+          "global_budget_utilization": 1.0,
+          "layer_budgets": [
+            [
+              2,
+              2
+            ],
+            [
+              4,
+              2
+            ],
+            [
+              6,
+              2
+            ]
+          ],
+          "non_uniform": false,
+          "normal_total": 6,
+          "score_demand_quantiles": [
+            [
+              2,
+              3
+            ],
+            [
+              4,
+              2
+            ],
+            [
+              6,
+              4
+            ]
+          ]
+        },
+        "2x": {
+          "calibration_digest": "9763c52de21c8e2762b1c7cf5845930a586479f92a4fc7d16e5beb359b18691d",
+          "candidate_demand_quantiles": [
+            [
+              2,
+              255
+            ],
+            [
+              4,
+              255
+            ],
+            [
+              6,
+              255
+            ]
+          ],
+          "dense_layer_budgets": [
+            [
+              2,
+              8
+            ],
+            [
+              4,
+              7
+            ],
+            [
+              6,
+              9
+            ]
+          ],
+          "global_budget": 12,
+          "global_budget_utilization": 1.0,
+          "layer_budgets": [
+            [
+              2,
+              4
+            ],
+            [
+              4,
+              3
+            ],
+            [
+              6,
+              5
+            ]
+          ],
+          "non_uniform": true,
+          "normal_total": 12,
+          "score_demand_quantiles": [
+            [
+              2,
+              4
+            ],
+            [
+              4,
+              3
+            ],
+            [
+              6,
+              6
+            ]
+          ]
+        },
+        "4x": {
+          "calibration_digest": "42e72caa21173d94db94a8864bf6cfd1b6cf305d6536694d1a76c45c58ec6e0e",
+          "candidate_demand_quantiles": [
+            [
+              2,
+              255
+            ],
+            [
+              4,
+              255
+            ],
+            [
+              6,
+              255
+            ]
+          ],
+          "dense_layer_budgets": [
+            [
+              2,
+              8
+            ],
+            [
+              4,
+              7
+            ],
+            [
+              6,
+              9
+            ]
+          ],
+          "global_budget": 24,
+          "global_budget_utilization": 0.7916666666666666,
+          "layer_budgets": [
+            [
+              2,
+              6
+            ],
+            [
+              4,
+              5
+            ],
+            [
+              6,
+              8
+            ]
+          ],
+          "non_uniform": true,
+          "normal_total": 19,
+          "score_demand_quantiles": [
+            [
+              2,
+              6
+            ],
+            [
+              4,
+              5
+            ],
+            [
+              6,
+              8
+            ]
+          ]
+        }
+      },
+      "captured_queries_per_layer": 7168,
+      "captured_query_count": 21504,
+      "checkpoint": {
+        "bytes": 222269497,
+        "path": "artifacts/adaptive_v4_memory/paper_grade/training/s55/seed-6071405/s55-step-1000.pt",
+        "sha256": "488f7f0f7dadeeb4c13fe1fb7d357b4fdad88599611a1dd7bcfa04107418732a"
+      },
+      "conversations": 2304,
+      "examples_per_family": 256,
+      "layers": [
+        2,
+        4,
+        6
+      ],
+      "raw_artifact": {
+        "path": "artifacts/adaptive_v4_memory/paper_grade/calibration_matrix/s55/seed-6071405/p1-layer-quotas.json",
+        "sha256": "32d4aada92001f00fa8ede34dc991d7d90e03e3aab8062c27ed400ecab567d5e"
+      },
+      "scale": "s55",
+      "training_seed": 6071405
+    }
+  ],
+  "schema_version": 1,
+  "source_commit": "6a4b4efb4b8e992cf4ef9faf2600ee989df8fcbe",
+  "validation": {
+    "all_budget_bounds_verified": true,
+    "all_checkpoint_digests_verified": true,
+    "all_family_context_slices_verified": true,
+    "all_raw_digests_verified": true,
+    "all_sources_clean_and_identical": true,
+    "exact_seed_matrix_verified": true,
+    "held_out_evaluation_seed_used": false,
+    "targets_used_for_fit": false,
+    "uniform_1x_fixed_floor_verified": true
+  }
+}
