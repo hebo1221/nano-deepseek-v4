@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from p3_sequence_gate import require_p3_sequence_gate
 from transformers import AutoTokenizer
 
 RULER_REVISION = "38da79d79519ef87aa46ae804f838e1eab7f86d7"
@@ -204,7 +205,20 @@ def main() -> None:
     parser.add_argument("--length", type=int, action="append", choices=LENGTHS)
     parser.add_argument("--samples-per-task", type=int, default=500)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument(
+        "--p2-matrix",
+        type=Path,
+        default=Path("artifacts/adaptive_v4_memory/paper_grade/p2-core-quality-matrix.json"),
+    )
+    parser.add_argument(
+        "--causal-gate",
+        type=Path,
+        default=Path(
+            "research/adaptive_v4_memory/results/p2-causal-ablation.summary.json"
+        ),
+    )
     args = parser.parse_args()
+    require_p3_sequence_gate(args.p2_matrix, args.causal_gate)
     ruler_root = args.ruler_root.resolve()
     tokenizer_path = args.tokenizer_snapshot.resolve()
     output_root = args.output_root.resolve()
