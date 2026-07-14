@@ -40,14 +40,31 @@ CONTRASTS = {
     "layer_identity_with_pins": ("calibrated+pins", "shuffled-quota+pins"),
     "layer_identity_without_pins": ("calibrated-no-pins", "shuffled-quota"),
     "local_adaptation_with_pins": ("local+pins", "calibrated+pins"),
-    "hierarchy_beyond_local": ("hierarchical+pins", "local+pins"),
+    "cross_layer_prior": ("hierarchical+pins", "local+pins"),
     "score_concentration": ("hierarchical+pins", "hierarchical+pins-no-score"),
     "temporal_reuse": ("hierarchical+pins", "hierarchical+pins-no-temporal"),
     "refresh_reuse": ("hierarchical+pins", "hierarchical+pins-no-refresh"),
+    "protected_pins": ("hierarchical+pins", "hierarchical-no-pins"),
     "dense_fallback": ("hierarchical+pins+fallback", "hierarchical+pins"),
     "fixed_top_p_0_5": ("fixed-top-p-0.5", "fixed"),
     "fixed_top_p_0_8": ("fixed-top-p-0.8", "fixed"),
 }
+PREREGISTERED_COMPONENT_CONTRASTS = {
+    "score_concentration": ("hierarchical+pins", "hierarchical+pins-no-score"),
+    "temporal_reuse": ("hierarchical+pins", "hierarchical+pins-no-temporal"),
+    "cross_layer_prior": ("hierarchical+pins", "local+pins"),
+    "refresh_reuse": ("hierarchical+pins", "hierarchical+pins-no-refresh"),
+    "protected_pins": ("hierarchical+pins", "hierarchical-no-pins"),
+    "dense_fallback": ("hierarchical+pins+fallback", "hierarchical+pins"),
+}
+REQUIRED_ABLATION_FACTORS = [
+    "score-concentration",
+    "temporal-reuse",
+    "cross-layer-signal",
+    "refresh-reuse",
+    "protected-pins",
+    "dense-fallback",
+]
 
 
 def sha256(path: Path) -> str:
@@ -478,6 +495,24 @@ def main() -> None:
         "Wrong causal matrix id.",
     )
     _require(matrix.get("completed_shards") == EXPECTED_SHARDS, "Causal matrix is incomplete.")
+    design_manifest_path = _verify_dependency(
+        matrix.get("prerequisites", {}).get("design"), "causal design manifest"
+    )
+    design_manifest = json.loads(design_manifest_path.read_text())
+    registered_component_contrasts = design_manifest.get("component_contrasts", {})
+    _require(
+        {
+            name: tuple(pair)
+            for name, pair in registered_component_contrasts.items()
+            if isinstance(pair, list)
+        }
+        == PREREGISTERED_COMPONENT_CONTRASTS,
+        "Preregistered causal component contrasts drifted.",
+    )
+    _require(
+        set(PREREGISTERED_COMPONENT_CONTRASTS).issubset(CONTRASTS),
+        "A preregistered causal component contrast is not summarized.",
+    )
     design = matrix.get("frozen_design", {})
     _require(design.get("total_expected_shards") == EXPECTED_SHARDS, "Shard design drifted.")
     _require(tuple(design.get("scales", ())) == ("s55", "s151"), "Scale drifted.")
@@ -806,6 +841,10 @@ def main() -> None:
         "experiment_id": "p2-causal-ablation-audit-v1",
         "source": {"commit": source_commit, "dirty": False},
         "raw_matrix": {"path": str(args.matrix), "sha256": sha256(args.matrix)},
+        "design_manifest": {
+            "path": str(design_manifest_path),
+            "sha256": sha256(design_manifest_path),
+        },
         "implementation_digest": implementation_digest,
         "audit": {
             "all_raw_shards_verified": True,
@@ -815,6 +854,9 @@ def main() -> None:
             "all_physical_predictions_identical": True,
             "exact_config_reuse_verified": True,
             "registered_causal_arms": len(shard.ALL_ARM_NAMES),
+            "registered_paired_contrasts": len(CONTRASTS),
+            "preregistered_component_contrasts_verified": True,
+            "required_ablation_factors_verified": REQUIRED_ABLATION_FACTORS,
             "supplemental_fixed_top_p_arms_verified": True,
             "offline_oracle_excluded_from_primary_gate": True,
             "quality_execution_counts": quality_execution_counts,

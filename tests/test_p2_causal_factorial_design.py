@@ -8,6 +8,7 @@ from typing import Any
 SCRIPTS = Path(__file__).resolve().parents[1] / "research/adaptive_v4_memory/scripts"
 sys.path.insert(0, str(SCRIPTS))
 
+import summarize_p2_causal_factorial as summary  # noqa: E402
 from freeze_p2_causal_factorial_arms import (  # noqa: E402
     COMPONENT_ARMS,
     PRIMARY_ARMS,
@@ -60,10 +61,9 @@ def test_manifest_matches_implemented_arms_and_strict_budget_scale_gate() -> Non
     assert set(manifest["supplemental_baseline_arms"]) == {
         arm.name for arm in SUPPLEMENTAL_BASELINE_ARMS
     }
-    assert manifest["component_contrasts"]["score_concentration"] == [
-        "hierarchical+pins",
-        "hierarchical+pins-no-score",
-    ]
+    assert {
+        name: tuple(pair) for name, pair in manifest["component_contrasts"].items()
+    } == summary.PREREGISTERED_COMPONENT_CONTRASTS
     assert manifest["central_gate"]["required_budget_points"] == ["2x", "4x"]
     assert manifest["scales"] == ["s55", "s151"]
     assert len(manifest["training_seeds"]) == 5

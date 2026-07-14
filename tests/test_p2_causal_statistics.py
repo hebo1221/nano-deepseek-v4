@@ -11,6 +11,19 @@ sys.path.insert(0, str(SCRIPTS))
 import summarize_p2_causal_factorial as causal  # noqa: E402
 
 
+def test_all_preregistered_component_contrasts_are_reported() -> None:
+    assert set(causal.PREREGISTERED_COMPONENT_CONTRASTS).issubset(causal.CONTRASTS)
+    assert causal.CONTRASTS["cross_layer_prior"] == (
+        "hierarchical+pins",
+        "local+pins",
+    )
+    assert causal.CONTRASTS["protected_pins"] == (
+        "hierarchical+pins",
+        "hierarchical-no-pins",
+    )
+    assert len(causal.CONTRASTS) == 15
+
+
 def test_seed_cluster_statistics_are_deterministic_and_seed_level() -> None:
     first = causal.seed_cluster_statistics(
         [0.1] * 5, label="constant", confidence=0.9875, resamples=1_000

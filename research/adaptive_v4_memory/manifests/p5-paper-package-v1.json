@@ -78,6 +78,16 @@
         "unique_shards": 9000,
         "exact_config_reuse_verified": true,
         "registered_causal_arms": 16,
+        "registered_paired_contrasts": 15,
+        "preregistered_component_contrasts_verified": true,
+        "required_ablation_factors_verified": [
+          "score-concentration",
+          "temporal-reuse",
+          "cross-layer-signal",
+          "refresh-reuse",
+          "protected-pins",
+          "dense-fallback"
+        ],
         "supplemental_fixed_top_p_arms_verified": true,
         "offline_oracle_excluded_from_primary_gate": true
       }
