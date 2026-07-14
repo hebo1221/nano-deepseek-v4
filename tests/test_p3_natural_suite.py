@@ -299,6 +299,10 @@ def _natural_benchmark_summaries(tmp_path: Path, manifest_path: Path) -> dict[st
                     "both_failed": 1,
                 },
                 "paired_examples": expected[name],
+                "paired_clusters": (
+                    1_844 if name == "SCBench" else expected[name]
+                ),
+                "cluster_unit": "shared-context-row" if name == "SCBench" else "example",
                 "mean_difference": 0.0,
                 "mean_difference_percentage_points": 0.0,
                 "paired_bootstrap_95_ci": [0.0, 0.0],
@@ -657,6 +661,8 @@ def test_natural_benchmark_summary_reports_paired_quality_and_physical_contrasts
 
     contrast = result["paired_quality_contrast"]
     assert contrast["paired_examples"] == 2
+    assert contrast["paired_clusters"] == 2
+    assert contrast["cluster_unit"] == "example"
     assert contrast["mean_difference"] == -0.25
     assert contrast["failure_as_zero"] is True
     assert contrast["bootstrap_resamples"] == 10_000

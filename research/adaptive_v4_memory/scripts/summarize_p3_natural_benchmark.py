@@ -73,26 +73,36 @@ def _stable_seed(label: str) -> int:
     return int.from_bytes(hashlib.sha256(label.encode()).digest()[:8], "big")
 
 
-def _paired_bootstrap(values: list[float], *, label: str) -> dict[str, Any]:
-    array = np.asarray(values, dtype=np.float64)
-    _require(len(array) > 0, "Paired natural contrast is empty.")
-    unique, counts = np.unique(array, return_counts=True)
-    probabilities = counts / len(array)
+def _paired_cluster_bootstrap(
+    clusters: dict[str, list[float]], *, label: str, cluster_unit: str
+) -> dict[str, Any]:
+    _require(bool(clusters), "Paired natural contrast is empty.")
+    ordered = [clusters[key] for key in sorted(clusters)]
+    cluster_sums = np.asarray([sum(values) for values in ordered], dtype=np.float64)
+    cluster_counts = np.asarray([len(values) for values in ordered], dtype=np.float64)
+    array = np.asarray([value for values in ordered for value in values], dtype=np.float64)
+    _require(bool(np.all(cluster_counts > 0)), "Paired natural cluster is empty.")
     rng = np.random.default_rng(_stable_seed(label))
     means = np.empty(BOOTSTRAP_RESAMPLES, dtype=np.float64)
     batch_size = 128
+    probabilities = np.full(len(ordered), 1.0 / len(ordered), dtype=np.float64)
     for start in range(0, BOOTSTRAP_RESAMPLES, batch_size):
         stop = min(start + batch_size, BOOTSTRAP_RESAMPLES)
-        sampled = rng.multinomial(len(array), probabilities, size=stop - start)
-        means[start:stop] = sampled @ unique / len(array)
+        sampled = rng.multinomial(len(ordered), probabilities, size=stop - start)
+        means[start:stop] = (sampled @ cluster_sums) / (sampled @ cluster_counts)
     alpha = 1.0 - CONFIDENCE_LEVEL
     lower, upper = np.quantile(means, (alpha / 2.0, 1.0 - alpha / 2.0))
     lower_tail = (np.count_nonzero(means <= 0.0) + 1) / (BOOTSTRAP_RESAMPLES + 1)
     upper_tail = (np.count_nonzero(means >= 0.0) + 1) / (BOOTSTRAP_RESAMPLES + 1)
-    standard_deviation = float(array.std(ddof=1)) if len(array) > 1 else 0.0
+    cluster_means = cluster_sums / cluster_counts
+    standard_deviation = (
+        float(cluster_means.std(ddof=1)) if len(cluster_means) > 1 else 0.0
+    )
     mean = float(array.mean())
     return {
         "paired_examples": len(array),
+        "paired_clusters": len(ordered),
+        "cluster_unit": cluster_unit,
         "mean_difference": mean,
         "mean_difference_percentage_points": mean * 100.0,
         "paired_bootstrap_95_ci": [float(lower), float(upper)],
@@ -101,8 +111,7 @@ def _paired_bootstrap(values: list[float], *, label: str) -> dict[str, Any]:
             float(upper) * 100.0,
         ],
         "two_sided_bootstrap_p": min(1.0, 2.0 * min(lower_tail, upper_tail)),
-        "cohens_dz": mean / standard_deviation if standard_deviation > 0.0 else None,
-        "sample_standard_deviation": standard_deviation,
+        "cluster_mean_sample_standard_deviation": standard_deviation,
         "bootstrap_resamples": BOOTSTRAP_RESAMPLES,
         "confidence_level": CONFIDENCE_LEVEL,
         "bootstrap_seed": _stable_seed(label),
@@ -127,7 +136,8 @@ def _paired_contrasts(
         set(records[comparator]) == set(records[candidate]),
         "Natural paired contrast example identities drifted.",
     )
-    quality_differences: list[float] = []
+    quality_clusters: dict[str, list[float]] = {}
+    cluster_unit = "shared-context-row" if benchmark == "SCBench" else "example"
     measurement_values: dict[str, dict[str, list[float]]] = {
         metric: {comparator: [], candidate: []}
         for metric in ("latency_ms", "peak_hbm_bytes", "hot_resident_bytes")
@@ -159,7 +169,14 @@ def _paired_contrasts(
             failure_pairing["both_failed"] += 1
         reference_score = float(reference["score"]) if reference_scored else 0.0
         treatment_score = float(treatment["score"]) if treatment_scored else 0.0
-        quality_differences.append(treatment_score - reference_score)
+        difference = treatment_score - reference_score
+        if benchmark == "SCBench":
+            cluster_id = (
+                f'{reference["mode"]}:{reference["task"]}:{reference["row_index"]}'
+            )
+        else:
+            cluster_id = identifier
+        quality_clusters.setdefault(cluster_id, []).append(difference)
         for metric in measurement_values:
             measurement_values[metric][comparator].append(float(reference[metric]))
             measurement_values[metric][candidate].append(float(treatment[metric]))
@@ -169,7 +186,11 @@ def _paired_contrasts(
         "failure_as_zero": True,
         "jointly_scored_examples": jointly_scored,
         "failure_pairing": failure_pairing,
-        **_paired_bootstrap(quality_differences, label=f"p3-natural:{benchmark}:quality"),
+        **_paired_cluster_bootstrap(
+            quality_clusters,
+            label=f"p3-natural:{benchmark}:quality",
+            cluster_unit=cluster_unit,
+        ),
     }
     measurements: dict[str, Any] = {}
     for metric, by_arm in measurement_values.items():

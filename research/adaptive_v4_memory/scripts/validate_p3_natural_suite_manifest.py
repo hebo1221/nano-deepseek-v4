@@ -98,6 +98,8 @@ def validate_manifest(payload: dict[str, Any]) -> dict[str, Any]:
         or statistics.get("operational_failure_score") != 0.0
         or statistics.get("bootstrap_resamples") != 10_000
         or statistics.get("confidence_level") != 0.95
+        or "SCBench" not in statistics.get("paired_unit", "")
+        or "paired cluster bootstrap" not in statistics.get("interval", "")
         or "do not replace" not in statistics.get("multiplicity", "")
         or tuple(measurement_reporting.get("paired_physical_contrasts", ()))
         != ("latency_ms", "peak_hbm_bytes", "hot_resident_bytes")

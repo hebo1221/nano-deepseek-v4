@@ -166,8 +166,12 @@ def audit_benchmark(
             "measurements": measurements,
         }
     contrast = payload.get("paired_quality_contrast", {})
+    expected_clusters = 1_844 if name == "SCBench" else expected_examples
     _require(
         contrast.get("paired_examples") == expected_examples
+        and contrast.get("paired_clusters") == expected_clusters
+        and contrast.get("cluster_unit")
+        == ("shared-context-row" if name == "SCBench" else "example")
         and contrast.get("candidate") == required_arms[1]
         and contrast.get("comparator") == required_arms[0]
         and contrast.get("failure_as_zero") is True
