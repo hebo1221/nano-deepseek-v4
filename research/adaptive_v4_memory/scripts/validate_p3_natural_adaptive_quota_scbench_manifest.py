@@ -22,6 +22,12 @@ TASKS = (
 )
 ARMS = ("fixed+pins", "natural-adaptive-quota+pins")
 PREDICTIONS_PER_ARM = 10_286
+ALLOWED_FAILURE_TYPES = (
+    "unsupported-context",
+    "empty-generation",
+    "oom",
+    "runtime-error",
+)
 
 
 def _require(condition: bool, message: str) -> None:
@@ -70,9 +76,24 @@ def validate_manifest(payload: dict[str, Any]) -> None:
     _require(
         statistics.get("paired_cluster_bootstrap_resamples") == 10_000
         and statistics.get("paired_cluster_bootstrap_seed") == 9_371_504
+        and statistics.get("derived_seed_policy")
+        == (
+            "overall uses the base seed; modes use base plus 1-based manifest index; "
+            "mode-task cells use base plus 100 plus 1-based manifest Cartesian index"
+        )
         and statistics.get("holm_family_size") == len(MODES) * len(TASKS)
         and "scores zero" in statistics.get("failure_policy", ""),
         "Adaptive SCBench statistics drifted.",
+    )
+    failure_reporting = payload.get("failure_reporting", {})
+    _require(
+        tuple(failure_reporting.get("allowed_failure_types", ())) == ALLOWED_FAILURE_TYPES
+        and failure_reporting.get("unknown_or_missing_failure_type_policy")
+        == "reject the artifact during audit"
+        and failure_reporting.get("successful_record_policy") == "failure_type must be null"
+        and "score allowed failures zero"
+        in failure_reporting.get("paired_scoring_policy", ""),
+        "Adaptive SCBench failure reporting drifted.",
     )
     gate = payload.get("confirmation_gate", {})
     _require(

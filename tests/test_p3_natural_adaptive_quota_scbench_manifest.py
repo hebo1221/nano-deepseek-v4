@@ -48,3 +48,19 @@ def test_adaptive_scbench_rejects_outcome_dependent_scorer_selection() -> None:
 
     with pytest.raises(ValueError, match="scorer selection drifted"):
         adaptive.validate_manifest(payload)
+
+
+def test_adaptive_scbench_freezes_operational_failure_vocabulary() -> None:
+    payload = _manifest()
+
+    assert payload["failure_reporting"]["allowed_failure_types"] == [
+        "unsupported-context",
+        "empty-generation",
+        "oom",
+        "runtime-error",
+    ]
+
+    drifted = deepcopy(payload)
+    drifted["failure_reporting"]["allowed_failure_types"].append("driver-reset")
+    with pytest.raises(ValueError, match="failure reporting drifted"):
+        adaptive.validate_manifest(drifted)

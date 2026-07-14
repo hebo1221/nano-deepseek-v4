@@ -78,10 +78,22 @@
     "primary_unit": "paired turn with shared-context-cluster bootstrap",
     "paired_cluster_bootstrap_resamples": 10000,
     "paired_cluster_bootstrap_seed": 9371504,
+    "derived_seed_policy": "overall uses the base seed; modes use base plus 1-based manifest index; mode-task cells use base plus 100 plus 1-based manifest Cartesian index",
     "confidence": 0.95,
     "report_by_mode_task": true,
     "holm_family_size": 24,
     "failure_policy": "intention-to-evaluate; every operational or unsupported-context failure scores zero and is never dropped or silently retried"
+  },
+  "failure_reporting": {
+    "allowed_failure_types": [
+      "unsupported-context",
+      "empty-generation",
+      "oom",
+      "runtime-error"
+    ],
+    "unknown_or_missing_failure_type_policy": "reject the artifact during audit",
+    "successful_record_policy": "failure_type must be null",
+    "paired_scoring_policy": "retain every frozen turn and score allowed failures zero"
   },
   "confirmation_gate": {
     "all_required": true,

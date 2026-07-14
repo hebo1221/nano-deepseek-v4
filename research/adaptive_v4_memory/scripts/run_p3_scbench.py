@@ -563,6 +563,10 @@ def main() -> None:
             "adaptive_prerequisite_sha256": {
                 name: metadata["sha256"] for name, metadata in adaptive_prerequisites.items()
             },
+            "sequence_gate_dependency_sha256": {
+                name: metadata["sha256"]
+                for name, metadata in sequence_decision.get("dependencies", {}).items()
+            },
             "model_snapshot_digest_set_sha256": manifest["model"]["snapshot_digest_set_sha256"],
             "scorer_bundle_sha256": scorer_bundle,
             "arm_config": (
