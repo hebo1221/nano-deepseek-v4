@@ -32,6 +32,15 @@ MEASURED_REPETITIONS = reference.MEASURED_REPETITIONS
 INPUT_SEED_BASE = 9_171_400
 CELL_TIMEOUT_SECONDS = reference.CELL_TIMEOUT_SECONDS
 EXPECTED_CELLS = len(SCALES) * len(BUDGETS) * len(CONTEXTS) * len(GENERATIONS) * len(LOAD_PROFILES)
+REQUIRED_CAUSAL_TRUE_AUDITS = (
+    "exact_seed_randomization_verified",
+    "physical_controller_budget_verified",
+    "exact_statistical_cell_coverage_verified",
+    "family_holm_bonferroni_verified",
+    "contrast_holm_bonferroni_verified",
+    "primary_four_cell_bonferroni_verified",
+    "required_scale_seed_completion_verified",
+)
 IMPLEMENTATION_PATHS = (
     "nano_deepseek_v4",
     "research/adaptive_v4_memory/manifests/p2-causal-factorial-v1.json",
@@ -111,6 +120,9 @@ def require_nine_seed_causal_audit(path: Path) -> dict[str, Any]:
         and audit.get("no_budget_violations") is True
         and audit.get("all_physical_predictions_identical") is True
         and audit.get("exact_config_reuse_verified") is True
+        and audit.get("outcome_dependent_early_stopping") is False
+        and audit.get("seed_p_values_used_as_success_gate") is False
+        and all(audit.get(name) is True for name in REQUIRED_CAUSAL_TRUE_AUDITS)
         and payload.get("pooling_audit", {}).get("identical_frozen_contracts") is True
         and payload.get("pooling_audit", {}).get("disjoint_training_seeds") is True
         and gate.get("candidate") == "calibrated+pins"

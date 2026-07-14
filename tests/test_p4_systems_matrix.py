@@ -240,6 +240,15 @@ def test_p4_adaptive_gate_is_complete_but_outcome_independent(tmp_path: Path) ->
                     "no_budget_violations": True,
                     "all_physical_predictions_identical": True,
                     "exact_config_reuse_verified": True,
+                    "outcome_dependent_early_stopping": False,
+                    "seed_p_values_used_as_success_gate": False,
+                    "exact_seed_randomization_verified": True,
+                    "physical_controller_budget_verified": True,
+                    "exact_statistical_cell_coverage_verified": True,
+                    "family_holm_bonferroni_verified": True,
+                    "contrast_holm_bonferroni_verified": True,
+                    "primary_four_cell_bonferroni_verified": True,
+                    "required_scale_seed_completion_verified": True,
                 },
                 "pooling_audit": {
                     "identical_frozen_contracts": True,
@@ -263,6 +272,12 @@ def test_p4_adaptive_gate_is_complete_but_outcome_independent(tmp_path: Path) ->
     result = adaptive.require_nine_seed_causal_audit(path)
 
     assert result["primary_causal_gate"]["passed"] is False
+
+    payload = json.loads(path.read_text())
+    payload["audit"]["primary_four_cell_bonferroni_verified"] = False
+    path.write_text(json.dumps(payload))
+    with pytest.raises(ValueError, match="complete nine-seed causal audit"):
+        adaptive.require_nine_seed_causal_audit(path)
 
 
 def test_p4_adaptive_summary_preserves_paired_system_costs() -> None:
