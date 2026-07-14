@@ -209,8 +209,9 @@ The matching S151 held-out pilot is also complete. Hierarchical versus fixed
 was +5.89 pp at 1x, +2.68 pp at 2x, and tied at 4x; all net 1x/2x gains came
 from instruction persistence, while native remained best overall. Dense
 fallback again had zero net accuracy benefit. Unlike S55, S151 failed exact
-chunk=2 validation, so its full quality matrix must use token-by-token cache
-evaluation unless chunk=1 equivalence establishes the scale-specific contract.
+chunk=2 validation; the clean-source chunk=1 audit subsequently matched all
+1,260 core-policy records and 3,920 predictions exactly. Its full quality
+matrix therefore uses token-by-token cache evaluation.
 
 ## P2 training matrix
 

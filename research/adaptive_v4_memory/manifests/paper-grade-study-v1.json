@@ -1,6 +1,7 @@
 {
   "schema_version": 1,
   "experiment_id": "adaptive-v4-memory-paper-grade-v1",
+  "protocol_version": "1.1",
   "frozen_date": "2026-07-14",
   "protocol": "research/adaptive_v4_memory/paper_grade_protocol.md",
   "scales": ["s55", "s151"],
@@ -58,6 +59,34 @@
     "no-protected-pins",
     "no-dense-fallback"
   ],
+  "causal_ablation_matrix": {
+    "execution_order": "after-frozen-p2-synthetic-core",
+    "arms": [
+      "fixed",
+      "fixed+pins",
+      "calibrated-no-pins",
+      "calibrated+pins",
+      "shuffled-quota",
+      "shuffled-quota+pins",
+      "local-no-pins",
+      "local+pins",
+      "hierarchical-no-pins",
+      "hierarchical+pins"
+    ],
+    "paired_controls": [
+      "checkpoint",
+      "conversation",
+      "dtype",
+      "execution-order",
+      "fallback-setting"
+    ],
+    "hot_memory_match": {
+      "metric": "measured-mean-hot-resident-bytes",
+      "maximum_relative_difference": 0.01,
+      "retune_on": "calibration-traces-only",
+      "posthoc_accuracy_interpolation": false
+    }
+  },
   "budget_grid": [
     "1x-minimum-per-csa-layer",
     "2x-minimum-per-csa-layer",
@@ -80,6 +109,17 @@
     "minimum_improved_families": 2,
     "required_scales": 2
   },
+  "primary_causal_gate": {
+    "candidate": "calibrated+pins",
+    "comparator": "fixed+pins",
+    "same_measured_hot_memory_required": true,
+    "pooled_effect_strictly_positive": true,
+    "corrected_cluster_bootstrap_lower_bound_strictly_positive": true,
+    "positive_seed_effects_required_per_scale": 5,
+    "required_seed_count_per_scale": 5,
+    "required_scales": ["s55", "s151"],
+    "failure_interpretation": "failed-or-bounded-causal-claim"
+  },
   "natural_benchmark_order": [
     "RULER",
     "SCBench",
@@ -87,14 +127,52 @@
     "LongMemEval",
     "MRCR-or-equivalent"
   ],
+  "natural_benchmark_lengths": {
+    "RULER": [8192, 16384, 32768, 65536, 131072]
+  },
+  "natural_comparison_arms": [
+    "native-or-dense",
+    "strongest-memory-matched-fixed",
+    "fixed+pins",
+    "synthetic-qualified-calibrated",
+    "FlashMemory-compatible-implementation",
+    "IndexCache-compatible-implementation"
+  ],
   "systems_matrix": {
     "context_tokens": [8192, 32768, 131072, 512000],
     "batch_sizes": [1, 4, 8, 16],
     "concurrency": [1, 8, 32],
     "generation_tokens": [128, 512, 2048],
     "warmups_per_cell": 5,
-    "timed_repetitions_per_cell": 30
+    "timed_repetitions_per_cell": 30,
+    "required_metrics": [
+      "ttft",
+      "tpot",
+      "latency-p50",
+      "latency-p95",
+      "latency-p99",
+      "throughput",
+      "allocated-hbm",
+      "reserved-hbm",
+      "peak-hbm",
+      "total-device-hbm",
+      "pinned-host-bytes",
+      "fragmentation",
+      "h2d-bytes",
+      "d2h-bytes",
+      "useful-transfer-ratio",
+      "misses",
+      "late-misses",
+      "controller-time",
+      "indexer-time",
+      "tail-failures"
+    ]
   },
+  "evidence_ladder": [
+    "synthetic-to-natural-language",
+    "small-to-largest-compatible-to-official-v4",
+    "logical-budget-to-measured-physical-hbm"
+  ],
   "controller_early_stop": {
     "minimum_completed_seeds": 5,
     "minimum_regression_percentage_points": 10.0,

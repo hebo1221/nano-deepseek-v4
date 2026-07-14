@@ -1,8 +1,10 @@
 # Paper-grade expansion protocol
 
-Protocol version: 1.0  
+Protocol version: 1.1
 Frozen: 2026-07-14  
-Status: active, before causal-controller implementation or expanded evaluation
+Amended: 2026-07-14, before the full P2 matrix or causal-ablation analysis
+Status: active; P2 synthetic core runs first, followed by causal ablations,
+natural-language evaluation, and systems evaluation
 
 This amendment supersedes the experimental scale of the M5 pilot. It does not
 erase the pilot result: it narrows that result to the exact one-token global M2
@@ -16,6 +18,9 @@ interface and preregisters the evidence required for broader claims.
    without requiring future-layer signals?
 3. Does physical non-uniform residency improve end-to-end serving rather than
    merely reducing one cache component?
+4. After protected pins are held constant, does adaptive quota allocation add
+   quality beyond the benefit of pinning alone at the same measured hot-memory
+   footprint?
 
 The primary comparison is same-token hierarchical control versus the strongest
 fixed policy selected on calibration data. One-token global M2 is a negative
@@ -38,10 +43,23 @@ A learned lookahead predictor is exploratory until the training-free arms are
 frozen. It must use disjoint train, calibration, and test traces and may not be
 substituted for a failed primary arm after test results are observed.
 
-Required ablations remove one component at a time: score concentration,
-temporal reuse, cross-layer prior, refresh reuse, protected pins, and dense
-fallback. Every arm uses the same model checkpoint, generated examples, dtype,
-and evaluation order within a paired run.
+The primary causal factorial contains, at every eligible budget point:
+
+1. fixed allocation without protected pins (`fixed`);
+2. fixed allocation with protected pins (`fixed+pins`);
+3. calibrated allocation without protected pins (`calibrated-no-pins`);
+4. calibrated allocation with protected pins (`calibrated+pins`);
+5. calibrated quotas shuffled across eligible layers, evaluated both without
+   and with the same pin policy (`shuffled-quota[-pins]`); and
+6. layer-local and hierarchical calibrated allocation with identical pin and
+   fallback settings.
+
+This factorial is run only after the already-frozen P2 synthetic core finishes;
+the core matrix is not modified or restarted in response to ablation results.
+Additional one-component ablations remove score concentration, temporal reuse,
+cross-layer prior, refresh reuse, protected pins, and dense fallback. Every arm
+uses the same model checkpoint, generated examples, dtype, execution order, and
+paired conversations.
 
 ## 3. Models and seeds
 
@@ -116,8 +134,11 @@ layers:
 1x, 2x, 4x minimum-per-layer budget, native top-k, dense
 ```
 
-Memory-matched policies are compared using actual mean hot-resident bytes, not
-configuration labels alone.
+Memory-matched policies are compared using measured hot-resident bytes, not
+configuration labels alone. A causal pair is considered memory matched only
+when its mean measured hot-resident bytes differ by at most 1%. If the initial
+pair misses this tolerance, fixed top-k is retuned on calibration traces and
+the held-out pair is rerun; post-hoc accuracy interpolation is forbidden.
 
 ## 5. Data isolation
 
@@ -151,6 +172,17 @@ native is at most 1 percentage point, no primary family regresses by more than
 2 points, and the lower confidence bound of its improvement over the strongest
 fixed policy is non-negative on at least two families at both scales.
 
+The central causal claim has a separate, stricter gate. At the same measured
+hot-memory footprint, `calibrated+pins` must beat `fixed+pins` on both S55 and
+S151: the pooled paired effect must be positive, its 95% cluster-bootstrap lower
+bound must be greater than zero after the preregistered family correction, and
+all five seed-level effects must be positive at each scale. Any failed clause is
+reported as a failed or bounded causal claim rather than averaged away. The
+contrasts `fixed+pins - fixed` and `calibrated+pins - calibrated-no-pins`
+estimate the pin contribution; `calibrated-no-pins - fixed` and
+`calibrated+pins - fixed+pins` estimate adaptive-quota contribution; shuffled
+quotas test whether layer identity, rather than merely non-uniformity, matters.
+
 ## 7. Natural-language evaluation
 
 The minimum publishable natural evaluation is one complete established suite,
@@ -171,6 +203,12 @@ pinned checkpoint and supported runtime cannot be provisioned, the report must
 provide the exact revision, launch command, minimum accelerator/storage
 requirement, and estimated cost while withholding official-scale claims.
 
+Natural-language comparisons include native/dense, strongest memory-matched
+fixed, `fixed+pins`, and any synthetic-qualified calibrated arm. FlashMemory-
+and IndexCache-family baselines are included when their pinned implementations
+support the selected model/runtime; incompatibility is recorded explicitly and
+never replaced by a projected number.
+
 ## 8. Systems matrix
 
 At every quality-qualified policy point, measure:
@@ -185,12 +223,31 @@ generation:  128, 512, 2048 tokens
 Each cell has at least five untimed warmups and 30 timed repetitions. Report
 TTFT, TPOT, p50/p95/p99, throughput, allocated/reserved HBM, peak HBM, pinned
 host bytes, fragmentation, H2D/D2H bytes, useful transfer ratio, misses, late
-misses, controller time, and indexer time. OOM and timeout boundaries are data.
+misses, controller time, indexer time, and total device HBM at process and
+system level. OOM, timeout, numerical failure, late transfer, and tail-latency
+outliers are retained in an explicit tail-failure table.
 
 Reference PyTorch and fused production runtimes are separate result tables.
 Projected kernel speedups are never mixed with measured results.
 
-## 9. Early stopping
+## 9. Evidence ladder and execution order
+
+The proof is deliberately sequential:
+
+1. finish the frozen synthetic P2 core without changing its arms;
+2. separate pin and adaptive-quota causality with the factorial above;
+3. transfer qualified arms from synthetic tasks to the full natural suites;
+4. transfer conclusions from S55/S151 to the largest available compatible
+   model and, separately, official V4 Flash when provisioned; and
+5. replace logical block budgets with measured physical HBM, transfer traffic,
+   latency, throughput, and tail-failure evidence.
+
+Each rung may falsify transfer from the previous rung. Synthetic success is not
+described as natural-language success, small-model success is not described as
+large-model success, and logical budget matching is not described as physical
+HBM equivalence.
+
+## 10. Early stopping
 
 An individual controller arm may stop after the first scale only when all five
 seeds show more than 10 percentage points of quality regression in every
@@ -201,7 +258,7 @@ Natural-language and systems evaluation may skip a failed controller, but must
 still run native and the strongest fixed/tiered baseline. Thus a controller
 failure cannot terminate the broader cache-systems study.
 
-## 10. Claim boundary
+## 11. Claim boundary
 
 The existing M5 evidence supports only this statement:
 
@@ -213,7 +270,7 @@ control, official V4, or natural-language workloads fail. A paper-level claim
 requires the sample sizes, independent seeds, natural suite, and system matrix
 defined above.
 
-## 11. Reproducibility gate
+## 12. Reproducibility gate
 
 Every result table and figure must be generated from a digest-bound artifact.
 Manifests record source commit, dirty state, checkpoint and dataset hashes,
