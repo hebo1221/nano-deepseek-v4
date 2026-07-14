@@ -388,8 +388,13 @@ def execute(spec: dict[str, Any], *, executable: Path) -> dict[str, Any]:
     model = _load_model(Path(spec["checkpoint"]), device)
     failures: dict[str, dict[str, Any] | None] = {policy: None for policy in POLICIES}
     warmup_failures: list[dict[str, Any]] = []
+    warmup_repetitions_attempted = 0
+    warmup_paired_repetitions_completed = 0
+    warmup_policy_runs_completed = {policy: 0 for policy in POLICIES}
     seeds = spec["repetition_seeds"]
     for repetition in range(spec["warmups"]):
+        if all(failures[policy] is not None for policy in POLICIES):
+            break
         prompt, decode, input_digest = generate_inputs(
             model,
             context=cell["context"],
@@ -398,7 +403,9 @@ def execute(spec: dict[str, Any], *, executable: Path) -> dict[str, Any]:
             concurrency=cell["concurrency"],
             seed=seeds[repetition],
         )
+        warmup_repetitions_attempted += 1
         order = POLICIES if repetition % 2 == 0 else tuple(reversed(POLICIES))
+        completed_this_repetition: set[str] = set()
         for policy in order:
             if failures[policy] is not None:
                 continue
@@ -413,12 +420,16 @@ def execute(spec: dict[str, Any], *, executable: Path) -> dict[str, Any]:
                     concurrency=cell["concurrency"],
                     device=device,
                 )
+                warmup_policy_runs_completed[policy] += 1
+                completed_this_repetition.add(policy)
             except Exception as error:
                 failure = failure_record(
                     error, phase="warmup", policy=policy, repetition=repetition
                 )
                 failures[policy] = failure
                 warmup_failures.append(failure)
+        if completed_this_repetition == set(POLICIES):
+            warmup_paired_repetitions_completed += 1
         del prompt, decode
     repetitions: list[dict[str, Any]] = []
     for repetition in range(spec["measured_repetitions"]):
@@ -490,7 +501,9 @@ def execute(spec: dict[str, Any], *, executable: Path) -> dict[str, Any]:
         "cell": cell,
         "status": status,
         "warmups": spec["warmups"],
-        "warmup_repetitions_completed": spec["warmups"],
+        "warmup_repetitions_attempted": warmup_repetitions_attempted,
+        "warmup_paired_repetitions_completed": warmup_paired_repetitions_completed,
+        "warmup_policy_runs_completed": warmup_policy_runs_completed,
         "warmup_failures": warmup_failures,
         "measured_repetitions": spec["measured_repetitions"],
         "backend": backend_provenance(executable, device),

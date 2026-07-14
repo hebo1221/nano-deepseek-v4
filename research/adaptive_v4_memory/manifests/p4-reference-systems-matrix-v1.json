@@ -8,6 +8,12 @@
       "timing": "before any P4 reference cell was generated",
       "change": "expand the six marginal load profiles to the complete 4 batch x 3 active-request factorial",
       "reason": "measure batch-by-load interactions instead of inferring them from separate one-factor sweeps"
+    },
+    {
+      "date": "2026-07-14",
+      "timing": "before any P4 reference cell was generated",
+      "change": "record attempted, paired-complete, and per-policy warmup counts separately",
+      "reason": "terminal warmup failures must remain distinguishable from the five successfully completed preparation repetitions required by a complete cell"
     }
   ],
   "evidence_tier": "single-accelerator-serial-interleaved-reference-pytorch-runtime",
@@ -61,6 +67,7 @@
     "matrix_progress": "artifacts/adaptive_v4_memory/paper_grade/p4/reference-systems-matrix.json",
     "audit_output": "artifacts/adaptive_v4_memory/paper_grade/p4/reference-systems.summary.json",
     "resume_unit": "one scale-context-generation-load-profile paired cell",
+    "warmup_accounting": "record attempted repetitions, paired-complete repetitions, per-policy completed runs, and every terminal warmup failure separately",
     "policy_failure_isolated": "if either resident or tiered fails, continue all 30 measured repetitions for the surviving policy and report the cell as partial",
     "failure_is_terminal_and_reported": true
   },

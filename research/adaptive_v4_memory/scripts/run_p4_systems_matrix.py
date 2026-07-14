@@ -373,8 +373,25 @@ def _artifact_valid(
     if not identity_ok:
         return False
     repetitions = payload.get("repetitions", [])
+    warmup_attempted = payload.get("warmup_repetitions_attempted")
+    warmup_paired = payload.get("warmup_paired_repetitions_completed")
+    warmup_policy_runs = payload.get("warmup_policy_runs_completed")
+    warmup_failures = payload.get("warmup_failures")
     if not (
         payload.get("warmups") == WARMUPS
+        and isinstance(warmup_attempted, int)
+        and 0 <= warmup_attempted <= WARMUPS
+        and isinstance(warmup_paired, int)
+        and 0 <= warmup_paired <= warmup_attempted
+        and isinstance(warmup_policy_runs, dict)
+        and set(warmup_policy_runs) == set(POLICIES)
+        and all(
+            isinstance(warmup_policy_runs[policy], int)
+            and 0 <= warmup_policy_runs[policy] <= warmup_attempted
+            for policy in POLICIES
+        )
+        and warmup_paired == min(warmup_policy_runs.values())
+        and isinstance(warmup_failures, list)
         and payload.get("measured_repetitions") == MEASURED_REPETITIONS
         and isinstance(repetitions, list)
         and len(repetitions) <= MEASURED_REPETITIONS
@@ -389,6 +406,23 @@ def _artifact_valid(
     }
     if any(
         policy_status[policy].get("measured_repetitions") != counts[policy] for policy in POLICIES
+    ):
+        return False
+    for policy in POLICIES:
+        failure = policy_status[policy].get("failure")
+        if warmup_policy_runs[policy] < WARMUPS:
+            if not (
+                isinstance(failure, dict)
+                and failure.get("phase") == "warmup"
+                and failure in warmup_failures
+            ):
+                return False
+        elif isinstance(failure, dict) and failure.get("phase") == "warmup":
+            return False
+    if len(warmup_failures) != sum(
+        isinstance(policy_status[policy].get("failure"), dict)
+        and policy_status[policy]["failure"].get("phase") == "warmup"
+        for policy in POLICIES
     ):
         return False
     complete = {policy for policy in POLICIES if counts[policy] == MEASURED_REPETITIONS}
@@ -580,18 +614,25 @@ def main() -> None:
             started = time.monotonic()
             repetitions: list[dict[str, Any]] = []
             policy_failures: dict[str, dict[str, Any]] = {}
+            warmup_repetitions_attempted = 0
+            warmup_paired_repetitions_completed = 0
+            warmup_policy_runs_completed = {policy: 0 for policy in POLICIES}
+            warmup_failures: list[dict[str, Any]] = []
             try:
                 for repetition in range(WARMUPS + MEASURED_REPETITIONS):
                     if time.monotonic() - started > args.cell_timeout_seconds:
                         for policy in POLICIES:
                             if policy not in policy_failures:
-                                policy_failures[policy] = {
+                                failure = {
                                     "failure_type": "timeout",
                                     "error_type": "TimeoutError",
                                     "error": "P4 paired cell exceeded its frozen wall-time limit.",
                                     "phase": ("warmup" if repetition < WARMUPS else "measured"),
                                     "repetition": repetition,
                                 }
+                                policy_failures[policy] = failure
+                                if repetition < WARMUPS:
+                                    warmup_failures.append(failure)
                         break
                     prompts, decode, input_digest = generate_inputs(
                         model,
@@ -601,6 +642,8 @@ def main() -> None:
                         active_requests=active_requests,
                         seed=9_071_400 + repetition,
                     )
+                    if repetition < WARMUPS:
+                        warmup_repetitions_attempted += 1
                     order = POLICIES if repetition % 2 == 0 else tuple(reversed(POLICIES))
                     policy_runs: dict[str, dict[str, Any]] = {}
                     failures_this_repetition: dict[str, dict[str, Any]] = {}
@@ -616,6 +659,8 @@ def main() -> None:
                                 input_digest=input_digest,
                                 device=device,
                             )
+                            if repetition < WARMUPS:
+                                warmup_policy_runs_completed[policy] += 1
                         except Exception as error:
                             failure = {
                                 "failure_type": (
@@ -630,7 +675,11 @@ def main() -> None:
                             }
                             policy_failures[policy] = failure
                             failures_this_repetition[policy] = failure
+                            if repetition < WARMUPS:
+                                warmup_failures.append(failure)
                             _cleanup()
+                    if repetition < WARMUPS and set(policy_runs) == set(POLICIES):
+                        warmup_paired_repetitions_completed += 1
                     if repetition >= WARMUPS:
                         paired = set(policy_runs) == set(POLICIES)
                         repetitions.append(
@@ -690,6 +739,12 @@ def main() -> None:
                         "active_requests": active_requests,
                     },
                     "warmups": WARMUPS,
+                    "warmup_repetitions_attempted": warmup_repetitions_attempted,
+                    "warmup_paired_repetitions_completed": (
+                        warmup_paired_repetitions_completed
+                    ),
+                    "warmup_policy_runs_completed": warmup_policy_runs_completed,
+                    "warmup_failures": warmup_failures,
                     "measured_repetitions": MEASURED_REPETITIONS,
                     "repetitions": repetitions,
                     "policy_status": policy_status,
@@ -706,6 +761,29 @@ def main() -> None:
                     if isinstance(error, TimeoutError)
                     else "error"
                 )
+                orchestration_phase = (
+                    "warmup"
+                    if any(
+                        warmup_policy_runs_completed[policy] < WARMUPS
+                        for policy in POLICIES
+                    )
+                    else "measured"
+                )
+                terminal_failures = {
+                    policy: policy_failures.get(policy)
+                    or {
+                        "failure_type": failure_type,
+                        "error_type": type(error).__name__,
+                        "error": str(error),
+                        "phase": orchestration_phase,
+                    }
+                    for policy in POLICIES
+                }
+                warmup_failures = [
+                    failure
+                    for failure in terminal_failures.values()
+                    if failure.get("phase") == "warmup"
+                ]
                 payload = {
                     "schema_version": 1,
                     "experiment_id": "p4-reference-systems-cell-v1",
@@ -722,6 +800,12 @@ def main() -> None:
                         "active_requests": active_requests,
                     },
                     "warmups": WARMUPS,
+                    "warmup_repetitions_attempted": warmup_repetitions_attempted,
+                    "warmup_paired_repetitions_completed": (
+                        warmup_paired_repetitions_completed
+                    ),
+                    "warmup_policy_runs_completed": warmup_policy_runs_completed,
+                    "warmup_failures": warmup_failures,
                     "measured_repetitions": MEASURED_REPETITIONS,
                     "repetitions": repetitions,
                     "policy_status": {
@@ -730,12 +814,7 @@ def main() -> None:
                             "measured_repetitions": sum(
                                 policy in row.get("policies", {}) for row in repetitions
                             ),
-                            "failure": {
-                                "failure_type": failure_type,
-                                "error_type": type(error).__name__,
-                                "error": str(error),
-                                "phase": "cell-orchestration",
-                            },
+                            "failure": terminal_failures[policy],
                         }
                         for policy in POLICIES
                     },

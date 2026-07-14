@@ -96,7 +96,11 @@ def _adapter_payload(
         "cell": production.cell_dict(cell),
         "status": "complete",
         "warmups": production.WARMUPS,
-        "warmup_repetitions_completed": production.WARMUPS,
+        "warmup_repetitions_attempted": production.WARMUPS,
+        "warmup_paired_repetitions_completed": production.WARMUPS,
+        "warmup_policy_runs_completed": {
+            policy: production.WARMUPS for policy in production.POLICIES
+        },
         "warmup_failures": [],
         "measured_repetitions": production.MEASURED_REPETITIONS,
         "backend": {
@@ -197,6 +201,17 @@ def test_production_adapter_requires_timestamp_proven_concurrency() -> None:
         production.validate_adapter_payload(serial, cell=cell, executable_digest=digest)
 
 
+def test_production_adapter_rejects_false_warmup_completion() -> None:
+    cell = next(cell for cell in production.frozen_cells() if cell[5] == 8)
+    digest = "a" * 64
+    payload = _adapter_payload(cell, digest)
+    payload["warmup_policy_runs_completed"]["resident-native"] = 0
+    payload["warmup_paired_repetitions_completed"] = 0
+
+    with pytest.raises(ValueError, match="matching terminal failure"):
+        production.validate_adapter_payload(payload, cell=cell, executable_digest=digest)
+
+
 def test_production_adapter_accepts_explicitly_unavailable_process_hbm() -> None:
     cell = next(cell for cell in production.frozen_cells() if cell[5] == 8)
     digest = "a" * 64
@@ -234,12 +249,19 @@ def test_production_manifest_records_process_hbm_amendment_before_execution() ->
         .read_text()
     )
 
-    amendment = manifest["protocol_amendments"][-1]
+    amendment = next(
+        row
+        for row in manifest["protocol_amendments"]
+        if "process-total HBM" in row["change"]
+    )
     assert amendment["timing"] == "before any P4 production cell was generated"
     assert "process-total HBM" in amendment["change"]
     assert any(
         "otherwise null with explicit availability status" in measurement
         for measurement in manifest["required_measurements"]
+    )
+    assert any(
+        "paired-complete" in row["change"] for row in manifest["protocol_amendments"]
     )
 
 

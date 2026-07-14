@@ -170,12 +170,18 @@ def test_p4_partial_artifact_preserves_surviving_policy(tmp_path: Path) -> None:
         "manifest": {"sha256": "manifest"},
         "p3_audit": {"sha256": "p3"},
         "warmups": systems.WARMUPS,
+        "warmup_repetitions_attempted": systems.WARMUPS,
+        "warmup_paired_repetitions_completed": systems.WARMUPS,
+        "warmup_policy_runs_completed": {
+            policy: systems.WARMUPS for policy in systems.POLICIES
+        },
+        "warmup_failures": [],
         "measured_repetitions": systems.MEASURED_REPETITIONS,
         "repetitions": repetitions,
         "policy_status": {
             "resident-native": {
                 "measured_repetitions": 0,
-                "failure": {"failure_type": "oom"},
+                "failure": {"failure_type": "oom", "phase": "measured"},
             },
             "tiered-native": {
                 "measured_repetitions": systems.MEASURED_REPETITIONS,
@@ -197,6 +203,18 @@ def test_p4_partial_artifact_preserves_surviving_policy(tmp_path: Path) -> None:
     wrong_order = json.loads(artifact.read_text())
     wrong_order["repetitions"][0]["execution_order"] = list(reversed(systems.POLICIES))
     artifact.write_text(json.dumps(wrong_order))
+    assert not systems._artifact_valid(
+        artifact,
+        cell=cell,
+        digest="implementation",
+        manifest_digest="manifest",
+        p3_digest="p3",
+    )
+
+    false_warmups = json.loads(artifact.read_text())
+    false_warmups["warmup_policy_runs_completed"]["resident-native"] = 0
+    false_warmups["warmup_paired_repetitions_completed"] = 0
+    artifact.write_text(json.dumps(false_warmups))
     assert not systems._artifact_valid(
         artifact,
         cell=cell,

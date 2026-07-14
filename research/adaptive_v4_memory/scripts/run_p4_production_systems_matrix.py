@@ -394,9 +394,24 @@ def validate_adapter_payload(
     )
     _require(payload.get("cell") == cell_dict(cell), "Production adapter cell drifted.")
     _require(payload.get("warmups") == WARMUPS, "Production warmup count drifted.")
+    warmup_attempted = payload.get("warmup_repetitions_attempted")
+    warmup_paired = payload.get("warmup_paired_repetitions_completed")
+    warmup_policy_runs = payload.get("warmup_policy_runs_completed")
+    warmup_failures = payload.get("warmup_failures")
+    if not isinstance(warmup_policy_runs, dict) or not isinstance(warmup_failures, list):
+        raise ValueError("Production warmup accounting is incomplete.")
     _require(
-        payload.get("warmup_repetitions_completed") == WARMUPS
-        and isinstance(payload.get("warmup_failures"), list),
+        isinstance(warmup_attempted, int)
+        and 0 <= warmup_attempted <= WARMUPS
+        and isinstance(warmup_paired, int)
+        and 0 <= warmup_paired <= warmup_attempted
+        and set(warmup_policy_runs) == set(POLICIES)
+        and all(
+            isinstance(warmup_policy_runs[policy], int)
+            and 0 <= warmup_policy_runs[policy] <= warmup_attempted
+            for policy in POLICIES
+        )
+        and warmup_paired == min(warmup_policy_runs.values()),
         "Production warmup accounting is incomplete.",
     )
     _require(
@@ -449,6 +464,28 @@ def validate_adapter_payload(
             or isinstance(policy_status[policy].get("failure"), dict),
             "Incomplete production policy lacks a terminal failure.",
         )
+        failure = policy_status[policy].get("failure")
+        if warmup_policy_runs[policy] < WARMUPS:
+            _require(
+                isinstance(failure, dict)
+                and failure.get("phase") == "warmup"
+                and failure in warmup_failures,
+                "Incomplete production warmups lack a matching terminal failure.",
+            )
+        else:
+            _require(
+                not isinstance(failure, dict) or failure.get("phase") != "warmup",
+                "Completed production warmups contradict the terminal failure phase.",
+            )
+    _require(
+        len(warmup_failures)
+        == sum(
+            isinstance(policy_status[policy].get("failure"), dict)
+            and policy_status[policy]["failure"].get("phase") == "warmup"
+            for policy in POLICIES
+        ),
+        "Production warmup failure count drifted.",
+    )
     complete = sum(count == MEASURED_REPETITIONS for count in counts.values())
     expected_status = "complete" if complete == 2 else "partial" if complete == 1 else "failed"
     _require(payload.get("status") == expected_status, "Production cell status drifted.")
@@ -512,7 +549,9 @@ def _terminal_failure(
         "cell": cell_dict(cell),
         "status": "failed",
         "warmups": WARMUPS,
-        "warmup_repetitions_completed": 0,
+        "warmup_repetitions_attempted": 0,
+        "warmup_paired_repetitions_completed": 0,
+        "warmup_policy_runs_completed": {policy: 0 for policy in POLICIES},
         "warmup_failures": [failure],
         "measured_repetitions": MEASURED_REPETITIONS,
         "repetitions": [],
