@@ -217,6 +217,21 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
         is True
     )
     assert manifest["evidence"]["p2_causal"]["required_audit"]["registered_causal_arms"] == 16
+    assert manifest["evidence"]["p2_causal"]["required_audit"]["registered_paired_contrasts"] == 15
+    assert (
+        manifest["evidence"]["p2_causal"]["required_audit"][
+            "preregistered_component_contrasts_verified"
+        ]
+        is True
+    )
+    assert (
+        len(
+            manifest["evidence"]["p2_causal"]["required_audit"][
+                "required_ablation_factors_verified"
+            ]
+        )
+        == 6
+    )
     assert (
         manifest["evidence"]["p2_causal"]["required_audit"][
             "offline_oracle_excluded_from_primary_gate"
@@ -405,6 +420,7 @@ def test_p5_classification_preserves_claim_boundaries() -> None:
         {
             "audit": {
                 "terminal_cells": package.P4_EXPECTED_CELLS,
+                "complete_cells": 213,
                 "partial_cells": 1,
                 "failed_cells": 2,
             }
@@ -412,7 +428,7 @@ def test_p5_classification_preserves_claim_boundaries() -> None:
         {
             "audit": {
                 "terminal_cells": package.P4_EXPECTED_CELLS,
-                "complete_cells": 105,
+                "complete_cells": 213,
                 "partial_cells": 1,
                 "failed_cells": 2,
                 "actual_concurrency_verified": True,
@@ -473,6 +489,7 @@ def test_p5_success_requires_full_system_coverage() -> None:
         {
             "audit": {
                 "terminal_cells": package.P4_EXPECTED_CELLS,
+                "complete_cells": package.P4_EXPECTED_CELLS,
                 "partial_cells": 0,
                 "failed_cells": 0,
             }
@@ -527,7 +544,14 @@ def test_p5_marks_all_failed_production_coverage_unverified() -> None:
         _ifeval_evidence(),
         _longsafety_evidence(),
         _p4_500k_evidence(successful=0),
-        {"audit": {"terminal_cells": package.P4_EXPECTED_CELLS}},
+        {
+            "audit": {
+                "terminal_cells": package.P4_EXPECTED_CELLS,
+                "complete_cells": 0,
+                "partial_cells": 0,
+                "failed_cells": package.P4_EXPECTED_CELLS,
+            }
+        },
         {
             "audit": {
                 "terminal_cells": package.P4_EXPECTED_CELLS,
@@ -544,6 +568,7 @@ def test_p5_marks_all_failed_production_coverage_unverified() -> None:
     )
 
     assert classifications["p4_production_systems"] == "unverified"
+    assert classifications["p4_reference_systems"] == "unverified"
     assert classifications["p4_500k_context"] == "negative-result"
 
 

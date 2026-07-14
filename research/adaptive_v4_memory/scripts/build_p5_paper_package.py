@@ -511,10 +511,27 @@ def classify_evidence(
     )
     preflight_class = _classify_500k_preflight(p4_500k_context)
     reference_audit = p4_reference_systems["audit"]
-    reference_complete = reference_audit.get("terminal_cells") == P4_EXPECTED_CELLS
+    reference_counts = tuple(
+        reference_audit.get(field) for field in ("complete_cells", "partial_cells", "failed_cells")
+    )
+    reference_accounted = (
+        reference_audit.get("terminal_cells") == P4_EXPECTED_CELLS
+        and all(type(value) is int and value >= 0 for value in reference_counts)
+        and sum(reference_counts) == P4_EXPECTED_CELLS
+    )
+    reference_measured = reference_accounted and sum(reference_counts[:2]) > 0
     production_audit = p4_production_systems["audit"]
-    production_full = (
+    production_counts = tuple(
+        production_audit.get(field) for field in ("complete_cells", "partial_cells", "failed_cells")
+    )
+    production_accounted = (
         production_audit.get("terminal_cells") == P4_EXPECTED_CELLS
+        and all(type(value) is int and value >= 0 for value in production_counts)
+        and sum(production_counts) == P4_EXPECTED_CELLS
+        and production_audit.get("tail_failure_accounting_complete") is True
+    )
+    production_full = (
+        production_accounted
         and production_audit.get("complete_cells") == P4_EXPECTED_CELLS
         and production_audit.get("partial_cells") == 0
         and production_audit.get("failed_cells") == 0
@@ -524,12 +541,11 @@ def classify_evidence(
         and production_audit.get("tail_failure_accounting_complete") is True
         and production_audit.get("all_paired_predictions_identical") is True
     )
-    production_terminal = production_audit.get("terminal_cells") == P4_EXPECTED_CELLS
     production_class = (
         "success"
         if production_full
         else "bounded-result"
-        if production_terminal and production_audit.get("complete_cells", 0) > 0
+        if production_accounted and production_audit.get("complete_cells", 0) > 0
         else "unverified"
     )
     result = {
@@ -551,7 +567,7 @@ def classify_evidence(
         "p3_ifeval": "bounded-result" if ifeval_complete else "unverified",
         "p3_longsafety": "bounded-result" if longsafety_judged else "unverified",
         "p4_500k_context": preflight_class,
-        "p4_reference_systems": "bounded-result" if reference_complete else "unverified",
+        "p4_reference_systems": "bounded-result" if reference_measured else "unverified",
         "p4_production_systems": production_class,
         "production_runtime_blocker": "unverified",
         "official_deepseek_v4": "unverified",
