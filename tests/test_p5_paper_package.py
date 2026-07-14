@@ -1123,7 +1123,7 @@ def test_evidence_rejects_an_incomplete_artifact_binding(tmp_path: Path) -> None
                 "experiment_id": "incomplete-artifact-binding-v1",
                 "source": {"dirty": False},
                 "audit": {"terminal": True},
-                "raw_cell": {"path": str(artifact)},
+                "raw_cell": {"sha256": package.sha256(artifact)},
             }
         )
     )

@@ -1811,10 +1811,18 @@ def _validate_evidence(name: str, path: Path, contract: dict[str, Any]) -> dict[
         "required_artifact_collections", {}
     ).items():
         collection = payload.get(collection_name)
+        if isinstance(collection, dict):
+            rows = list(collection.values())
+        elif isinstance(collection, list):
+            rows = collection
+        else:
+            raise ValueError(f"{name} artifact collection {collection_name} is missing.")
         _require(
-            isinstance(collection, (dict, list)) and len(collection) == expected_count,
+            len(rows) == expected_count,
             f"{name} artifact collection {collection_name} drifted.",
         )
+        for index, metadata in enumerate(rows):
+            _bound_artifact(metadata, f"{name} {collection_name}[{index}]")
     analysis_paths = P2_ANALYSIS_PATHS.get(name)
     if analysis_paths is not None:
         _require(
@@ -1851,11 +1859,10 @@ def _verify_declared_artifact_tree(payload: Any, label: str) -> int:
     def visit(value: Any, location: str) -> int:
         verified = 0
         if isinstance(value, dict):
-            declares_path = "path" in value
             declares_digest = "sha256" in value
-            if declares_path or declares_digest:
+            if declares_digest:
                 _require(
-                    declares_path and declares_digest,
+                    "path" in value,
                     f"Incomplete digest-bound artifact metadata for {location}.",
                 )
                 artifact = _bound_artifact(value, location)
