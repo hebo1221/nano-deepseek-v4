@@ -1565,8 +1565,11 @@ def _write_p3_natural_figure(path: Path, payload: dict[str, Any]) -> None:
         summaries[benchmark] = benchmark_payload["summary"]["sha256"]
     _write_interval_svg(
         path,
-        title="Natural long-context quality against the strongest fixed baseline",
-        subtitle="strongest-memory-matched-fixed minus native-dense; failures score zero",
+        title="Natural long-context quality against the preselected fixed baseline",
+        subtitle=(
+            "best of four frozen Qwen3-1.7B RULER candidates at 50% KV, transferred "
+            "unchanged; fixed minus native; failures score zero"
+        ),
         x_label="paired benchmark score difference (percentage points)",
         rows=rows,
         source={
@@ -1796,7 +1799,10 @@ manually, remains mandatory before goal completion, and is never reported as pas
   {p3_ruler["audit"]["total_predictions"]:,} predictions on one pinned compatible model.
 - P3 natural suite: {p3_natural["audit"]["benchmarks_terminal"]} terminal benchmarks and
   at least {p3_natural["audit"]["minimum_protocol_examples_accounted_per_arm"]:,}
-  examples accounted per required arm.
+  examples accounted per required arm. The fixed arm was selected before any Qwen3-4B
+  outcome as the best of four frozen Qwen3-1.7B RULER candidates at 50% KV over
+  8K/16K/32K, then transferred unchanged. "Strongest" is restricted to that selection
+  grid and is not a claim of global dominance on Qwen3-4B or every natural benchmark.
 - P3 safety stress: {p3_safety["audit"]["examples_accounted_per_arm"]:,} examples per arm,
   {p3_safety["audit"]["families_terminal"]} families, and
   {p3_safety["audit"]["contexts_terminal"]} context lengths with paired inputs.

@@ -39,6 +39,12 @@ columns at the pinned Hub revision. MRCR retains all 2,400 released examples in
 the source inventory even though the primary Qwen comparison stops at its five
 bins through 128K.
 
+The internal arm label `strongest-memory-matched-fixed` means only the best of
+the four frozen KVPress candidates on the completed Qwen3-1.7B RULER selection
+grid at 50% KV and 8K/16K/32K. It is selected before any Qwen3-4B prediction and
+then transferred unchanged. It does not assert that the selected method is
+globally strongest on Qwen3-4B or on each downstream natural benchmark.
+
 ## Provenance and scoring boundaries
 
 - [SCBench](https://huggingface.co/datasets/microsoft/SCBench) data and the

@@ -1081,6 +1081,8 @@ def test_p5_natural_tables_and_figure_retain_quality_failures_and_memory(
     assert contrast_rows[0]["hot_resident_ratio_of_means"] == 0.6
     rendered = target.read_text()
     assert "failures score zero" in rendered
+    assert "preselected fixed baseline" in rendered
+    assert "best of four frozen Qwen3-1.7B RULER candidates" in rendered
     assert "RULER" in rendered
     assert "rows_sha256" in rendered
 
