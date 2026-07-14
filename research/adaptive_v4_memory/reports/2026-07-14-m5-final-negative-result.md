@@ -1,6 +1,6 @@
-# M5 final validation: online M2 negative result
+# M5 pilot validation: one-token online M2 negative result
 
-Status: **final negative result for Adaptive V4 Memory's online M2 hypothesis**.
+Status: **pilot negative result for the tested one-token global M2 interface**.
 The M4 fixed-top-k tiered store remains a valid bounded memory result, but the
 adaptive controller is not quality-safe in causal serving.
 
@@ -66,7 +66,7 @@ but only about 2% total-cache reduction and no speedup. M5 now falsifies the
 assumption that the offline M2 decision can be shifted one token and remain
 quality-safe.
 
-The supported outcome is narrow: fixed-top-k CPU-cold/GPU-hot CSA value storage
+The supported pilot outcome is narrow: fixed-top-k CPU-cold/GPU-hot CSA value storage
 is correct and memory-bounded in this reference runtime. Adaptive online claims,
 official-scale performance claims, and production speedup claims are rejected.
 
@@ -74,5 +74,6 @@ The minimum credible next systems design is a fused same-token contract that
 (1) computes layer-local uncertainty before value attention, (2) allocates a
 hierarchical request/layer budget without waiting for later layers, (3) issues
 asynchronous prefetch into paged slots, and (4) exposes rollback/history as a
-separate residency class. Until that exists, further controller tuning would
-optimize an invalid causal interface.
+separate residency class. Until that exists, further tuning of this one-token
+global interface would optimize an invalid causal interface. Same-token and
+learned-lookahead designs remain open under the paper-grade expansion protocol.

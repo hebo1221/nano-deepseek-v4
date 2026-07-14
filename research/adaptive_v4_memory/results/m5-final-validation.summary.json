@@ -75,6 +75,7 @@
     "quality_vs_fixed": false,
     "strict_speedup": false
   },
-  "decision": "negative_result",
-  "conclusion": "Offline M2 does not transfer to a causal one-token-lookahead runtime. Keep fixed-top-k tiering as the bounded reference result; a same-token fused hierarchical controller is required before further scale claims."
+  "decision": "pilot_negative_result",
+  "claim_scope": "The tested one-token cross-layer global M2 interface on two Tier-S checkpoints and three synthetic pilot workloads.",
+  "conclusion": "Offline M2 does not transfer to the tested one-token-lookahead runtime. This does not decide same-token, learned-lookahead, natural-language, or official-scale adaptive memory; those require the frozen paper-grade expansion protocol."
 }

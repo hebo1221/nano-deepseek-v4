@@ -17,10 +17,12 @@ resident on the accelerator.
 - [`experimental_protocol.md`](experimental_protocol.md) fixes the baselines,
   workloads, metrics, statistical analysis, artifacts, and phase gates before
   implementation begins.
+- [`paper_grade_protocol.md`](paper_grade_protocol.md) freezes the multi-seed,
+  causal-ablation, natural-benchmark, statistical, and systems expansion.
 
 ## Current status
 
-Status: **M5 complete; online adaptive hypothesis falsified**
+Status: **paper-grade expansion active; M5 one-token result is a pilot**
 
 No performance or systems claim has been made. M1 adds deterministic baselines,
 an exhaustive Tier-T oracle, differentiable CSA training probes, and two
@@ -111,7 +113,7 @@ index and rollback state remain resident. Batch-1 throughput retained 94–95%;
 no speedup was observed. See the checked M4 report and summary for the bounded
 claim and negative strict-gate decision.
 
-## M5 final decision
+## M5 pilot decision
 
 `nano_deepseek_v4/online_memory_controller.py` connects M2 actions to the real
 tier fetch with deterministic lifecycle and persistence support. Across three
@@ -120,8 +122,13 @@ but lost substantial quality because a cross-layer global decision can only be
 applied one token after its scores are complete. Total hot-cache reduction was
 only 1.51–1.92%, p95 latency was 1.11–1.29x native, and no speedup was observed.
 
+This falsifies only the tested one-token global interface, not adaptive memory
+in general. The [`paper_grade_protocol.md`](paper_grade_protocol.md) freezes the
+larger multi-seed, natural-benchmark, causal-ablation, and systems study before
+new results are observed.
+
 The pinned official Flash (159.62 GB) and Pro (864.72 GB) payloads cannot be run
 on the available host, so official-scale execution remains explicitly
-unverified. The checked M5 report records the final negative result, official
+unverified. The checked M5 report records the pilot negative result, official
 feasibility audit, minimum fused-kernel contract, and the retained bounded M4
 fixed-top-k result.

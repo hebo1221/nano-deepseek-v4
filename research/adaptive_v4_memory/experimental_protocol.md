@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Protocol version | 0.1 |
-| Status | M5 complete; online M2 negative result |
+| Status | Paper-grade expansion active; M5 is a scoped pilot result |
 | Last updated | 2026-07-14 |
 
 This protocol is the preregistered evaluation contract for Adaptive V4 Memory.
