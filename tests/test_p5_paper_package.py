@@ -181,6 +181,17 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
     assert manifest["execution_audits"]["p2_causal_parallel_equivalence"]["required_probes"] == 3
     assert manifest["execution_audits"]["p1_online_checkpoint_reuse"]["required_probes"] == 10
     assert manifest["evidence"]["p2_core"]["required_audit"]["unique_shards"] == 4500
+    assert manifest["evidence"]["p2_core"]["path"].endswith("strict.summary.json")
+    assert all(
+        manifest["evidence"]["p2_core"]["required_audit"][field] is True
+        for field in (
+            "held_out_seed_contract_verified",
+            "paired_conversation_coverage_verified",
+            "execution_order_coverage_verified",
+            "aggregate_recomputed",
+            "batch_coverage_verified",
+        )
+    )
     assert (
         manifest["evidence"]["p1_online_learned_lookahead"]["required_audit"][
             "checkpoint_reuse_equivalence_verified"

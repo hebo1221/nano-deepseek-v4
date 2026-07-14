@@ -16,6 +16,13 @@ import numpy as np
 
 EXPECTED_SHARDS = 4_500
 BOOTSTRAP_RESAMPLES = 10_000
+STRICT_RAW_AUDIT = {
+    "held_out_seed_contract_verified": True,
+    "paired_conversation_coverage_verified": True,
+    "execution_order_coverage_verified": True,
+    "aggregate_recomputed": True,
+    "batch_coverage_verified": True,
+}
 CONFIDENCE_LEVEL = 0.95
 BUDGETS = (1, 2, 4)
 
@@ -746,6 +753,7 @@ def main() -> None:
             "all_dependency_digests_verified": True,
             "all_record_digests_verified": True,
             "no_budget_violations": True,
+            **STRICT_RAW_AUDIT,
             "unique_shards": len(seen),
             "raw_shard_digest_set_sha256": hashlib.sha256(
                 "\n".join(sorted(raw_digests)).encode()

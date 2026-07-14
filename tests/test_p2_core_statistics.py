@@ -133,6 +133,16 @@ def test_raw_shard_verifier_binds_seeds_pairing_and_execution_order(
         core.verify_raw_shard(bad_aggregate, run, "implementation")
 
 
+def test_p5_strict_audit_fields_match_the_raw_verifier_contract() -> None:
+    assert core.STRICT_RAW_AUDIT == {
+        "held_out_seed_contract_verified": True,
+        "paired_conversation_coverage_verified": True,
+        "execution_order_coverage_verified": True,
+        "aggregate_recomputed": True,
+        "batch_coverage_verified": True,
+    }
+
+
 def test_bootstrap_paired_mean_is_deterministic_and_uses_paired_units() -> None:
     values = [0.25] * 20
     first = bootstrap_paired_mean(values, label="constant-test", resamples=1_000)

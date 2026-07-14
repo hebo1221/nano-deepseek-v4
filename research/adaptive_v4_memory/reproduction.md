@@ -34,6 +34,9 @@ then execute and summarize the 9,000-shard factorial:
 .venv/bin/python research/adaptive_v4_memory/scripts/summarize_p2_core_matrix.py \
   --matrix artifacts/adaptive_v4_memory/paper_grade/p2-core-quality-matrix.json \
   --output artifacts/adaptive_v4_memory/paper_grade/p2-core-quality-matrix.summary.json
+.venv/bin/python research/adaptive_v4_memory/scripts/summarize_p2_core_matrix.py \
+  --matrix artifacts/adaptive_v4_memory/paper_grade/p2-core-quality-matrix.json \
+  --output artifacts/adaptive_v4_memory/paper_grade/p2-core-quality-matrix.strict.summary.json
 .venv/bin/python research/adaptive_v4_memory/scripts/run_p2_causal_prerequisites.py
 .venv/bin/python research/adaptive_v4_memory/scripts/run_p2_causal_parallel.py --workers 3
 .venv/bin/python research/adaptive_v4_memory/scripts/summarize_p2_causal_factorial.py \

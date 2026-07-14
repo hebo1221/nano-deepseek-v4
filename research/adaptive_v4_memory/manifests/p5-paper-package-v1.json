@@ -11,9 +11,16 @@
   },
   "evidence": {
     "p2_core": {
-      "path": "artifacts/adaptive_v4_memory/paper_grade/p2-core-quality-matrix.summary.json",
+      "path": "artifacts/adaptive_v4_memory/paper_grade/p2-core-quality-matrix.strict.summary.json",
       "experiment_id": "p2-core-quality-matrix-audit-v1",
-      "required_audit": {"unique_shards": 4500}
+      "required_audit": {
+        "unique_shards": 4500,
+        "held_out_seed_contract_verified": true,
+        "paired_conversation_coverage_verified": true,
+        "execution_order_coverage_verified": true,
+        "aggregate_recomputed": true,
+        "batch_coverage_verified": true
+      }
     },
     "m5_one_token_pilot": {
       "path": "artifacts/adaptive_v4_memory/paper_grade/p1/m5-pilot-baseline.summary.json",
