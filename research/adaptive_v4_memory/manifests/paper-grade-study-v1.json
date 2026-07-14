@@ -5,6 +5,25 @@
   "protocol": "research/adaptive_v4_memory/paper_grade_protocol.md",
   "scales": ["s55", "s151"],
   "training_seeds": [6071401, 6071402, 6071403, 6071404, 6071405],
+  "controller_calibration_seeds": [7071401, 7071402, 7071403, 7071404, 7071405],
+  "controller_calibration": {
+    "quantile": 0.95,
+    "allowed_features": [
+      "ranked-score-top-p-cardinality",
+      "candidate-block-count"
+    ],
+    "forbidden_features": [
+      "target",
+      "native-correctness",
+      "held-out-evaluation-example"
+    ],
+    "minimum_per_layer": "memory-matched-fixed-top-k",
+    "uniform_budget_points": ["1x-minimum-per-csa-layer"],
+    "non_uniform_budget_points": [
+      "2x-minimum-per-csa-layer",
+      "4x-minimum-per-csa-layer"
+    ]
+  },
   "evaluation_seeds": [8071401, 8071402, 8071403, 8071404, 8071405],
   "minimum_examples_per_seed_scale_family": 1000,
   "context_lengths": [80, 128, 256, 512, 1024],

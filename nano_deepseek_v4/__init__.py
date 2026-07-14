@@ -18,6 +18,11 @@ from .adaptive_memory_data import (
     generate_associative_recall_batch,
     generate_associative_recall_training_batch,
 )
+from .adaptive_memory_workloads import (
+    PAPER_GRADE_WORKLOAD_FAMILIES,
+    AdaptiveMemoryWorkloadBatch,
+    generate_adaptive_memory_workload,
+)
 from .causal_memory_controller import (
     SameTokenControllerConfig,
     SameTokenControllerStats,
@@ -160,8 +165,11 @@ __all__ = [
     "AssociativeRecallConfig",
     "AssociativeRecallBatch",
     "AssociativeRecallTrainingBatch",
+    "AdaptiveMemoryWorkloadBatch",
+    "PAPER_GRADE_WORKLOAD_FAMILIES",
     "generate_associative_recall_batch",
     "generate_associative_recall_training_batch",
+    "generate_adaptive_memory_workload",
     # model
     "DeepSeekV4Cache",
     "DeepSeekV4ForCausalLM",
