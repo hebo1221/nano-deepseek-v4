@@ -21,6 +21,7 @@ import numpy as np
 import pandas as pd
 import torch
 from adaptive_v4_gpu_lock import acquire_gpu_lock
+from p3_sequence_gate import require_p3_sequence_gate
 from prepare_p3_ruler_dataset import LENGTHS, MODEL_REVISION, RULER_REVISION, TASKS, sha256
 
 KVPRESS_REVISION = "6d965557a5b9f0201a2301b23c454473dd681d0d"
@@ -243,7 +244,20 @@ def main() -> None:
     parser.add_argument("--ratio", type=float, action="append", choices=(0.25, 0.5, 0.75))
     parser.add_argument("--max-new-cells", type=int)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument(
+        "--p2-matrix",
+        type=Path,
+        default=Path("artifacts/adaptive_v4_memory/paper_grade/p2-core-quality-matrix.json"),
+    )
+    parser.add_argument(
+        "--causal-gate",
+        type=Path,
+        default=Path(
+            "research/adaptive_v4_memory/results/p2-causal-ablation.summary.json"
+        ),
+    )
     args = parser.parse_args()
+    require_p3_sequence_gate(args.p2_matrix, args.causal_gate)
     if args.max_new_cells is not None and args.max_new_cells <= 0:
         raise ValueError("max-new-cells must be positive.")
     source_commit = git_head(Path.cwd())
