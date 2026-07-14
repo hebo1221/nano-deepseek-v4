@@ -26,6 +26,8 @@
   "primary_total_policy_runs_including_warmup": 7560,
   "adapter_contract": {
     "interface": "executable --spec <json> --output <json>",
+    "checked_reference_executable": "research/adaptive_v4_memory/scripts/p4_continuous_batch_adapter.py",
+    "checked_reference_semantics": "all admitted requests in a cell share one real model batch for every prefill chunk and decode step; this proves static full-request concurrency but not dynamic-arrival or continuous-admission scheduling",
     "required_backend_provenance": [
       "runtime-name-and-version",
       "source-repository-and-revision",

@@ -195,6 +195,13 @@ bare-metal mode, accelerator, driver, P3 audit, and every cell artifact are
 digest-bound. A serial loop, projected metric, aggregate-only latency, or
 unreported failure cannot satisfy the production gate.
 
+The checked `p4_continuous_batch_adapter.py` is the first concrete backend for
+that contract. It combines all admitted requests into the actual model batch at
+every prefill chunk and decode step, and records every request-token coordinate
+against that execution batch. Its claim remains static full-request batching;
+it does not establish dynamic arrivals, continuous admission, a fused kernel,
+or multi-GPU serving.
+
 After all audits finish, the strict P5 package can be regenerated with:
 
 ```bash
