@@ -39,7 +39,10 @@ def test_unavailable_production_adapter_fails_closed_with_bound_cell(tmp_path: P
     assert result.returncode == 78
     assert not output.exists()
     failure = json.loads(result.stderr)
-    assert failure["failure_type"] == "external-production-runtime-unavailable"
+    assert (
+        failure["failure_type"]
+        == "external-fused-dynamic-production-runtime-unavailable"
+    )
     assert failure["cell"] == cell
     blocker = Path(failure["blocker"]["path"])
     assert blocker.is_file()

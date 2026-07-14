@@ -1,16 +1,15 @@
 {
   "schema_version": 1,
   "experiment_id": "p4-production-resource-blocker-v1",
-  "status": "external-runtime-unavailable",
-  "blocked_scope": "P4 actual-concurrency production serving matrix",
-  "available_evidence": "P4 reference PyTorch matrix remains executable and is reported separately",
+  "status": "external-fused-dynamic-runtime-unavailable",
+  "blocked_scope": "external fused or dynamic-arrival production serving beyond the checked static continuous-batching adapter",
+  "available_evidence": "the checked static continuous-batching adapter and the P4 reference PyTorch matrix remain executable and are reported separately",
   "missing_requirements": [
-    "a production serving runtime implementing the frozen executable adapter contract",
-    "runtime and source revision provenance for that backend",
-    "actual concurrent request scheduling with lifecycle timestamps",
-    "production HBM, transfer, controller, indexer, and tail-failure telemetry"
+    "an external fused serving runtime or a scheduler supporting dynamic arrivals and continuous admission",
+    "official runtime and source revision provenance for that external backend",
+    "multi-GPU production deployment evidence"
   ],
-  "failure_policy": "publish all 108 production cells as explicit terminal adapter failures; never substitute reference, projected, or serial-interleaved measurements",
-  "resolution": "provide an executable conforming to p4-production-systems-matrix-v1.json and rerun the same frozen Cartesian matrix",
-  "claim_boundary": "The blocker is not evidence about production performance and cannot be relabeled as an executed production benchmark."
+  "failure_policy": "never relabel checked static batching, reference, projected, or serial-interleaved measurements as external fused or dynamic-serving evidence",
+  "resolution": "provide an external executable conforming to p4-production-systems-matrix-v1.json and rerun the same frozen Cartesian matrix",
+  "claim_boundary": "The blocker does not invalidate measurements from the checked static continuous-batching adapter, but those results cannot establish dynamic-arrival, fused-kernel, multi-GPU, or official DeepSeek-V4 serving performance."
 }

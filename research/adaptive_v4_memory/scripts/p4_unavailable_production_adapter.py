@@ -44,7 +44,7 @@ def main() -> None:
     if blocker.get("experiment_id") != "p4-production-resource-blocker-v1":
         raise ValueError("The frozen production resource blocker is required.")
     message = {
-        "failure_type": "external-production-runtime-unavailable",
+        "failure_type": "external-fused-dynamic-production-runtime-unavailable",
         "cell": spec["cell"],
         "blocker": {"path": str(BLOCKER), "sha256": sha256(BLOCKER)},
         "output_written": False,
