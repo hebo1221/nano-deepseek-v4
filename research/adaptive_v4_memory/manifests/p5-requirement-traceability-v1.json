@@ -48,6 +48,8 @@
       "phase": "P1",
       "requirement": "Retain native, memory-matched fixed top-k/top-p, offline oracle M2, and one-token global M2 baselines.",
       "sources": [
+        {"kind": "evidence", "name": "m5_one_token_pilot"},
+        {"kind": "evidence", "name": "m3_offline_learned_risk_pilot"},
         {"kind": "evidence", "name": "p2_causal"},
         {"kind": "boundary-manifest", "name": "p2_causal_factorial"}
       ]
@@ -57,7 +59,7 @@
       "phase": "P1",
       "requirement": "Evaluate an online same-token layer-local controller.",
       "sources": [
-        {"kind": "evidence", "name": "p2_core"},
+        {"kind": "evidence", "name": "p2_causal"},
         {"kind": "boundary-manifest", "name": "p2_causal_factorial"}
       ]
     },
@@ -87,7 +89,8 @@
       "sources": [
         {"kind": "evidence", "name": "p2_causal"},
         {"kind": "execution-audit", "name": "p2_core_parallel_equivalence"},
-        {"kind": "execution-audit", "name": "p2_causal_parallel_equivalence"}
+        {"kind": "execution-audit", "name": "p2_causal_parallel_equivalence"},
+        {"kind": "verification-contract", "name": "final-local-release-gate"}
       ]
     },
     {
