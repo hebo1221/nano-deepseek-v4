@@ -66,8 +66,8 @@
       },
       "prompt_protocol": {
         "positions": ["front", "end"],
-        "front": "Based on the following long context, {instruction}\\n\\n{context}",
-        "end": "{context}\\n\\nBased on the long context above, {instruction}",
+        "front": "Based on the following long context, {instruction}\n\n{context}",
+        "end": "{context}\n\nBased on the long context above, {instruction}",
         "generation_max_new_tokens": 2048,
         "do_sample": false,
         "expected_rows": 1543,
