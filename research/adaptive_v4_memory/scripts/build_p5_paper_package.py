@@ -53,6 +53,9 @@ REPRODUCTION_REQUIRED_MARKERS = [
     "run_p2_seed_extension_causal.py --scale s151 --workers 3",
     "summarize_p2_seed_extension_causal.py",
     "run_p3_natural_ruler.py",
+    "prepare_p3_cross_family_ruler_dataset.py",
+    "run_p3_cross_family_ruler.py",
+    "summarize_p3_cross_family_ruler.py",
     "run_p3_scbench.py",
     "run_p3_longbench_v2.py",
     "run_p3_longmemeval.py",
@@ -77,6 +80,7 @@ BOUNDARY_EXPERIMENT_IDS = {
     "p2_causal_factorial": "p2-causal-factorial-v1",
     "online_learned_lookahead": "p1-online-learned-lookahead-v1",
     "p3_ruler": "p3-ruler-qwen3-1.7b-v1",
+    "cross_family": "p3-cross-family-ruler-transfer-v1",
     "natural_suite": "p3-natural-language-suite-v1",
     "safety_stress": "p3-qwen3-4b-safety-stress-v1",
     "natural_safety": "p3-qwen3-4b-natural-safety-v1",
@@ -1152,6 +1156,7 @@ def classify_evidence(
     p4_reference_systems: dict[str, Any],
     p4_production_systems: dict[str, Any],
     p4_adaptive_systems: dict[str, Any] | None = None,
+    p3_cross_family: dict[str, Any] | None = None,
 ) -> dict[str, str]:
     core_audit = p2_core.get("audit", {})
     core_complete = (
@@ -1450,6 +1455,31 @@ def classify_evidence(
         "production_runtime_blocker": "unverified",
         "official_deepseek_v4": "unverified",
     }
+    if isinstance(p3_cross_family, dict):
+        cross_audit = p3_cross_family.get("audit", {})
+        cross_terminal = (
+            p3_cross_family.get("status") == "terminal"
+            and cross_audit.get("terminal_arms") == 2
+            and cross_audit.get("total_predictions") == 7_800
+            and cross_audit.get("paired_examples") == 3_900
+            and cross_audit.get("all_scores_recomputed_from_raw_response") is True
+            and cross_audit.get("all_runtime_kvpress_bindings_verified") is True
+            and cross_audit.get("all_dependency_digests_verified") is True
+            and cross_audit.get("exact_input_pairing_verified") is True
+            and cross_audit.get("exact_token_contract_verified") is True
+            and cross_audit.get("failure_accounting_complete") is True
+            and cross_audit.get("physical_kv_measurements_verified") is True
+            and cross_audit.get("phi_specific_reselection") is False
+            and cross_audit.get("outcome_dependent_execution") is False
+        )
+        cross_gate = p3_cross_family.get("transfer_gate", {})
+        result["p3_cross_family"] = (
+            "success"
+            if cross_terminal and cross_gate.get("passed") is True
+            else "negative-result"
+            if cross_terminal and cross_gate.get("passed") is False
+            else "unverified"
+        )
     _require(set(result.values()).issubset(ALLOWED_CLASSES), "Unknown conclusion class.")
     return result
 
@@ -1912,6 +1942,20 @@ def _p3_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
     ]
 
 
+def _p3_cross_family_task_length_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        _flatten_json_row(row)
+        for row in payload["statistics"]["by_task_length"]
+    ]
+
+
+def _p3_cross_family_length_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        _flatten_json_row(row)
+        for row in payload["statistics"]["by_length_with_exact_task_cluster_inference"]
+    ]
+
+
 def _p3_safety_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return [
         {"arm": arm, **row}
@@ -2307,6 +2351,7 @@ def _report(
     p2_causal: dict[str, Any],
     p2_causal_confirmatory: dict[str, Any],
     p3_ruler: dict[str, Any],
+    p3_cross_family: dict[str, Any],
     p3_natural: dict[str, Any],
     p3_safety: dict[str, Any],
     p3_natural_safety: dict[str, Any],
@@ -2417,6 +2462,11 @@ user request, is outside the completion gate, and is never reported as passed.
   non-causal upper bound over {len(p2_causal_confirmatory["offline_oracle_upper_bound"]["registered_arms"])} arms.
 - P3 RULER: {p3_ruler["audit"]["completed_cells"]} cells and
   {p3_ruler["audit"]["total_predictions"]:,} predictions on one pinned compatible model.
+- P3 cross-family transfer: {p3_cross_family["audit"]["total_predictions"]:,} paired
+  Phi-4-mini RULER predictions across 3 lengths and 13 tasks. The Qwen-selected
+  50%-KV operating point was transferred without Phi-specific tuning; its frozen
+  transfer gate passed: **{p3_cross_family["transfer_gate"]["passed"]}**. This is a
+  separately reported model-family transfer cohort, not a second full natural suite.
 - P3 natural suite: {p3_natural["audit"]["benchmarks_terminal"]} terminal benchmarks and
   at least {p3_natural["audit"]["minimum_protocol_examples_accounted_per_arm"]:,}
   examples accounted per required arm. The fixed arm was selected before any Qwen3-4B
@@ -2608,6 +2658,7 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         loaded["p4_reference_systems"],
         loaded["p4_production_systems"],
         loaded["p4_adaptive_systems"],
+        p3_cross_family=loaded["p3_cross_family"],
     )
     classes["p2_core_confirmatory"] = _classify_validated_confirmatory_core(
         loaded["p2_core_confirmatory"]
@@ -2692,6 +2743,18 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         _write_csv(output_root / name, rows, _field_union(rows))
     p3 = _p3_rows(loaded["p3_ruler"])
     _write_csv(output_root / "table-p3-ruler-cells.csv", p3, list(p3[0]))
+    p3_cross_task_length = _p3_cross_family_task_length_rows(loaded["p3_cross_family"])
+    _write_csv(
+        output_root / "table-p3-cross-family-task-length.csv",
+        p3_cross_task_length,
+        _field_union(p3_cross_task_length),
+    )
+    p3_cross_length = _p3_cross_family_length_rows(loaded["p3_cross_family"])
+    _write_csv(
+        output_root / "table-p3-cross-family-length-inference.csv",
+        p3_cross_length,
+        _field_union(p3_cross_length),
+    )
     p3_safety = _p3_safety_rows(loaded["p3_safety"])
     _write_csv(
         output_root / "table-p3-safety-slices.csv",
@@ -2861,6 +2924,7 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         p2_causal=loaded["p2_causal"],
         p2_causal_confirmatory=loaded["p2_causal_confirmatory"],
         p3_ruler=loaded["p3_ruler"],
+        p3_cross_family=loaded["p3_cross_family"],
         p3_natural=loaded["p3_natural"],
         p3_safety=loaded["p3_safety"],
         p3_natural_safety=loaded["p3_natural_safety"],

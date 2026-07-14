@@ -255,6 +255,41 @@
       "experiment_id": "p3-ruler-qwen3-1.7b-audit-v1",
       "required_audit": {"completed_cells": 57, "total_predictions": 370500, "all_runtime_kvpress_bindings_verified": true}
     },
+    "p3_cross_family": {
+      "path": "artifacts/adaptive_v4_memory/paper_grade/p3/cross-family/phi4-mini-ruler.summary.json",
+      "experiment_id": "p3-cross-family-ruler-transfer-audit-v1",
+      "required_audit": {
+        "required_arms_terminal": true,
+        "terminal_arms": 2,
+        "expected_examples_per_arm": 3900,
+        "verified_examples_per_arm": {
+          "native-dense": 3900,
+          "qwen-selected-memory-matched": 3900
+        },
+        "predictions_per_arm": 3900,
+        "total_predictions": 7800,
+        "paired_examples": 3900,
+        "all_raw_record_digests_verified": true,
+        "all_raw_records_verified": true,
+        "all_runtime_kvpress_bindings_verified": true,
+        "all_dependency_digests_verified": true,
+        "all_record_revisions_verified": true,
+        "all_scores_recomputed_from_raw_response": true,
+        "exact_input_pairing_verified": true,
+        "all_example_pairs_verified": true,
+        "exact_token_contract_verified": true,
+        "no_silent_truncation_verified": true,
+        "failure_accounting_complete": true,
+        "physical_kv_measurements_verified": true,
+        "phi_specific_reselection": false,
+        "qwen_selection_reused_without_phi_tuning": true,
+        "outcome_dependent_execution": false,
+        "task_length_cells": 39,
+        "exact_task_sign_flip_assignments_per_length": 8192,
+        "paired_bootstrap_resamples": 10000,
+        "paired_bootstrap_seed": 9171501
+      }
+    },
     "p3_natural": {
       "path": "artifacts/adaptive_v4_memory/paper_grade/p3/natural-suite.summary.json",
       "experiment_id": "p3-natural-language-suite-audit-v1",
@@ -484,6 +519,7 @@
     "p2_causal_factorial": "research/adaptive_v4_memory/manifests/p2-causal-factorial-v1.json",
     "online_learned_lookahead": "research/adaptive_v4_memory/manifests/p1-online-learned-lookahead-v1.json",
     "p3_ruler": "research/adaptive_v4_memory/manifests/p3-ruler-qwen3-1.7b-v1.json",
+    "cross_family": "research/adaptive_v4_memory/manifests/p3-cross-family-ruler-transfer-v1.json",
     "natural_suite": "research/adaptive_v4_memory/manifests/p3-natural-suite-v1.json",
     "safety_stress": "research/adaptive_v4_memory/manifests/p3-safety-stress-v1.json",
     "natural_safety": "research/adaptive_v4_memory/manifests/p3-natural-safety-v1.json",
@@ -514,6 +550,8 @@
     "table-p2-causal-physical-memory.csv",
     "table-p2-causal-offline-oracle.csv",
     "table-p3-ruler-cells.csv",
+    "table-p3-cross-family-task-length.csv",
+    "table-p3-cross-family-length-inference.csv",
     "table-p3-safety-slices.csv",
     "table-p3-natural-benchmark-arms.csv",
     "table-p3-natural-paired-contrasts.csv",

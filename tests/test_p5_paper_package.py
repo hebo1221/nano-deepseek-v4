@@ -273,6 +273,7 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
         "p2_causal",
         "p2_causal_confirmatory",
         "p3_ruler",
+        "p3_cross_family",
         "p3_natural",
         "p3_safety",
         "p3_natural_safety",
@@ -288,6 +289,11 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
         "p2_causal_parallel_equivalence",
         "p1_online_checkpoint_reuse",
     }
+    cross = manifest["evidence"]["p3_cross_family"]
+    assert cross["experiment_id"] == "p3-cross-family-ruler-transfer-audit-v1"
+    assert cross["required_audit"]["total_predictions"] == 7_800
+    assert cross["required_audit"]["paired_examples"] == 3_900
+    assert cross["required_audit"]["all_scores_recomputed_from_raw_response"] is True
     assert manifest["execution_audits"]["p2_core_parallel_equivalence"]["required_probes"] == 3
     assert manifest["execution_audits"]["p2_causal_parallel_equivalence"]["required_probes"] == 3
     assert manifest["execution_audits"]["p1_online_checkpoint_reuse"]["required_probes"] == 10
@@ -1125,6 +1131,50 @@ def test_p5_classification_preserves_claim_boundaries() -> None:
         "production_runtime_blocker": "unverified",
         "official_deepseek_v4": "unverified",
     }
+
+
+@pytest.mark.parametrize(
+    ("passed", "expected"),
+    [(True, "success"), (False, "negative-result")],
+)
+def test_cross_family_classification_is_gate_bound(passed: bool, expected: str) -> None:
+    cross_family = {
+        "status": "terminal",
+        "audit": {
+            "terminal_arms": 2,
+            "total_predictions": 7_800,
+            "paired_examples": 3_900,
+            "all_scores_recomputed_from_raw_response": True,
+            "all_runtime_kvpress_bindings_verified": True,
+            "all_dependency_digests_verified": True,
+            "exact_input_pairing_verified": True,
+            "exact_token_contract_verified": True,
+            "failure_accounting_complete": True,
+            "physical_kv_measurements_verified": True,
+            "phi_specific_reselection": False,
+            "outcome_dependent_execution": False,
+        },
+        "transfer_gate": {"passed": passed},
+    }
+    classifications = package.classify_evidence(
+        _p2_core_evidence(),
+        _m5_pilot_evidence(),
+        _m3_offline_learned_risk_evidence(),
+        _online_learned_lookahead_evidence(),
+        {"primary_causal_gate": {"passed": False}},
+        {"benchmark_complete": False},
+        {"audit": {}},
+        {"audit": {}},
+        {"audit": {}},
+        {"audit": {}},
+        {"audit": {}},
+        {"audit": {}},
+        {"audit": {}},
+        {"audit": {}},
+        {"audit": {}},
+        p3_cross_family=cross_family,
+    )
+    assert classifications["p3_cross_family"] == expected
 
 
 def test_p5_success_requires_full_system_coverage() -> None:

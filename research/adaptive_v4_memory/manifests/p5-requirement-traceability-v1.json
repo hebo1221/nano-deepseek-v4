@@ -155,7 +155,9 @@
       "requirement": "Freeze licensed/versioned harnesses for RULER, LongBench v2, SCBench, LongMemEval, and MRCR.",
       "sources": [
         {"kind": "evidence", "name": "p3_ruler"},
+        {"kind": "evidence", "name": "p3_cross_family"},
         {"kind": "evidence", "name": "p3_natural"},
+        {"kind": "boundary-manifest", "name": "cross_family"},
         {"kind": "boundary-manifest", "name": "natural_suite"}
       ]
     },
@@ -163,7 +165,11 @@
       "id": "P3.2",
       "phase": "P3",
       "requirement": "Compare strong KV-cache baselines on an available real long-context model.",
-      "sources": [{"kind": "evidence", "name": "p3_natural"}]
+      "sources": [
+        {"kind": "evidence", "name": "p3_natural"},
+        {"kind": "evidence", "name": "p3_cross_family"},
+        {"kind": "boundary-manifest", "name": "cross_family"}
+      ]
     },
     {
       "id": "P3.3",
