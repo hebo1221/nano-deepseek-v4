@@ -39,8 +39,8 @@ def config_from_payload(payload: Any) -> SameTokenControllerConfig:
     values["signal"] = TrainingFreeControllerConfig(**signal)
     for name in ("layer_budgets", "dense_layer_budgets"):
         rows = values.get(name)
-        _require(isinstance(rows, list), f"Controller {name} is missing.")
-        assert isinstance(rows, list)
+        _require(isinstance(rows, (list, tuple)), f"Controller {name} is missing.")
+        assert isinstance(rows, (list, tuple))
         values[name] = tuple(tuple(row) for row in rows)
     try:
         return SameTokenControllerConfig(**values)
