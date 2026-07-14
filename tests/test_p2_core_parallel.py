@@ -58,9 +58,7 @@ def test_parallel_consolidation_preserves_verified_other_scale(
         )
     )
     output_root = tmp_path / "outputs"
-    selected_output = (
-        output_root / "s55" / "seed-1" / "family" / "context-80" / "replicate-0.json"
-    )
+    selected_output = output_root / "s55" / "seed-1" / "family" / "context-80" / "replicate-0.json"
     selected_output.parent.mkdir(parents=True)
     selected_output.write_text("selected")
     equivalence = tmp_path / "equivalence.json"
@@ -115,3 +113,44 @@ def test_parallel_consolidation_preserves_verified_other_scale(
     )
 
     assert {run["scale"] for run in captured["runs"]} == {"s55", "s151"}
+
+
+def test_parallel_probe_requires_exact_record_equivalence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    canonical_root = tmp_path / "canonical"
+    probe_root = tmp_path / "probe"
+    for seed, family in parallel.PARALLEL_PROBE_TASKS:
+        canonical = parallel._coordinate_path(canonical_root, "s55", seed, family, 80, 0)
+        probe = parallel._coordinate_path(probe_root, "s55", seed, family, 80, 0)
+        canonical.parent.mkdir(parents=True)
+        probe.parent.mkdir(parents=True)
+        payload = {
+            "records_digest": f"digest-{seed}",
+            "records": [{"prediction": seed}],
+            "aggregate": [{"accuracy": 1.0}],
+            "generation_seed": seed,
+        }
+        canonical.write_text(json.dumps(payload))
+        probe.write_text(json.dumps(payload))
+    monkeypatch.setattr(parallel.matrix, "_head", lambda: "commit")
+    monkeypatch.setattr(parallel.shard, "_implementation_digest", lambda: "implementation")
+
+    audit = parallel.audit_parallel_probe(
+        canonical_root=canonical_root,
+        probe_root=probe_root,
+        audit_path=tmp_path / "audit.json",
+    )
+
+    assert audit["audit"]["all_records_identical"] is True
+    seed, family = parallel.PARALLEL_PROBE_TASKS[0]
+    tampered = parallel._coordinate_path(probe_root, "s55", seed, family, 80, 0)
+    payload = json.loads(tampered.read_text())
+    payload["records"] = [{"prediction": -1}]
+    tampered.write_text(json.dumps(payload))
+    with pytest.raises(RuntimeError, match="changed P2 predictions"):
+        parallel.audit_parallel_probe(
+            canonical_root=canonical_root,
+            probe_root=probe_root,
+            audit_path=tmp_path / "audit.json",
+        )

@@ -27,6 +27,11 @@ FAMILY_WEIGHTS = {
     )
     for family in PAPER_GRADE_WORKLOAD_FAMILIES
 }
+PARALLEL_PROBE_TASKS = (
+    (shard.TRAINING_SEEDS[0], "long-generation-changing-evidence"),
+    (shard.TRAINING_SEEDS[1], "dense-global-aggregation"),
+    (shard.TRAINING_SEEDS[2], "single-remote-retrieval"),
+)
 
 
 def partition_seed_families(
@@ -179,6 +184,135 @@ def _evaluate_tasks(config: dict[str, Any]) -> None:
         torch.cuda.empty_cache()
 
 
+def _wait_for_processes(processes: list[Any], label: str) -> None:
+    while any(process.is_alive() for process in processes):
+        failures = [
+            code for process in processes if (code := process.exitcode) is not None and code != 0
+        ]
+        if failures:
+            for process in processes:
+                if process.is_alive():
+                    process.terminate()
+            for process in processes:
+                process.join()
+            raise RuntimeError(f"{label} workers failed: {failures}")
+        time.sleep(1)
+    for process in processes:
+        process.join()
+    failures = [
+        code for process in processes if (code := process.exitcode) is not None and code != 0
+    ]
+    if failures:
+        raise RuntimeError(f"{label} workers failed: {failures}")
+
+
+def _coordinate_path(
+    root: Path, scale: str, seed: int, family: str, context: int, replicate: int
+) -> Path:
+    return (
+        root
+        / scale
+        / f"seed-{seed}"
+        / family
+        / f"context-{context}"
+        / f"replicate-{replicate}.json"
+    )
+
+
+def audit_parallel_probe(
+    *, canonical_root: Path, probe_root: Path, audit_path: Path
+) -> dict[str, Any]:
+    probes = []
+    for seed, family in PARALLEL_PROBE_TASKS:
+        canonical_path = _coordinate_path(canonical_root, "s55", seed, family, 80, 0)
+        probe_path = _coordinate_path(probe_root, "s55", seed, family, 80, 0)
+        if not canonical_path.is_file() or not probe_path.is_file():
+            raise RuntimeError(f"Parallel equivalence probe is missing: {seed}/{family}")
+        canonical = json.loads(canonical_path.read_text())
+        probe = json.loads(probe_path.read_text())
+        if (
+            canonical.get("records_digest") != probe.get("records_digest")
+            or canonical.get("records") != probe.get("records")
+            or canonical.get("aggregate") != probe.get("aggregate")
+            or canonical.get("generation_seed") != probe.get("generation_seed")
+        ):
+            raise RuntimeError(f"Parallel execution changed P2 predictions: {seed}/{family}")
+        probes.append(
+            {
+                "training_seed": seed,
+                "family": family,
+                "context": 80,
+                "replicate": 0,
+                "records_digest": canonical["records_digest"],
+                "canonical": {
+                    "path": str(canonical_path),
+                    "sha256": matrix._sha256(canonical_path),
+                },
+                "parallel_probe": {
+                    "path": str(probe_path),
+                    "sha256": matrix._sha256(probe_path),
+                },
+            }
+        )
+    payload = {
+        "schema_version": 1,
+        "experiment_id": "p2-core-parallel-equivalence-audit-v1",
+        "source": {
+            "commit": matrix._head(),
+            "dirty": False,
+            "orchestrator_sha256": matrix._sha256(Path(__file__)),
+            "implementation_digest": shard._implementation_digest(),
+        },
+        "audit": {
+            "workers": len(PARALLEL_PROBE_TASKS),
+            "probe_shards": len(probes),
+            "all_records_identical": True,
+            "all_aggregates_identical": True,
+            "all_generation_seeds_identical": True,
+        },
+        "probes": probes,
+    }
+    _atomic_json(audit_path, payload)
+    return payload
+
+
+def run_parallel_probe(
+    *,
+    context: Any,
+    base: dict[str, Any],
+    canonical_root: Path,
+    probe_root: Path,
+    audit_path: Path,
+) -> dict[str, Any]:
+    probe_base = {
+        **base,
+        "scale": "s55",
+        "output_root": str(probe_root),
+        "contexts": (80,),
+        "replicates": (0,),
+        "equivalence": (
+            "research/adaptive_v4_memory/results/p1-chunked-cache-equivalence.summary.json"
+        ),
+    }
+    processes = []
+    for worker, task in enumerate(PARALLEL_PROBE_TASKS):
+        config = {
+            **probe_base,
+            "worker": worker,
+            "workers": len(PARALLEL_PROBE_TASKS),
+            "tasks": (task,),
+        }
+        process = context.Process(target=_evaluate_tasks, args=(config,))
+        process.start()
+        processes.append(process)
+    _wait_for_processes(processes, "P2 parallel equivalence probe")
+    return audit_parallel_probe(
+        canonical_root=canonical_root,
+        probe_root=probe_root,
+        audit_path=audit_path,
+    )
+
+
 def _consolidate(config: dict[str, Any], matrix_summary: Path) -> None:
     scale = config["scale"]
     equivalence = Path(config["equivalence"])
@@ -295,6 +429,18 @@ def main() -> None:
         type=Path,
         default=Path("artifacts/adaptive_v4_memory/paper_grade/p2-core-quality-matrix.json"),
     )
+    parser.add_argument(
+        "--parallel-probe-root",
+        type=Path,
+        default=Path("artifacts/adaptive_v4_memory/paper_grade/p2_core_parallel_equivalence"),
+    )
+    parser.add_argument(
+        "--parallel-probe-audit",
+        type=Path,
+        default=Path(
+            "artifacts/adaptive_v4_memory/paper_grade/p2-core-parallel-equivalence.summary.json"
+        ),
+    )
     args = parser.parse_args()
     if args.workers <= 0:
         raise ValueError("workers must be positive.")
@@ -327,6 +473,14 @@ def main() -> None:
     lock = acquire_gpu_lock(f"p2-core-parallel-{args.scale}")
     try:
         context = mp.get_context("spawn")
+        if args.scale == "s151":
+            run_parallel_probe(
+                context=context,
+                base=base,
+                canonical_root=args.output_root,
+                probe_root=args.parallel_probe_root,
+                audit_path=args.parallel_probe_audit,
+            )
         processes = []
         for worker, tasks in enumerate(assignments):
             config = {
@@ -338,27 +492,7 @@ def main() -> None:
             process = context.Process(target=_evaluate_tasks, args=(config,))
             process.start()
             processes.append(process)
-        while any(process.is_alive() for process in processes):
-            failures = [
-                code
-                for process in processes
-                if (code := process.exitcode) is not None and code != 0
-            ]
-            if failures:
-                for process in processes:
-                    if process.is_alive():
-                        process.terminate()
-                for process in processes:
-                    process.join()
-                raise RuntimeError(f"Parallel P2 workers failed: {failures}")
-            time.sleep(1)
-        for process in processes:
-            process.join()
-        failures = [
-            code for process in processes if (code := process.exitcode) is not None and code != 0
-        ]
-        if failures:
-            raise RuntimeError(f"Parallel P2 workers failed: {failures}")
+        _wait_for_processes(processes, "Parallel P2")
         _consolidate(base, args.matrix_summary)
     finally:
         lock.close()
