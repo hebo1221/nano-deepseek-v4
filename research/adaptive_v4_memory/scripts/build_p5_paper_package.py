@@ -113,6 +113,10 @@ SCALE_AUDIT_SOURCE_MANIFESTS = {
     "cross_family": Path(
         "research/adaptive_v4_memory/manifests/p3-cross-family-ruler-transfer-v1.json"
     ),
+    "cross_family_adaptive_quota": Path(
+        "research/adaptive_v4_memory/manifests/"
+        "p3-cross-family-adaptive-quota-ruler-v1.json"
+    ),
     "natural_adaptive_quota": Path(
         "research/adaptive_v4_memory/manifests/p3-natural-adaptive-quota-ruler-v1.json"
     ),
@@ -443,6 +447,33 @@ def _validate_experiment_scale_audit(payload: dict[str, Any]) -> None:
     _require(
         planned.get("p3_cross_family_phi4_mini_ruler") == expected_cross_family,
         "P3 cross-family scale count drifted.",
+    )
+
+    cross_adaptive = sources["cross_family_adaptive_quota"]
+    cross_adaptive_benchmark = cross_adaptive.get("benchmark", {})
+    cross_adaptive_relationship = cross_adaptive.get("relationship_to_other_cohorts", {})
+    expected_cross_adaptive = {
+        "predictions": cross_adaptive_benchmark.get("paired_predictions_total"),
+        "predictions_per_arm": cross_adaptive_benchmark.get("predictions_per_arm"),
+        "paired_arms": len(cross_adaptive.get("arms", {})),
+        "tasks": len(cross_adaptive_benchmark.get("tasks", [])),
+        "context_lengths": cross_adaptive_benchmark.get("lengths_tokens", []),
+        "examples_per_task_context_arm": cross_adaptive_benchmark.get(
+            "samples_per_task_length"
+        ),
+        "same_global_token_budget": cross_adaptive.get("physical_contract", {}).get(
+            "same_global_kept_tokens"
+        ),
+        "pooled_with_qwen": cross_adaptive_relationship.get("pooled_with_qwen"),
+        "phi_specific_tuning_allowed": cross_adaptive_relationship.get(
+            "phi_specific_tuning_or_reselection_allowed"
+        ),
+        "unchanged_synthetic_controller_transfer": False,
+    }
+    _require(
+        planned.get("p3_cross_family_adaptive_quota_phi4_mini_ruler")
+        == expected_cross_adaptive,
+        "P3 cross-family adaptive-quota scale count drifted.",
     )
 
     natural_adaptive = sources["natural_adaptive_quota"]

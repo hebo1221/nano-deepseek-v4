@@ -117,6 +117,18 @@
       "pooled_with_primary": false,
       "phi_specific_tuning_allowed": false
     },
+    "p3_cross_family_adaptive_quota_phi4_mini_ruler": {
+      "predictions": 7800,
+      "predictions_per_arm": 3900,
+      "paired_arms": 2,
+      "tasks": 13,
+      "context_lengths": [8192, 32768, 131072],
+      "examples_per_task_context_arm": 100,
+      "same_global_token_budget": true,
+      "pooled_with_qwen": false,
+      "phi_specific_tuning_allowed": false,
+      "unchanged_synthetic_controller_transfer": false
+    },
     "p3_natural_adaptive_quota_qwen3_4b": {
       "predictions": 65000,
       "predictions_per_arm": 32500,
