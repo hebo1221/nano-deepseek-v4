@@ -90,6 +90,22 @@ def test_independent_seed_extension_removes_exact_test_resolution_floor() -> Non
     }
     assert execution["per_checkpoint_equivalence_required"] is True
     assert execution["artifact_namespace"].endswith("/p2_seed_extension")
+    assert execution["operational_amendment"]["outcomes_inspected"] is False
+    assert execution["operational_amendment"]["design_changed"] is False
+    assert execution["primary_causal_gate"] == {
+        "matrix": (
+            "artifacts/adaptive_v4_memory/paper_grade/"
+            "p2-causal-factorial-matrix.json"
+        ),
+        "audit": (
+            "artifacts/adaptive_v4_memory/paper_grade/"
+            "p2-causal-ablation.summary.json"
+        ),
+        "required_unique_shards": 9_000,
+        "requires_physical_hot_memory_matching": True,
+        "requires_all_arm_sequential_chunked_equivalence": True,
+        "requires_exact_config_reuse_audit": True,
+    }
     assert execution["commands"] == [
         ".venv/bin/python research/adaptive_v4_memory/scripts/"
         "run_p2_seed_extension_prerequisites.py",
@@ -99,6 +115,14 @@ def test_independent_seed_extension_removes_exact_test_resolution_floor() -> Non
         "run_p2_seed_extension_core.py --scale s151 --workers 3",
         ".venv/bin/python research/adaptive_v4_memory/scripts/"
         "summarize_p2_seed_extension.py",
+        ".venv/bin/python research/adaptive_v4_memory/scripts/"
+        "run_p2_seed_extension_causal_prerequisites.py",
+        ".venv/bin/python research/adaptive_v4_memory/scripts/"
+        "run_p2_seed_extension_causal.py --scale s55 --workers 3",
+        ".venv/bin/python research/adaptive_v4_memory/scripts/"
+        "run_p2_seed_extension_causal.py --scale s151 --workers 3",
+        ".venv/bin/python research/adaptive_v4_memory/scripts/"
+        "summarize_p2_seed_extension_causal.py",
     ]
     assert set(execution["outputs"]) == {
         "prerequisites",
@@ -106,4 +130,9 @@ def test_independent_seed_extension_removes_exact_test_resolution_floor() -> Non
         "extension_audit",
         "combined_matrix",
         "combined_audit",
+        "causal_prerequisites",
+        "causal_extension_matrix",
+        "causal_extension_audit",
+        "causal_combined_matrix",
+        "causal_combined_audit",
     }

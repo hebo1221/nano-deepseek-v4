@@ -1,6 +1,6 @@
 # Paper-grade expansion protocol
 
-Protocol version: 1.3
+Protocol version: 1.4
 Frozen: 2026-07-14  
 Amended: 2026-07-14, before causal-factorial held-out execution
 Status: active; P2 synthetic core runs first, followed by causal ablations,
@@ -25,6 +25,15 @@ exclusive study lock; every worker writes a distinct artifact path, and a
 single parent verifies exact Cartesian coverage and raw digests before emitting
 the canonical matrix. The online learned-lookahead runner additionally reuses
 one immutable checkpoint load across shards from the same scale and seed.
+
+Version 1.4 binds the preregistered four-seed confirmatory extension to
+executable artifacts before primary causal outcomes or any extension outcome
+is inspected. It changes no arm, workload, budget, sample count, or success
+criterion. Each new checkpoint must independently pass calibration-only
+physical hot-memory matching and all-16-arm sequential/chunked equivalence.
+The 7,200-shard extension and 9,000-shard primary causal cohorts remain
+separately reportable; a 16,200-shard nine-seed analysis is emitted only after
+their frozen contracts and base evaluator digest are proven identical.
 
 ## 1. Primary questions
 

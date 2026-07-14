@@ -61,6 +61,13 @@
     "causal_policy_example_evaluations": 5184000
   },
   "execution_contract": {
+    "operational_amendment": {
+      "frozen_at": "2026-07-14T23:18:00+09:00",
+      "timing": "before primary causal outcomes and before any extension execution",
+      "outcomes_inspected": false,
+      "design_changed": false,
+      "purpose": "Bind the already-preregistered causal extension volume to executable per-checkpoint physical-match, all-arm equivalence, matrix, audit, and pooling paths."
+    },
     "primary_gate": {
       "matrix": "artifacts/adaptive_v4_memory/paper_grade/p2-core-quality-matrix.json",
       "strict_audit": "artifacts/adaptive_v4_memory/paper_grade/p2-core-quality-matrix.strict.summary.json",
@@ -69,20 +76,37 @@
       "requires_exact_execution_rotation": true,
       "requires_exact_statistical_cell_coverage": true
     },
+    "primary_causal_gate": {
+      "matrix": "artifacts/adaptive_v4_memory/paper_grade/p2-causal-factorial-matrix.json",
+      "audit": "artifacts/adaptive_v4_memory/paper_grade/p2-causal-ablation.summary.json",
+      "required_unique_shards": 9000,
+      "requires_physical_hot_memory_matching": true,
+      "requires_all_arm_sequential_chunked_equivalence": true,
+      "requires_exact_config_reuse_audit": true
+    },
     "artifact_namespace": "artifacts/adaptive_v4_memory/paper_grade/p2_seed_extension",
     "per_checkpoint_equivalence_required": true,
     "commands": [
       ".venv/bin/python research/adaptive_v4_memory/scripts/run_p2_seed_extension_prerequisites.py",
       ".venv/bin/python research/adaptive_v4_memory/scripts/run_p2_seed_extension_core.py --scale s55 --workers 3",
       ".venv/bin/python research/adaptive_v4_memory/scripts/run_p2_seed_extension_core.py --scale s151 --workers 3",
-      ".venv/bin/python research/adaptive_v4_memory/scripts/summarize_p2_seed_extension.py"
+      ".venv/bin/python research/adaptive_v4_memory/scripts/summarize_p2_seed_extension.py",
+      ".venv/bin/python research/adaptive_v4_memory/scripts/run_p2_seed_extension_causal_prerequisites.py",
+      ".venv/bin/python research/adaptive_v4_memory/scripts/run_p2_seed_extension_causal.py --scale s55 --workers 3",
+      ".venv/bin/python research/adaptive_v4_memory/scripts/run_p2_seed_extension_causal.py --scale s151 --workers 3",
+      ".venv/bin/python research/adaptive_v4_memory/scripts/summarize_p2_seed_extension_causal.py"
     ],
     "outputs": {
       "prerequisites": "artifacts/adaptive_v4_memory/paper_grade/p2-seed-extension-prerequisites.json",
       "extension_matrix": "artifacts/adaptive_v4_memory/paper_grade/p2-seed-extension-core-matrix.json",
       "extension_audit": "artifacts/adaptive_v4_memory/paper_grade/p2-seed-extension-core.summary.json",
       "combined_matrix": "artifacts/adaptive_v4_memory/paper_grade/p2-nine-seed-core-matrix.json",
-      "combined_audit": "artifacts/adaptive_v4_memory/paper_grade/p2-nine-seed-core.summary.json"
+      "combined_audit": "artifacts/adaptive_v4_memory/paper_grade/p2-nine-seed-core.summary.json",
+      "causal_prerequisites": "artifacts/adaptive_v4_memory/paper_grade/p2-seed-extension-causal-prerequisites.json",
+      "causal_extension_matrix": "artifacts/adaptive_v4_memory/paper_grade/p2-seed-extension-causal-matrix.json",
+      "causal_extension_audit": "artifacts/adaptive_v4_memory/paper_grade/p2-seed-extension-causal.summary.json",
+      "causal_combined_matrix": "artifacts/adaptive_v4_memory/paper_grade/p2-nine-seed-causal-matrix.json",
+      "causal_combined_audit": "artifacts/adaptive_v4_memory/paper_grade/p2-nine-seed-causal.summary.json"
     }
   },
   "execution_order": [
