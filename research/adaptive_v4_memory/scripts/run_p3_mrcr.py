@@ -18,6 +18,7 @@ import numpy as np
 import pyarrow.parquet as pq
 import torch
 from adaptive_v4_gpu_lock import acquire_gpu_lock
+from p3_cross_family_sequence_gate import require_cross_family_sequence_gate
 from p3_natural_metrics import score_mrcr
 from p3_natural_workloads import (
     encode_rendered_segments_exact,
@@ -34,10 +35,18 @@ from run_p3_ruler_matrix import (
     load_evaluator,
 )
 from transformers import DynamicCache
+from validate_p3_natural_adaptive_quota_mrcr_manifest import (
+    validate_manifest as validate_adaptive_mrcr_manifest,
+)
 from verify_p3_natural_model import sha256, verify_snapshot
 
 BENCHMARK = "MRCR"
 ARMS = ("native-dense", "strongest-memory-matched-fixed")
+ADAPTIVE_QUOTA_ARMS = ("fixed+pins", "natural-adaptive-quota+pins")
+DEFAULT_OUTPUT_ROOT = Path("artifacts/adaptive_v4_memory/paper_grade/p3/natural/mrcr")
+ADAPTIVE_QUOTA_OUTPUT_ROOT = Path(
+    "artifacts/adaptive_v4_memory/paper_grade/p3/natural-adaptive-quota/mrcr-qwen3-4b"
+)
 NEEDLE_COUNTS = (2, 4, 8)
 EXPECTED_EXAMPLES = 1500
 MODEL_REVISION = "cdbee75f17c01a7cc42f958dc650907174af0554"
@@ -47,6 +56,45 @@ DATASET_REVISION = "f4c69fae7cf81f7ca26b9fee34b392a50f6b8a1d"
 def _require(condition: bool, message: str) -> None:
     if not condition:
         raise ValueError(message)
+
+
+def load_adaptive_prerequisite(
+    path: Path, *, experiment_id: str, predictions: int, label: str
+) -> dict[str, str]:
+    _require(path.is_file(), f"Adaptive MRCR prerequisite is unavailable: {label}.")
+    payload = json.loads(path.read_text())
+    audit = payload.get("audit", {})
+    _require(payload.get("experiment_id") == experiment_id, f"Wrong prerequisite: {label}.")
+    if experiment_id == "p3-natural-adaptive-quota-ruler-audit-v1":
+        _require(
+            payload.get("status") == "terminal"
+            and audit.get("total_predictions") == predictions
+            and audit.get("all_raw_records_verified") is True
+            and audit.get("all_dependency_digests_verified") is True
+            and audit.get("failure_accounting_complete") is True
+            and audit.get("quota_physical_audits_verified") is True
+            and audit.get("same_global_token_budget_verified") is True
+            and audit.get("causal_layer_order_verified") is True,
+            "Adaptive RULER prerequisite lacks verified quota evidence.",
+        )
+    elif experiment_id == "p3-natural-mrcr-audit-v1":
+        arms = payload.get("arms", {})
+        _require(
+            audit.get("all_raw_artifacts_verified") is True
+            and audit.get("all_failure_accounting_complete") is True
+            and audit.get("all_required_arms_input_paired") is True
+            and audit.get("all_reported_scores_recomputed_from_raw_response") is True
+            and sum(
+                int(row.get("accounted_examples", -predictions))
+                for row in arms.values()
+                if isinstance(row, dict)
+            )
+            == predictions,
+            "Baseline MRCR prerequisite is not a complete audited result.",
+        )
+    else:
+        raise ValueError(f"Unsupported adaptive MRCR prerequisite: {experiment_id}.")
+    return {"path": str(path), "sha256": sha256(path)}
 
 
 def atomic_json(path: Path, payload: dict[str, Any]) -> None:
@@ -111,11 +159,15 @@ def rendered_input(tokenizer: Any, messages: list[dict[str, str]]) -> dict[str, 
     context_ids, query_ids, boundary_retreat = encode_rendered_segments_exact(
         tokenizer, context, query
     )
+    token_ids = torch.cat((context_ids, query_ids), dim=1)
     return {
         "context_ids": context_ids,
         "question_ids": query_ids,
         "exact_input_tokens": int(context_ids.shape[1] + query_ids.shape[1]),
         "raw_prompt_sha256": hashlib.sha256((context + query).encode()).hexdigest(),
+        "input_token_ids_sha256": hashlib.sha256(
+            token_ids.detach().cpu().to(torch.int64).contiguous().numpy().tobytes()
+        ).hexdigest(),
         "token_boundary_retreat": boundary_retreat,
     }
 
@@ -305,6 +357,7 @@ def runtime_environment() -> dict[str, Any]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run frozen Qwen3-4B MRCR primary cells.")
+    parser.add_argument("--cohort", choices=("baseline", "adaptive-quota"), default="baseline")
     parser.add_argument("--kvpress-root", type=Path, required=True)
     parser.add_argument("--model-snapshot", type=Path, required=True)
     parser.add_argument(
@@ -330,6 +383,39 @@ def main() -> None:
         default=Path("artifacts/adaptive_v4_memory/paper_grade/p2-causal-ablation.summary.json"),
     )
     parser.add_argument(
+        "--primary-core-summary",
+        type=Path,
+        default=Path(
+            "artifacts/adaptive_v4_memory/paper_grade/p2-core-quality-matrix.strict.summary.json"
+        ),
+    )
+    parser.add_argument(
+        "--nine-seed-causal-summary",
+        type=Path,
+        default=Path("artifacts/adaptive_v4_memory/paper_grade/p2-nine-seed-causal.summary.json"),
+    )
+    parser.add_argument(
+        "--adaptive-quota-manifest",
+        type=Path,
+        default=Path(
+            "research/adaptive_v4_memory/manifests/"
+            "p3-natural-adaptive-quota-mrcr-v1.json"
+        ),
+    )
+    parser.add_argument(
+        "--adaptive-ruler-summary",
+        type=Path,
+        default=Path(
+            "artifacts/adaptive_v4_memory/paper_grade/p3/natural-adaptive-quota/"
+            "ruler-qwen3-4b.summary.json"
+        ),
+    )
+    parser.add_argument(
+        "--baseline-mrcr-summary",
+        type=Path,
+        default=Path("artifacts/adaptive_v4_memory/paper_grade/p3/natural/mrcr.summary.json"),
+    )
+    parser.add_argument(
         "--p2-matrix",
         type=Path,
         default=Path("artifacts/adaptive_v4_memory/paper_grade/p2-core-quality-matrix.json"),
@@ -337,9 +423,9 @@ def main() -> None:
     parser.add_argument(
         "--output-root",
         type=Path,
-        default=Path("artifacts/adaptive_v4_memory/paper_grade/p3/natural/mrcr"),
+        default=DEFAULT_OUTPUT_ROOT,
     )
-    parser.add_argument("--arm", action="append", choices=ARMS)
+    parser.add_argument("--arm", action="append", choices=(*ARMS, *ADAPTIVE_QUOTA_ARMS))
     parser.add_argument("--max-new-examples", type=int)
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
@@ -347,7 +433,39 @@ def main() -> None:
         args.max_new_examples is None or args.max_new_examples > 0,
         "max-new-examples must be positive.",
     )
-    sequence_decision = require_p3_sequence_gate(args.p2_matrix, args.causal_gate)
+    adaptive_manifest: dict[str, Any] | None = None
+    adaptive_prerequisites: dict[str, dict[str, str]] = {}
+    adaptive_arm_config: Any = None
+    if args.cohort == "adaptive-quota":
+        from run_p3_natural_ruler import compatibility_arm_config
+
+        adaptive_arm_config = compatibility_arm_config
+        sequence_decision = require_cross_family_sequence_gate(
+            primary_core=args.primary_core_summary,
+            primary_causal=args.causal_gate,
+            nine_seed_causal=args.nine_seed_causal_summary,
+            fixed_selection=args.fixed_selection,
+        )
+        adaptive_manifest = json.loads(args.adaptive_quota_manifest.read_text())
+        validate_adaptive_mrcr_manifest(adaptive_manifest)
+        adaptive_prerequisites = {
+            "adaptive_ruler": load_adaptive_prerequisite(
+                args.adaptive_ruler_summary,
+                experiment_id="p3-natural-adaptive-quota-ruler-audit-v1",
+                predictions=65_000,
+                label="Qwen3-4B adaptive-quota RULER audit",
+            ),
+            "baseline_mrcr": load_adaptive_prerequisite(
+                args.baseline_mrcr_summary,
+                experiment_id="p3-natural-mrcr-audit-v1",
+                predictions=3_000,
+                label="Qwen3-4B baseline MRCR audit",
+            ),
+        }
+        if args.output_root == DEFAULT_OUTPUT_ROOT:
+            args.output_root = ADAPTIVE_QUOTA_OUTPUT_ROOT
+    else:
+        sequence_decision = require_p3_sequence_gate(args.p2_matrix, args.causal_gate)
     source_commit = git_head(Path.cwd())
     if git_dirty(Path.cwd()):
         raise RuntimeError("MRCR evaluation requires a clean source tree.")
@@ -377,14 +495,34 @@ def main() -> None:
         official_encoder=official_encoder,
     )
     _require(len(rows) == EXPECTED_EXAMPLES, "Frozen MRCR run must contain 1,500 examples.")
+    if adaptive_manifest is not None:
+        _require(
+            adaptive_manifest["benchmark"]["predictions_per_arm"] == len(rows)
+            and adaptive_manifest["model"]["snapshot_digest_set_sha256"]
+            == manifest["model"]["snapshot_digest_set_sha256"]
+            and adaptive_manifest["benchmark"]["dataset_file_sha256"]
+            == [row["sha256"] for row in manifest["benchmarks"][BENCHMARK]["dataset"]["files"]]
+            and adaptive_manifest["benchmark"]["scorer_sha256"]
+            == sha256(Path(__file__).with_name("p3_natural_metrics.py")),
+            "Adaptive MRCR immutable inputs drifted from the base suite.",
+        )
     runner_digest = sha256(Path(__file__))
     manifest_digest = sha256(args.manifest)
     inventory_digest = sha256(args.dataset_inventory)
     selection_digest = sha256(args.fixed_selection)
     causal_digest = sha256(args.causal_gate)
     scorer_digest = sha256(Path(__file__).with_name("p3_natural_metrics.py"))
+    adaptive_manifest_digest = (
+        sha256(args.adaptive_quota_manifest) if adaptive_manifest is not None else None
+    )
     maximum_context = manifest["model"]["maximum_supported_context_tokens"]
-    selected_arms = tuple(args.arm or ARMS)
+    cohort_arms = ADAPTIVE_QUOTA_ARMS if args.cohort == "adaptive-quota" else ARMS
+    selected_arms = tuple(args.arm or cohort_arms)
+    _require(
+        len(selected_arms) == len(set(selected_arms))
+        and all(arm in cohort_arms for arm in selected_arms),
+        f"Selected MRCR arms do not belong to the {args.cohort} cohort.",
+    )
     identities = {
         arm: {
             "source_commit": source_commit,
@@ -393,8 +531,21 @@ def main() -> None:
             "inventory_sha256": inventory_digest,
             "causal_gate_sha256": causal_digest,
             "fixed_selection_sha256": selection_digest,
+            "cohort": args.cohort,
+            "adaptive_quota_manifest_sha256": adaptive_manifest_digest,
+            "adaptive_prerequisite_sha256": {
+                name: metadata["sha256"] for name, metadata in adaptive_prerequisites.items()
+            },
+            "sequence_gate_dependency_sha256": {
+                name: metadata["sha256"]
+                for name, metadata in sequence_decision.get("dependencies", {}).items()
+            },
             "model_snapshot_digest_set_sha256": manifest["model"]["snapshot_digest_set_sha256"],
-            "arm_config": arm_config(arm, selection, selection_digest),
+            "arm_config": (
+                adaptive_arm_config(arm, selection, selection_digest)
+                if args.cohort == "adaptive-quota"
+                else arm_config(arm, selection, selection_digest)
+            ),
             "seed": args.seed,
         }
         for arm in selected_arms
@@ -411,6 +562,11 @@ def main() -> None:
 
     lock = acquire_gpu_lock("p3-mrcr")
     try:
+        from p3_protected_prefix_press import (
+            wrap_same_budget_adaptive_quota_protected_prefix,
+            wrap_same_budget_protected_prefix,
+        )
+
         EvaluationConfig, EvaluationRunner, _scorer = load_evaluator(kvpress_root)
         config = EvaluationConfig(
             dataset="mrcr",
@@ -438,6 +594,17 @@ def main() -> None:
             runner.config.press_name = arm_settings["press_name"]
             runner.config.compression_ratio = arm_settings["compression_ratio"]
             runner._setup_press()
+            active_press: Any = runner.press
+            compatibility_press: Any = None
+            if args.cohort == "adaptive-quota":
+                if arm == "fixed+pins":
+                    compatibility_press = wrap_same_budget_protected_prefix(runner.press)
+                else:
+                    compatibility_press = wrap_same_budget_adaptive_quota_protected_prefix(
+                        runner.press,
+                        max_adjustment_fraction=arm_settings["max_adjustment_fraction"],
+                    )
+                active_press = compatibility_press
             root = args.output_root / arm
             progress = root / "progress.json"
             partial = root / "records.partial.jsonl"
@@ -465,6 +632,7 @@ def main() -> None:
                         "exact_input_tokens": rendered["exact_input_tokens"],
                         "generation_reserve_tokens": reserve,
                         "raw_prompt_sha256": rendered["raw_prompt_sha256"],
+                        "input_token_ids_sha256": rendered["input_token_ids_sha256"],
                         "token_boundary_retreat": rendered["token_boundary_retreat"],
                         "arm_config": arm_settings,
                         "revisions": {
@@ -479,6 +647,8 @@ def main() -> None:
                             "official_o200k_prompt_plus_answer_tokens"
                         ],
                     }
+                    if args.cohort == "adaptive-quota":
+                        base["quota_physical_audit"] = None
                     if rendered["exact_input_tokens"] + reserve > maximum_context:
                         record = failure_record(
                             base,
@@ -492,12 +662,24 @@ def main() -> None:
                         torch.cuda.synchronize()
                         started = time.perf_counter_ns()
                         try:
+                            if compatibility_press is not None:
+                                span = arm_settings["protected_prefix_token_span"]
+                                compatibility_press.configure(
+                                    protected_start=span["start"], protected_end=span["end"]
+                                )
                             response, resident_bytes = infer_one(
                                 pipeline=runner.pipeline,
-                                press=runner.press,
+                                press=active_press,
                                 rendered=rendered,
                                 max_new_tokens=reserve,
                             )
+                            compatibility_audit = (
+                                compatibility_press.audit()
+                                if compatibility_press is not None
+                                else None
+                            )
+                            if args.cohort == "adaptive-quota":
+                                base["quota_physical_audit"] = compatibility_audit
                             torch.cuda.synchronize()
                             latency_ms = (time.perf_counter_ns() - started) / 1_000_000.0
                             peak_hbm = torch.cuda.max_memory_allocated()
@@ -570,6 +752,7 @@ def main() -> None:
                 "experiment_id": "p3-natural-benchmark-arm-cell-v1",
                 "benchmark": BENCHMARK,
                 "arm": arm,
+                "cohort": args.cohort,
                 "status": "terminal",
                 "source": {
                     "commit": source_commit,
@@ -578,6 +761,15 @@ def main() -> None:
                 },
                 "run_identity": identities[arm],
                 "experiment_manifest": {"path": str(args.manifest), "sha256": manifest_digest},
+                "adaptive_quota_manifest": (
+                    {
+                        "path": str(args.adaptive_quota_manifest),
+                        "sha256": adaptive_manifest_digest,
+                    }
+                    if adaptive_manifest_digest is not None
+                    else None
+                ),
+                "adaptive_prerequisites": adaptive_prerequisites,
                 "causal_gate": {"path": str(args.causal_gate), "sha256": causal_digest},
                 "dataset_inventory": {
                     "path": str(args.dataset_inventory),

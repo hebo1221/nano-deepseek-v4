@@ -13,9 +13,11 @@ SCRIPTS = Path(__file__).resolve().parents[1] / "research/adaptive_v4_memory/scr
 sys.path.insert(0, str(SCRIPTS))
 
 from run_p3_mrcr import (  # noqa: E402
+    ADAPTIVE_QUOTA_ARMS,
     _existing_records,
     arm_config,
     failure_record,
+    load_adaptive_prerequisite,
     load_rows,
     rendered_input,
 )
@@ -126,6 +128,7 @@ def test_mrcr_split_is_a_slice_of_one_exact_chat_tokenization() -> None:
         torch.cat((rendered["context_ids"], rendered["question_ids"]), dim=1), full_ids
     )
     assert rendered["exact_input_tokens"] == full_ids.shape[1]
+    assert len(rendered["input_token_ids_sha256"]) == 64
 
 
 def test_mrcr_progress_recovers_empty_crash_window(tmp_path: Path) -> None:
@@ -138,3 +141,62 @@ def test_mrcr_progress_recovers_empty_crash_window(tmp_path: Path) -> None:
     assert _existing_records(progress, partial, identity) == []
     progress.unlink()
     assert _existing_records(progress, partial, identity) == []
+
+
+def test_adaptive_mrcr_accepts_terminal_prerequisites_regardless_of_gate_outcome(
+    tmp_path: Path,
+) -> None:
+    adaptive = tmp_path / "adaptive-ruler.json"
+    adaptive.write_text(
+        json.dumps(
+            {
+                "experiment_id": "p3-natural-adaptive-quota-ruler-audit-v1",
+                "status": "terminal",
+                "classification": "bounded-negative-result",
+                "audit": {
+                    "total_predictions": 65_000,
+                    "all_raw_records_verified": True,
+                    "all_dependency_digests_verified": True,
+                    "failure_accounting_complete": True,
+                    "quota_physical_audits_verified": True,
+                    "same_global_token_budget_verified": True,
+                    "causal_layer_order_verified": True,
+                },
+            }
+        )
+    )
+    baseline = tmp_path / "baseline-mrcr.json"
+    baseline.write_text(
+        json.dumps(
+            {
+                "experiment_id": "p3-natural-mrcr-audit-v1",
+                "audit": {
+                    "all_raw_artifacts_verified": True,
+                    "all_failure_accounting_complete": True,
+                    "all_required_arms_input_paired": True,
+                    "all_reported_scores_recomputed_from_raw_response": True,
+                },
+                "arms": {
+                    "native-dense": {"accounted_examples": 1_500},
+                    "strongest-memory-matched-fixed": {"accounted_examples": 1_500},
+                },
+            }
+        )
+    )
+
+    adaptive_dependency = load_adaptive_prerequisite(
+        adaptive,
+        experiment_id="p3-natural-adaptive-quota-ruler-audit-v1",
+        predictions=65_000,
+        label="adaptive RULER",
+    )
+    baseline_dependency = load_adaptive_prerequisite(
+        baseline,
+        experiment_id="p3-natural-mrcr-audit-v1",
+        predictions=3_000,
+        label="baseline MRCR",
+    )
+
+    assert ADAPTIVE_QUOTA_ARMS == ("fixed+pins", "natural-adaptive-quota+pins")
+    assert len(adaptive_dependency["sha256"]) == 64
+    assert len(baseline_dependency["sha256"]) == 64
