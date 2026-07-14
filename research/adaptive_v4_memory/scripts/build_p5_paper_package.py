@@ -58,6 +58,29 @@ def _validate_evidence(name: str, path: Path, contract: dict[str, Any]) -> dict[
     return payload
 
 
+def _classify_500k_preflight(payload: dict[str, Any]) -> str:
+    audit = payload["audit"]
+    successes = audit.get("successful_policy_attempts")
+    failures = audit.get("failed_policy_attempts")
+    terminal = (
+        audit.get("all_terminal_cells_verified") is True
+        and audit.get("all_artifact_digests_verified") is True
+        and audit.get("context_tokens") == 500_000
+        and audit.get("generation_tokens") == 128
+        and audit.get("scales_attempted") == 2
+        and audit.get("terminal_policy_attempts") == 4
+        and type(successes) is int
+        and type(failures) is int
+        and successes >= 0
+        and failures >= 0
+        and successes + failures == 4
+        and audit.get("performance_claim_available") is False
+    )
+    if not terminal:
+        return "unverified"
+    return "bounded-result" if successes > 0 else "negative-result"
+
+
 def classify_evidence(
     p2_core: dict[str, Any],
     m5_one_token_pilot: dict[str, Any],
@@ -151,24 +174,7 @@ def classify_evidence(
         and longsafety_audit.get("expected_generations_total") == 6_172
         and longsafety_audit.get("official_judge_status") == "complete"
     )
-    preflight_audit = p4_500k_context["audit"]
-    preflight_terminal = (
-        preflight_audit.get("all_terminal_cells_verified") is True
-        and preflight_audit.get("all_artifact_digests_verified") is True
-        and preflight_audit.get("context_tokens") == 500_000
-        and preflight_audit.get("generation_tokens") == 128
-        and preflight_audit.get("scales_attempted") == 2
-        and preflight_audit.get("terminal_policy_attempts") == 4
-        and preflight_audit.get("performance_claim_available") is False
-    )
-    preflight_successes = preflight_audit.get("successful_policy_attempts", 0)
-    preflight_class = (
-        "bounded-result"
-        if preflight_terminal and preflight_successes > 0
-        else "negative-result"
-        if preflight_terminal
-        else "unverified"
-    )
+    preflight_class = _classify_500k_preflight(p4_500k_context)
     reference_audit = p4_reference_systems["audit"]
     reference_complete = reference_audit.get("terminal_cells") == P4_EXPECTED_CELLS
     production_audit = p4_production_systems["audit"]

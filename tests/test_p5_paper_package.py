@@ -342,6 +342,13 @@ def test_p5_marks_all_failed_production_coverage_unverified() -> None:
     assert classifications["p4_500k_context"] == "negative-result"
 
 
+def test_p5_rejects_incomplete_500k_failure_accounting() -> None:
+    evidence = _p4_500k_evidence()
+    evidence["audit"]["failed_policy_attempts"] = 1  # type: ignore[index]
+
+    assert package._classify_500k_preflight(evidence) == "unverified"
+
+
 def test_p5_p4_table_retains_terminal_failure() -> None:
     rows = package._p4_rows(
         {
