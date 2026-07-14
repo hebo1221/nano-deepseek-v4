@@ -293,6 +293,7 @@
       "path": "artifacts/adaptive_v4_memory/paper_grade/p3/cross-family/phi4-mini-ruler.summary.json",
       "experiment_id": "p3-cross-family-ruler-transfer-audit-v1",
       "required_declared_artifact_graph": true,
+      "required_artifact_collections": {"arm_cells": 2},
       "required_audit": {
         "required_arms_terminal": true,
         "terminal_arms": 2,
@@ -329,6 +330,7 @@
       "path": "artifacts/adaptive_v4_memory/paper_grade/p3/cross-family/phi4-mini-adaptive-quota-ruler.summary.json",
       "experiment_id": "p3-cross-family-adaptive-quota-ruler-audit-v1",
       "required_declared_artifact_graph": true,
+      "required_artifact_collections": {"arm_cells": 2},
       "required_audit": {
         "required_arms_terminal": true,
         "terminal_arms": 2,
@@ -359,6 +361,7 @@
       "path": "artifacts/adaptive_v4_memory/paper_grade/p3/cross-family/phi4-mini-adaptive-quota-longbench-v2.summary.json",
       "experiment_id": "p3-cross-family-adaptive-quota-longbench-v2-audit-v1",
       "required_declared_artifact_graph": true,
+      "required_artifact_collections": {"arm_cells": 2},
       "required_audit": {
         "required_arms_terminal": true,
         "terminal_arms": 2,
@@ -394,6 +397,7 @@
       "path": "artifacts/adaptive_v4_memory/paper_grade/p3/natural-adaptive-quota/ruler-qwen3-4b.summary.json",
       "experiment_id": "p3-natural-adaptive-quota-ruler-audit-v1",
       "required_declared_artifact_graph": true,
+      "required_artifact_collections": {"arm_cells": 2},
       "required_audit": {
         "required_arms_terminal": true,
         "terminal_arms": 2,
@@ -434,6 +438,7 @@
       "path": "artifacts/adaptive_v4_memory/paper_grade/p3/natural-adaptive-quota/longmemeval-qwen3-4b.summary.json",
       "experiment_id": "p3-natural-adaptive-quota-longmemeval-audit-v1",
       "required_declared_artifact_graph": true,
+      "required_artifact_collections": {"arm_cells": 2},
       "required_audit": {
         "required_arms_terminal": true,
         "terminal_arms": 2,
@@ -472,6 +477,7 @@
       "path": "artifacts/adaptive_v4_memory/paper_grade/p3/natural-adaptive-quota/scbench-qwen3-4b.summary.json",
       "experiment_id": "p3-natural-adaptive-quota-scbench-audit-v1",
       "required_declared_artifact_graph": true,
+      "required_artifact_collections": {"arm_cells": 2},
       "required_audit": {
         "required_arms_terminal": true,
         "terminal_arms": 2,
@@ -503,6 +509,7 @@
       "path": "artifacts/adaptive_v4_memory/paper_grade/p3/natural-adaptive-quota/longbench-v2-qwen3-4b.summary.json",
       "experiment_id": "p3-natural-adaptive-quota-longbench-v2-audit-v1",
       "required_declared_artifact_graph": true,
+      "required_artifact_collections": {"arm_cells": 2},
       "required_audit": {
         "required_arms_terminal": true,
         "terminal_arms": 2,
@@ -536,6 +543,7 @@
       "path": "artifacts/adaptive_v4_memory/paper_grade/p3/natural-adaptive-quota/mrcr-qwen3-4b.summary.json",
       "experiment_id": "p3-natural-adaptive-quota-mrcr-audit-v1",
       "required_declared_artifact_graph": true,
+      "required_artifact_collections": {"arm_cells": 2},
       "required_audit": {
         "required_arms_terminal": true,
         "terminal_arms": 2,

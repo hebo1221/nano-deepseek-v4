@@ -382,6 +382,21 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
         manifest["evidence"][name]["required_declared_artifact_graph"] is True
         for name in graph_bound
     )
+    paired_arm_cell_evidence = {
+        "p3_cross_family",
+        "p3_cross_family_adaptive_quota",
+        "p3_cross_family_adaptive_quota_longbench_v2",
+        "p3_natural_adaptive_quota",
+        "p3_natural_adaptive_quota_longmemeval",
+        "p3_natural_adaptive_quota_scbench",
+        "p3_natural_adaptive_quota_longbench_v2",
+        "p3_natural_adaptive_quota_mrcr",
+    }
+    assert all(
+        manifest["evidence"][name]["required_artifact_collections"]
+        == {"arm_cells": 2}
+        for name in paired_arm_cell_evidence
+    )
 
     assert set(manifest["evidence"]) == {
         "p2_core",
@@ -2148,6 +2163,11 @@ def test_adaptive_longmemeval_evidence_rejects_an_available_confirmation_gate(
     contract = manifest["evidence"]["p3_natural_adaptive_quota_longmemeval"]
     adaptive_manifest = tmp_path / "adaptive-manifest.json"
     adaptive_manifest.write_text('{"status": "frozen"}\n')
+    arm_cells = {}
+    for arm in ("fixed", "adaptive"):
+        cell = tmp_path / f"{arm}-cell.json"
+        cell.write_text(json.dumps({"arm": arm}))
+        arm_cells[arm] = {"path": str(cell), "sha256": package.sha256(cell)}
     evidence = {
         "experiment_id": contract["experiment_id"],
         "source": {"dirty": False},
@@ -2157,6 +2177,7 @@ def test_adaptive_longmemeval_evidence_rejects_an_available_confirmation_gate(
             "path": str(adaptive_manifest),
             "sha256": package.sha256(adaptive_manifest),
         },
+        "arm_cells": arm_cells,
     }
     path = tmp_path / "adaptive-longmemeval-summary.json"
     path.write_text(json.dumps(evidence))
