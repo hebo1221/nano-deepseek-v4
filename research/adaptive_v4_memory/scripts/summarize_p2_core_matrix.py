@@ -134,8 +134,7 @@ def verify_raw_shard(
         targets = record.get("targets", [])
         _require(len(predictions) == len(targets), "Prediction/target length drifted.")
         correctness = [
-            prediction == target
-            for prediction, target in zip(predictions, targets, strict=True)
+            prediction == target for prediction, target in zip(predictions, targets, strict=True)
         ]
         _require(correctness == record.get("correct"), "Correctness field drifted.")
         _require(sum(correctness) == record.get("correct_count"), "Correct count drifted.")
@@ -296,7 +295,26 @@ def _statistics(
                             "mean_difference_percentage_points": float(np.mean(values) * 100.0),
                         }
                     )
+        for scale in shard.CHUNK_SIZE_BY_SCALE:
+            scale_rows = [
+                row
+                for row in scale_families
+                if row["budget_multiplier"] == budget and row["scale"] == scale
+            ]
+            adjusted = holm_bonferroni(
+                {row["family"]: row["paired_sign_flip_two_sided_p"] for row in scale_rows}
+            )
+            for row in scale_rows:
+                row["holm_adjusted_p"] = adjusted[row["family"]]
     worst = min(slices, key=lambda row: row["mean_difference"])
+    worst_by_budget_scale = [
+        min(
+            (row for row in slices if row["budget_multiplier"] == budget and row["scale"] == scale),
+            key=lambda row: row["mean_difference"],
+        )
+        for budget in BUDGETS
+        for scale in shard.CHUNK_SIZE_BY_SCALE
+    ]
     seed_variance: list[dict[str, Any]] = []
     for budget in BUDGETS:
         for scale in shard.CHUNK_SIZE_BY_SCALE:
@@ -324,6 +342,7 @@ def _statistics(
         "seed_variance": seed_variance,
         "by_scale_family_context": slices,
         "worst_slice": worst,
+        "worst_slice_by_budget_scale": worst_by_budget_scale,
     }
 
 
@@ -331,12 +350,13 @@ def _quality_gate(
     fixed_statistics: dict[str, Any], native_statistics: dict[str, Any]
 ) -> list[dict[str, Any]]:
     results = []
-    families = fixed_statistics["by_family_with_holm_bonferroni"]
     pooled = fixed_statistics["pooled_by_scale"]
     seeds = fixed_statistics["by_seed"]
     for budget in BUDGETS:
         budget_pooled = [row for row in pooled if row["budget_multiplier"] == budget]
-        budget_families = [row for row in families if row["budget_multiplier"] == budget]
+        budget_scale_families = [
+            row for row in fixed_statistics["by_scale_family"] if row["budget_multiplier"] == budget
+        ]
         budget_seeds = [row for row in seeds if row["budget_multiplier"] == budget]
         native_pooled = [
             row
@@ -348,6 +368,14 @@ def _quality_gate(
             for row in native_statistics["by_scale_family"]
             if row["budget_multiplier"] == budget
         ]
+        significant_by_scale = {
+            scale: sum(
+                row["mean_difference"] > 0.0 and row["holm_adjusted_p"] < 0.05
+                for row in budget_scale_families
+                if row["scale"] == scale
+            )
+            for scale in shard.CHUNK_SIZE_BY_SCALE
+        }
         results.append(
             {
                 "budget_multiplier": budget,
@@ -356,10 +384,7 @@ def _quality_gate(
                 ),
                 "positive_seed_effects": sum(row["mean_difference"] > 0.0 for row in budget_seeds),
                 "total_seed_effects": len(budget_seeds),
-                "holm_significant_positive_families": sum(
-                    row["mean_difference"] > 0.0 and row["holm_adjusted_p"] < 0.05
-                    for row in budget_families
-                ),
+                "holm_significant_positive_families_by_scale": significant_by_scale,
                 "minimum_required_improved_families": 2,
                 "native_mean_regression_within_1pp_on_both_scales": all(
                     row["mean_difference"] >= -0.01 for row in native_pooled
@@ -372,8 +397,10 @@ def _quality_gate(
     for row in results:
         row["passes_fixed_baseline_component"] = (
             row["positive_pooled_lower_ci_on_both_scales"]
-            and row["holm_significant_positive_families"]
-            >= row["minimum_required_improved_families"]
+            and all(
+                count >= row["minimum_required_improved_families"]
+                for count in row["holm_significant_positive_families_by_scale"].values()
+            )
             and row["native_mean_regression_within_1pp_on_both_scales"]
             and row["native_family_regression_within_2pp_on_both_scales"]
         )
@@ -395,9 +422,31 @@ def main() -> None:
         "Wrong P2 matrix id.",
     )
     _require(matrix.get("completed_shards") == EXPECTED_SHARDS, "P2 matrix is incomplete.")
+    design = matrix.get("frozen_design", {})
+    _require(tuple(design.get("scales", ())) == tuple(shard.CHUNK_SIZE_BY_SCALE), "Scale drift.")
+    _require(tuple(design.get("training_seeds", ())) == shard.TRAINING_SEEDS, "Seed drift.")
+    _require(
+        tuple(design.get("families", ())) == shard.PAPER_GRADE_WORKLOAD_FAMILIES,
+        "Family drift.",
+    )
+    _require(tuple(design.get("contexts", ())) == shard.CONTEXTS, "Context drift.")
+    _require(tuple(design.get("replicates", ())) == shard.REPLICATES, "Replicate drift.")
     runs = matrix.get("runs")
     _require(isinstance(runs, list) and len(runs) == EXPECTED_SHARDS, "P2 run count drifted.")
     implementation_digest = matrix["implementation_digest"]
+    _require(
+        implementation_digest == shard._implementation_digest(),
+        "Matrix implementation is not the checked-out P2 implementation.",
+    )
+    expected_identities = set(
+        product(
+            shard.CHUNK_SIZE_BY_SCALE,
+            shard.TRAINING_SEEDS,
+            shard.PAPER_GRADE_WORKLOAD_FAMILIES,
+            shard.CONTEXTS,
+            shard.REPLICATES,
+        )
+    )
     seen: set[tuple[str, int, str, int, int]] = set()
     outcomes: dict[tuple[str, int, str, int, str], list[tuple[int, int]]] = defaultdict(list)
     fixed_differences: dict[tuple[int, str, int, str, int], list[float]] = defaultdict(list)
@@ -450,6 +499,11 @@ def main() -> None:
                 calibrated = by_policy_and_conversation[(calibrated_name, conversation_id)]
                 _require(fixed["total"] == calibrated["total"], "Paired query count drifted.")
                 _require(native["total"] == calibrated["total"], "Native query count drifted.")
+                for field in ("targets", "query_positions", "evidence_positions"):
+                    _require(
+                        fixed[field] == calibrated[field] == native[field],
+                        f"Paired {field} drifted.",
+                    )
                 key = (
                     budget,
                     raw["scale"],
@@ -465,7 +519,7 @@ def main() -> None:
                     calibrated["correct_count"] / calibrated["total"]
                     - native["correct_count"] / native["total"]
                 )
-    _require(len(seen) == EXPECTED_SHARDS, "P2 shard identity coverage drifted.")
+    _require(seen == expected_identities, "P2 Cartesian shard coverage drifted.")
     policy_summary = [_summary_row(key, values) for key, values in sorted(outcomes.items())]
     fixed_statistics = _statistics(
         fixed_differences,
