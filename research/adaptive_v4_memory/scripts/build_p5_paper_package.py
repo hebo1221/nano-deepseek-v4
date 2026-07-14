@@ -2217,6 +2217,32 @@ def classify_evidence(
     return result
 
 
+def _validate_required_classifications(
+    classifications: dict[str, str], contract: Any
+) -> None:
+    _require(
+        isinstance(contract, dict) and bool(contract),
+        "Missing P5 required-classification contract.",
+    )
+    _require(
+        set(contract) == set(classifications),
+        "P5 required-classification coverage drifted.",
+    )
+    for name, allowed in contract.items():
+        _require(
+            isinstance(allowed, list)
+            and bool(allowed)
+            and all(value in ALLOWED_CLASSES for value in allowed),
+            f"Invalid P5 required classifications for {name}.",
+        )
+        observed = classifications[name]
+        _require(
+            observed in allowed,
+            f"P5 classification {name}={observed} is not terminally admissible; "
+            f"expected one of {allowed}.",
+        )
+
+
 def _write_csv(path: Path, rows: Iterable[dict[str, Any]], fields: list[str]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="") as handle:
@@ -3740,6 +3766,7 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
     classes["p2_causal_confirmatory"] = _classify_validated_confirmatory_causal(
         loaded["p2_causal_confirmatory"]
     )
+    _validate_required_classifications(classes, manifest.get("required_classifications"))
     traceability_rows = _traceability_rows(traceability, manifest, classes)
     output_root.mkdir(parents=True, exist_ok=True)
     (output_root / "reproduction-guide.md").write_text(reproduction_guide)

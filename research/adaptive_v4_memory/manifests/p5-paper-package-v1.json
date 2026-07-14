@@ -577,6 +577,9 @@
       "required_audit": {
         "benchmarks_terminal": 5,
         "minimum_protocol_examples_accounted_per_arm": 45289,
+        "all_required_artifacts_verified": true,
+        "all_required_baseline_cells_terminal": true,
+        "all_failure_accounting_complete": true,
         "all_source_implementations_verified": true,
         "all_runtime_kvpress_bindings_verified": true,
         "all_record_revisions_verified": true,
@@ -595,7 +598,9 @@
         "dataset_license_revision_inventory_verified": true,
         "upstream_code_license_revision_inventory_verified": true,
         "ruler_license_revision_manifest_verified": true,
-        "model_license_revision_manifest_verified": true
+        "model_license_revision_manifest_verified": true,
+        "safety_stress_terminal": true,
+        "natural_safety_terminal": true
       }
     },
     "p3_safety": {
@@ -904,6 +909,37 @@
     "paper-report.md",
     "artifact-index.json"
   ],
+  "required_classifications": {
+    "p2_core": ["success", "negative-result"],
+    "p2_core_confirmatory": ["success", "negative-result"],
+    "m5_one_token_pilot": ["negative-result"],
+    "m3_offline_learned_risk_pilot": ["negative-result"],
+    "p1_online_learned_lookahead": ["success", "negative-result"],
+    "p2_causal": ["success", "bounded-result"],
+    "p2_causal_confirmatory": ["success", "bounded-result"],
+    "p3_ruler": ["bounded-result"],
+    "p3_cross_family": ["success", "negative-result"],
+    "p3_cross_family_adaptive_quota": ["success", "negative-result"],
+    "p3_cross_family_adaptive_quota_longbench_v2": ["success", "negative-result"],
+    "p3_natural": ["bounded-result"],
+    "p3_natural_adaptive_quota": ["success", "negative-result"],
+    "p3_natural_adaptive_quota_scbench": ["success", "negative-result"],
+    "p3_natural_adaptive_quota_longbench_v2": ["success", "negative-result"],
+    "p3_natural_adaptive_quota_longmemeval": ["unverified"],
+    "p3_natural_adaptive_quota_mrcr": ["success", "negative-result"],
+    "p3_natural_adaptive_quota_suite": ["success", "negative-result"],
+    "p3_safety": ["bounded-result"],
+    "p3_natural_safety": ["bounded-result"],
+    "p3_ifeval": ["bounded-result"],
+    "p3_longsafety": ["unverified"],
+    "p4_500k_context": ["bounded-result", "negative-result"],
+    "p4_reference_systems": ["bounded-result"],
+    "p4_adaptive_systems": ["bounded-result", "negative-result"],
+    "p4_adaptive_production_systems": ["bounded-result", "negative-result"],
+    "p4_production_systems": ["success", "bounded-result"],
+    "production_runtime_blocker": ["unverified"],
+    "official_deepseek_v4": ["unverified"]
+  },
   "allowed_conclusion_classes": [
     "success",
     "bounded-result",

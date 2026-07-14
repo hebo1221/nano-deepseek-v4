@@ -268,9 +268,15 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
     root = Path(__file__).resolve().parents[1]
     manifest_path = root / "research/adaptive_v4_memory/manifests/p5-paper-package-v1.json"
     manifest_text = manifest_path.read_text()
-    manifest = json.loads(manifest_text)
 
-    assert manifest_text.count('"p2_causal_confirmatory":') == 1
+    def reject_duplicate_keys(pairs: list[tuple[str, object]]) -> dict[str, object]:
+        parsed: dict[str, object] = {}
+        for key, value in pairs:
+            assert key not in parsed, f"duplicate P5 manifest key: {key}"
+            parsed[key] = value
+        return parsed
+
+    manifest = json.loads(manifest_text, object_pairs_hook=reject_duplicate_keys)
 
     assert set(manifest["evidence"]) == {
         "p2_core",
@@ -669,6 +675,14 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
         ]
         is True
     )
+    for field in (
+        "all_required_artifacts_verified",
+        "all_required_baseline_cells_terminal",
+        "all_failure_accounting_complete",
+        "safety_stress_terminal",
+        "natural_safety_terminal",
+    ):
+        assert manifest["evidence"]["p3_natural"]["required_audit"][field] is True
     assert (
         manifest["evidence"]["p3_natural"]["required_audit"][
             "all_runtime_kvpress_bindings_verified"
@@ -1364,6 +1378,32 @@ def test_p5_classification_preserves_claim_boundaries() -> None:
         "production_runtime_blocker": "unverified",
         "official_deepseek_v4": "unverified",
     }
+
+
+def test_p5_required_classifications_fail_closed_on_unverified_natural_suite() -> None:
+    root = Path(__file__).resolve().parents[1]
+    manifest = json.loads(
+        (root / "research/adaptive_v4_memory/manifests/p5-paper-package-v1.json").read_text()
+    )
+    contract = manifest["required_classifications"]
+    classifications = {name: allowed[0] for name, allowed in contract.items()}
+
+    package._validate_required_classifications(classifications, contract)
+
+    classifications["p3_natural"] = "unverified"
+    with pytest.raises(ValueError, match="p3_natural=unverified"):
+        package._validate_required_classifications(classifications, contract)
+
+
+def test_p5_required_classifications_require_exact_coverage() -> None:
+    with pytest.raises(ValueError, match="coverage drifted"):
+        package._validate_required_classifications(
+            {"p3_natural": "bounded-result"},
+            {
+                "p3_natural": ["bounded-result"],
+                "p2_core": ["success", "negative-result"],
+            },
+        )
 
 
 @pytest.mark.parametrize(
