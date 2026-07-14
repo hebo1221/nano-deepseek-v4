@@ -2,7 +2,8 @@
 
 Status: **pilot negative result for the tested one-token global M2 interface**.
 The M4 fixed-top-k tiered store remains a valid bounded memory result, but the
-adaptive controller is not quality-safe in causal serving.
+tested one-token cross-layer global M2 controller is not quality-safe in this
+pilot's causal-serving conditions.
 
 ## What was implemented
 
@@ -67,8 +68,10 @@ assumption that the offline M2 decision can be shifted one token and remain
 quality-safe.
 
 The supported pilot outcome is narrow: fixed-top-k CPU-cold/GPU-hot CSA value storage
-is correct and memory-bounded in this reference runtime. Adaptive online claims,
-official-scale performance claims, and production speedup claims are rejected.
+is correct and memory-bounded in this reference runtime. Official-scale performance
+and production speedup claims are not resolved by this pilot; only online claims
+for the tested one-token cross-layer global M2 interface are rejected on the two
+pilot scales and three pilot workloads.
 
 The minimum credible next systems design is a fused same-token contract that
 (1) computes layer-local uncertainty before value attention, (2) allocates a
