@@ -55,6 +55,15 @@ print(json.dumps(runner.kvpress_runtime_binding(), sort_keys=True))
     assert Path(binding["registry_path"]).is_relative_to(checkout)
     assert len(binding["module_sha256"]) == 64
     assert len(binding["registry_sha256"]) == 64
+    import summarize_p3_ruler_matrix as summary
+
+    assert summary.verify_runtime_kvpress_binding(binding)["module_sha256"] == binding[
+        "module_sha256"
+    ]
+    with pytest.raises(ValueError, match="import binding drifted"):
+        summary.verify_runtime_kvpress_binding(
+            {**binding, "module_sha256": "0" * 64}
+        )
 
 
 def test_paired_ruler_statistics_are_deterministic(monkeypatch: pytest.MonkeyPatch) -> None:

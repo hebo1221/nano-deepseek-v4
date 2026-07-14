@@ -55,6 +55,9 @@ evaluation.
 
 ## Provenance and scoring boundaries
 
+- Every P3 runner imports both evaluator and press code from the clean pinned
+  KVPress checkout. Runtime cells record the resolved module and registry paths
+  plus SHA-256 digests; the RULER audit rejects missing or site-packages bindings.
 - [SCBench](https://huggingface.co/datasets/microsoft/SCBench) data and the
   [MInference SCBench code](https://github.com/microsoft/MInference/tree/main/scbench)
   are pinned separately. Every official task-specific scorer and both

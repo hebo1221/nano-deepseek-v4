@@ -393,6 +393,12 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
         "exact_sign_assignments"
     ] == 512
     assert manifest["evidence"]["p3_ruler"]["required_audit"]["total_predictions"] == 370500
+    assert (
+        manifest["evidence"]["p3_ruler"]["required_audit"][
+            "all_runtime_kvpress_bindings_verified"
+        ]
+        is True
+    )
     assert manifest["evidence"]["p3_safety"]["required_audit"]["examples_accounted_per_arm"] == 1200
     assert manifest["evidence"]["p4_reference_systems"]["required_audit"]["terminal_cells"] == 216
     assert all(
