@@ -27,6 +27,7 @@ from p3_sequence_gate import require_p3_sequence_gate
 from run_p3_ruler_matrix import KVPRESS_REVISION, git_dirty, git_head, load_evaluator
 from summarize_p3_natural_suite import sha256
 from transformers import DynamicCache
+from verify_p3_natural_model import verify_snapshot
 
 BENCHMARK = "LongBench-v2"
 ARMS = ("native-dense", "strongest-memory-matched-fixed")
@@ -89,14 +90,6 @@ def load_rows(path: Path, template: str, expected: int = EXPECTED_EXAMPLES) -> l
         _require(row.get("answer") in {"A", "B", "C", "D"}, "Invalid answer label.")
         prompt_parts(row, template)
     return payload
-
-
-def verify_model_snapshot(path: Path, manifest: dict[str, Any]) -> None:
-    expected = manifest["model"]["snapshot_files_sha256"]
-    actual = {item.name for item in path.iterdir() if item.is_file()}
-    _require(actual == set(expected), "Model snapshot file set drifted.")
-    for name, digest in expected.items():
-        _require(sha256(path / name) == digest, f"Model snapshot drifted: {name}")
 
 
 def load_dependencies(
@@ -403,7 +396,7 @@ def main() -> None:
         selection_path=args.fixed_selection,
     )
     model_snapshot = args.model_snapshot.resolve()
-    verify_model_snapshot(model_snapshot, manifest)
+    verify_snapshot(model_snapshot, manifest["model"])
     rows = load_rows(dataset_path, prompt_template)
     runner_digest = sha256(Path(__file__).resolve())
     manifest_digest = sha256(args.manifest)
