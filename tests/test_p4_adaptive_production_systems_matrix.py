@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -202,6 +203,77 @@ def test_orchestrator_failure_is_terminal_and_auditable() -> None:
     assert {
         status["failure"]["error_type"] for status in payload["policy_status"].values()
     } == {"TimeoutError"}
+
+
+def test_resumable_artifact_rejects_dependency_and_raw_drift(tmp_path: Path) -> None:
+    cell = runner.frozen_cells()[0]
+    dependencies: dict[str, Path] = {}
+    for name in ("manifest", "p2_audit", "p3_adaptive_audit", "calibration", "memory_match"):
+        path = tmp_path / f"{name}.json"
+        path.write_text(name)
+        dependencies[name] = path
+    checkpoint = tmp_path / "checkpoint.pt"
+    checkpoint.write_text("checkpoint")
+    spec = runner.build_spec(
+        cell=cell,
+        arms=_arms(),
+        checkpoint=checkpoint,
+        manifest=dependencies["manifest"],
+        p2_audit=dependencies["p2_audit"],
+        p3_adaptive_audit=dependencies["p3_adaptive_audit"],
+        calibration=dependencies["calibration"],
+        memory_match=dependencies["memory_match"],
+        cell_timeout_seconds=1.0,
+    )
+    spec_path = tmp_path / "adapter-spec.json"
+    spec_path.write_text(json.dumps(spec))
+    adapter_path = tmp_path / "adapter"
+    adapter_path.write_text("adapter")
+    implementation = "a" * 64
+    adapter_payload = runner.terminal_adapter_failure(cell, TimeoutError("deadline"))
+    payload = {
+        "schema_version": 1,
+        "experiment_id": "p4-adaptive-production-systems-cell-v1",
+        "cell": runner.cell_dict(cell),
+        "source": {
+            "commit": "test-commit",
+            "dirty": False,
+            "implementation_digest": implementation,
+        },
+        **{name: spec[name] for name in dependencies},
+        "adapter": {
+            "path": str(adapter_path),
+            "sha256": runner.production.sha256(adapter_path),
+        },
+        "adapter_spec": {
+            "path": str(spec_path),
+            "sha256": runner.production.sha256(spec_path),
+        },
+        "adapter_raw": None,
+        "cell_timeout_seconds": 1.0,
+        "wall_time_seconds": 1.0,
+        "adapter_payload": adapter_payload,
+    }
+    artifact = tmp_path / "cell.json"
+    artifact.write_text(json.dumps(payload))
+
+    assert runner.artifact_valid(artifact, cell=cell, implementation=implementation)
+
+    dependencies["calibration"].write_text("tampered")
+    assert not runner.artifact_valid(artifact, cell=cell, implementation=implementation)
+    dependencies["calibration"].write_text("calibration")
+
+    raw_path = tmp_path / "adapter-raw.json"
+    raw_path.write_text("rejected raw evidence")
+    payload["adapter_raw"] = {
+        "path": str(raw_path),
+        "sha256": runner.production.sha256(raw_path),
+    }
+    artifact.write_text(json.dumps(payload))
+    assert runner.artifact_valid(artifact, cell=cell, implementation=implementation)
+
+    raw_path.write_text("tampered raw evidence")
+    assert not runner.artifact_valid(artifact, cell=cell, implementation=implementation)
 
 
 def test_adaptive_production_bootstrap_and_holm_are_deterministic() -> None:
