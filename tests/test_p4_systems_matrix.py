@@ -368,6 +368,84 @@ def test_p4_partial_artifact_preserves_surviving_policy(tmp_path: Path) -> None:
         p3_digest="p3",
     )
 
+    empty_failure = json.loads(payload_json)
+    empty_failure["policy_status"]["resident-native"]["failure"] = {}
+    artifact.write_text(json.dumps(empty_failure))
+    assert not systems._artifact_valid(
+        artifact,
+        cell=cell,
+        digest="implementation",
+        manifest_digest="manifest",
+        p3_digest="p3",
+    )
+
+    completed_with_failure = json.loads(payload_json)
+    completed_with_failure["policy_status"]["tiered-native"]["failure"] = {
+        "failure_type": "timeout",
+        "error_type": "TimeoutError",
+        "error": "contradicts complete status",
+        "phase": "measured",
+    }
+    artifact.write_text(json.dumps(completed_with_failure))
+    assert not systems._artifact_valid(
+        artifact,
+        cell=cell,
+        digest="implementation",
+        manifest_digest="manifest",
+        p3_digest="p3",
+    )
+
+    recorded_failure = json.loads(payload_json)
+    failure = {
+        "failure_type": "oom",
+        "error_type": "OutOfMemoryError",
+        "error": "failed during the first measured repetition",
+        "phase": "measured",
+        "repetition": systems.WARMUPS,
+    }
+    recorded_failure["repetitions"][0]["policy_failures"]["resident-native"] = failure
+    recorded_failure["policy_status"]["resident-native"]["failure"] = failure
+    artifact.write_text(json.dumps(recorded_failure))
+    assert systems._artifact_valid(
+        artifact,
+        cell=cell,
+        digest="implementation",
+        manifest_digest="manifest",
+        p3_digest="p3",
+    )
+
+    wrong_failure_repetition = json.loads(json.dumps(recorded_failure))
+    wrong_failure_repetition["repetitions"][0]["policy_failures"]["resident-native"][
+        "repetition"
+    ] += 1
+    wrong_failure_repetition["policy_status"]["resident-native"]["failure"][
+        "repetition"
+    ] += 1
+    artifact.write_text(json.dumps(wrong_failure_repetition))
+    assert not systems._artifact_valid(
+        artifact,
+        cell=cell,
+        digest="implementation",
+        manifest_digest="manifest",
+        p3_digest="p3",
+    )
+
+    wrong_failure_phase = json.loads(json.dumps(recorded_failure))
+    wrong_failure_phase["repetitions"][0]["policy_failures"]["resident-native"][
+        "phase"
+    ] = "warmup"
+    wrong_failure_phase["policy_status"]["resident-native"]["failure"][
+        "phase"
+    ] = "warmup"
+    artifact.write_text(json.dumps(wrong_failure_phase))
+    assert not systems._artifact_valid(
+        artifact,
+        cell=cell,
+        digest="implementation",
+        manifest_digest="manifest",
+        p3_digest="p3",
+    )
+
     artifact.write_text(payload_json)
 
     false_warmups = json.loads(artifact.read_text())

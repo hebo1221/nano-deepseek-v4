@@ -453,6 +453,10 @@ def _artifact_valid(
             if not (
                 _valid_failure(failure, phases={"warmup"})
                 and failure.get("phase") == "warmup"
+                and (
+                    "repetition" not in failure
+                    or failure["repetition"] < WARMUPS
+                )
                 and failure in warmup_failures
             ):
                 return False
@@ -461,6 +465,15 @@ def _artifact_valid(
                 return False
         elif not _valid_failure(failure, phases={"measured"}):
             return False
+        elif "repetition" in failure:
+            measured_index = failure["repetition"] - WARMUPS
+            if measured_index < 0 or measured_index > len(repetitions):
+                return False
+            if measured_index == len(repetitions):
+                if failure.get("failure_type") != "timeout":
+                    return False
+            elif repetitions[measured_index]["policy_failures"].get(policy) != failure:
+                return False
     if len(warmup_failures) != sum(
         isinstance(policy_status[policy].get("failure"), dict)
         and policy_status[policy]["failure"].get("phase") == "warmup"
@@ -595,8 +608,10 @@ def _valid_failure(value: Any, *, phases: set[str]) -> bool:
         and value.get("phase") in phases
         and (
             "repetition" not in value
-            or type(value.get("repetition")) is int
-            and value["repetition"] >= 0
+            or (
+                type(value.get("repetition")) is int
+                and value["repetition"] >= 0
+            )
         )
     )
 
