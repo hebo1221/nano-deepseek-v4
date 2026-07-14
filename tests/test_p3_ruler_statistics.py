@@ -22,6 +22,16 @@ def _frame(scores: list[float]) -> pd.DataFrame:
     )
 
 
+def test_ruler_screen_covers_token_layer_and_head_adaptive_baselines() -> None:
+    import run_p3_ruler_matrix as runner
+    import summarize_p3_ruler_matrix as summary
+
+    assert runner.ARMS["pyramidkv"][0] == "pyramidkv"
+    assert runner.ARMS["adakv_snapkv"][0] == "adakv_snapkv"
+    assert len(runner.cells(runner.LENGTHS, tuple(runner.ARMS), None)) == 57
+    assert summary.EXPECTED_CELLS == 57
+
+
 def test_paired_ruler_statistics_are_deterministic(monkeypatch: pytest.MonkeyPatch) -> None:
     import summarize_p3_ruler_matrix as summary
 

@@ -29,6 +29,8 @@ ARMS = {
     "native": ("no_press", (0.0,)),
     "streaming_llm": ("streaming_llm", (0.25, 0.5, 0.75)),
     "snapkv": ("snapkv", (0.25, 0.5, 0.75)),
+    "pyramidkv": ("pyramidkv", (0.25, 0.5, 0.75)),
+    "adakv_snapkv": ("adakv_snapkv", (0.25, 0.5, 0.75)),
     "expected_attention": ("expected_attention", (0.25, 0.5, 0.75)),
     "critical_expected_attention": ("critical_expected_attention", (0.25, 0.5, 0.75)),
 }

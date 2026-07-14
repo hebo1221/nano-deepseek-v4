@@ -118,6 +118,10 @@ For conventional-model baselines, the official
 for more than twenty compression methods, RULER/NIAH evaluation, per-layer
 compression, and threshold policies. P3 will pin a repository revision and use
 it rather than reimplementing selected baselines with incompatible harnesses.
+The frozen Qwen3 screen evaluates StreamingLLM, SnapKV, Expected Attention,
+Critical Expected Attention, PyramidKV, and Ada-KV-wrapped SnapKV at 25%, 50%,
+and 75% compression. This covers token-, layer-, and head-adaptive retention
+before selecting the 50%-compression baseline for the natural benchmarks.
 
 ## 8. Novelty boundary matrix
 

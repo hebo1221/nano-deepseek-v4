@@ -236,7 +236,7 @@ After all audits finish, the strict P5 package can be regenerated with:
 ```
 
 The command requires a clean tree and complete 4,500-shard P2 core,
-9,000-shard causal, 253,500-prediction small-model RULER, five-benchmark natural,
+9,000-shard causal, 370,500-prediction/57-cell small-model RULER, five-benchmark natural,
 3,600-prediction safety-retention, 7,254-generation natural-safety, 216-cell
 reference-system, four terminal 500K feasibility attempts, and separate
 216-cell actual-concurrency production audits. It writes digest-indexed CSV

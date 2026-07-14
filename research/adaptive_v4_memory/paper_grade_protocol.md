@@ -1,6 +1,6 @@
 # Paper-grade expansion protocol
 
-Protocol version: 1.5
+Protocol version: 1.6
 Frozen: 2026-07-14  
 Amended: 2026-07-14, before causal-factorial held-out execution
 Status: active; P2 synthetic core runs first, followed by causal ablations,
@@ -41,6 +41,12 @@ Holm-Bonferroni adjustments use the exact seed-cluster paired-randomization
 p-values, while cluster-bootstrap intervals remain the effect-uncertainty
 summary. It also replaces the stale count of 12 causal contrasts with all 15
 implemented preregistered contrasts; no arm, example, seed, or gate changes.
+
+Version 1.6 expands the pre-outcome Qwen3-1.7B RULER baseline screen from 39
+to 57 cells by adding pinned PyramidKV and Ada-KV-wrapped SnapKV implementations
+at the same 25%, 50%, and 75% compression ratios. This adds layer- and
+head-adaptive comparators without changing datasets, model snapshots, selection
+criterion, natural-suite outcomes, or P2 execution.
 
 ## 1. Primary questions
 

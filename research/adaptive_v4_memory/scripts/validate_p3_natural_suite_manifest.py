@@ -75,7 +75,7 @@ def validate_manifest(payload: dict[str, Any]) -> dict[str, Any]:
     amendments = payload.get("amendments", [])
     if (
         not isinstance(amendments, list)
-        or len(amendments) != 4
+        or len(amendments) != 5
         or "RULER scorer SHA-256" not in amendments[0].get("change", "")
         or "tokenizer.json SHA-256" not in amendments[1].get("change", "")
         or "pinned public code dependencies" not in amendments[2].get("change", "")
@@ -84,6 +84,9 @@ def validate_manifest(payload: dict[str, Any]) -> dict[str, Any]:
         or "no natural-suite benchmark payload acquisition" not in amendments[3].get(
             "reason", ""
         )
+        or "PyramidKV" not in amendments[4].get("change", "")
+        or "Ada-KV" not in amendments[4].get("change", "")
+        or "before any P3 prediction" not in amendments[4].get("reason", "")
     ):
         raise ValueError("Natural-suite pre-execution correction record drifted.")
     if tuple(payload.get("execution_order", ())) != EXPECTED_ORDER:
@@ -338,7 +341,17 @@ def validate_manifest(payload: dict[str, Any]) -> dict[str, Any]:
         != payload["execution_totals"]["minimum_predictions_per_arm"]
     ):
         raise ValueError("Natural-suite audit totals do not close.")
-    selection = payload["external_baselines"]["kvpress"]["fixed_baseline_selection"]
+    kvpress = payload["external_baselines"]["kvpress"]
+    if tuple(kvpress["compatible_qwen3_methods"]) != (
+        "streaming-llm",
+        "snapkv",
+        "pyramidkv",
+        "adakv-snapkv",
+        "expected-attention",
+        "critical-expected-attention",
+    ):
+        raise ValueError("Compatible Qwen3 baseline coverage drifted.")
+    selection = kvpress["fixed_baseline_selection"]
     if (
         selection["eligible_compression_ratio"] != 0.5
         or tuple(selection["eligible_lengths_tokens"]) != (8192, 16384, 32768)

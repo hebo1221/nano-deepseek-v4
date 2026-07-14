@@ -13,7 +13,7 @@ from run_p3_ruler_matrix import ARMS, LENGTHS, cell_dir, cells, sha256
 from summarize_p2_core_matrix import bootstrap_paired_mean, holm_bonferroni
 
 EXPECTED_ROWS_PER_CELL = 6_500
-EXPECTED_CELLS = 39
+EXPECTED_CELLS = len(LENGTHS) * sum(len(ratios) for _press, ratios in ARMS.values())
 
 
 def _require(condition: bool, message: str) -> None:

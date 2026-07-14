@@ -14,6 +14,12 @@
       "timing": "before any RULER model prediction and before a complete dataset manifest existed",
       "change": "record one interrupted deterministic preparation artifact containing 500 rows for the 8K niah_single_1 task; require the final generator to report every preexisting valid task file it reuses",
       "reason": "the orphan file was generated from the frozen task, tokenizer, seed 42, and sample count before the sequence gate; there were zero result cells and it supplies no model outcome"
+    },
+    {
+      "date": "2026-07-14",
+      "timing": "before any RULER model prediction or baseline outcome inspection",
+      "change": "add the pinned KVPress PyramidKV and Ada-KV-wrapped SnapKV implementations at the same three compression ratios, expanding the screening matrix from 39 to 57 cells",
+      "reason": "cover layer-adaptive and head-adaptive cache allocation rather than selecting the strongest fixed baseline from token-only methods"
     }
   ],
   "sequence_gate": {
@@ -96,6 +102,16 @@
       "compression_ratios": [0.25, 0.5, 0.75]
     },
     {
+      "name": "pyramidkv",
+      "press": "pyramidkv",
+      "compression_ratios": [0.25, 0.5, 0.75]
+    },
+    {
+      "name": "adakv_snapkv",
+      "press": "adakv_snapkv",
+      "compression_ratios": [0.25, 0.5, 0.75]
+    },
+    {
       "name": "expected_attention",
       "press": "expected_attention",
       "compression_ratios": [0.25, 0.5, 0.75]
@@ -109,8 +125,8 @@
   "execution": {
     "evaluation_order": "length_then_arm_then_compression_ratio",
     "resume_unit": "one_length_arm_ratio_cell",
-    "total_cells": 39,
-    "total_predictions": 253500,
+    "total_cells": 57,
+    "total_predictions": 370500,
     "dataset_generator": "research/adaptive_v4_memory/scripts/prepare_p3_ruler_dataset.py",
     "matrix_runner": "research/adaptive_v4_memory/scripts/run_p3_ruler_matrix.py",
     "audit_runner": "research/adaptive_v4_memory/scripts/summarize_p3_ruler_matrix.py",

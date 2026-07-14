@@ -112,7 +112,14 @@ def load_contracts(
         selection.get("experiment_id") == "p3-fixed-baseline-selection-v1"
         and selection.get("source", {}).get("dirty") is False
         and selection.get("selected_arm")
-        in {"streaming_llm", "snapkv", "expected_attention", "critical_expected_attention"}
+        in {
+            "streaming_llm",
+            "snapkv",
+            "pyramidkv",
+            "adakv_snapkv",
+            "expected_attention",
+            "critical_expected_attention",
+        }
         and selection.get("selected_compression_ratio") == 0.5,
         "Frozen fixed baseline selection is missing or invalid.",
     )

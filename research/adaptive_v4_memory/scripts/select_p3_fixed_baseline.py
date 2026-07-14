@@ -6,17 +6,21 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from run_p3_ruler_matrix import sha256
+from run_p3_ruler_matrix import ARMS, LENGTHS, sha256
 
 ELIGIBLE_ARMS = (
     "streaming_llm",
     "snapkv",
+    "pyramidkv",
+    "adakv_snapkv",
     "expected_attention",
     "critical_expected_attention",
 )
 ELIGIBLE_LENGTHS = (8192, 16384, 32768)
 ELIGIBLE_RATIO = 0.5
 ROWS_PER_CELL = 6500
+EXPECTED_CELLS = len(LENGTHS) * sum(len(ratios) for _press, ratios in ARMS.values())
+EXPECTED_PREDICTIONS = EXPECTED_CELLS * ROWS_PER_CELL
 
 
 def _require(condition: bool, message: str) -> None:
@@ -34,8 +38,8 @@ def select_fixed(payload: dict[str, Any]) -> dict[str, Any]:
         payload.get("benchmark_complete") is True
         and audit.get("all_cells_verified") is True
         and audit.get("all_output_digests_verified") is True
-        and audit.get("completed_cells") == 39
-        and audit.get("total_predictions") == 253_500,
+        and audit.get("completed_cells") == EXPECTED_CELLS
+        and audit.get("total_predictions") == EXPECTED_PREDICTIONS,
         "Fixed baseline selection requires the complete RULER audit.",
     )
     eligible = [

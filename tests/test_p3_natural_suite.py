@@ -18,7 +18,13 @@ from p3_natural_metrics import (  # noqa: E402
     score_longbench_v2,
     score_mrcr,
 )
-from select_p3_fixed_baseline import ELIGIBLE_ARMS, ELIGIBLE_LENGTHS, select_fixed  # noqa: E402
+from select_p3_fixed_baseline import (  # noqa: E402
+    ELIGIBLE_ARMS,
+    ELIGIBLE_LENGTHS,
+    EXPECTED_CELLS,
+    EXPECTED_PREDICTIONS,
+    select_fixed,
+)
 from summarize_p3_natural_benchmark import (  # noqa: E402
     RUNNER_PATHS,
     audit_arm,
@@ -48,7 +54,7 @@ def test_natural_suite_freezes_full_scale_and_sample_contract() -> None:
     result = validate_manifest(manifest)
 
     assert manifest["status"] == "amended_and_frozen_before_execution"
-    assert len(manifest["amendments"]) == 4
+    assert len(manifest["amendments"]) == 5
     assert result["generation_seed"] == 42
     assert {
         contract["generation_seed"] for contract in manifest["benchmarks"].values()
@@ -1545,8 +1551,8 @@ def test_fixed_baseline_selection_is_frozen_on_small_model_ruler() -> None:
         "audit": {
             "all_cells_verified": True,
             "all_output_digests_verified": True,
-            "completed_cells": 39,
-            "total_predictions": 253_500,
+            "completed_cells": EXPECTED_CELLS,
+            "total_predictions": EXPECTED_PREDICTIONS,
         },
         "cell_summary": cell_summary,
     }
@@ -1555,6 +1561,7 @@ def test_fixed_baseline_selection_is_frozen_on_small_model_ruler() -> None:
 
     assert result["selected_arm"] == "snapkv"
     assert result["selected_compression_ratio"] == 0.5
+    assert set(ELIGIBLE_ARMS) >= {"pyramidkv", "adakv_snapkv"}
     assert all(row["observations"] == 19_500 for row in result["candidates"])
 
 

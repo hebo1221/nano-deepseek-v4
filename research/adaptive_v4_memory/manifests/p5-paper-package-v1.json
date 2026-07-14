@@ -253,7 +253,7 @@
     "p3_ruler": {
       "path": "artifacts/adaptive_v4_memory/paper_grade/p3/ruler-qwen3-1.7b.summary.json",
       "experiment_id": "p3-ruler-qwen3-1.7b-audit-v1",
-      "required_audit": {"completed_cells": 39, "total_predictions": 253500}
+      "required_audit": {"completed_cells": 57, "total_predictions": 370500}
     },
     "p3_natural": {
       "path": "artifacts/adaptive_v4_memory/paper_grade/p3/natural-suite.summary.json",

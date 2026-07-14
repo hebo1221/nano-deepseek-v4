@@ -28,6 +28,11 @@
       "date": "2026-07-14",
       "timing": "before inspecting any primary P2 policy outcome",
       "change": "preregister a separate four-seed extension that preserves the immutable five-seed primary cohort and permits nine-seed confirmatory inference only under an identical-contract pooling audit"
+    },
+    {
+      "date": "2026-07-14",
+      "timing": "before any P3 model prediction or baseline outcome inspection",
+      "change": "expand the Qwen3-1.7B RULER baseline screen from 39 to 57 cells by adding PyramidKV and Ada-KV-wrapped SnapKV"
     }
   ],
   "date": "2026-07-14",
@@ -92,9 +97,9 @@
       "arms": 6
     },
     "p3_small_model_ruler": {
-      "predictions": 253500,
+      "predictions": 370500,
       "model_scales": 1,
-      "cells": 39
+      "cells": 57
     },
     "p3_natural_qwen3_4b": {
       "predictions": 90578,

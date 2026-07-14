@@ -577,7 +577,7 @@ def _validate_boundary_manifest(name: str, path: Path) -> dict[str, Any]:
         _require(
             payload.get("status") == "amended_and_frozen_before_execution"
             and isinstance(amendments, list)
-            and len(amendments) == 2,
+            and len(amendments) == 3,
             "P3 RULER pre-execution amendment record drifted.",
         )
         _require(
@@ -596,6 +596,13 @@ def _validate_boundary_manifest(name: str, path: Path) -> dict[str, Any]:
             and "zero result cells" in amendments[1].get("reason", ""),
             "P3 RULER sequence boundary drifted.",
         )
+        _require(
+            "PyramidKV" in amendments[2].get("change", "")
+            and "Ada-KV" in amendments[2].get("change", "")
+            and payload.get("execution", {}).get("total_cells") == 57
+            and payload.get("execution", {}).get("total_predictions") == 370_500,
+            "P3 RULER baseline breadth drifted.",
+        )
     elif name == "natural_suite":
         baselines = payload.get("external_baselines", {})
         kvpress = baselines.get("kvpress", {})
@@ -607,6 +614,18 @@ def _validate_boundary_manifest(name: str, path: Path) -> dict[str, Any]:
             and kvpress.get("revision")
             == "6d965557a5b9f0201a2301b23c454473dd681d0d",
             "P3 compatible-model baseline boundary drifted.",
+        )
+        _require(
+            tuple(kvpress.get("compatible_qwen3_methods", ()))
+            == (
+                "streaming-llm",
+                "snapkv",
+                "pyramidkv",
+                "adakv-snapkv",
+                "expected-attention",
+                "critical-expected-attention",
+            ),
+            "P3 compatible-model baseline coverage drifted.",
         )
         _require(
             flashmemory.get("manifest")

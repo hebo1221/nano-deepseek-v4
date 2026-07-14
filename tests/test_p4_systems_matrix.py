@@ -115,8 +115,8 @@ def test_p4_requires_full_natural_suite_not_ruler_only(tmp_path: Path) -> None:
                 "audit": {
                     "all_cells_verified": True,
                     "all_output_digests_verified": True,
-                    "completed_cells": 39,
-                    "total_predictions": 253_500,
+                    "completed_cells": 57,
+                    "total_predictions": 370_500,
                 },
             }
         )

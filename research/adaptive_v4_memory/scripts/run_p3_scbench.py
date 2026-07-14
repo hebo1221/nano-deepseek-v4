@@ -212,7 +212,14 @@ def load_dependencies(
     )
     _require(
         selection.get("selected_arm")
-        in {"streaming_llm", "snapkv", "expected_attention", "critical_expected_attention"}
+        in {
+            "streaming_llm",
+            "snapkv",
+            "pyramidkv",
+            "adakv_snapkv",
+            "expected_attention",
+            "critical_expected_attention",
+        }
         and selection.get("selected_compression_ratio") == 0.5,
         "Fixed baseline selection is outside the preregistered candidate set.",
     )

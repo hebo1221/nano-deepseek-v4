@@ -23,6 +23,11 @@
       "date": "2026-07-14",
       "change": "freeze generation_seed=42 for every natural benchmark and require the runner, arm-cell run identity, and audit summary to agree on that seed",
       "reason": "a pre-execution audit found that four runners relied on an unfrozen CLI default; no natural-suite benchmark payload acquisition, baseline selection, dataset generation, or model inference had occurred"
+    },
+    {
+      "date": "2026-07-14",
+      "change": "expand the small-model fixed-baseline screen with PyramidKV and Ada-KV-wrapped SnapKV and permit either winner to propagate unchanged through every natural and safety runner",
+      "reason": "cover layer- and head-adaptive cache allocation before any P3 prediction or baseline outcome inspection"
     }
   ],
   "protocol": "research/adaptive_v4_memory/paper_grade_protocol.md",
@@ -410,6 +415,8 @@
       "compatible_qwen3_methods": [
         "streaming-llm",
         "snapkv",
+        "pyramidkv",
+        "adakv-snapkv",
         "expected-attention",
         "critical-expected-attention"
       ],
