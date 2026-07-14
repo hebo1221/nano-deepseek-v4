@@ -12,7 +12,7 @@ SCRIPTS = Path(__file__).resolve().parents[1] / "research/adaptive_v4_memory/scr
 sys.path.insert(0, str(SCRIPTS))
 
 from p3_safety_workloads import FAMILIES  # noqa: E402
-from summarize_p3_safety_stress import summarize  # noqa: E402
+from summarize_p3_safety_stress import _exact_paired_pvalue, summarize  # noqa: E402
 
 
 def _digest(path: Path) -> str:
@@ -165,3 +165,9 @@ def test_safety_summary_rejects_unregistered_failure(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="Unregistered safety failure"):
         summarize(manifest, arms)
+
+
+def test_exact_paired_test_is_stable_at_frozen_sample_size() -> None:
+    assert _exact_paired_pvalue(600, 600) == pytest.approx(1.0)
+    assert _exact_paired_pvalue(1_200, 0) < 1e-100
+    assert 0.0 <= _exact_paired_pvalue(1_100, 100) <= 1.0

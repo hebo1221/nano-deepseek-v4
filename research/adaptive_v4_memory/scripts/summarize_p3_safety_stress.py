@@ -89,8 +89,19 @@ def _exact_paired_pvalue(wins: int, losses: int) -> float:
     discordant = wins + losses
     if discordant == 0:
         return 1.0
-    tail = sum(math.comb(discordant, index) for index in range(min(wins, losses) + 1))
-    return min(1.0, 2.0 * tail / (2**discordant))
+    smaller = min(wins, losses)
+    log_probabilities = [
+        math.lgamma(discordant + 1)
+        - math.lgamma(index + 1)
+        - math.lgamma(discordant - index + 1)
+        - discordant * math.log(2.0)
+        for index in range(smaller + 1)
+    ]
+    maximum = max(log_probabilities)
+    lower_tail = math.exp(maximum) * sum(
+        math.exp(value - maximum) for value in log_probabilities
+    )
+    return min(1.0, 2.0 * lower_tail)
 
 
 def paired_protected_effect(
