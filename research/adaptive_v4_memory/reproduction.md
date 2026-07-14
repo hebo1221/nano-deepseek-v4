@@ -37,6 +37,10 @@ then execute and summarize the 9,000-shard factorial:
 .venv/bin/python research/adaptive_v4_memory/scripts/summarize_p2_core_matrix.py \
   --matrix artifacts/adaptive_v4_memory/paper_grade/p2-core-quality-matrix.json \
   --output artifacts/adaptive_v4_memory/paper_grade/p2-core-quality-matrix.strict.summary.json
+.venv/bin/python research/adaptive_v4_memory/scripts/run_p2_seed_extension_prerequisites.py
+.venv/bin/python research/adaptive_v4_memory/scripts/run_p2_seed_extension_core.py --scale s55 --workers 3
+.venv/bin/python research/adaptive_v4_memory/scripts/run_p2_seed_extension_core.py --scale s151 --workers 3
+.venv/bin/python research/adaptive_v4_memory/scripts/summarize_p2_seed_extension.py
 .venv/bin/python research/adaptive_v4_memory/scripts/run_p2_causal_prerequisites.py
 .venv/bin/python research/adaptive_v4_memory/scripts/run_p2_causal_parallel.py --workers 3
 .venv/bin/python research/adaptive_v4_memory/scripts/summarize_p2_causal_factorial.py \
@@ -44,7 +48,11 @@ then execute and summarize the 9,000-shard factorial:
   --output artifacts/adaptive_v4_memory/paper_grade/p2-causal-ablation.summary.json
 ```
 
-The parallel runners first require exact serial/parallel probes. P2 causal also
+The separately preregistered four-seed extension starts only after the immutable
+4,500-shard primary cohort passes its strict audit. It produces an independently
+auditable 3,600-shard matrix, then permits the 8,100-shard nine-seed confirmatory
+summary only when frozen contracts match and seed namespaces are disjoint. The
+parallel runners first require exact serial/parallel probes. P2 causal also
 requires calibration-only physical-memory matching and exact chunked-quality versus
 sequential-tier equivalence for every seed, scale, budget, family, context, and arm.
 

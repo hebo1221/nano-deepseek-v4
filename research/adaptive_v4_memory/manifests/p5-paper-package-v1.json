@@ -37,6 +37,52 @@
         "family_holm_p_values_used_as_success_gate": false
       }
     },
+    "p2_core_confirmatory": {
+      "path": "artifacts/adaptive_v4_memory/paper_grade/p2-nine-seed-core.summary.json",
+      "experiment_id": "p2-nine-seed-core-matrix-audit-v1",
+      "required_audit": {
+        "unique_shards": 8100,
+        "all_raw_shards_verified": true,
+        "all_dependency_digests_verified": true,
+        "all_record_digests_verified": true,
+        "no_budget_violations": true,
+        "held_out_seed_contract_verified": true,
+        "paired_conversation_coverage_verified": true,
+        "execution_order_coverage_verified": true,
+        "exact_record_schema_verified": true,
+        "exact_execution_rotation_verified": true,
+        "exact_statistical_cell_coverage_verified": true,
+        "paired_units_per_seed_scale_family_context": 200,
+        "paired_units_per_seed_scale_family": 1000,
+        "statistical_cells_per_comparison": 2430,
+        "aggregate_recomputed": true,
+        "batch_coverage_verified": true,
+        "exact_seed_randomization_verified": true,
+        "independent_seed_clusters_per_cell": 9,
+        "minimum_attainable_two_sided_seed_p": 0.00390625,
+        "seed_p_values_used_as_success_gate": false,
+        "family_holm_p_values_used_as_success_gate": false
+      },
+      "required_sections": {
+        "pooling_audit": {
+          "identical_frozen_contracts": true,
+          "identical_base_implementation": true,
+          "disjoint_training_seeds": true,
+          "cohorts_independently_audited": true,
+          "primary_report_preserved": true,
+          "extension_report_preserved": true,
+          "outcome_dependent_early_stopping": false
+        },
+        "confirmatory_inference": {
+          "independent_training_seeds_per_scale": 9,
+          "exact_sign_assignments": 512,
+          "minimum_attainable_two_sided_seed_p": 0.00390625,
+          "primary_cohort_reported_separately": true,
+          "extension_cohort_reported_separately": true,
+          "outcome_dependent_early_stopping": false
+        }
+      }
+    },
     "m5_one_token_pilot": {
       "path": "artifacts/adaptive_v4_memory/paper_grade/p1/m5-pilot-baseline.summary.json",
       "experiment_id": "m5-one-token-pilot-baseline-audit-v1",
@@ -350,6 +396,7 @@
   "boundary_manifests": {
     "paper_grade_study": "research/adaptive_v4_memory/manifests/paper-grade-study-v1.json",
     "experiment_scale_audit": "research/adaptive_v4_memory/manifests/experiment-scale-audit-v1.json",
+    "p2_seed_extension": "research/adaptive_v4_memory/manifests/p2-independent-seed-extension-v1.json",
     "p2_causal_factorial": "research/adaptive_v4_memory/manifests/p2-causal-factorial-v1.json",
     "online_learned_lookahead": "research/adaptive_v4_memory/manifests/p1-online-learned-lookahead-v1.json",
     "p3_ruler": "research/adaptive_v4_memory/manifests/p3-ruler-qwen3-1.7b-v1.json",

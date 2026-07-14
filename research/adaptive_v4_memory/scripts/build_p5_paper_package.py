@@ -41,6 +41,10 @@ REPRODUCTION_REQUIRED_MARKERS = [
     "run_p2_core_parallel.py --scale s55 --workers 3",
     "run_p2_core_parallel.py --scale s151 --workers 3",
     "summarize_p2_core_matrix.py",
+    "run_p2_seed_extension_prerequisites.py",
+    "run_p2_seed_extension_core.py --scale s55 --workers 3",
+    "run_p2_seed_extension_core.py --scale s151 --workers 3",
+    "summarize_p2_seed_extension.py",
     "run_p2_causal_prerequisites.py",
     "run_p2_causal_parallel.py --workers 3",
     "summarize_p2_causal_factorial.py",
@@ -63,6 +67,7 @@ REPRODUCTION_REQUIRED_MARKERS = [
 BOUNDARY_EXPERIMENT_IDS = {
     "paper_grade_study": "adaptive-v4-memory-paper-grade-v1",
     "experiment_scale_audit": "adaptive-v4-memory-experiment-scale-audit-v1",
+    "p2_seed_extension": "p2-independent-seed-extension-v1",
     "p2_causal_factorial": "p2-causal-factorial-v1",
     "online_learned_lookahead": "p1-online-learned-lookahead-v1",
     "p3_ruler": "p3-ruler-qwen3-1.7b-v1",
@@ -715,6 +720,14 @@ def _validate_evidence(name: str, path: Path, contract: dict[str, Any]) -> dict[
     audit = payload.get("audit", {})
     for field, expected in contract["required_audit"].items():
         _require(audit.get(field) == expected, f"{name} audit field {field} drifted.")
+    for section, required in contract.get("required_sections", {}).items():
+        observed = payload.get(section, {})
+        _require(isinstance(observed, dict), f"{name} section {section} is missing.")
+        for field, expected in required.items():
+            _require(
+                observed.get(field) == expected,
+                f"{name} section {section}.{field} drifted.",
+            )
     return payload
 
 
@@ -935,6 +948,21 @@ def _classify_500k_preflight(payload: dict[str, Any]) -> str:
     if not terminal:
         return "unverified"
     return "bounded-result" if successes > 0 else "negative-result"
+
+
+def _classify_validated_confirmatory_core(payload: dict[str, Any]) -> str:
+    quality_gate = payload.get("quality_gate")
+    if not isinstance(quality_gate, list) or not quality_gate:
+        return "unverified"
+    return (
+        "success"
+        if any(
+            isinstance(row, dict)
+            and row.get("passes_fixed_baseline_component") is True
+            for row in quality_gate
+        )
+        else "negative-result"
+    )
 
 
 def classify_evidence(
@@ -1965,6 +1993,7 @@ def _report(
     classifications: dict[str, str],
     traceability_rows: list[dict[str, Any]],
     p2_core: dict[str, Any],
+    p2_core_confirmatory: dict[str, Any],
     m5_one_token_pilot: dict[str, Any],
     m3_offline_learned_risk_pilot: dict[str, Any],
     p1_online_learned_lookahead: dict[str, Any],
@@ -2033,9 +2062,12 @@ manually, remains mandatory before goal completion, and is never reported as pas
 
 ## Experiment volume
 
-- P2 core: {p2_core["audit"]["unique_shards"]:,} verified shards, 5 training seeds,
-  2 scales, 9 workload families, 5 contexts, and 1,000 examples per
-  seed-scale-family.
+- P2 core primary cohort: {p2_core["audit"]["unique_shards"]:,} verified shards and
+  5 independently trained seeds. The immutable primary report remains separately auditable.
+- P2 core confirmatory cohort: {p2_core_confirmatory["audit"]["unique_shards"]:,}
+  verified shards, 9 independently trained seeds, 2 scales, 9 workload families,
+  5 contexts, and 1,000 examples per seed-scale-family. Pooling was permitted only after
+  identical-contract and disjoint-seed audits passed.
 - M5 one-token baseline: {m5_one_token_pilot["audit"]["scales_verified"]} scales,
   {m5_one_token_pilot["audit"]["workloads_per_scale"]} synthetic workloads per scale,
   classified only as a pilot negative result for the tested interface.
@@ -2053,15 +2085,17 @@ manually, remains mandatory before goal completion, and is never reported as pas
   executed and {p2_causal["audit"]["quality_execution_counts"]["reused_exact_config"]:,}
   arm-batches reused an exact byte-identical config; the calibrated+pins versus
   fixed+pins gate passed: **{causal["passed"]}**.
-- P2 independent inference: each scale-budget cell has
-  {p2_causal["audit"]["independent_seed_clusters_per_cell"]} independent training-seed
-  clusters. Exact enumeration covers
-  {1 << p2_causal["audit"]["independent_seed_clusters_per_cell"]} sign assignments, so the
-  minimum attainable two-sided seed-level p-value is
-  {p2_causal["audit"]["minimum_attainable_two_sided_seed_p"]:.4f}. These p-values are
-  resolution-limited descriptive evidence and are not used as a p<0.05 success gate;
-  the much larger within-seed example count does not increase the number of independently
-  trained models.
+- P2 core confirmatory inference: exact enumeration covers
+  {p2_core_confirmatory["confirmatory_inference"]["exact_sign_assignments"]} sign
+  assignments across 9 independent seeds, giving a minimum attainable two-sided
+  seed-level p-value of
+  {p2_core_confirmatory["confirmatory_inference"]["minimum_attainable_two_sided_seed_p"]:.6f}.
+  The original five-seed cohort and four-seed extension are also reported separately.
+- P2 causal inference remains a five-seed analysis with
+  {1 << p2_causal["audit"]["independent_seed_clusters_per_cell"]} exact sign assignments
+  and a minimum attainable two-sided p-value of
+  {p2_causal["audit"]["minimum_attainable_two_sided_seed_p"]:.4f}. Seed-level p-values
+  accompany effect sizes and intervals; they are never the sole success criterion.
 - P2 supplemental baselines: fixed top-p 0.5/0.8 are evaluated on the complete
   factorial, and the target-aware registered-arm oracle is reported only as a
   non-causal upper bound over {len(p2_causal["offline_oracle_upper_bound"]["registered_arms"])} arms.
@@ -2249,6 +2283,9 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         loaded["p4_reference_systems"],
         loaded["p4_production_systems"],
     )
+    classes["p2_core_confirmatory"] = _classify_validated_confirmatory_core(
+        loaded["p2_core_confirmatory"]
+    )
     traceability_rows = _traceability_rows(traceability, manifest, classes)
     output_root.mkdir(parents=True, exist_ok=True)
     (output_root / "reproduction-guide.md").write_text(reproduction_guide)
@@ -2281,22 +2318,33 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
             "scientific_classification",
         ],
     )
-    inference_resolution = _p2_inference_resolution_rows(loaded["p2_core"], loaded["p2_causal"])
+    inference_resolution = _p2_inference_resolution_rows(
+        loaded["p2_core_confirmatory"], loaded["p2_causal"]
+    )
     _write_csv(
         output_root / "table-p2-inference-resolution.csv",
         inference_resolution,
         list(inference_resolution[0]),
     )
-    quality = _p2_quality_rows(loaded["p2_core"])
+    quality = _p2_quality_rows(loaded["p2_core_confirmatory"])
     _write_csv(output_root / "table-p2-quality-gate.csv", quality, list(quality[0]))
     p2_core_tables = {
         "table-p2-core-policy-summary.csv": [
-            _flatten_json_row(row) for row in loaded["p2_core"]["policy_summary"]
+            _flatten_json_row(row)
+            for row in loaded["p2_core_confirmatory"]["policy_summary"]
         ],
-        "table-p2-core-effects.csv": _p2_core_effect_rows(loaded["p2_core"]),
-        "table-p2-core-family-effects.csv": _p2_core_family_rows(loaded["p2_core"]),
-        "table-p2-core-seed-effects.csv": _p2_core_seed_rows(loaded["p2_core"]),
-        "table-p2-core-worst-slices.csv": _p2_core_worst_slice_rows(loaded["p2_core"]),
+        "table-p2-core-effects.csv": _p2_core_effect_rows(
+            loaded["p2_core_confirmatory"]
+        ),
+        "table-p2-core-family-effects.csv": _p2_core_family_rows(
+            loaded["p2_core_confirmatory"]
+        ),
+        "table-p2-core-seed-effects.csv": _p2_core_seed_rows(
+            loaded["p2_core_confirmatory"]
+        ),
+        "table-p2-core-worst-slices.csv": _p2_core_worst_slice_rows(
+            loaded["p2_core_confirmatory"]
+        ),
     }
     for name, rows in p2_core_tables.items():
         _write_csv(output_root / name, rows, _field_union(rows))
@@ -2422,6 +2470,7 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         classifications=classes,
         traceability_rows=traceability_rows,
         p2_core=loaded["p2_core"],
+        p2_core_confirmatory=loaded["p2_core_confirmatory"],
         m5_one_token_pilot=loaded["m5_one_token_pilot"],
         m3_offline_learned_risk_pilot=loaded["m3_offline_learned_risk_pilot"],
         p1_online_learned_lookahead=loaded["p1_online_learned_lookahead"],

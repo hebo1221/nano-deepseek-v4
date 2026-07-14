@@ -41,6 +41,27 @@ def _p2_core_evidence(*, passed: bool = False) -> dict[str, object]:
     }
 
 
+def _p2_confirmatory_evidence(*, passed: bool = False) -> dict[str, object]:
+    return {
+        "source": {"dirty": False},
+        "audit": {
+            "unique_shards": 8_100,
+            "independent_seed_clusters_per_cell": 9,
+            "minimum_attainable_two_sided_seed_p": 0.00390625,
+            "statistical_cells_per_comparison": 2_430,
+        },
+        "pooling_audit": {
+            "identical_frozen_contracts": True,
+            "disjoint_training_seeds": True,
+        },
+        "confirmatory_inference": {
+            "exact_sign_assignments": 512,
+            "minimum_attainable_two_sided_seed_p": 0.00390625,
+        },
+        "quality_gate": [{"passes_fixed_baseline_component": passed}],
+    }
+
+
 def _safety_evidence() -> dict[str, object]:
     return {
         "audit": {
@@ -213,6 +234,7 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
 
     assert set(manifest["evidence"]) == {
         "p2_core",
+        "p2_core_confirmatory",
         "m5_one_token_pilot",
         "m3_offline_learned_risk_pilot",
         "p1_online_learned_lookahead",
@@ -273,6 +295,22 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
     assert manifest["evidence"]["p2_core"]["required_audit"][
         "statistical_cells_per_comparison"
     ] == 1_350
+    confirmatory = manifest["evidence"]["p2_core_confirmatory"]
+    assert confirmatory["required_audit"]["unique_shards"] == 8_100
+    assert confirmatory["required_audit"]["independent_seed_clusters_per_cell"] == 9
+    assert confirmatory["required_audit"]["statistical_cells_per_comparison"] == 2_430
+    assert confirmatory["required_audit"][
+        "minimum_attainable_two_sided_seed_p"
+    ] == pytest.approx(0.00390625)
+    assert confirmatory["required_sections"]["pooling_audit"][
+        "identical_frozen_contracts"
+    ] is True
+    assert confirmatory["required_sections"]["pooling_audit"][
+        "disjoint_training_seeds"
+    ] is True
+    assert confirmatory["required_sections"]["confirmatory_inference"][
+        "exact_sign_assignments"
+    ] == 512
     assert (
         manifest["evidence"]["p1_online_learned_lookahead"]["required_audit"][
             "checkpoint_reuse_equivalence_verified"
@@ -510,6 +548,9 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
     assert manifest["boundary_manifests"]["experiment_scale_audit"].endswith(
         "experiment-scale-audit-v1.json"
     )
+    assert manifest["boundary_manifests"]["p2_seed_extension"].endswith(
+        "p2-independent-seed-extension-v1.json"
+    )
     assert set(manifest["boundary_manifests"]) == set(package.BOUNDARY_EXPERIMENT_IDS)
     assert {
         "figure-p2-causal-effect.svg",
@@ -551,6 +592,39 @@ def test_p5_reproduction_guide_binds_every_stage_and_failure_boundary(tmp_path: 
     incomplete.write_text("# incomplete\n")
     with pytest.raises(ValueError, match="Reproduction guide is incomplete"):
         package._validate_reproduction_guide(incomplete)
+
+
+def test_confirmatory_core_requires_pooling_and_exact_inference(
+    tmp_path: Path,
+) -> None:
+    evidence = _p2_confirmatory_evidence(passed=True)
+    evidence["experiment_id"] = "p2-nine-seed-core-matrix-audit-v1"
+    path = tmp_path / "confirmatory.json"
+    path.write_text(json.dumps(evidence))
+    contract = {
+        "experiment_id": "p2-nine-seed-core-matrix-audit-v1",
+        "required_audit": {
+            "unique_shards": 8_100,
+            "independent_seed_clusters_per_cell": 9,
+        },
+        "required_sections": {
+            "pooling_audit": {
+                "identical_frozen_contracts": True,
+                "disjoint_training_seeds": True,
+            },
+            "confirmatory_inference": {"exact_sign_assignments": 512},
+        },
+    }
+
+    assert package._validate_evidence("p2_core_confirmatory", path, contract) == evidence
+    assert package._classify_validated_confirmatory_core(evidence) == "success"
+
+    evidence["pooling_audit"]["disjoint_training_seeds"] = False  # type: ignore[index]
+    path.write_text(json.dumps(evidence))
+    with pytest.raises(ValueError, match="pooling_audit.disjoint_training_seeds"):
+        package._validate_evidence("p2_core_confirmatory", path, contract)
+
+    assert package._classify_validated_confirmatory_core({"quality_gate": []}) == "unverified"
 
 
 def test_p5_traceability_covers_every_requirement_and_fails_closed() -> None:

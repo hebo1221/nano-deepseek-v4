@@ -102,20 +102,28 @@
       "requirement": "Use at least five independent training seeds at S55 and S151.",
       "sources": [
         {"kind": "evidence", "name": "p2_core"},
-        {"kind": "evidence", "name": "p2_causal"}
+        {"kind": "evidence", "name": "p2_core_confirmatory"},
+        {"kind": "evidence", "name": "p2_causal"},
+        {"kind": "boundary-manifest", "name": "p2_seed_extension"}
       ]
     },
     {
       "id": "P2.2",
       "phase": "P2",
       "requirement": "Evaluate at least 1,000 examples per seed-scale-workload family.",
-      "sources": [{"kind": "evidence", "name": "p2_core"}]
+      "sources": [
+        {"kind": "evidence", "name": "p2_core"},
+        {"kind": "evidence", "name": "p2_core_confirmatory"}
+      ]
     },
     {
       "id": "P2.3",
       "phase": "P2",
       "requirement": "Cover all nine preregistered synthetic workload families.",
-      "sources": [{"kind": "evidence", "name": "p2_core"}]
+      "sources": [
+        {"kind": "evidence", "name": "p2_core"},
+        {"kind": "evidence", "name": "p2_core_confirmatory"}
+      ]
     },
     {
       "id": "P2.4",
@@ -123,6 +131,7 @@
       "requirement": "Evaluate at least five context lengths and multiple hot-memory budgets.",
       "sources": [
         {"kind": "evidence", "name": "p2_core"},
+        {"kind": "evidence", "name": "p2_core_confirmatory"},
         {"kind": "boundary-manifest", "name": "paper_grade_study"}
       ]
     },
@@ -132,6 +141,7 @@
       "requirement": "Report paired bootstrap intervals, effects, paired tests, worst slices, and seed variance.",
       "sources": [
         {"kind": "evidence", "name": "p2_core"},
+        {"kind": "evidence", "name": "p2_core_confirmatory"},
         {"kind": "evidence", "name": "p2_causal"}
       ]
     },
@@ -248,7 +258,10 @@
       "id": "C.1",
       "phase": "completion",
       "requirement": "Report the core 5-seed by 2-scale by 1,000-example-per-family Tier-S result with uncertainty.",
-      "sources": [{"kind": "evidence", "name": "p2_core"}]
+      "sources": [
+        {"kind": "evidence", "name": "p2_core"},
+        {"kind": "evidence", "name": "p2_core_confirmatory"}
+      ]
     },
     {
       "id": "C.2",
