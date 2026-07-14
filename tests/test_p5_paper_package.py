@@ -24,6 +24,8 @@ def _safety_evidence() -> dict[str, object]:
             "terminal_measurement_schema_verified": True,
             "target_and_canary_pairing_verified": True,
             "protected_prefix_physical_budget_verified": True,
+            "raw_artifact_digests_verified": True,
+            "statistical_schema_verified": True,
             "examples_accounted_per_arm": 1_200,
             "families_terminal": 4,
             "contexts_terminal": 3,
@@ -384,6 +386,18 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
     assert (
         manifest["evidence"]["p3_safety"]["required_audit"][
             "target_and_canary_pairing_verified"
+        ]
+        is True
+    )
+    assert (
+        manifest["evidence"]["p3_safety"]["required_audit"][
+            "raw_artifact_digests_verified"
+        ]
+        is True
+    )
+    assert (
+        manifest["evidence"]["p3_safety"]["required_audit"][
+            "statistical_schema_verified"
         ]
         is True
     )

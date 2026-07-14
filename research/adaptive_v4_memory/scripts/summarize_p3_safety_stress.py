@@ -489,6 +489,8 @@ def summarize(manifest_path: Path, arm_paths: dict[str, Path]) -> dict[str, Any]
             "terminal_measurement_schema_verified": True,
             "target_and_canary_pairing_verified": True,
             "protected_prefix_physical_budget_verified": True,
+            "raw_artifact_digests_verified": True,
+            "statistical_schema_verified": True,
             "examples_accounted_per_arm": manifest["expected_examples_per_arm"],
             "families_terminal": len(FAMILIES),
             "contexts_terminal": len(manifest["context_targets_tokens"]),

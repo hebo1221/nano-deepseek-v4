@@ -150,6 +150,8 @@
         "terminal_measurement_schema_verified": true,
         "target_and_canary_pairing_verified": true,
         "protected_prefix_physical_budget_verified": true,
+        "raw_artifact_digests_verified": true,
+        "statistical_schema_verified": true,
         "examples_accounted_per_arm": 1200,
         "families_terminal": 4,
         "contexts_terminal": 3

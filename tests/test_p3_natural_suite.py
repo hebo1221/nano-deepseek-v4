@@ -28,6 +28,7 @@ from summarize_p3_natural_benchmark import (  # noqa: E402
 from summarize_p3_natural_suite import (  # noqa: E402
     BENCHMARK_IDS,
     audit_provenance_inventories,
+    audit_safety_stress,
     summarize,
 )
 from validate_p3_natural_suite_manifest import validate_manifest  # noqa: E402
@@ -493,12 +494,35 @@ def _safety_summary(tmp_path: Path, manifest_path: Path) -> Path:
     manifest = json.loads(manifest_path.read_text())
     contract = manifest["suite_audit"]["safety_stress"]
     safety_manifest = Path(contract["manifest"])
+    safety_contract = json.loads(safety_manifest.read_text())
     expected = contract["examples_per_required_arm"]
+    per_slice = safety_contract["examples_per_family_context"]
     slices = [
-        {"family": family, "context_target": context}
-        for family in range(contract["families"])
-        for context in range(contract["contexts"])
+        {
+            "family": family,
+            "context_target": context,
+            "expected_examples": per_slice,
+            "scored_examples": per_slice,
+            "failures": 0,
+            "success_rate_failures_zero": 1.0,
+            "leakage_events": 0,
+            "leakage_rate_all_expected": 0.0,
+        }
+        for family in safety_contract["families"]
+        for context in safety_contract["context_targets_tokens"]
     ]
+    raw_cells: dict[str, dict[str, str]] = {}
+    for index, arm in enumerate(contract["required_arms"]):
+        raw_cell = tmp_path / f"safety-{index}-raw-cell.json"
+        raw_cell.write_text("{}")
+        raw_cells[arm] = {"path": str(raw_cell), "sha256": _digest(raw_cell)}
+    source_implementation = {
+        "commit": "a" * 40,
+        "runner_path": "runner.py",
+        "workload_path": "workload.py",
+        "implementation_sha256": "b" * 64,
+        "workload_sha256": "c" * 64,
+    }
     path = tmp_path / "safety-summary.json"
     path.write_text(
         json.dumps(
@@ -514,7 +538,13 @@ def _safety_summary(tmp_path: Path, manifest_path: Path) -> Path:
                     "failure_accounting_complete": True,
                     "input_pairing_verified": True,
                     "source_implementations_verified": True,
+                    "coordinate_grid_verified": True,
+                    "record_revisions_verified": True,
+                    "terminal_measurement_schema_verified": True,
+                    "target_and_canary_pairing_verified": True,
                     "protected_prefix_physical_budget_verified": True,
+                    "raw_artifact_digests_verified": True,
+                    "statistical_schema_verified": True,
                     "examples_accounted_per_arm": expected,
                     "families_terminal": contract["families"],
                     "contexts_terminal": contract["contexts"],
@@ -527,15 +557,31 @@ def _safety_summary(tmp_path: Path, manifest_path: Path) -> Path:
                     arm: {
                         "terminal": True,
                         "expected_examples": expected,
-                        "scored_examples": expected - 1,
-                        "failures_by_type": {"runtime-error": 1},
+                        "scored_examples": expected,
+                        "failures_by_type": {},
+                        "macro_success_rate_failures_zero": 1.0,
+                        "total_leakage_events": 0,
                         "slices": slices,
+                        "worst_slice": slices[0],
+                        "paired_prompt_digest_set_sha256": "d" * 64,
+                        "raw_cell": raw_cells[arm],
+                        "source_implementation": source_implementation,
                     }
                     for arm in contract["required_arms"]
                 },
                 "protected_prefix_causal_contrast": {
+                    "estimand": "protected minus fixed; operational failures score zero",
                     "paired_examples": expected,
+                    "mean_success_rate_difference": 0.0,
+                    "paired_bootstrap_95_ci": [0.0, 0.0],
+                    "wins": 0,
+                    "ties": expected,
+                    "losses": 0,
+                    "exact_two_sided_paired_pvalue": 1.0,
+                    "physically_comparable_scored_pairs": expected,
                     "resident_bytes_equal_for_comparable_pairs": True,
+                    "bootstrap_seed": safety_contract["seed"],
+                    "bootstrap_replicates": 10_000,
                 },
                 "claim_boundary": "synthetic safety retention only",
             }
@@ -590,6 +636,47 @@ def _natural_safety_summary(tmp_path: Path, manifest_path: Path) -> Path:
         )
     )
     return path
+
+
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    [
+        ("raw-cell-digest", "raw cell drifted"),
+        ("bootstrap-ci", "causal contrast is incomplete"),
+        ("leakage-rate", "slice statistics drifted"),
+        ("boolean-failure-count", "arm is incomplete"),
+    ],
+)
+def test_safety_suite_rejects_invalid_raw_and_statistical_evidence(
+    tmp_path: Path, mutation: str, message: str
+) -> None:
+    root = Path(__file__).resolve().parents[1]
+    manifest_path = root / "research/adaptive_v4_memory/manifests/p3-natural-suite-v1.json"
+    manifest = json.loads(manifest_path.read_text())
+    path = _safety_summary(tmp_path, manifest_path)
+    payload = json.loads(path.read_text())
+    first_arm = manifest["suite_audit"]["safety_stress"]["required_arms"][0]
+    if mutation == "raw-cell-digest":
+        payload["arms"][first_arm]["raw_cell"]["sha256"] = "0" * 64
+    elif mutation == "bootstrap-ci":
+        payload["protected_prefix_causal_contrast"]["paired_bootstrap_95_ci"] = [
+            0.0,
+            float("inf"),
+        ]
+    elif mutation == "leakage-rate":
+        payload["arms"][first_arm]["slices"][0]["leakage_rate_all_expected"] = 1.0
+    else:
+        payload["arms"][first_arm]["scored_examples"] -= 1
+        payload["arms"][first_arm]["failures_by_type"] = {"runtime-error": True}
+    path.write_text(json.dumps(payload))
+
+    with pytest.raises(ValueError, match=message):
+        audit_safety_stress(
+            path=path,
+            manifest=manifest,
+            natural_manifest_digest=_digest(manifest_path),
+            model_snapshot_digest=manifest["model"]["snapshot_digest_set_sha256"],
+        )
 
 
 def test_natural_suite_audit_requires_all_examples_and_baselines(tmp_path: Path) -> None:

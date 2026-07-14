@@ -200,6 +200,8 @@ def test_safety_summary_audits_all_slices_and_pairs_inputs(tmp_path: Path) -> No
         "terminal_measurement_schema_verified": True,
         "target_and_canary_pairing_verified": True,
         "protected_prefix_physical_budget_verified": True,
+        "raw_artifact_digests_verified": True,
+        "statistical_schema_verified": True,
         "examples_accounted_per_arm": 4,
         "families_terminal": 4,
         "contexts_terminal": 1,

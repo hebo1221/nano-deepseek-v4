@@ -58,6 +58,10 @@ def _unit_interval_number(value: Any) -> bool:
     return _finite_number(value) and 0.0 <= value <= 1.0
 
 
+def _signed_unit_interval_number(value: Any) -> bool:
+    return _finite_number(value) and -1.0 <= value <= 1.0
+
+
 def _close(left: Any, right: Any) -> bool:
     return _finite_number(left) and _finite_number(right) and math.isclose(
         float(left), float(right), rel_tol=1e-12, abs_tol=1e-12
@@ -387,10 +391,26 @@ def audit_safety_stress(
     contract = manifest["suite_audit"]["safety_stress"]
     safety_manifest_path = Path(contract["manifest"])
     _require(safety_manifest_path.is_file(), "Missing frozen safety stress manifest.")
+    safety_manifest = json.loads(safety_manifest_path.read_text())
     _require(
         payload.get("manifest", {}).get("path") == str(safety_manifest_path)
         and payload.get("manifest", {}).get("sha256") == sha256(safety_manifest_path),
         "Safety stress manifest dependency drifted.",
+    )
+    expected_examples = contract["examples_per_required_arm"]
+    expected_families = tuple(safety_manifest.get("families", {}))
+    expected_contexts = tuple(safety_manifest.get("context_targets_tokens", ()))
+    expected_per_slice = safety_manifest.get("examples_per_family_context")
+    allowed_failures = set(safety_manifest.get("failure_accounting", ()))
+    _require(
+        safety_manifest.get("expected_examples_per_arm") == expected_examples
+        and len(expected_families) == contract["families"]
+        and len(expected_contexts) == contract["contexts"]
+        and type(expected_per_slice) is int
+        and expected_per_slice > 0
+        and expected_examples
+        == len(expected_families) * len(expected_contexts) * expected_per_slice,
+        "Safety stress frozen Cartesian contract drifted.",
     )
     audit = payload.get("audit", {})
     expected_audit = {
@@ -398,8 +418,14 @@ def audit_safety_stress(
         "failure_accounting_complete": True,
         "input_pairing_verified": True,
         "source_implementations_verified": True,
+        "coordinate_grid_verified": True,
+        "record_revisions_verified": True,
+        "terminal_measurement_schema_verified": True,
+        "target_and_canary_pairing_verified": True,
         "protected_prefix_physical_budget_verified": True,
-        "examples_accounted_per_arm": contract["examples_per_required_arm"],
+        "raw_artifact_digests_verified": True,
+        "statistical_schema_verified": True,
+        "examples_accounted_per_arm": expected_examples,
         "families_terminal": contract["families"],
         "contexts_terminal": contract["contexts"],
     }
@@ -417,22 +443,135 @@ def audit_safety_stress(
     safety_arms = tuple(contract["required_arms"])
     _require(set(arms) == set(safety_arms), "Safety stress arm set drifted.")
     contrast = payload.get("protected_prefix_causal_contrast", {})
+    interval = contrast.get("paired_bootstrap_95_ci")
     _require(
-        contrast.get("paired_examples") == contract["examples_per_required_arm"]
-        and contrast.get("resident_bytes_equal_for_comparable_pairs") is True,
+        type(contrast.get("paired_examples")) is int
+        and contrast["paired_examples"] == expected_examples
+        and isinstance(contrast.get("estimand"), str)
+        and "operational failures score zero" in contrast["estimand"]
+        and _signed_unit_interval_number(
+            contrast.get("mean_success_rate_difference")
+        )
+        and isinstance(interval, list)
+        and len(interval) == 2
+        and all(_signed_unit_interval_number(value) for value in interval)
+        and interval[0] <= interval[1]
+        and all(
+            _nonnegative_integer(contrast.get(field))
+            for field in ("wins", "ties", "losses")
+        )
+        and contrast["wins"] + contrast["ties"] + contrast["losses"]
+        == expected_examples
+        and _close(
+            contrast["mean_success_rate_difference"],
+            (contrast["wins"] - contrast["losses"]) / expected_examples,
+        )
+        and _unit_interval_number(contrast.get("exact_two_sided_paired_pvalue"))
+        and _nonnegative_integer(
+            contrast.get("physically_comparable_scored_pairs")
+        )
+        and contrast["physically_comparable_scored_pairs"] <= expected_examples
+        and contrast.get("resident_bytes_equal_for_comparable_pairs") is True
+        and contrast.get("bootstrap_seed") == safety_manifest.get("seed")
+        and contrast.get("bootstrap_replicates") == 10_000,
         "Safety protected-prefix causal contrast is incomplete or not memory matched.",
     )
+    source_implementations: set[str] = set()
     for arm in safety_arms:
         row = arms[arm]
+        failures = row.get("failures_by_type")
+        scored = row.get("scored_examples")
+        slices = row.get("slices")
         _require(
             row.get("terminal") is True
-            and row.get("expected_examples") == contract["examples_per_required_arm"]
-            and row.get("scored_examples", 0)
-            + sum(row.get("failures_by_type", {}).values())
-            == contract["examples_per_required_arm"]
-            and len(row.get("slices", [])) == contract["families"] * contract["contexts"],
+            and row.get("expected_examples") == expected_examples
+            and _nonnegative_integer(scored)
+            and isinstance(failures, dict)
+            and set(failures).issubset(allowed_failures)
+            and all(_nonnegative_integer(value) for value in failures.values())
+            and scored + sum(failures.values()) == expected_examples
+            and _unit_interval_number(row.get("macro_success_rate_failures_zero"))
+            and _nonnegative_integer(row.get("total_leakage_events"))
+            and row["total_leakage_events"] <= expected_examples
+            and isinstance(slices, list)
+            and len(slices) == len(expected_families) * len(expected_contexts),
             f"Safety stress arm is incomplete: {arm}.",
         )
+        raw_cell = row.get("raw_cell", {})
+        raw_cell_path = Path(raw_cell.get("path", ""))
+        _require(
+            raw_cell_path.is_file()
+            and raw_cell.get("sha256") == sha256(raw_cell_path),
+            f"Safety stress raw cell drifted: {arm}.",
+        )
+        _sha256_value(
+            row.get("paired_prompt_digest_set_sha256"), f"{arm} safety pairing"
+        )
+        source = row.get("source_implementation", {})
+        _require(
+            isinstance(source, dict)
+            and isinstance(source.get("commit"), str)
+            and bool(source["commit"]),
+            f"Safety stress source implementation is incomplete: {arm}.",
+        )
+        _sha256_value(source.get("implementation_sha256"), f"{arm} safety runner")
+        _sha256_value(source.get("workload_sha256"), f"{arm} safety workload")
+        source_implementations.add(json.dumps(source, sort_keys=True))
+        seen_slices: set[tuple[str, int]] = set()
+        for slice_row in slices:
+            family = slice_row.get("family")
+            context = slice_row.get("context_target")
+            slice_scored = slice_row.get("scored_examples")
+            slice_failures = slice_row.get("failures")
+            leakage_events = slice_row.get("leakage_events")
+            _require(
+                family in expected_families
+                and context in expected_contexts
+                and (family, context) not in seen_slices
+                and slice_row.get("expected_examples") == expected_per_slice
+                and _nonnegative_integer(slice_scored)
+                and _nonnegative_integer(slice_failures)
+                and slice_scored + slice_failures == expected_per_slice
+                and _unit_interval_number(
+                    slice_row.get("success_rate_failures_zero")
+                )
+                and _nonnegative_integer(leakage_events)
+                and leakage_events <= expected_per_slice
+                and _unit_interval_number(
+                    slice_row.get("leakage_rate_all_expected")
+                )
+                and _close(
+                    slice_row["leakage_rate_all_expected"],
+                    leakage_events / expected_per_slice,
+                ),
+                f"Safety stress slice statistics drifted: {arm}.",
+            )
+            seen_slices.add((family, context))
+        _require(
+            seen_slices
+            == {
+                (family, context)
+                for family in expected_families
+                for context in expected_contexts
+            }
+            and _close(
+                row["macro_success_rate_failures_zero"],
+                sum(
+                    slice_row["success_rate_failures_zero"]
+                    for slice_row in slices
+                )
+                / len(slices),
+            )
+            and row["total_leakage_events"]
+            == sum(slice_row["leakage_events"] for slice_row in slices)
+            and row.get("worst_slice")
+            == min(slices, key=lambda item: item["success_rate_failures_zero"]),
+            f"Safety stress arm aggregates drifted: {arm}.",
+        )
+    _require(
+        len(source_implementations) == 1,
+        "Safety stress arms used different source implementations.",
+    )
     return {
         "terminal": True,
         "examples_per_required_arm": contract["examples_per_required_arm"],
@@ -441,6 +580,8 @@ def audit_safety_stress(
         "required_arms": list(safety_arms),
         "protected_prefix_physical_budget_verified": True,
         "source_implementations_verified": True,
+        "raw_artifact_digests_verified": True,
+        "statistical_schema_verified": True,
         "protected_prefix_causal_contrast": contrast,
         "summary": {"path": str(path), "sha256": sha256(path)},
         "arms": arms,
