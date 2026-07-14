@@ -177,6 +177,7 @@
       "requirement": "If official resources are unavailable, freeze GPU, storage, cost, and reproduction blockers without relabeling compatible-model evidence.",
       "sources": [
         {"kind": "boundary-manifest", "name": "official_deepseek_v4"},
+        {"kind": "boundary-manifest", "name": "natural_suite"},
         {"kind": "boundary-manifest", "name": "production_runtime_blocker"}
       ]
     },

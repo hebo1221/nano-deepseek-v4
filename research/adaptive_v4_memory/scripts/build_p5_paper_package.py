@@ -553,6 +553,43 @@ def _validate_boundary_manifest(name: str, path: Path) -> dict[str, Any]:
             and "zero result cells" in amendments[1].get("reason", ""),
             "P3 RULER sequence boundary drifted.",
         )
+    elif name == "natural_suite":
+        baselines = payload.get("external_baselines", {})
+        kvpress = baselines.get("kvpress", {})
+        flashmemory = baselines.get("FlashMemory-DeepSeek-V4", {})
+        indexcache = baselines.get("IndexCache", {})
+        indexcache_files = indexcache.get("files_sha256", {})
+        _require(
+            payload.get("status") == "amended_and_frozen_before_execution"
+            and kvpress.get("revision")
+            == "6d965557a5b9f0201a2301b23c454473dd681d0d",
+            "P3 compatible-model baseline boundary drifted.",
+        )
+        _require(
+            flashmemory.get("manifest")
+            == "research/adaptive_v4_memory/manifests/p3-flashmemory-deepseek-v4-v1.json"
+            and flashmemory.get("compatible_with_primary_qwen3_model") is False
+            and "never project" in flashmemory.get("action", ""),
+            "FlashMemory architecture boundary drifted.",
+        )
+        _require(
+            indexcache.get("repository") == "https://github.com/THUDM/IndexCache"
+            and indexcache.get("revision")
+            == "08d22d69b1aa2aa0a3de23df6d6b88dbd5b5d044"
+            and indexcache.get("license") == "apache-2.0"
+            and indexcache.get("compatible_with_primary_qwen3_model") is False
+            and "DeepSeek Sparse Attention"
+            in indexcache.get("supported_architecture_boundary", "")
+            and "supported DSA runtime" in indexcache.get("action", "")
+            and indexcache_files
+            == {
+                "LICENSE": "7ecd8ce1d30b8aa26232f5c7c878cca53bc273547ce52f1678f955154746e64f",
+                "README.md": "b925cec609200200d1f5d076083589d3b19fb78a32b9f5c541db09baf70b5b49",
+                "indexcache.patch": "aa0e78e6e7ffd25e9d98f45fd608dc3547af937e5f77e01b5c01f1aaaf5df5b7",
+                "indexcache_vllm.patch": "2044f07ecd65b2bebe0b770bbc3f0246785b6eb5026311345722ef7d271ce356",
+            },
+            "IndexCache architecture or provenance boundary drifted.",
+        )
     elif name == "p4_500k_context":
         amendments = payload.get("protocol_amendments", [])
         execution = payload.get("execution", {})
@@ -2124,6 +2161,10 @@ user request, is outside the completion gate, and is never reported as passed.
   outcome as the best of four frozen Qwen3-1.7B RULER candidates at 50% KV over
   8K/16K/32K, then transferred unchanged. "Strongest" is restricted to that selection
   grid and is not a claim of global dominance on Qwen3-4B or every natural benchmark.
+- External DSA comparators: FlashMemory-DeepSeek-V4 and IndexCache are not Qwen3-compatible
+  baselines and remain unverified rather than projected. IndexCache is pinned at
+  `08d22d69b1aa2aa0a3de23df6d6b88dbd5b5d044` and may be compared only on its supported
+  DeepSeek Sparse Attention runtime; the official FlashMemory contract remains separately blocked.
 - P3 safety stress: {p3_safety["audit"]["examples_accounted_per_arm"]:,} examples per arm,
   {p3_safety["audit"]["families_terminal"]} families, and
   {p3_safety["audit"]["contexts_terminal"]} context lengths with paired inputs.

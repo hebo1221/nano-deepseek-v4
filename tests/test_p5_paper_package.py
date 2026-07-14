@@ -809,6 +809,35 @@ def test_official_v4_boundary_validation_fails_closed(tmp_path: Path) -> None:
         package._validate_boundary_manifest("official_deepseek_v4", tampered)
 
 
+def test_natural_suite_boundary_rejects_projected_dsa_baselines(tmp_path: Path) -> None:
+    root = Path(__file__).resolve().parents[1]
+    source = root / "research/adaptive_v4_memory/manifests/p3-natural-suite-v1.json"
+    payload = json.loads(source.read_text())
+    package._validate_boundary_manifest("natural_suite", source)
+
+    payload["external_baselines"]["IndexCache"][
+        "compatible_with_primary_qwen3_model"
+    ] = True
+    tampered = tmp_path / "natural-suite.json"
+    tampered.write_text(json.dumps(payload))
+    with pytest.raises(ValueError, match="IndexCache architecture or provenance"):
+        package._validate_boundary_manifest("natural_suite", tampered)
+
+    payload = json.loads(source.read_text())
+    payload["external_baselines"]["IndexCache"]["files_sha256"]["README.md"] = "0" * 64
+    tampered.write_text(json.dumps(payload))
+    with pytest.raises(ValueError, match="IndexCache architecture or provenance"):
+        package._validate_boundary_manifest("natural_suite", tampered)
+
+    payload = json.loads(source.read_text())
+    payload["external_baselines"]["FlashMemory-DeepSeek-V4"]["action"] = (
+        "project the official result onto Qwen3"
+    )
+    tampered.write_text(json.dumps(payload))
+    with pytest.raises(ValueError, match="FlashMemory architecture boundary"):
+        package._validate_boundary_manifest("natural_suite", tampered)
+
+
 def test_experiment_scale_audit_recomputes_headline_counts(tmp_path: Path) -> None:
     root = Path(__file__).resolve().parents[1]
     source = root / "research/adaptive_v4_memory/manifests/experiment-scale-audit-v1.json"
