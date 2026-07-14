@@ -1,6 +1,6 @@
 # Related work and novelty boundary
 
-Last reviewed: 2026-07-14
+Last reviewed: 2026-07-15
 
 This document tracks the literature that can invalidate, constrain, or inspire
 Adaptive V4 Memory. It is deliberately broader than KV eviction because V4
@@ -89,6 +89,7 @@ control under the native V4 architecture.
 | [FlashMemory-DeepSeek-V4](https://arxiv.org/abs/2606.09079) | CPU cold pool, lookahead Memory Indexer, GPU working set, native second-stage top-k | refresh interval 64, threshold 0.5, layers 10/12/20, OR aggregation | False positives grow with irrelevant context; dense MRCR memory fails | Can uncertainty-controlled budgets, refresh, and fallback handle both sparse and dense demand? |
 | [Tangram](https://arxiv.org/abs/2606.06302) | static reservation, ragged paging, ahead-of-time load balancing for non-uniform budgets | calibrated head ranking and bounded ratios | Dynamic heterogeneity otherwise causes fragmentation, reclamation, and load imbalance | How should V4 block classes and adaptive layer budgets map to real pages and batches? |
 | [NOSA](https://arxiv.org/abs/2510.13602) | query-aware and query-agnostic locality for CPU offload | learned transfer selection | Targets long generation by reducing unnecessary transfers | Strong P4 transfer-aware comparison; useful bytes and late misses must accompany quality |
+| [AsymCache](https://arxiv.org/abs/2606.02964) | lossless GPU eviction, position-aware recomputation, Multi-Segment Attention, adaptive chunking | cache hit rate and attention-kernel cost model | Non-contiguous layout and recomputation cost alter TTFT/TPOT even when logical hit rate is unchanged | P4 must report layout/kernel evidence separately from HBM and transfer savings; the current reference runtime cannot claim this production benefit |
 
 FlashMemory is the minimum direct baseline. A method that only replaces its
 threshold with another fixed threshold is not a research contribution.
@@ -169,6 +170,10 @@ The final row is a research specification, not an achieved feature list.
 10. **Separate phase-specific policy from budget.** Prefill policy, decode
     policy, and layer budget are distinct ablations; a gain from one cannot be
     credited to the others.
+11. **Treat residency layout as part of the cost model.** Equal hit rates and
+    equal resident bytes can produce different latency when retained blocks are
+    non-contiguous or misses trigger position-dependent recomputation. Keep
+    reference PyTorch, production adapter, and fused/kernel claims separate.
 
 ## 10. Reading queue
 
