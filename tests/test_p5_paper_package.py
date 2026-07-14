@@ -252,6 +252,14 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
         "figure-p4-production-tradeoffs.svg",
         "table-p3-natural-benchmark-arms.csv",
         "table-p3-natural-paired-contrasts.csv",
+        "table-p2-core-effects.csv",
+        "table-p2-core-family-effects.csv",
+        "table-p2-core-seed-effects.csv",
+        "table-p2-core-worst-slices.csv",
+        "table-p2-causal-contrasts.csv",
+        "table-p2-causal-worst-slices.csv",
+        "table-p2-causal-physical-memory.csv",
+        "table-p2-causal-offline-oracle.csv",
     }.issubset(manifest["generated_files"])
 
 
@@ -836,3 +844,126 @@ def test_p5_natural_tables_and_figure_retain_quality_failures_and_memory(
     assert "failures score zero" in rendered
     assert "RULER" in rendered
     assert "rows_sha256" in rendered
+
+
+def test_p5_p2_detailed_tables_retain_seed_family_worst_slice_and_memory() -> None:
+    statistics = {
+        "pooled_by_scale": [
+            {
+                "budget_multiplier": 2,
+                "scale": "s55",
+                "mean_difference": 0.03,
+                "seed_cluster_inference": {
+                    "seed_cluster_bootstrap_ci": [0.01, 0.05],
+                    "cohens_dz_across_seeds": 1.2,
+                },
+            }
+        ],
+        "by_scale_family": [
+            {
+                "budget_multiplier": 2,
+                "scale": "s55",
+                "family": "single-remote-retrieval",
+                "mean_difference": 0.04,
+                "holm_adjusted_p": 0.02,
+                "seed_cluster_inference": {"seed_means": [0.02, 0.04]},
+            }
+        ],
+        "by_seed": [
+            {
+                "budget_multiplier": 2,
+                "scale": "s55",
+                "training_seed": 6071401,
+                "mean_difference": 0.02,
+            }
+        ],
+        "worst_slice": {
+            "budget_multiplier": 2,
+            "scale": "s55",
+            "family": "dense-global-aggregation",
+            "context": 1024,
+            "mean_difference": -0.01,
+        },
+        "worst_slice_by_budget_scale": [
+            {
+                "budget_multiplier": 2,
+                "scale": "s55",
+                "family": "dense-global-aggregation",
+                "context": 1024,
+                "mean_difference": -0.01,
+            }
+        ],
+    }
+    core = {"paired_statistics": {"calibrated_minus_fixed": statistics}}
+
+    assert package._p2_core_effect_rows(core)[0][
+        "seed_cluster_inference.seed_cluster_bootstrap_ci"
+    ] == "[0.01,0.05]"
+    assert package._p2_core_family_rows(core)[0]["holm_adjusted_p"] == 0.02
+    assert package._p2_core_seed_rows(core)[0]["training_seed"] == 6071401
+    assert {row["scope"] for row in package._p2_core_worst_slice_rows(core)} == {
+        "global",
+        "budget-scale",
+    }
+
+    contrast = {
+        "candidate": "calibrated+pins",
+        "comparator": "fixed+pins",
+        "cells": [
+            {
+                "scale": "s55",
+                "budget": "2x",
+                "mean_difference": 0.03,
+                "seed_cluster_inference": {"seed_means": [0.01, 0.02]},
+            }
+        ],
+        "worst_slice": {
+            "scale": "s55",
+            "budget": "2x",
+            "family": "dense-global-aggregation",
+            "context": 1024,
+            "mean_difference": -0.01,
+        },
+    }
+    causal = {
+        "paired_statistics": {"adaptive_quota_with_pins": contrast},
+        "physical_hot_memory": {
+            "by_seed": [
+                {
+                    "scale": "s55",
+                    "budget": "2x",
+                    "training_seed": 6071401,
+                    "relative_difference": 0.005,
+                }
+            ],
+            "aggregate": [
+                {"scale": "s55", "budget": "2x", "relative_difference": 0.004}
+            ],
+            "all_physical_arms_by_seed": [
+                {
+                    "scale": "s55",
+                    "budget": "2x",
+                    "training_seed": 6071401,
+                    "arm": "fixed+pins",
+                    "mean_hot_resident_bytes": 100.0,
+                }
+            ],
+        },
+        "offline_oracle_upper_bound": {
+            "inference_role": "descriptive non-causal upper bound only",
+            "selection_unit": "complete held-out conversation",
+            "used_for_primary_gate": False,
+            "cells": [{"scale": "s55", "budget": "2x", "mean_difference": 0.1}],
+        },
+    }
+
+    assert package._causal_contrast_rows(causal)[0]["contrast"] == (
+        "adaptive_quota_with_pins"
+    )
+    assert package._causal_worst_slice_rows(causal)[0]["context"] == 1024
+    assert {row["scope"] for row in package._causal_physical_memory_rows(causal)} == {
+        "seed-match",
+        "aggregate-match",
+        "all-physical-arms",
+    }
+    assert package._causal_oracle_rows(causal)[0]["used_for_primary_gate"] is False
