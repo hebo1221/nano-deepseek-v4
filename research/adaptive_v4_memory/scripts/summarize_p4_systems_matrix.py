@@ -13,18 +13,43 @@ import run_p4_systems_matrix as systems
 from summarize_p2_core_matrix import bootstrap_paired_mean
 
 METRICS = {
+    "ttft_p50_ms": lambda run: run["ttft_ms"]["p50_ms"],
     "ttft_p95_ms": lambda run: run["ttft_ms"]["p95_ms"],
+    "ttft_p99_ms": lambda run: run["ttft_ms"]["p99_ms"],
+    "tpot_p50_ms": lambda run: run["decode_step_ms"]["p50_ms"],
+    "tpot_p95_ms": lambda run: run["decode_step_ms"]["p95_ms"],
+    "tpot_p99_ms": lambda run: run["decode_step_ms"]["p99_ms"],
     "decode_step_p95_ms": lambda run: run["decode_step_ms"]["p95_ms"],
     "decode_step_p99_ms": lambda run: run["decode_step_ms"]["p99_ms"],
     "throughput_tokens_per_second": lambda run: run["generated_token_throughput_per_second"],
     "end_to_end_ms": lambda run: run["end_to_end_ms"],
+    "allocated_after_prefill_bytes": lambda run: run["cuda"][
+        "allocated_after_prefill_bytes"
+    ],
+    "reserved_after_prefill_bytes": lambda run: run["cuda"]["reserved_after_prefill_bytes"],
+    "fragmentation_after_prefill_bytes": lambda run: run["cuda"][
+        "fragmentation_after_prefill_bytes"
+    ],
+    "fragmentation_after_prefill_ratio": lambda run: run["cuda"][
+        "fragmentation_after_prefill_bytes"
+    ]
+    / max(run["cuda"]["reserved_after_prefill_bytes"], 1),
     "peak_allocated_bytes": lambda run: run["cuda"]["peak_allocated_bytes"],
     "peak_reserved_bytes": lambda run: run["cuda"]["peak_reserved_bytes"],
+    "logical_cache_bytes": lambda run: run["cache"]["logical_cache_bytes"],
     "hot_resident_bytes": lambda run: run["cache"]["hot_resident_bytes"],
+    "cold_resident_bytes": lambda run: run["cache"]["cold_resident_bytes"],
     "pinned_host_bytes": lambda run: run["cache"]["pinned_host_bytes"],
     "h2d_bytes": lambda run: run["cache"]["h2d_bytes"],
+    "d2h_bytes": lambda run: run["cache"]["d2h_bytes"],
+    "useful_h2d_bytes": lambda run: run["cache"]["useful_h2d_bytes"],
+    "h2d_count": lambda run: run["cache"]["h2d_count"],
+    "d2h_count": lambda run: run["cache"]["d2h_count"],
     "useful_h2d_ratio": lambda run: run["transfer"]["useful_h2d_ratio"],
     "late_misses": lambda run: run["cache"]["late_misses"],
+    "prefetches": lambda run: run["cache"]["prefetches"],
+    "evictions": lambda run: run["cache"]["evictions"],
+    "controller_time_ns": lambda run: run["controller_time_ns"],
     "indexer_time_ns": lambda run: run["untimed_indexer_probe"]["indexer_time_ns"],
 }
 

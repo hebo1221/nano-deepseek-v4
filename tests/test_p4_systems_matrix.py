@@ -98,6 +98,39 @@ def test_p4_audit_distribution_retains_run_level_tail() -> None:
     assert result["maximum"] == 31.0
 
 
+def test_reference_summary_reports_full_latency_memory_and_transfer_contract() -> None:
+    required = {
+        "ttft_p50_ms",
+        "ttft_p95_ms",
+        "ttft_p99_ms",
+        "tpot_p50_ms",
+        "tpot_p95_ms",
+        "tpot_p99_ms",
+        "end_to_end_ms",
+        "throughput_tokens_per_second",
+        "allocated_after_prefill_bytes",
+        "reserved_after_prefill_bytes",
+        "fragmentation_after_prefill_bytes",
+        "fragmentation_after_prefill_ratio",
+        "logical_cache_bytes",
+        "hot_resident_bytes",
+        "cold_resident_bytes",
+        "pinned_host_bytes",
+        "h2d_bytes",
+        "d2h_bytes",
+        "useful_h2d_bytes",
+        "h2d_count",
+        "d2h_count",
+        "late_misses",
+        "prefetches",
+        "evictions",
+        "controller_time_ns",
+        "indexer_time_ns",
+    }
+
+    assert required.issubset(summary.METRICS)
+
+
 def test_p4_partial_artifact_preserves_surviving_policy(tmp_path: Path) -> None:
     cell = systems.frozen_cells()[0]
     repetitions = [

@@ -42,10 +42,30 @@ def _p95(values: list[float]) -> float:
     return float(np.quantile(np.asarray(values, dtype=np.float64), 0.95))
 
 
+def _quantile(values: list[float], quantile: float) -> float:
+    return float(np.quantile(np.asarray(values, dtype=np.float64), quantile))
+
+
+def _fragmentation_bytes(run: dict[str, Any]) -> float:
+    cuda = run["cuda"]
+    return float(
+        max(cuda["reserved_after_prefill_bytes"] - cuda["allocated_after_prefill_bytes"], 0)
+    )
+
+
 METRICS: dict[str, Callable[[dict[str, Any]], float]] = {
+    "ttft_p50_ms": lambda run: _quantile(
+        _request_latency(run, "scheduler_received_ns", "first_token_ns"), 0.50
+    ),
     "ttft_p95_ms": lambda run: _p95(
         _request_latency(run, "scheduler_received_ns", "first_token_ns")
     ),
+    "ttft_p99_ms": lambda run: _quantile(
+        _request_latency(run, "scheduler_received_ns", "first_token_ns"), 0.99
+    ),
+    "tpot_p50_ms": lambda run: _quantile(run["decode_step_latency_ms"], 0.50),
+    "tpot_p95_ms": lambda run: _quantile(run["decode_step_latency_ms"], 0.95),
+    "tpot_p99_ms": lambda run: _quantile(run["decode_step_latency_ms"], 0.99),
     "decode_step_p95_ms": lambda run: _p95(run["decode_step_latency_ms"]),
     "decode_step_p99_ms": lambda run: float(
         np.quantile(np.asarray(run["decode_step_latency_ms"], dtype=np.float64), 0.99)
@@ -54,18 +74,44 @@ METRICS: dict[str, Callable[[dict[str, Any]], float]] = {
     "end_to_end_ms": lambda run: max(
         _request_latency(run, "scheduler_received_ns", "completed_ns")
     ),
+    "end_to_end_p50_ms": lambda run: _quantile(
+        _request_latency(run, "scheduler_received_ns", "completed_ns"), 0.50
+    ),
+    "end_to_end_p95_ms": lambda run: _quantile(
+        _request_latency(run, "scheduler_received_ns", "completed_ns"), 0.95
+    ),
+    "end_to_end_p99_ms": lambda run: _quantile(
+        _request_latency(run, "scheduler_received_ns", "completed_ns"), 0.99
+    ),
+    "allocated_after_prefill_bytes": lambda run: float(
+        run["cuda"]["allocated_after_prefill_bytes"]
+    ),
+    "reserved_after_prefill_bytes": lambda run: float(
+        run["cuda"]["reserved_after_prefill_bytes"]
+    ),
+    "fragmentation_after_prefill_bytes": _fragmentation_bytes,
+    "fragmentation_after_prefill_ratio": lambda run: _fragmentation_bytes(run)
+    / max(float(run["cuda"]["reserved_after_prefill_bytes"]), 1.0),
     "peak_allocated_bytes": lambda run: float(run["cuda"]["peak_allocated_bytes"]),
     "peak_reserved_bytes": lambda run: float(run["cuda"]["peak_reserved_bytes"]),
     "process_total_hbm_bytes": lambda run: float(run["cuda"]["process_total_hbm_bytes"]),
     "device_total_hbm_bytes": lambda run: float(run["cuda"]["device_total_hbm_bytes"]),
+    "logical_cache_bytes": lambda run: float(run["cache"]["logical_cache_bytes"]),
     "hot_resident_bytes": lambda run: float(run["cache"]["hot_resident_bytes"]),
+    "cold_resident_bytes": lambda run: float(run["cache"]["cold_resident_bytes"]),
     "pinned_host_bytes": lambda run: float(run["cache"]["pinned_host_bytes"]),
     "h2d_bytes": lambda run: float(run["transfer"]["h2d_bytes"]),
     "d2h_bytes": lambda run: float(run["transfer"]["d2h_bytes"]),
+    "useful_h2d_bytes": lambda run: float(run["transfer"]["useful_h2d_bytes"]),
+    "h2d_count": lambda run: float(run["transfer"]["h2d_count"]),
+    "d2h_count": lambda run: float(run["transfer"]["d2h_count"]),
     "useful_h2d_ratio": lambda run: (
         float(run["transfer"]["useful_h2d_bytes"]) / max(float(run["transfer"]["h2d_bytes"]), 1.0)
     ),
+    "misses": lambda run: float(run["transfer"]["misses"]),
     "late_misses": lambda run: float(run["transfer"]["late_misses"]),
+    "prefetches": lambda run: float(run["transfer"]["prefetches"]),
+    "evictions": lambda run: float(run["transfer"]["evictions"]),
     "controller_time_ns": lambda run: float(run["timing"]["controller_time_ns"]),
     "indexer_time_ns": lambda run: float(run["timing"]["indexer_time_ns"]),
 }

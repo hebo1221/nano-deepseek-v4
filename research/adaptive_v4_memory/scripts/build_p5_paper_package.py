@@ -382,6 +382,44 @@ def _p4_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return rows
 
 
+def _p4_metric_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for cell in [
+        *payload["complete_cell_statistics"],
+        *payload["partial_cell_statistics"],
+    ]:
+        coordinates = cell["cell"]
+        for metric, metric_payload in sorted(cell["metrics"].items()):
+            paired = metric_payload.get("tiered_minus_resident")
+            for policy in ("resident", "tiered"):
+                distribution_payload = metric_payload.get(policy)
+                if distribution_payload is None:
+                    continue
+                rows.append(
+                    {
+                        **coordinates,
+                        "active_requests": coordinates.get(
+                            "active_requests", coordinates.get("concurrency", "")
+                        ),
+                        "concurrency": coordinates.get("concurrency", ""),
+                        "status": cell["status"],
+                        "metric": metric,
+                        "policy": policy,
+                        **distribution_payload,
+                        "paired_observations": metric_payload["paired_observations"],
+                        "mean_ratio_tiered_over_resident": metric_payload.get(
+                            "mean_ratio_tiered_over_resident"
+                        ),
+                        "paired_tiered_minus_resident": (
+                            json.dumps(paired, sort_keys=True, separators=(",", ":"))
+                            if paired is not None
+                            else ""
+                        ),
+                    }
+                )
+    return rows
+
+
 def _p4_500k_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return [
         {
@@ -493,6 +531,9 @@ mechanical and deliberately narrower than the motivating hypothesis.
 - P4 production systems: {p4_production["terminal_cells"]} terminal actual-concurrency cells,
   {p4_production["complete_cells"]} complete, {p4_production["partial_cells"]} partial, and
   {p4_production["failed_cells"]} failed.
+  The long-form P4 metric tables retain run-level distributions (mean, standard deviation,
+  p50/p95/p99, minimum, and maximum) plus paired bootstrap effects for every registered
+  latency, throughput, HBM, fragmentation, cache, transfer, miss, and controller metric.
 
 ## Claim boundary
 
@@ -609,6 +650,39 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         output_root / "table-p4-production-system-cells.csv",
         p4_production,
         p4_fields,
+    )
+    p4_metric_fields = [
+        "scale",
+        "context",
+        "generation",
+        "profile",
+        "batch",
+        "active_requests",
+        "concurrency",
+        "status",
+        "metric",
+        "policy",
+        "observations",
+        "mean",
+        "sample_standard_deviation",
+        "p50",
+        "p95",
+        "p99",
+        "minimum",
+        "maximum",
+        "paired_observations",
+        "mean_ratio_tiered_over_resident",
+        "paired_tiered_minus_resident",
+    ]
+    _write_csv(
+        output_root / "table-p4-reference-system-metrics.csv",
+        _p4_metric_rows(loaded["p4_reference_systems"]),
+        p4_metric_fields,
+    )
+    _write_csv(
+        output_root / "table-p4-production-system-metrics.csv",
+        _p4_metric_rows(loaded["p4_production_systems"]),
+        p4_metric_fields,
     )
     report = _report(
         classifications=classes,

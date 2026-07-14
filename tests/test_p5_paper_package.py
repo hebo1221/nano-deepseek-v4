@@ -493,3 +493,53 @@ def test_p5_500k_table_reports_feasibility_without_latency() -> None:
     assert rows[1]["status"] == "oom"
     assert rows[0]["prediction_digest"] == "a" * 64
     assert "latency" not in rows[0]
+
+
+def test_p5_p4_long_metric_table_retains_tail_and_paired_statistics() -> None:
+    distribution = {
+        "observations": 30,
+        "mean": 2.0,
+        "sample_standard_deviation": 1.0,
+        "p50": 1.5,
+        "p95": 4.0,
+        "p99": 5.0,
+        "minimum": 1.0,
+        "maximum": 6.0,
+    }
+    rows = package._p4_metric_rows(
+        {
+            "complete_cell_statistics": [
+                {
+                    "cell": {
+                        "scale": "s55",
+                        "context": 8192,
+                        "generation": 128,
+                        "profile": "serving-b1-c1",
+                        "batch": 1,
+                        "concurrency": 1,
+                    },
+                    "status": "complete",
+                    "metrics": {
+                        "ttft_p99_ms": {
+                            "resident": distribution,
+                            "tiered": {**distribution, "mean": 1.8},
+                            "paired_observations": 30,
+                            "mean_ratio_tiered_over_resident": 0.9,
+                            "tiered_minus_resident": {
+                                "mean": -0.2,
+                                "ci95": [-0.3, -0.1],
+                            },
+                        }
+                    },
+                }
+            ],
+            "partial_cell_statistics": [],
+        }
+    )
+
+    assert len(rows) == 2
+    assert {row["policy"] for row in rows} == {"resident", "tiered"}
+    assert rows[0]["metric"] == "ttft_p99_ms"
+    assert rows[0]["p99"] == 5.0
+    assert rows[0]["paired_observations"] == 30
+    assert '"mean":-0.2' in rows[0]["paired_tiered_minus_resident"]

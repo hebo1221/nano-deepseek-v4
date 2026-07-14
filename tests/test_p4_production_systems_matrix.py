@@ -11,6 +11,7 @@ SCRIPTS = Path(__file__).resolve().parents[1] / "research/adaptive_v4_memory/scr
 sys.path.insert(0, str(SCRIPTS))
 
 import run_p4_production_systems_matrix as production  # noqa: E402
+import summarize_p4_production_systems_matrix as production_summary  # noqa: E402
 
 
 def _policy_run(cell: tuple[str, int, int, str, int, int], policy: str) -> dict[str, object]:
@@ -122,6 +123,42 @@ def test_production_matrix_has_full_batch_concurrency_factorial() -> None:
         (batch, concurrency) for batch in (1, 4, 8, 16) for concurrency in (1, 8, 32)
     }
     assert all(cell[3].startswith("serving-") for cell in cells)
+
+
+def test_production_summary_reports_full_latency_memory_and_transfer_contract() -> None:
+    required = {
+        "ttft_p50_ms",
+        "ttft_p95_ms",
+        "ttft_p99_ms",
+        "tpot_p50_ms",
+        "tpot_p95_ms",
+        "tpot_p99_ms",
+        "end_to_end_p50_ms",
+        "end_to_end_p95_ms",
+        "end_to_end_p99_ms",
+        "throughput_tokens_per_second",
+        "allocated_after_prefill_bytes",
+        "reserved_after_prefill_bytes",
+        "fragmentation_after_prefill_bytes",
+        "fragmentation_after_prefill_ratio",
+        "logical_cache_bytes",
+        "hot_resident_bytes",
+        "cold_resident_bytes",
+        "pinned_host_bytes",
+        "h2d_bytes",
+        "d2h_bytes",
+        "useful_h2d_bytes",
+        "h2d_count",
+        "d2h_count",
+        "misses",
+        "late_misses",
+        "prefetches",
+        "evictions",
+        "controller_time_ns",
+        "indexer_time_ns",
+    }
+
+    assert required.issubset(production_summary.METRICS)
 
 
 def test_production_adapter_requires_timestamp_proven_concurrency() -> None:
