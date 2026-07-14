@@ -26,9 +26,7 @@ FIXED = "memory-matched-fixed+pins"
 MAXIMUM_HBM_DIFFERENCE = 0.01
 MAXIMUM_WORST_SLICE_REGRESSION = -0.02
 _DIGEST_CACHE: dict[tuple[Path, int, int], str] = {}
-PARALLEL_RUNNER = Path(
-    "research/adaptive_v4_memory/scripts/run_p1_online_lookahead_parallel.py"
-)
+PARALLEL_RUNNER = Path("research/adaptive_v4_memory/scripts/run_p1_online_lookahead_parallel.py")
 
 
 def sha256(path: Path) -> str:
@@ -79,8 +77,7 @@ def _verify_checkpoint_reuse_audit(metadata: dict[str, Any]) -> int:
     _require(
         payload.get("experiment_id") == "p1-online-lookahead-checkpoint-reuse-audit-v1"
         and payload.get("source", {}).get("dirty") is False
-        and payload.get("source", {}).get("orchestrator_sha256")
-        == _cached_sha256(PARALLEL_RUNNER)
+        and payload.get("source", {}).get("orchestrator_sha256") == _cached_sha256(PARALLEL_RUNNER)
         and audit.get("scale_seed_probes") == 10
         and audit.get("all_label_rows_identical") is True
         and audit.get("all_test_records_identical") is True
@@ -102,8 +99,7 @@ def _verify_checkpoint_reuse_audit(metadata: dict[str, Any]) -> int:
             and probe_audit.get("test_records_identical") is True
             and probe_audit.get("controller_accounting_identical") is True
             and probe_audit.get("timing_fields_excluded") is True
-            and probe.get("implementation", {}).get("label")
-            == labels.implementation_digest()
+            and probe.get("implementation", {}).get("label") == labels.implementation_digest()
             and probe.get("implementation", {}).get("evaluation")
             == evaluator.implementation_digest()
             and probe.get("implementation", {}).get("orchestrator_sha256")

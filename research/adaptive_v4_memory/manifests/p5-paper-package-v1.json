@@ -181,6 +181,54 @@
       }
     }
   },
+  "execution_audits": {
+    "p2_core_parallel_equivalence": {
+      "path": "artifacts/adaptive_v4_memory/paper_grade/p2-core-parallel-equivalence.summary.json",
+      "experiment_id": "p2-core-parallel-equivalence-audit-v1",
+      "orchestrator": "research/adaptive_v4_memory/scripts/run_p2_core_parallel.py",
+      "required_probes": 3,
+      "coordinate_fields": ["training_seed", "family", "context", "replicate"],
+      "artifact_fields": ["canonical", "parallel_probe"],
+      "required_audit": {
+        "workers": 3,
+        "probe_shards": 3,
+        "all_records_identical": true,
+        "all_aggregates_identical": true,
+        "all_generation_seeds_identical": true
+      }
+    },
+    "p2_causal_parallel_equivalence": {
+      "path": "artifacts/adaptive_v4_memory/paper_grade/p2-causal-parallel-equivalence.summary.json",
+      "experiment_id": "p2-causal-parallel-equivalence-audit-v1",
+      "orchestrator": "research/adaptive_v4_memory/scripts/run_p2_causal_parallel.py",
+      "required_probes": 3,
+      "coordinate_fields": ["scale", "training_seed", "budget", "family", "context", "replicate"],
+      "artifact_fields": ["serial", "parallel"],
+      "required_audit": {
+        "workers": 3,
+        "probe_shards": 3,
+        "all_quality_records_identical": true,
+        "all_controller_accounting_identical": true,
+        "all_physical_accounting_identical": true,
+        "timing_fields_excluded": true
+      }
+    },
+    "p1_online_checkpoint_reuse": {
+      "path": "artifacts/adaptive_v4_memory/paper_grade/p1-online-lookahead-reuse.summary.json",
+      "experiment_id": "p1-online-lookahead-checkpoint-reuse-audit-v1",
+      "orchestrator": "research/adaptive_v4_memory/scripts/run_p1_online_lookahead_parallel.py",
+      "required_probes": 10,
+      "coordinate_fields": ["scale", "training_seed"],
+      "child_experiment_id": "p1-online-lookahead-checkpoint-reuse-probe-v1",
+      "child_artifacts": 4,
+      "required_audit": {
+        "scale_seed_probes": 10,
+        "all_label_rows_identical": true,
+        "all_test_records_identical": true,
+        "all_controller_accounting_identical": true
+      }
+    }
+  },
   "boundary_manifests": {
     "paper_grade_study": "research/adaptive_v4_memory/manifests/paper-grade-study-v1.json",
     "experiment_scale_audit": "research/adaptive_v4_memory/manifests/experiment-scale-audit-v1.json",

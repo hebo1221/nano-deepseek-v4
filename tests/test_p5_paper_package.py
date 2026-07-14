@@ -172,6 +172,14 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
         "p4_reference_systems",
         "p4_production_systems",
     }
+    assert set(manifest["execution_audits"]) == {
+        "p2_core_parallel_equivalence",
+        "p2_causal_parallel_equivalence",
+        "p1_online_checkpoint_reuse",
+    }
+    assert manifest["execution_audits"]["p2_core_parallel_equivalence"]["required_probes"] == 3
+    assert manifest["execution_audits"]["p2_causal_parallel_equivalence"]["required_probes"] == 3
+    assert manifest["execution_audits"]["p1_online_checkpoint_reuse"]["required_probes"] == 10
     assert manifest["evidence"]["p2_core"]["required_audit"]["unique_shards"] == 4500
     assert (
         manifest["evidence"]["p1_online_learned_lookahead"]["required_audit"][
@@ -247,12 +255,53 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
     }.issubset(manifest["generated_files"])
 
 
+def test_p5_execution_audit_binds_probe_artifacts(tmp_path: Path) -> None:
+    orchestrator = tmp_path / "runner.py"
+    orchestrator.write_text("# frozen runner\n")
+    raw_paths = []
+    for name in ("serial.json", "parallel.json"):
+        raw = tmp_path / name
+        raw.write_text(json.dumps({"records": [1, 2, 3]}))
+        raw_paths.append(raw)
+    payload = {
+        "experiment_id": "parallel-audit-v1",
+        "source": {
+            "dirty": False,
+            "orchestrator_sha256": package.sha256(orchestrator),
+        },
+        "audit": {"probe_shards": 1, "all_records_identical": True},
+        "probes": [
+            {
+                "scale": "s55",
+                "training_seed": 1,
+                "serial": {"path": str(raw_paths[0]), "sha256": package.sha256(raw_paths[0])},
+                "parallel": {
+                    "path": str(raw_paths[1]),
+                    "sha256": package.sha256(raw_paths[1]),
+                },
+            }
+        ],
+    }
+    audit_path = tmp_path / "audit.json"
+    audit_path.write_text(json.dumps(payload))
+    contract = {
+        "experiment_id": "parallel-audit-v1",
+        "orchestrator": str(orchestrator),
+        "required_probes": 1,
+        "coordinate_fields": ["scale", "training_seed"],
+        "artifact_fields": ["serial", "parallel"],
+        "required_audit": {"probe_shards": 1, "all_records_identical": True},
+    }
+
+    package._validate_execution_audit("parallel", audit_path, contract)
+    raw_paths[1].write_text(json.dumps({"records": [9]}))
+    with pytest.raises(ValueError, match="Digest mismatch"):
+        package._validate_execution_audit("parallel", audit_path, contract)
+
+
 def test_official_v4_boundary_validation_fails_closed(tmp_path: Path) -> None:
     root = Path(__file__).resolve().parents[1]
-    source = (
-        root
-        / "research/adaptive_v4_memory/manifests/p3-flashmemory-deepseek-v4-v1.json"
-    )
+    source = root / "research/adaptive_v4_memory/manifests/p3-flashmemory-deepseek-v4-v1.json"
     payload = json.loads(source.read_text())
     package._validate_boundary_manifest("official_deepseek_v4", source)
 
@@ -267,10 +316,7 @@ def test_production_runtime_boundary_validation_rejects_relabeling(
     tmp_path: Path,
 ) -> None:
     root = Path(__file__).resolve().parents[1]
-    source = (
-        root
-        / "research/adaptive_v4_memory/manifests/p4-production-resource-blocker-v1.json"
-    )
+    source = root / "research/adaptive_v4_memory/manifests/p4-production-resource-blocker-v1.json"
     payload = json.loads(source.read_text())
     package._validate_boundary_manifest("production_runtime_blocker", source)
 

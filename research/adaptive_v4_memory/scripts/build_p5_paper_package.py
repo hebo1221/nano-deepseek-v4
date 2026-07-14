@@ -99,13 +99,8 @@ def _validate_boundary_manifest(name: str, path: Path) -> dict[str, Any]:
             "Official DeepSeek-V4 hard blockers are incomplete.",
         )
         _require(
-            verification.get("serving_checkpoint", {}).get("current_status")
-            == "unavailable"
-            and len(
-                verification.get("serving_checkpoint", {}).get(
-                    "required_before_execution", []
-                )
-            )
+            verification.get("serving_checkpoint", {}).get("current_status") == "unavailable"
+            and len(verification.get("serving_checkpoint", {}).get("required_before_execution", []))
             >= 4,
             "Official DeepSeek-V4 checkpoint verification contract is incomplete.",
         )
@@ -163,6 +158,64 @@ def _validate_evidence(name: str, path: Path, contract: dict[str, Any]) -> dict[
     audit = payload.get("audit", {})
     for field, expected in contract["required_audit"].items():
         _require(audit.get(field) == expected, f"{name} audit field {field} drifted.")
+    return payload
+
+
+def _bound_artifact(metadata: Any, label: str) -> Path:
+    _require(isinstance(metadata, dict), f"Missing {label} metadata.")
+    path = Path(metadata.get("path", ""))
+    _require(path.is_file(), f"Missing {label}: {path}")
+    _require(metadata.get("sha256") == sha256(path), f"Digest mismatch for {label}: {path}")
+    return path
+
+
+def _validate_execution_audit(name: str, path: Path, contract: dict[str, Any]) -> dict[str, Any]:
+    payload = _validate_evidence(name, path, contract)
+    orchestrator = Path(contract["orchestrator"])
+    _require(orchestrator.is_file(), f"Missing {name} orchestrator: {orchestrator}")
+    _require(
+        payload.get("source", {}).get("orchestrator_sha256") == sha256(orchestrator),
+        f"{name} orchestrator digest drifted.",
+    )
+    probes = payload.get("probes")
+    _require(
+        isinstance(probes, list) and len(probes) == contract["required_probes"],
+        f"{name} probe coverage drifted.",
+    )
+    coordinates: set[tuple[Any, ...]] = set()
+    for index, probe_metadata in enumerate(cast(list[Any], probes)):
+        _require(isinstance(probe_metadata, dict), f"Malformed {name} probe {index}.")
+        probe = probe_metadata
+        child_experiment_id = contract.get("child_experiment_id")
+        if child_experiment_id is not None:
+            child_path = _bound_artifact(probe_metadata, f"{name} probe {index}")
+            probe = _load(child_path)
+            _require(
+                probe.get("experiment_id") == child_experiment_id,
+                f"Wrong {name} child experiment id: {child_path}",
+            )
+            child_artifacts = probe.get("artifacts")
+            _require(
+                isinstance(child_artifacts, list)
+                and len(child_artifacts) == contract["child_artifacts"],
+                f"{name} child artifact coverage drifted: {child_path}",
+            )
+            for child_index, artifact in enumerate(cast(list[Any], child_artifacts)):
+                _bound_artifact(
+                    artifact,
+                    f"{name} child artifact {index}/{child_index}",
+                )
+        coordinate = tuple(probe.get(field) for field in contract["coordinate_fields"])
+        _require(
+            all(value is not None for value in coordinate) and coordinate not in coordinates,
+            f"{name} probe coordinate coverage drifted: {coordinate}",
+        )
+        coordinates.add(coordinate)
+        for artifact_field in contract.get("artifact_fields", []):
+            _bound_artifact(
+                probe.get(artifact_field),
+                f"{name} {artifact_field} artifact {coordinate}",
+            )
     return payload
 
 
@@ -441,8 +494,8 @@ def _write_interval_svg(
             f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
             f'viewBox="0 0 {width} {height}" role="img" aria-labelledby="title desc">'
         ),
-        f"<title id=\"title\">{html.escape(title)}</title>",
-        f"<desc id=\"desc\">{html.escape(subtitle)}</desc>",
+        f'<title id="title">{html.escape(title)}</title>',
+        f'<desc id="desc">{html.escape(subtitle)}</desc>',
         f"<metadata>{html.escape(json.dumps(metadata, sort_keys=True))}</metadata>",
         f'<rect width="{width}" height="{height}" fill="#ffffff"/>',
         (
@@ -494,7 +547,7 @@ def _write_interval_svg(
                 (
                     f'<text x="{width - right + 12}" y="{y + 5}" font-family="monospace" '
                     f'font-size="11" fill="#253247">{float(row["value"]):+.2f} '
-                    f'[{float(row["lower"]):+.2f}, {float(row["upper"]):+.2f}]</text>'
+                    f"[{float(row['lower']):+.2f}, {float(row['upper']):+.2f}]</text>"
                 ),
             ]
         )
@@ -515,7 +568,7 @@ def _write_p2_causal_figure(path: Path, payload: dict[str, Any]) -> None:
         interval = cell["four_cell_corrected_bootstrap"]["confidence_interval"]
         rows.append(
             {
-                "label": f'{cell["scale"]} · {cell["budget"]}',
+                "label": f"{cell['scale']} · {cell['budget']}",
                 "value": float(cell["mean_difference_percentage_points"]),
                 "lower": float(interval[0]) * 100.0,
                 "upper": float(interval[1]) * 100.0,
@@ -550,9 +603,7 @@ def _write_p4_tradeoff_figure(path: Path, payload: dict[str, Any]) -> None:
     for cell in measured_cells:
         context = int(cell["cell"]["context"])
         for metric in metric_labels:
-            ratio = cell.get("metrics", {}).get(metric, {}).get(
-                "mean_ratio_tiered_over_resident"
-            )
+            ratio = cell.get("metrics", {}).get(metric, {}).get("mean_ratio_tiered_over_resident")
             if (
                 isinstance(ratio, (int, float))
                 and not isinstance(ratio, bool)
@@ -576,9 +627,9 @@ def _write_p4_tradeoff_figure(path: Path, payload: dict[str, Any]) -> None:
         path,
         title="Production adapter trade-offs across measured cells",
         subtitle=(
-            f'tiered relative to resident; mean and range; terminal cells: {audit["terminal_cells"]}, '
-            f'complete: {audit["complete_cells"]}, partial: {audit["partial_cells"]}, '
-            f'failed: {audit["failed_cells"]}'
+            f"tiered relative to resident; mean and range; terminal cells: {audit['terminal_cells']}, "
+            f"complete: {audit['complete_cells']}, partial: {audit['partial_cells']}, "
+            f"failed: {audit['failed_cells']}"
         ),
         x_label="tiered over resident change (%)",
         rows=rows,
@@ -692,14 +743,10 @@ def _p3_natural_arm_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
                         scored["peak_hbm_bytes"]["p95"] if scored["peak_hbm_bytes"] else ""
                     ),
                     "scored_hot_resident_bytes_mean": (
-                        scored["hot_resident_bytes"]["mean"]
-                        if scored["hot_resident_bytes"]
-                        else ""
+                        scored["hot_resident_bytes"]["mean"] if scored["hot_resident_bytes"] else ""
                     ),
                     "scored_hot_resident_bytes_p95": (
-                        scored["hot_resident_bytes"]["p95"]
-                        if scored["hot_resident_bytes"]
-                        else ""
+                        scored["hot_resident_bytes"]["p95"] if scored["hot_resident_bytes"] else ""
                     ),
                 }
             )
@@ -757,15 +804,11 @@ def _p3_natural_contrast_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
                 "peak_hbm_mean_paired_difference": measurements["peak_hbm_bytes"][
                     "mean_paired_difference"
                 ],
-                "peak_hbm_ratio_of_means": measurements["peak_hbm_bytes"][
-                    "ratio_of_means"
+                "peak_hbm_ratio_of_means": measurements["peak_hbm_bytes"]["ratio_of_means"],
+                "hot_resident_mean_paired_difference": measurements["hot_resident_bytes"][
+                    "mean_paired_difference"
                 ],
-                "hot_resident_mean_paired_difference": measurements[
-                    "hot_resident_bytes"
-                ]["mean_paired_difference"],
-                "hot_resident_ratio_of_means": measurements["hot_resident_bytes"][
-                    "ratio_of_means"
-                ],
+                "hot_resident_ratio_of_means": measurements["hot_resident_bytes"]["ratio_of_means"],
             }
         )
     return rows
@@ -938,6 +981,12 @@ def _report(
     evidence_lines = "\n".join(
         f"| {row['name']} | {classifications.get(row['name'], 'unverified')} | `{row['sha256']}` |"
         for row in inputs
+        if row.get("kind") != "execution-audit"
+    )
+    execution_lines = "\n".join(
+        f"| {row['name']} | verified | `{row['sha256']}` |"
+        for row in inputs
+        if row.get("kind") == "execution-audit"
     )
     return f"""# Adaptive V4 Memory: paper-grade empirical report
 
@@ -949,6 +998,15 @@ mechanical and deliberately narrower than the motivating hypothesis.
 | Evidence | Classification | SHA-256 |
 |---|---|---|
 {evidence_lines}
+
+## Execution integrity ledger
+
+| Audit | Status | SHA-256 |
+|---|---|---|
+{execution_lines}
+
+These audits bind the serial/parallel equivalence probes and their raw child artifacts.
+They validate execution semantics and do not receive a scientific conclusion class.
 
 ## Experiment volume
 
@@ -1059,6 +1117,17 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         path = Path(contract["path"])
         loaded[name] = _validate_evidence(name, path, contract)
         inputs.append({"name": name, "path": str(path), "sha256": sha256(path)})
+    for name, contract in manifest["execution_audits"].items():
+        path = Path(contract["path"])
+        _validate_execution_audit(name, path, contract)
+        inputs.append(
+            {
+                "name": name,
+                "kind": "execution-audit",
+                "path": str(path),
+                "sha256": sha256(path),
+            }
+        )
     _require(
         set(manifest["boundary_manifests"]) == set(BOUNDARY_EXPERIMENT_IDS),
         "P5 boundary manifest set drifted.",
@@ -1086,7 +1155,9 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
     )
     output_root.mkdir(parents=True, exist_ok=True)
     evidence_rows = [
-        {**row, "classification": classes.get(row["name"], "unverified")} for row in inputs
+        {**row, "classification": classes.get(row["name"], "unverified")}
+        for row in inputs
+        if row.get("kind") != "execution-audit"
     ]
     _write_csv(
         output_root / "table-evidence.csv",
@@ -1192,12 +1263,8 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         _p4_metric_rows(loaded["p4_production_systems"]),
         p4_metric_fields,
     )
-    _write_p2_causal_figure(
-        output_root / "figure-p2-causal-effect.svg", loaded["p2_causal"]
-    )
-    _write_p3_natural_figure(
-        output_root / "figure-p3-natural-quality.svg", loaded["p3_natural"]
-    )
+    _write_p2_causal_figure(output_root / "figure-p2-causal-effect.svg", loaded["p2_causal"])
+    _write_p3_natural_figure(output_root / "figure-p3-natural-quality.svg", loaded["p3_natural"])
     _write_p4_tradeoff_figure(
         output_root / "figure-p4-production-tradeoffs.svg",
         loaded["p4_production_systems"],
