@@ -379,6 +379,7 @@ def test_p5_500k_table_reports_feasibility_without_latency() -> None:
                     "policy_attempts": {
                         "resident-native": {
                             "status": "success",
+                            "prediction_digest": "a" * 64,
                             "peak_allocated_bytes": 123,
                             "pinned_host_bytes": 0,
                             "error_type": None,
@@ -400,4 +401,5 @@ def test_p5_500k_table_reports_feasibility_without_latency() -> None:
     assert len(rows) == 2
     assert rows[0]["context_tokens"] == 500_000
     assert rows[1]["status"] == "oom"
+    assert rows[0]["prediction_digest"] == "a" * 64
     assert "latency" not in rows[0]

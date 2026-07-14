@@ -321,6 +321,7 @@ def _p4_500k_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
             "context_tokens": payload["audit"]["context_tokens"],
             "generation_tokens": payload["audit"]["generation_tokens"],
             "status": attempt["status"],
+            "prediction_digest": attempt.get("prediction_digest"),
             "peak_allocated_bytes": attempt.get("peak_allocated_bytes"),
             "pinned_host_bytes": attempt.get("pinned_host_bytes"),
             "error_type": attempt.get("error_type"),
@@ -351,6 +352,7 @@ def _report(
 ) -> str:
     causal = p2_causal["primary_causal_gate"]
     p4_500k = p4_500k_context["audit"]
+    p4_500k_correctness = p4_500k_context["correctness"]
     p4_reference = p4_reference_systems["audit"]
     p4_production = p4_production_systems["audit"]
     evidence_lines = "\n".join(
@@ -408,7 +410,9 @@ mechanical and deliberately narrower than the motivating hypothesis.
 - P4 500K feasibility: {p4_500k["terminal_policy_attempts"]} terminal scale-policy
   attempts, {p4_500k["successful_policy_attempts"]} successful and
   {p4_500k["failed_policy_attempts"]} failed. This single-attempt preflight carries
-  no performance claim.
+  no performance claim; {p4_500k_correctness["scales_with_both_policies_successful"]}
+  paired-success scales had prediction equality
+  **{p4_500k_correctness["all_successful_pair_predictions_identical"]}**.
 - P4 reference systems: {p4_reference["terminal_cells"]} terminal serial-interleaved cells,
   {p4_reference["complete_cells"]} complete, {p4_reference["partial_cells"]} partial, and
   {p4_reference["failed_cells"]} failed.
