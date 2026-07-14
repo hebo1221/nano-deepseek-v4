@@ -206,6 +206,11 @@ still measured and the cell is reported as partial instead of being discarded.
 Its c8/c32 profiles are serial round-robin active-request probes, not actual
 concurrent serving; they remain bounded reference evidence even at 216/216.
 
+Before that matrix, `p4-500k-context-preflight-v1.json` separately attempts a
+500,000-token prefill plus 128-token decode on S55/S151 for resident-native and
+tiered-native. It has one attempt per scale-policy, preserves OOM/timeout/error
+outcomes, and is feasibility evidence only—not a latency or throughput result.
+
 The separate P4 production manifest freezes another 216 cells behind an
 external serving-adapter contract. Its c8/c32 cells pass only when raw request
 admission, first-token, and completion timestamps reconstruct the requested
@@ -233,7 +238,7 @@ After all audits finish, the strict P5 package can be regenerated with:
 The command requires a clean tree and complete 4,500-shard P2 core,
 9,000-shard causal, 253,500-prediction small-model RULER, five-benchmark natural,
 3,600-prediction safety-retention, 7,254-generation natural-safety, 216-cell
-reference-system, and separate
+reference-system, four terminal 500K feasibility attempts, and separate
 216-cell actual-concurrency production audits. It writes digest-indexed CSV
 tables and a paper-style report under
 `artifacts/adaptive_v4_memory/paper_grade/p5/`; missing evidence is never

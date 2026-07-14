@@ -286,6 +286,13 @@ misses, controller time, indexer time, and total device HBM at process and
 system level. OOM, timeout, numerical failure, late transfer, and tail-latency
 outliers are retained in an explicit tail-failure table.
 
+The repeated Cartesian matrices cover 8K, 32K, and 128K. The optional 500K
+condition is a separate feasibility preflight: S55 and S151 each attempt one
+500,000-token prefill plus 128-token decode for resident-native and tiered-native
+at batch 1 and one active request. Success, OOM, timeout, and other errors are all
+terminal evidence. With one attempt per scale-policy it cannot support latency,
+throughput, tail, variance, or production-serving claims.
+
 Reference PyTorch and fused production runtimes are separate result tables.
 Projected kernel speedups are never mixed with measured results.
 
