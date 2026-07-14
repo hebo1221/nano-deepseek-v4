@@ -12,6 +12,7 @@ import pytest
 SCRIPTS = Path(__file__).resolve().parents[1] / "research/adaptive_v4_memory/scripts"
 sys.path.insert(0, str(SCRIPTS))
 
+import prepare_p3_natural_sources as sources  # noqa: E402
 from prepare_p3_natural_sources import (  # noqa: E402
     PREFETCH_SCOPE,
     acquire_or_verify_source,
@@ -129,3 +130,67 @@ def test_source_prefetch_requires_the_exact_preregistered_amendment() -> None:
     manifest["amendments"] = []
     with pytest.raises(ValueError, match="prefetch amendment"):
         require_prefetch_authorization(manifest)
+
+
+def test_final_source_inventory_verifies_gate_before_reusing_prefetch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "amendments": [
+                    {
+                        "date": "2026-07-14",
+                        "change": sources.PREFETCH_AMENDMENT,
+                        "reason": "test",
+                    }
+                ],
+                "benchmarks": {"SCBench": {"upstream_code": {"revision": "a" * 40}}},
+            }
+        )
+    )
+    prefetch_root = tmp_path / "prefetch"
+    (prefetch_root / "scbench").mkdir(parents=True)
+    events: list[str] = []
+    written: dict[str, object] = {}
+    monkeypatch.setattr(sources, "validate_manifest", lambda _manifest: {"valid": True})
+    monkeypatch.setattr(sources, "workspace_source", lambda: {"commit": "b" * 40, "dirty": False})
+    monkeypatch.setattr(
+        sources,
+        "require_p3_sequence_gate",
+        lambda _matrix, _causal: events.append("gate") or {"passed": True},
+    )
+    monkeypatch.setattr(
+        sources,
+        "acquire_or_verify_source",
+        lambda destination, _contract: events.append("verify")
+        or {"path": str(destination), "revision": "a" * 40},
+    )
+    monkeypatch.setattr(
+        sources,
+        "atomic_json",
+        lambda path, payload: written.update({"path": path, "payload": payload}),
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "prepare_p3_natural_sources.py",
+            "--manifest",
+            str(manifest_path),
+            "--benchmark",
+            "SCBench",
+            "--prefetch-root",
+            str(prefetch_root),
+            "--output-root",
+            str(tmp_path / "output"),
+        ],
+    )
+
+    sources.main()
+
+    assert events == ["gate", "verify"]
+    payload = written["payload"]
+    assert isinstance(payload, dict)
+    assert payload["prefetch_reuse"]["verified_again_after_sequence_gate"] is True

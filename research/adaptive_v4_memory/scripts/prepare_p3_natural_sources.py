@@ -194,18 +194,13 @@ def main() -> None:
         raise RuntimeError("Natural source acquisition requires a clean experiment source tree.")
     selected = tuple(args.benchmark or BENCHMARKS)
 
-    inventories: dict[str, Any] = {}
-    for benchmark in selected:
-        contract = manifest["benchmarks"][benchmark]["upstream_code"]
-        relative = benchmark.lower().replace("-", "_")
-        prefetched = args.prefetch_root / relative
-        if args.prefetch_only or prefetched.exists():
-            destination = prefetched
-        else:
-            destination = args.output_root / relative
-        inventories[benchmark] = acquire_or_verify_source(destination, contract)
-
     if args.prefetch_only:
+        inventories = {}
+        for benchmark in selected:
+            contract = manifest["benchmarks"][benchmark]["upstream_code"]
+            relative = benchmark.lower().replace("-", "_")
+            destination = args.prefetch_root / relative
+            inventories[benchmark] = acquire_or_verify_source(destination, contract)
         payload = {
             "schema_version": 1,
             "experiment_id": "p3-natural-source-prefetch-v1",
@@ -239,6 +234,25 @@ def main() -> None:
         return
 
     sequence_gate = require_p3_sequence_gate(args.p2_matrix, args.causal_gate)
+    inventories = {}
+    reused_prefetch: list[str] = []
+    for benchmark in selected:
+        contract = manifest["benchmarks"][benchmark]["upstream_code"]
+        relative = benchmark.lower().replace("-", "_")
+        prefetched = args.prefetch_root / relative
+        if prefetched.exists():
+            destination = prefetched
+            reused_prefetch.append(benchmark)
+        else:
+            destination = args.output_root / relative
+        inventories[benchmark] = acquire_or_verify_source(destination, contract)
+
+    prefetch_inventory = args.prefetch_root / "prefetch-inventory.json"
+    prefetch_inventory_metadata = (
+        {"path": str(prefetch_inventory.resolve()), "sha256": sha256(prefetch_inventory)}
+        if prefetch_inventory.is_file()
+        else None
+    )
 
     payload = {
         "schema_version": 1,
@@ -254,7 +268,11 @@ def main() -> None:
         "prefetch_reuse": {
             "root": str(args.prefetch_root.resolve()),
             "manifest_amendment": prefetch_authorization,
-            "verified_again_after_sequence_gate": True,
+            "selected_benchmarks": list(selected),
+            "reused_benchmarks": reused_prefetch,
+            "all_selected_benchmarks_reused": len(reused_prefetch) == len(selected),
+            "verified_again_after_sequence_gate": bool(reused_prefetch),
+            "prefetch_inventory": prefetch_inventory_metadata,
         },
         "implementation_sha256": sha256(Path(__file__)),
         "benchmarks": inventories,
