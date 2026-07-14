@@ -12,6 +12,7 @@ import pytest
 SCRIPTS = Path(__file__).resolve().parents[1] / "research/adaptive_v4_memory/scripts"
 sys.path.insert(0, str(SCRIPTS))
 
+import summarize_p3_longsafety as longsafety  # noqa: E402
 from summarize_p3_longsafety import audit_arm  # noqa: E402
 
 RUNNER_PATH = "research/adaptive_v4_memory/scripts/run_p3_natural_safety_generation.py"
@@ -42,11 +43,20 @@ def _fixture(tmp_path: Path) -> tuple[Path, dict[str, Any], str]:
             "snapshot_digest_set_sha256": "a" * 64,
         },
         "statistics": {"generation_seed": 9_171_402},
+        "failure_accounting": ["oom", "runtime-error"],
         "benchmarks": {
             "LongSafety": {
                 "dataset": {"revision": "dataset-revision"},
                 "upstream_code": {"revision": "code-revision"},
-                "prompt_protocol": {"generation_max_new_tokens": 2048},
+                "prompt_protocol": {
+                    "generation_max_new_tokens": 2048,
+                    "expected_rows": 1,
+                    "expected_predictions_per_arm": 2,
+                },
+                "judge": {
+                    "official_default_model": "gpt-4o-2024-08-06",
+                    "agents": 4,
+                },
             }
         },
     }
@@ -145,6 +155,56 @@ def test_longsafety_arm_audit_binds_terminal_records(tmp_path: Path) -> None:
     assert result["generated"] == 2
     assert result["source_examples"] == 1
     assert set(records) == {"longsafety:7:front", "longsafety:7:end"}
+
+
+def test_longsafety_summary_preserves_blocked_judge_boundary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    native, _manifest, _manifest_digest = _fixture(tmp_path)
+    native_cell = json.loads(native.read_text())
+    fixed_root = tmp_path / "fixed"
+    fixed_root.mkdir()
+    native_records_path = Path(native_cell["raw_records"]["path"])
+    fixed_records = [
+        json.loads(line) for line in native_records_path.read_text().splitlines()
+    ]
+    fixed_config = {"press_name": "snapkv", "compression_ratio": 0.5}
+    for record in fixed_records:
+        record["arm"] = "strongest-memory-matched-fixed"
+        record["arm_config"] = fixed_config
+    fixed_records_path = fixed_root / "records.jsonl"
+    fixed_records_path.write_text(
+        "".join(json.dumps(record) + "\n" for record in fixed_records)
+    )
+    fixed_cell = dict(native_cell)
+    fixed_cell["arm"] = "strongest-memory-matched-fixed"
+    fixed_cell["run_identity"] = {
+        **native_cell["run_identity"],
+        "arm_config": fixed_config,
+    }
+    fixed_cell["raw_records"] = {
+        "path": str(fixed_records_path),
+        "sha256": _digest(fixed_records_path),
+    }
+    fixed_path = fixed_root / "cell.json"
+    fixed_path.write_text(json.dumps(fixed_cell))
+    manifest_path = Path(native_cell["manifest"]["path"])
+    monkeypatch.setattr(longsafety, "validate_manifest", lambda _manifest: {"test": True})
+
+    result = longsafety.summarize(
+        manifest_path,
+        {
+            "native-dense": native,
+            "strongest-memory-matched-fixed": fixed_path,
+        },
+    )
+
+    assert result["audit"]["dependency_digests_verified"] is True
+    assert result["audit"]["record_revisions_verified"] is True
+    assert result["audit"]["terminal_measurement_schema_verified"] is True
+    assert result["audit"]["generation_seed_verified"] is True
+    assert result["official_judge"]["status"] == "blocked"
+    assert result["official_judge"]["safety_scores_reported"] is False
 
 
 @pytest.mark.parametrize(
