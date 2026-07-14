@@ -162,6 +162,17 @@ fixed-policy floor, and protected end positions are inherited by the physical
 tier store. This is still calibration-only evidence: held-out quality was not
 inspected. See the checked five-seed calibration report and summary.
 
+The first paired held-out pilot now covers all nine families and five contexts
+on S55 seed 6071401 with 13 policies. Hierarchical calibration versus fixed was
++2.32 pp at 1x, -0.18 pp at 2x, and +0.18 pp at 4x over 560 queries. The 1x
+recoveries occurred entirely on instruction persistence, despite an identical
+uniform quota, so a protected-pin ablation is required before attribution.
+Dense fallback changed no correctness outcome while increasing H2D traffic;
+it is an ablation negative result, not a core full-matrix arm. Every policy,
+including native, failed the irrelevant-local slice. These are directional
+single-checkpoint findings only; see the checked held-out pilot report and
+digest-bound paired analysis.
+
 ## P2 training matrix
 
 The preregistered 5-seed × 2-scale Tier-S training matrix is complete. All ten
