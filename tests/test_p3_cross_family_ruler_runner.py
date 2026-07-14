@@ -109,3 +109,56 @@ def test_cross_family_partial_resume_binds_identity(tmp_path: Path) -> None:
     progress.write_text(json.dumps({"manifest_sha256": "b" * 64}))
     with pytest.raises(ValueError, match="provenance drifted"):
         runner._existing_records(progress, partial, identity)
+
+
+def test_cross_family_adaptive_arm_reuses_qwen_selection_without_phi_tuning() -> None:
+    selection = {
+        "candidates": [
+            {
+                "arm": arm,
+                "compression_ratio": 0.5,
+                "row_weighted_mean_accuracy": score,
+            }
+            for arm, score in (
+                ("streaming_llm", 0.60),
+                ("snapkv", 0.70),
+                ("critical_expected_attention", 0.65),
+            )
+        ]
+    }
+
+    fixed = runner.adaptive_quota_arm_config("fixed+pins", selection, "a" * 64)
+    adaptive = runner.adaptive_quota_arm_config(
+        "cross-family-adaptive-quota+pins", selection, "a" * 64
+    )
+
+    assert fixed["press_name"] == adaptive["press_name"] == "snapkv"
+    assert fixed["quota_policy"] == "fixed-per-layer"
+    assert adaptive["quota_policy"] == "causal-adaptive"
+    assert adaptive["max_adjustment_fraction"] == 0.25
+    assert adaptive["phi_specific_reselection"] is False
+
+
+def test_cross_family_adaptive_sequence_gate_requires_terminal_qwen_audit(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "qwen-adaptive.json"
+    payload = {
+        "experiment_id": "p3-natural-adaptive-quota-ruler-audit-v1",
+        "status": "terminal",
+        "audit": {
+            "total_predictions": 65_000,
+            "paired_examples": 32_500,
+            "all_raw_records_verified": True,
+            "quota_physical_audits_verified": True,
+            "outcome_dependent_execution": False,
+        },
+    }
+    path.write_text(json.dumps(payload))
+
+    assert runner.require_qwen_adaptive_audit(path) == payload
+
+    payload["audit"]["outcome_dependent_execution"] = True
+    path.write_text(json.dumps(payload))
+    with pytest.raises(ValueError, match="terminal Qwen adaptive audit"):
+        runner.require_qwen_adaptive_audit(path)

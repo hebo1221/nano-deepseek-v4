@@ -23,7 +23,7 @@ from prepare_p3_cross_family_ruler_dataset import (
     TASKS,
 )
 from run_p3_mrcr import atomic_json, failure_record, infer_one, runtime_environment
-from run_p3_natural_ruler import rendered_input
+from run_p3_natural_ruler import rendered_input, select_score_compatible_baseline
 from run_p3_ruler_matrix import (
     KVPRESS_REVISION,
     example_score,
@@ -32,15 +32,26 @@ from run_p3_ruler_matrix import (
     load_dataset,
     load_evaluator,
 )
+from validate_p3_cross_family_adaptive_quota_manifest import (
+    validate_manifest as validate_adaptive_manifest,
+)
 from validate_p3_cross_family_ruler_manifest import validate_manifest
 from verify_p3_natural_model import sha256, verify_snapshot
 
 BENCHMARK = "RULER"
 ARMS = ("native-dense", "qwen-selected-memory-matched")
+ADAPTIVE_QUOTA_ARMS = ("fixed+pins", "cross-family-adaptive-quota+pins")
 EXPECTED_EXAMPLES = len(LENGTHS) * EXPECTED_ROWS_PER_LENGTH
 CELL_EXPERIMENT_ID = "p3-cross-family-ruler-arm-cell-v1"
 OFFICIAL_SCORER_PATH = Path("evaluation/benchmarks/ruler/calculate_metrics.py")
 OFFICIAL_SCORER_SHA256 = "1df51402a394b1348f14d96e1fe87b1a4aff10f619f81f80f8840d8e0118fc9b"
+DEFAULT_OUTPUT_ROOT = Path(
+    "artifacts/adaptive_v4_memory/paper_grade/p3/cross-family/phi4-mini-ruler/results"
+)
+ADAPTIVE_OUTPUT_ROOT = Path(
+    "artifacts/adaptive_v4_memory/paper_grade/p3/cross-family/"
+    "phi4-mini-adaptive-quota-ruler/results"
+)
 
 
 def _require(condition: bool, message: str) -> None:
@@ -68,6 +79,42 @@ def arm_config(arm: str, selection: dict[str, Any], selection_digest: str) -> di
         "selection_model_family": "Qwen3",
         "phi_specific_reselection": False,
     }
+
+
+def adaptive_quota_arm_config(
+    arm: str, selection: dict[str, Any], selection_digest: str
+) -> dict[str, Any]:
+    _require(arm in ADAPTIVE_QUOTA_ARMS, f"Unknown Phi adaptive arm: {arm}.")
+    selected = select_score_compatible_baseline(selection)
+    return {
+        "press_name": selected["arm"],
+        "compression_ratio": 0.5,
+        "protected_prefix_token_span": {"start": 0, "end": 4},
+        "quota_policy": "fixed-per-layer" if arm == "fixed+pins" else "causal-adaptive",
+        "max_adjustment_fraction": 0.0 if arm == "fixed+pins" else 0.25,
+        "selection_sha256": selection_digest,
+        "score_compatible_selection_rule": (
+            "highest frozen Qwen3-1.7B row-weighted mean; lexicographic tie-break"
+        ),
+        "selection_model_family": "Qwen3",
+        "phi_specific_reselection": False,
+    }
+
+
+def require_qwen_adaptive_audit(path: Path) -> dict[str, Any]:
+    payload = json.loads(path.read_text())
+    audit = payload.get("audit", {})
+    _require(
+        payload.get("experiment_id") == "p3-natural-adaptive-quota-ruler-audit-v1"
+        and payload.get("status") == "terminal"
+        and audit.get("total_predictions") == 65_000
+        and audit.get("paired_examples") == 32_500
+        and audit.get("all_raw_records_verified") is True
+        and audit.get("quota_physical_audits_verified") is True
+        and audit.get("outcome_dependent_execution") is False,
+        "Phi adaptive transfer requires the terminal Qwen adaptive audit.",
+    )
+    return payload
 
 
 def load_dataset_contracts(
@@ -190,6 +237,7 @@ def _completed(cell_path: Path, arm: str, identity: dict[str, Any]) -> bool:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run the frozen Phi-4-mini RULER transfer.")
+    parser.add_argument("--cohort", choices=("baseline", "adaptive-quota"), default="baseline")
     parser.add_argument("--kvpress-root", type=Path, required=True)
     parser.add_argument("--model-snapshot", type=Path, required=True)
     parser.add_argument(
@@ -231,11 +279,24 @@ def main() -> None:
     parser.add_argument(
         "--output-root",
         type=Path,
+        default=DEFAULT_OUTPUT_ROOT,
+    )
+    parser.add_argument(
+        "--adaptive-quota-manifest",
+        type=Path,
         default=Path(
-            "artifacts/adaptive_v4_memory/paper_grade/p3/cross-family/phi4-mini-ruler/results"
+            "research/adaptive_v4_memory/manifests/p3-cross-family-adaptive-quota-ruler-v1.json"
         ),
     )
-    parser.add_argument("--arm", action="append", choices=ARMS)
+    parser.add_argument(
+        "--qwen-adaptive-audit",
+        type=Path,
+        default=Path(
+            "artifacts/adaptive_v4_memory/paper_grade/p3/natural-adaptive-quota/"
+            "ruler-qwen3-4b.summary.json"
+        ),
+    )
+    parser.add_argument("--arm", action="append", choices=(*ARMS, *ADAPTIVE_QUOTA_ARMS))
     parser.add_argument("--max-new-examples", type=int)
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
@@ -256,6 +317,14 @@ def main() -> None:
         "Pinned official RULER scorer drifted.",
     )
     manifest, selection = load_dependencies(args.manifest, args.fixed_selection)
+    adaptive_manifest: dict[str, Any] | None = None
+    qwen_adaptive_audit: dict[str, Any] | None = None
+    if args.cohort == "adaptive-quota":
+        adaptive_manifest = json.loads(args.adaptive_quota_manifest.read_text())
+        validate_adaptive_manifest(adaptive_manifest)
+        qwen_adaptive_audit = require_qwen_adaptive_audit(args.qwen_adaptive_audit)
+        if args.output_root == DEFAULT_OUTPUT_ROOT:
+            args.output_root = ADAPTIVE_OUTPUT_ROOT
     _require(args.seed == manifest["benchmark"]["generation_seed"], "Phi RULER seed drifted.")
     sequence_gate = require_cross_family_sequence_gate(
         primary_core=args.primary_core,
@@ -274,10 +343,18 @@ def main() -> None:
         generator_digest=generator_digest,
     )
     runner_digest = sha256(Path(__file__))
-    selected_arms = tuple(args.arm or ARMS)
+    cohort_arms = ADAPTIVE_QUOTA_ARMS if args.cohort == "adaptive-quota" else ARMS
+    selected_arms = tuple(args.arm or cohort_arms)
     _require(
-        len(selected_arms) == len(set(selected_arms)),
-        "Cross-family arms must not be repeated.",
+        len(selected_arms) == len(set(selected_arms))
+        and all(arm in cohort_arms for arm in selected_arms),
+        "Cross-family arms must be unique and belong to the selected cohort.",
+    )
+    adaptive_manifest_digest = (
+        sha256(args.adaptive_quota_manifest) if adaptive_manifest is not None else None
+    )
+    qwen_adaptive_audit_digest = (
+        sha256(args.qwen_adaptive_audit) if qwen_adaptive_audit is not None else None
     )
     identities = {
         arm: {
@@ -290,7 +367,14 @@ def main() -> None:
             "model_snapshot_digest_set_sha256": manifest["model"]["snapshot_digest_set_sha256"],
             "kvpress_revision": KVPRESS_REVISION,
             "official_scorer_sha256": OFFICIAL_SCORER_SHA256,
-            "arm_config": arm_config(arm, selection, selection_digest),
+            "cohort": args.cohort,
+            "adaptive_quota_manifest_sha256": adaptive_manifest_digest,
+            "qwen_adaptive_audit_sha256": qwen_adaptive_audit_digest,
+            "arm_config": (
+                adaptive_quota_arm_config(arm, selection, selection_digest)
+                if args.cohort == "adaptive-quota"
+                else arm_config(arm, selection, selection_digest)
+            ),
             "seed": args.seed,
         }
         for arm in selected_arms
@@ -307,6 +391,11 @@ def main() -> None:
 
     lock = acquire_gpu_lock("p3-cross-family-ruler")
     try:
+        from p3_protected_prefix_press import (
+            wrap_same_budget_adaptive_quota_protected_prefix,
+            wrap_same_budget_protected_prefix,
+        )
+
         EvaluationConfig, EvaluationRunner, _scorer = load_evaluator(kvpress_root)
         base_config = EvaluationConfig(
             dataset="ruler",
@@ -341,6 +430,17 @@ def main() -> None:
             runner.config.press_name = settings["press_name"]
             runner.config.compression_ratio = settings["compression_ratio"]
             runner._setup_press()
+            active_press: Any = runner.press
+            compatibility_press: Any = None
+            if args.cohort == "adaptive-quota":
+                if arm == "fixed+pins":
+                    compatibility_press = wrap_same_budget_protected_prefix(runner.press)
+                else:
+                    compatibility_press = wrap_same_budget_adaptive_quota_protected_prefix(
+                        runner.press,
+                        max_adjustment_fraction=settings["max_adjustment_fraction"],
+                    )
+                active_press = compatibility_press
             root = args.output_root / arm
             progress = root / "progress.json"
             partial = root / "records.partial.jsonl"
@@ -418,11 +518,21 @@ def main() -> None:
                             torch.cuda.synchronize()
                             started = time.perf_counter_ns()
                             try:
+                                if compatibility_press is not None:
+                                    span = settings["protected_prefix_token_span"]
+                                    compatibility_press.configure(
+                                        protected_start=span["start"], protected_end=span["end"]
+                                    )
                                 response, resident_bytes = infer_one(
                                     pipeline=runner.pipeline,
-                                    press=runner.press,
+                                    press=active_press,
                                     rendered=rendered,
                                     max_new_tokens=reserve,
+                                )
+                                compatibility_audit = (
+                                    compatibility_press.audit()
+                                    if compatibility_press is not None
+                                    else None
                                 )
                                 torch.cuda.synchronize()
                                 latency_ms = (time.perf_counter_ns() - started) / 1_000_000.0
@@ -435,6 +545,7 @@ def main() -> None:
                                         peak_hbm_bytes=peak_hbm,
                                         hot_resident_bytes=resident_bytes,
                                     )
+                                    record["quota_physical_audit"] = compatibility_audit
                                 else:
                                     generated = len(
                                         runner.pipeline.tokenizer.encode(
@@ -459,6 +570,7 @@ def main() -> None:
                                         "latency_ms": latency_ms,
                                         "peak_hbm_bytes": peak_hbm,
                                         "hot_resident_bytes": resident_bytes,
+                                        "quota_physical_audit": compatibility_audit,
                                     }
                             except torch.cuda.OutOfMemoryError as error:
                                 record = failure_record(
@@ -504,6 +616,7 @@ def main() -> None:
                 "experiment_id": CELL_EXPERIMENT_ID,
                 "benchmark": BENCHMARK,
                 "arm": arm,
+                "cohort": args.cohort,
                 "status": "terminal",
                 "source": {
                     "commit": source_commit,
@@ -515,6 +628,22 @@ def main() -> None:
                     "path": str(args.manifest),
                     "sha256": manifest_digest,
                 },
+                "adaptive_quota_manifest": (
+                    {
+                        "path": str(args.adaptive_quota_manifest),
+                        "sha256": adaptive_manifest_digest,
+                    }
+                    if adaptive_manifest_digest is not None
+                    else None
+                ),
+                "qwen_adaptive_audit": (
+                    {
+                        "path": str(args.qwen_adaptive_audit),
+                        "sha256": qwen_adaptive_audit_digest,
+                    }
+                    if qwen_adaptive_audit_digest is not None
+                    else None
+                ),
                 "sequence_gate": sequence_gate,
                 "model_snapshot_digest_set_sha256": manifest["model"]["snapshot_digest_set_sha256"],
                 "benchmark_dataset_digest_set_sha256": dataset_digest_set,

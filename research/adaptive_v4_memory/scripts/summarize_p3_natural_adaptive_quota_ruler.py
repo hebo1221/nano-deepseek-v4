@@ -96,13 +96,15 @@ def verify_quota_audit(
     arm: str,
     protected_start: int = 0,
     protected_end: int = 4,
+    layer_count: int = 36,
+    adaptive_arm: str = "natural-adaptive-quota+pins",
 ) -> dict[str, Any]:
     _require(isinstance(audit, dict), f"Missing quota audit for {arm}.")
     layers = audit.get("layers")
     _require(
         isinstance(layers, list)
-        and len(layers) == 36
-        and [row.get("layer_index") for row in layers] == list(range(36)),
+        and len(layers) == layer_count
+        and [row.get("layer_index") for row in layers] == list(range(layer_count)),
         f"Incomplete or unordered layer quota audit for {arm}.",
     )
     input_tokens = {row.get("input_tokens") for row in layers}
@@ -117,7 +119,7 @@ def verify_quota_audit(
     )
     context_tokens = int(next(iter(input_tokens)))
     fixed_per_layer = int(context_tokens * 0.5)
-    target_total = fixed_per_layer * 36
+    target_total = fixed_per_layer * layer_count
     observed_total = sum(int(value) for value in kept)
     if arm == "fixed+pins":
         _require(
@@ -129,7 +131,7 @@ def verify_quota_audit(
         )
     else:
         _require(
-            arm == "natural-adaptive-quota+pins"
+            arm == adaptive_arm
             and audit.get("same_global_budget_verified") is True
             and audit.get("causal_layer_order_verified") is True
             and audit.get("compatibility_arm") is True
@@ -343,18 +345,29 @@ def _measurement_summary(
 
 
 def analyze_pairs(
-    fixed: list[dict[str, Any]], adaptive: list[dict[str, Any]], manifest: dict[str, Any]
+    fixed: list[dict[str, Any]],
+    adaptive: list[dict[str, Any]],
+    manifest: dict[str, Any],
+    *,
+    arms: tuple[str, str] = ADAPTIVE_QUOTA_ARMS,
+    layer_count: int = 36,
+    lengths: tuple[int, ...] = LENGTHS,
+    tasks: tuple[str, ...] = TASKS,
+    expected_examples: int = EXPECTED_EXAMPLES,
 ) -> dict[str, Any]:
-    _require(len(fixed) == len(adaptive) == EXPECTED_EXAMPLES, "Adaptive pairing is incomplete.")
+    _require(
+        len(fixed) == len(adaptive) == expected_examples,
+        "Adaptive pairing is incomplete.",
+    )
     pairs = list(zip(fixed, adaptive, strict=True))
     differences: list[float] = []
     cells: dict[tuple[int, str], list[float]] = defaultdict(list)
     audited_pairs = 0
     hot_relative_differences: list[float] = []
     controller_times: list[int] = []
-    quota_by_layer: list[list[int]] = [[] for _ in range(36)]
-    concentration_by_layer: list[list[float]] = [[] for _ in range(36)]
-    controller_time_by_layer: list[list[int]] = [[] for _ in range(36)]
+    quota_by_layer: list[list[int]] = [[] for _ in range(layer_count)]
+    concentration_by_layer: list[list[float]] = [[] for _ in range(layer_count)]
+    controller_time_by_layer: list[list[int]] = [[] for _ in range(layer_count)]
     for fixed_row, adaptive_row in pairs:
         _require(fixed_row["example_id"] == adaptive_row["example_id"], "Pair identity drifted.")
         for field in (
@@ -400,12 +413,12 @@ def analyze_pairs(
             "paired_examples": len(cells[(length, task)]),
             "mean_difference": float(np.mean(cells[(length, task)])),
         }
-        for length in LENGTHS
-        for task in TASKS
+        for length in lengths
+        for task in tasks
     ]
     length_rows: list[dict[str, Any]] = []
     raw_p: dict[str, float] = {}
-    for length in LENGTHS:
+    for length in lengths:
         task_effects = [
             float(row["mean_difference"]) for row in task_length if row["length_tokens"] == length
         ]
@@ -440,10 +453,10 @@ def analyze_pairs(
         resamples=manifest["statistics"]["paired_bootstrap_resamples"],
     )
     failure_rates = {
-        arm: sum(row["status"] != "scored" for row in records) / EXPECTED_EXAMPLES
-        for arm, records in zip(ADAPTIVE_QUOTA_ARMS, (fixed, adaptive), strict=True)
+        arm: sum(row["status"] != "scored" for row in records) / expected_examples
+        for arm, records in zip(arms, (fixed, adaptive), strict=True)
     }
-    failure_increase = failure_rates[ADAPTIVE_QUOTA_ARMS[1]] - failure_rates[ADAPTIVE_QUOTA_ARMS[0]]
+    failure_increase = failure_rates[arms[1]] - failure_rates[arms[0]]
     worst = min(task_length, key=lambda row: float(row["mean_difference"]))
     nonnegative_lengths = sum(row["mean_difference"] >= 0.0 for row in length_rows)
     max_hot_difference = max(hot_relative_differences, default=None)
@@ -469,7 +482,7 @@ def analyze_pairs(
         "overall": overall,
         "accuracy_by_arm": {
             arm: float(np.mean([row["effective_score"] for row in records]))
-            for arm, records in zip(ADAPTIVE_QUOTA_ARMS, (fixed, adaptive), strict=True)
+            for arm, records in zip(arms, (fixed, adaptive), strict=True)
         },
         "by_length": length_rows,
         "by_task_length": task_length,
@@ -485,7 +498,7 @@ def analyze_pairs(
                     ).items()
                 )
             )
-            for arm, records in zip(ADAPTIVE_QUOTA_ARMS, (fixed, adaptive), strict=True)
+            for arm, records in zip(arms, (fixed, adaptive), strict=True)
         },
         "measurements": {
             metric: _measurement_summary(pairs, metric)
@@ -516,7 +529,7 @@ def analyze_pairs(
                     "score_concentration": _distribution(concentration_by_layer[layer]),
                     "controller_time_ns": _distribution(controller_time_by_layer[layer]),
                 }
-                for layer in range(36)
+                for layer in range(layer_count)
             ],
         },
         "confirmation_gate": {
