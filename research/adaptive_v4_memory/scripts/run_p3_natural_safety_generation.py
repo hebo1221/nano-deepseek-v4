@@ -243,9 +243,7 @@ def main() -> None:
             "natural_manifest_sha256": natural_digest,
             "asset_inventory_sha256": inventory_digest,
             "fixed_selection_sha256": selection_digest,
-            "model_snapshot_digest_set_sha256": manifest["model"][
-                "snapshot_digest_set_sha256"
-            ],
+            "model_snapshot_digest_set_sha256": manifest["model"]["snapshot_digest_set_sha256"],
             "benchmark": benchmark,
             "arm_config": arm_config(arm, selection, selection_digest),
             "seed": SEED,
@@ -295,7 +293,10 @@ def main() -> None:
             parts = arm_root / "record-parts"
             existing = _parts(progress, parts, identities[arm], expected)
             _require(
-                all(existing[index].get("example_id") == cases[index].example_id for index in range(len(existing))),
+                all(
+                    existing[index].get("example_id") == cases[index].example_id
+                    for index in range(len(existing))
+                ),
                 "Natural safety resume coordinate order drifted.",
             )
             limit = expected
@@ -325,9 +326,10 @@ def main() -> None:
                 torch.cuda.reset_peak_memory_stats()
                 torch.cuda.synchronize()
                 started = time.perf_counter_ns()
-                if rendered["exact_input_tokens"] + generation_reserve > manifest["model"][
-                    "maximum_supported_context_tokens"
-                ]:
+                if (
+                    rendered["exact_input_tokens"] + generation_reserve
+                    > manifest["model"]["maximum_supported_context_tokens"]
+                ):
                     record = _failure(base, "unsupported-context", started)
                 else:
                     response: str | None = None
@@ -400,7 +402,11 @@ def main() -> None:
                 "benchmark": benchmark,
                 "arm": arm,
                 "status": "terminal",
-                "source": {"commit": source_commit, "dirty": False},
+                "source": {
+                    "commit": source_commit,
+                    "dirty": False,
+                    "implementation_sha256": runner_digest,
+                },
                 "run_identity": identities[arm],
                 "manifest": {"path": str(args.manifest), "sha256": manifest_digest},
                 "manifest_validation": validation,

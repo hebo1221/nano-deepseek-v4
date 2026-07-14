@@ -8,11 +8,13 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
+from p3_source_provenance import verify_git_implementation
 from prepare_p3_natural_safety_assets import sha256
 from validate_p3_natural_safety_manifest import validate_manifest
 
 ARMS = ("native-dense", "strongest-memory-matched-fixed")
 POSITIONS = ("front", "end")
+GENERATION_RUNNER_PATH = "research/adaptive_v4_memory/scripts/run_p3_natural_safety_generation.py"
 
 
 def _require(condition: bool, message: str) -> None:
@@ -48,9 +50,13 @@ def audit_arm(
     )
     inventory_digest = cell.get("asset_inventory", {}).get("sha256")
     _require(
-        cell.get("manifest", {}).get("sha256") == manifest_digest
-        and _is_sha256(inventory_digest),
+        cell.get("manifest", {}).get("sha256") == manifest_digest and _is_sha256(inventory_digest),
         f"LongSafety generation provenance drifted: {arm}.",
+    )
+    source_implementation = verify_git_implementation(
+        cell.get("source"),
+        expected_path=GENERATION_RUNNER_PATH,
+        label=f"LongSafety/{arm}",
     )
     records_path = Path(cell.get("raw_records", {}).get("path", ""))
     _require(
@@ -131,6 +137,7 @@ def audit_arm(
             "asset_inventory_sha256": inventory_digest,
             "slices": slices,
             "raw_cell": {"path": str(cell_path), "sha256": sha256(cell_path)},
+            "source_implementation": source_implementation,
         },
         by_id,
     )
@@ -159,11 +166,14 @@ def summarize(manifest_path: Path, arm_paths: dict[str, Path]) -> dict[str, Any]
         len({arms[arm]["asset_inventory_sha256"] for arm in ARMS}) == 1,
         "LongSafety generation asset inventories diverged.",
     )
+    _require(
+        len({json.dumps(arms[arm]["source_implementation"], sort_keys=True) for arm in ARMS}) == 1,
+        "LongSafety generation arms used different source implementations.",
+    )
     _require(set(records[ARMS[0]]) == set(records[ARMS[1]]), "LongSafety identities diverged.")
     _require(
         all(
-            records[ARMS[0]][key]["raw_prompt_sha256"]
-            == records[ARMS[1]][key]["raw_prompt_sha256"]
+            records[ARMS[0]][key]["raw_prompt_sha256"] == records[ARMS[1]][key]["raw_prompt_sha256"]
             and records[ARMS[0]][key]["input_token_ids_sha256"]
             == records[ARMS[1]][key]["input_token_ids_sha256"]
             for key in records[ARMS[0]]
@@ -184,6 +194,7 @@ def summarize(manifest_path: Path, arm_paths: dict[str, Path]) -> dict[str, Any]
             "generation_arms_terminal": True,
             "input_pairing_verified": True,
             "generation_failure_accounting_complete": True,
+            "source_implementations_verified": True,
             "official_judge_status": "blocked",
             "expected_generations_per_arm": expected,
             "expected_generations_total": expected * len(ARMS),

@@ -97,6 +97,7 @@
         "required_arms_terminal": true,
         "failure_accounting_complete": true,
         "input_pairing_verified": true,
+        "source_implementations_verified": true,
         "protected_prefix_physical_budget_verified": true,
         "examples_accounted_per_arm": 1200,
         "families_terminal": 4,
@@ -117,6 +118,7 @@
         "ifeval_input_pairing_verified": true,
         "ifeval_expected_prompts_per_arm": 541,
         "failure_accounting_complete": true,
+        "source_implementations_verified": true,
         "comparative_long_context_safety_claim_available": false
       }
     },
@@ -127,6 +129,7 @@
         "required_arms_terminal": true,
         "input_pairing_verified": true,
         "official_scoring_accounted": true,
+        "source_implementations_verified": true,
         "expected_prompts_per_arm": 541
       }
     },
@@ -137,6 +140,7 @@
         "generation_arms_terminal": true,
         "input_pairing_verified": true,
         "generation_failure_accounting_complete": true,
+        "source_implementations_verified": true,
         "official_judge_status": "blocked",
         "expected_generations_total": 6172
       }

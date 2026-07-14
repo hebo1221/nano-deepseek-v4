@@ -7,6 +7,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from p3_source_provenance import verify_git_implementation
 from summarize_p3_natural_suite import BENCHMARK_IDS, sha256
 
 STATUS_VALUES = {"scored", "failure"}
@@ -49,37 +50,15 @@ def _records(path: Path) -> list[dict[str, Any]]:
     return records
 
 
-def _verify_source_implementation(
-    artifact: dict[str, Any], benchmark: str
-) -> dict[str, str]:
-    source = artifact.get("source", {})
-    commit = source.get("commit")
-    _require(
-        isinstance(commit, str)
-        and len(commit) in {40, 64}
-        and all(character in "0123456789abcdef" for character in commit),
-        f"Invalid {benchmark} source commit.",
-    )
+def _verify_source_implementation(artifact: dict[str, Any], benchmark: str) -> dict[str, str]:
     runner_path = RUNNER_PATHS[benchmark]
-    commit_check = subprocess.run(
-        ["git", "cat-file", "-e", f"{commit}^{{commit}}"],
-        capture_output=True,
-    )
-    _require(commit_check.returncode == 0, f"Unknown {benchmark} source commit: {commit}")
-    blob = subprocess.run(
-        ["git", "show", f"{commit}:{runner_path}"],
-        capture_output=True,
-    )
-    _require(blob.returncode == 0, f"Missing {benchmark} runner at source commit.")
-    observed_digest = hashlib.sha256(blob.stdout).hexdigest()
-    _require(
-        source.get("implementation_sha256") == observed_digest,
-        f"{benchmark} implementation does not match its source commit.",
+    verified = verify_git_implementation(
+        artifact.get("source"), expected_path=runner_path, label=benchmark
     )
     return {
-        "commit": commit,
+        "commit": verified["commit"],
         "runner_path": runner_path,
-        "implementation_sha256": observed_digest,
+        "implementation_sha256": verified["implementation_sha256"],
     }
 
 

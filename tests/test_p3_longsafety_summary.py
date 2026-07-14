@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -17,6 +18,21 @@ ARMS = longsafety.ARMS
 
 def _digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _generation_source() -> dict[str, object]:
+    commit = subprocess.run(
+        ["git", "rev-parse", "HEAD"], check=True, capture_output=True, text=True
+    ).stdout.strip()
+    path = "research/adaptive_v4_memory/scripts/run_p3_natural_safety_generation.py"
+    blob = subprocess.run(
+        ["git", "show", f"{commit}:{path}"], check=True, capture_output=True
+    ).stdout
+    return {
+        "commit": commit,
+        "dirty": False,
+        "implementation_sha256": hashlib.sha256(blob).hexdigest(),
+    }
 
 
 def _fixture(tmp_path: Path) -> tuple[Path, dict[str, Path]]:
@@ -60,7 +76,7 @@ def _fixture(tmp_path: Path) -> tuple[Path, dict[str, Path]]:
             "benchmark": "LongSafety",
             "arm": arm,
             "status": "terminal",
-            "source": {"dirty": False},
+            "source": _generation_source(),
             "manifest": {"sha256": _digest(manifest)},
             "asset_inventory": {"sha256": "e" * 64},
             "expected_generations": 2,
@@ -84,6 +100,7 @@ def test_longsafety_generation_audit_is_paired_and_does_not_invent_scores(
         "generation_arms_terminal": True,
         "input_pairing_verified": True,
         "generation_failure_accounting_complete": True,
+        "source_implementations_verified": True,
         "official_judge_status": "blocked",
         "expected_generations_per_arm": 2,
         "expected_generations_total": 4,
@@ -123,4 +140,17 @@ def test_longsafety_generation_audit_rejects_cell_manifest_drift(
     cells[ARMS[0]].write_text(json.dumps(cell))
 
     with pytest.raises(ValueError, match="generation provenance drifted"):
+        longsafety.summarize(manifest, cells)
+
+
+def test_longsafety_generation_audit_rejects_source_digest_drift(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manifest, cells = _fixture(tmp_path)
+    monkeypatch.setattr(longsafety, "validate_manifest", lambda _manifest: {"test": True})
+    cell = json.loads(cells[ARMS[0]].read_text())
+    cell["source"]["implementation_sha256"] = "0" * 64
+    cells[ARMS[0]].write_text(json.dumps(cell))
+
+    with pytest.raises(ValueError, match="does not match its source commit"):
         longsafety.summarize(manifest, cells)

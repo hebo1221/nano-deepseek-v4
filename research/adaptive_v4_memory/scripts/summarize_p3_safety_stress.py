@@ -20,6 +20,8 @@ ARMS = (
 )
 FIXED_ARM = "strongest-memory-matched-fixed"
 PROTECTED_ARM = "strongest-memory-matched-fixed+protected-prefix"
+RUNNER_PATH = "research/adaptive_v4_memory/scripts/run_p3_safety_stress.py"
+WORKLOAD_PATH = "research/adaptive_v4_memory/scripts/p3_safety_workloads.py"
 
 
 def _require(condition: bool, message: str) -> None:
@@ -36,6 +38,32 @@ def _dependency(metadata: Any, label: str) -> str:
     path = Path(metadata.get("path", ""))
     _require(path.is_file() and metadata.get("sha256") == sha256(path), f"Safety {label} drifted.")
     return metadata["sha256"]
+
+
+def _verify_source_implementation(cell: dict[str, Any]) -> dict[str, str]:
+    source = cell.get("source", {})
+    identity = cell.get("run_identity", {})
+    commit = source.get("commit")
+    _require(
+        isinstance(commit, str)
+        and len(commit) in {40, 64}
+        and all(character in "0123456789abcdef" for character in commit),
+        "Invalid safety source commit.",
+    )
+    assert isinstance(commit, str)
+    digests: dict[str, str] = {}
+    for name, path in (("implementation_sha256", RUNNER_PATH), ("workload_sha256", WORKLOAD_PATH)):
+        blob = subprocess.run(["git", "show", f"{commit}:{path}"], capture_output=True)
+        _require(blob.returncode == 0, f"Missing safety source at commit: {path}")
+        digests[name] = hashlib.sha256(blob.stdout).hexdigest()
+    _require(
+        source.get("implementation_sha256") == digests["implementation_sha256"]
+        and identity.get("source_commit") == commit
+        and identity.get("implementation_sha256") == digests["implementation_sha256"]
+        and identity.get("workload_sha256") == digests["workload_sha256"],
+        "Safety source implementation does not match its commit.",
+    )
+    return {"commit": commit, "runner_path": RUNNER_PATH, "workload_path": WORKLOAD_PATH, **digests}
 
 
 def _audit_protected_record(record: dict[str, Any], identifier: str) -> None:
@@ -98,9 +126,7 @@ def _exact_paired_pvalue(wins: int, losses: int) -> float:
         for index in range(smaller + 1)
     ]
     maximum = max(log_probabilities)
-    lower_tail = math.exp(maximum) * sum(
-        math.exp(value - maximum) for value in log_probabilities
-    )
+    lower_tail = math.exp(maximum) * sum(math.exp(value - maximum) for value in log_probabilities)
     return min(1.0, 2.0 * lower_tail)
 
 
@@ -115,8 +141,7 @@ def paired_protected_effect(
     identifiers = sorted(fixed)
     differences = np.array(
         [
-            float(protected[key].get("score") or 0.0)
-            - float(fixed[key].get("score") or 0.0)
+            float(protected[key].get("score") or 0.0) - float(fixed[key].get("score") or 0.0)
             for key in identifiers
         ],
         dtype=np.float64,
@@ -135,8 +160,7 @@ def paired_protected_effect(
         if fixed[key].get("status") == protected[key].get("status") == "scored"
     ]
     resident_equal = all(
-        fixed[key].get("hot_resident_bytes")
-        == protected[key].get("hot_resident_bytes")
+        fixed[key].get("hot_resident_bytes") == protected[key].get("hot_resident_bytes")
         for key in comparable
     )
     _require(resident_equal, "Protected contrast physical resident bytes diverged.")
@@ -171,6 +195,7 @@ def audit_arm(
         and cell.get("source", {}).get("dirty") is False,
         f"Invalid safety arm cell: {arm}.",
     )
+    source_implementation = _verify_source_implementation(cell)
     _require(cell.get("manifest", {}).get("sha256") == manifest_digest, "Safety manifest drifted.")
     records_path = Path(cell.get("raw_records", {}).get("path", ""))
     _require(
@@ -192,7 +217,10 @@ def audit_arm(
         )
         assert isinstance(identifier, str)
         identities.add(identifier)
-        _require(record.get("benchmark") == "SafetyStress" and record.get("arm") == arm, "Safety record drifted.")
+        _require(
+            record.get("benchmark") == "SafetyStress" and record.get("arm") == arm,
+            "Safety record drifted.",
+        )
         family_value, context_value = record.get("family"), record.get("context_target")
         _require(
             isinstance(family_value, str)
@@ -200,10 +228,7 @@ def audit_arm(
             and isinstance(context_value, int)
             and context_value in manifest["context_targets_tokens"]
             and isinstance(record.get("exact_input_tokens"), int)
-            and int(
-                context_value
-                * manifest["target_fill_tolerance"]["minimum_fraction"]
-            )
+            and int(context_value * manifest["target_fill_tolerance"]["minimum_fraction"])
             <= record["exact_input_tokens"]
             <= context_value - manifest["generation_reserve_tokens"],
             f"Safety slice or token accounting drifted: {identifier}.",
@@ -258,7 +283,9 @@ def audit_arm(
         )
     _require(
         len(slices) == len(FAMILIES) * len(manifest["context_targets_tokens"])
-        and all(row["expected_examples"] == manifest["examples_per_family_context"] for row in slices),
+        and all(
+            row["expected_examples"] == manifest["examples_per_family_context"] for row in slices
+        ),
         "Safety slice Cartesian coverage drifted.",
     )
     all_scores = [float(row.get("score") or 0.0) for row in records]
@@ -282,14 +309,13 @@ def audit_arm(
                 "\n".join(sorted(prompt_pairs)).encode()
             ).hexdigest(),
             "raw_cell": {"path": str(path), "sha256": sha256(path)},
+            "source_implementation": source_implementation,
         },
         dependencies,
     )
 
 
-def summarize(
-    manifest_path: Path, arm_paths: dict[str, Path]
-) -> dict[str, Any]:
+def summarize(manifest_path: Path, arm_paths: dict[str, Path]) -> dict[str, Any]:
     manifest = json.loads(manifest_path.read_text())
     _require(
         manifest.get("experiment_id") == "p3-qwen3-4b-safety-stress-v1"
@@ -315,6 +341,11 @@ def summarize(
         len({row["paired_prompt_digest_set_sha256"] for row in arms.values()}) == 1,
         "Safety arms are not prompt/token paired.",
     )
+    _require(
+        len({json.dumps(row["source_implementation"], sort_keys=True) for row in arms.values()})
+        == 1,
+        "Safety arms used different source implementations.",
+    )
     contrast = paired_protected_effect(
         _record_map(arm_paths[FIXED_ARM]),
         _record_map(arm_paths[PROTECTED_ARM]),
@@ -328,6 +359,7 @@ def summarize(
             "required_arms_terminal": True,
             "failure_accounting_complete": True,
             "input_pairing_verified": True,
+            "source_implementations_verified": True,
             "protected_prefix_physical_budget_verified": True,
             "examples_accounted_per_arm": manifest["expected_examples_per_arm"],
             "families_terminal": len(FAMILIES),

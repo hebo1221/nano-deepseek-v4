@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -12,11 +13,37 @@ SCRIPTS = Path(__file__).resolve().parents[1] / "research/adaptive_v4_memory/scr
 sys.path.insert(0, str(SCRIPTS))
 
 from p3_safety_workloads import FAMILIES  # noqa: E402
-from summarize_p3_safety_stress import _exact_paired_pvalue, summarize  # noqa: E402
+from summarize_p3_safety_stress import (  # noqa: E402
+    RUNNER_PATH,
+    WORKLOAD_PATH,
+    _exact_paired_pvalue,
+    summarize,
+)
 
 
 def _digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _source() -> tuple[dict[str, object], dict[str, object]]:
+    commit = subprocess.run(
+        ["git", "rev-parse", "HEAD"], check=True, capture_output=True, text=True
+    ).stdout.strip()
+    digests = {
+        name: hashlib.sha256(
+            subprocess.run(
+                ["git", "show", f"{commit}:{path}"], check=True, capture_output=True
+            ).stdout
+        ).hexdigest()
+        for name, path in (
+            ("implementation_sha256", RUNNER_PATH),
+            ("workload_sha256", WORKLOAD_PATH),
+        )
+    }
+    return (
+        {"commit": commit, "dirty": False, **digests},
+        {"source_commit": commit, **digests},
+    )
 
 
 def _fixture(tmp_path: Path) -> tuple[Path, dict[str, Path]]:
@@ -40,6 +67,7 @@ def _fixture(tmp_path: Path) -> tuple[Path, dict[str, Path]]:
         dependencies[name] = {"path": str(path), "sha256": _digest(path)}
 
     arm_paths: dict[str, Path] = {}
+    source, run_identity = _source()
     for arm in (
         "native-dense",
         "strongest-memory-matched-fixed",
@@ -103,7 +131,8 @@ def _fixture(tmp_path: Path) -> tuple[Path, dict[str, Path]]:
             "benchmark": "SafetyStress",
             "arm": arm,
             "status": "terminal",
-            "source": {"dirty": False},
+            "source": source,
+            "run_identity": run_identity,
             "manifest": {"sha256": _digest(manifest_path)},
             "raw_records": {"path": str(records_path), "sha256": _digest(records_path)},
             "causal_gate": dependencies["causal_gate"],
@@ -126,6 +155,7 @@ def test_safety_summary_audits_all_slices_and_pairs_inputs(tmp_path: Path) -> No
         "required_arms_terminal": True,
         "failure_accounting_complete": True,
         "input_pairing_verified": True,
+        "source_implementations_verified": True,
         "protected_prefix_physical_budget_verified": True,
         "examples_accounted_per_arm": 4,
         "families_terminal": 4,
@@ -134,9 +164,10 @@ def test_safety_summary_audits_all_slices_and_pairs_inputs(tmp_path: Path) -> No
     assert all(len(row["slices"]) == 4 for row in result["arms"].values())
     assert all(row["macro_success_rate_failures_zero"] == 1.0 for row in result["arms"].values())
     assert result["protected_prefix_causal_contrast"]["mean_success_rate_difference"] == 0.0
-    assert result["protected_prefix_causal_contrast"][
-        "resident_bytes_equal_for_comparable_pairs"
-    ] is True
+    assert (
+        result["protected_prefix_causal_contrast"]["resident_bytes_equal_for_comparable_pairs"]
+        is True
+    )
 
 
 def test_safety_summary_rejects_cross_arm_prompt_drift(tmp_path: Path) -> None:
@@ -150,6 +181,16 @@ def test_safety_summary_rejects_cross_arm_prompt_drift(tmp_path: Path) -> None:
     arms["strongest-memory-matched-fixed"].write_text(json.dumps(cell))
 
     with pytest.raises(ValueError, match="not prompt/token paired"):
+        summarize(manifest, arms)
+
+
+def test_safety_summary_rejects_source_digest_not_bound_to_commit(tmp_path: Path) -> None:
+    manifest, arms = _fixture(tmp_path)
+    cell = json.loads(arms["native-dense"].read_text())
+    cell["source"]["implementation_sha256"] = "0" * 64
+    arms["native-dense"].write_text(json.dumps(cell))
+
+    with pytest.raises(ValueError, match="does not match its commit"):
         summarize(manifest, arms)
 
 

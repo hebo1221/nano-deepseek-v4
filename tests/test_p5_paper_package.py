@@ -16,6 +16,7 @@ def _safety_evidence() -> dict[str, object]:
             "required_arms_terminal": True,
             "failure_accounting_complete": True,
             "input_pairing_verified": True,
+            "source_implementations_verified": True,
             "protected_prefix_physical_budget_verified": True,
             "examples_accounted_per_arm": 1_200,
             "families_terminal": 4,
@@ -91,6 +92,7 @@ def _ifeval_evidence() -> dict[str, object]:
             "required_arms_terminal": True,
             "input_pairing_verified": True,
             "official_scoring_accounted": True,
+            "source_implementations_verified": True,
             "expected_prompts_per_arm": 541,
         }
     }
@@ -109,6 +111,7 @@ def _natural_safety_evidence() -> dict[str, object]:
             "ifeval_input_pairing_verified": True,
             "ifeval_expected_prompts_per_arm": 541,
             "failure_accounting_complete": True,
+            "source_implementations_verified": True,
             "comparative_long_context_safety_claim_available": False,
         }
     }
@@ -120,6 +123,7 @@ def _longsafety_evidence(judge_status: str = "blocked") -> dict[str, object]:
             "generation_arms_terminal": True,
             "input_pairing_verified": True,
             "generation_failure_accounting_complete": True,
+            "source_implementations_verified": True,
             "official_judge_status": judge_status,
             "expected_generations_total": 6_172,
         }

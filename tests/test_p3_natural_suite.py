@@ -292,6 +292,7 @@ def _safety_summary(tmp_path: Path, manifest_path: Path) -> Path:
                     "required_arms_terminal": True,
                     "failure_accounting_complete": True,
                     "input_pairing_verified": True,
+                    "source_implementations_verified": True,
                     "protected_prefix_physical_budget_verified": True,
                     "examples_accounted_per_arm": expected,
                     "families_terminal": contract["families"],
@@ -355,13 +356,12 @@ def _natural_safety_summary(tmp_path: Path, manifest_path: Path) -> Path:
                     "ifeval_input_pairing_verified": True,
                     "ifeval_expected_prompts_per_arm": contract["ifeval_prompts_per_arm"],
                     "failure_accounting_complete": True,
+                    "source_implementations_verified": True,
                     "comparative_long_context_safety_claim_available": contract[
                         "comparative_long_context_safety_claim_available"
                     ],
                 },
-                "longsafety": {
-                    "summary": {"path": str(longsafety), "sha256": _digest(longsafety)}
-                },
+                "longsafety": {"summary": {"path": str(longsafety), "sha256": _digest(longsafety)}},
                 "ifeval": {"summary": {"path": str(ifeval), "sha256": _digest(ifeval)}},
                 "classification": "bounded-generation-and-control-result-with-paid-judge-blocker",
                 "claim_boundary": "compatible model only",

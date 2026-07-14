@@ -7,10 +7,13 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from p3_source_provenance import verify_git_implementation
 from prepare_p3_natural_safety_assets import sha256
 from validate_p3_natural_safety_manifest import validate_manifest
 
 ARMS = ("native-dense", "strongest-memory-matched-fixed")
+LONGSAFETY_SUMMARIZER_PATH = "research/adaptive_v4_memory/scripts/summarize_p3_longsafety.py"
+IFEVAL_SCORER_PATH = "research/adaptive_v4_memory/scripts/score_p3_ifeval.py"
 
 
 def _require(condition: bool, message: str) -> None:
@@ -18,9 +21,7 @@ def _require(condition: bool, message: str) -> None:
         raise ValueError(message)
 
 
-def summarize(
-    *, manifest_path: Path, longsafety_path: Path, ifeval_path: Path
-) -> dict[str, Any]:
+def summarize(*, manifest_path: Path, longsafety_path: Path, ifeval_path: Path) -> dict[str, Any]:
     manifest_bytes = manifest_path.read_bytes()
     manifest_digest = hashlib.sha256(manifest_bytes).hexdigest()
     manifest = json.loads(manifest_bytes)
@@ -28,11 +29,15 @@ def summarize(
     longsafety = json.loads(longsafety_path.read_text())
     ifeval = json.loads(ifeval_path.read_text())
     _require(
-        longsafety.get("experiment_id")
-        == "p3-natural-safety-longsafety-generation-audit-v1"
+        longsafety.get("experiment_id") == "p3-natural-safety-longsafety-generation-audit-v1"
         and longsafety.get("source", {}).get("dirty") is False
         and longsafety.get("manifest", {}).get("sha256") == manifest_digest,
         "LongSafety generation audit is missing, dirty, or stale.",
+    )
+    verify_git_implementation(
+        longsafety.get("source"),
+        expected_path=LONGSAFETY_SUMMARIZER_PATH,
+        label="LongSafety audit",
     )
     long_contract = manifest["benchmarks"]["LongSafety"]
     expected_long = long_contract["prompt_protocol"]["expected_predictions_per_arm"]
@@ -41,6 +46,7 @@ def summarize(
         long_audit.get("generation_arms_terminal") is True
         and long_audit.get("input_pairing_verified") is True
         and long_audit.get("generation_failure_accounting_complete") is True
+        and long_audit.get("source_implementations_verified") is True
         and long_audit.get("official_judge_status") == "blocked"
         and long_audit.get("expected_generations_per_arm") == expected_long
         and long_audit.get("expected_generations_total") == expected_long * len(ARMS)
@@ -72,14 +78,18 @@ def summarize(
         and set(ifeval.get("arms", {})) == set(ARMS),
         "IFEval official audit is missing, dirty, stale, or unpaired.",
     )
-    expected_ifeval = manifest["benchmarks"]["IFEval"]["protocol"][
-        "expected_prompts_per_arm"
-    ]
+    verify_git_implementation(
+        ifeval.get("source"),
+        expected_path=IFEVAL_SCORER_PATH,
+        label="IFEval audit",
+    )
+    expected_ifeval = manifest["benchmarks"]["IFEval"]["protocol"]["expected_prompts_per_arm"]
     ifeval_audit = ifeval.get("audit", {})
     _require(
         ifeval_audit.get("required_arms_terminal") is True
         and ifeval_audit.get("input_pairing_verified") is True
         and ifeval_audit.get("official_scoring_accounted") is True
+        and ifeval_audit.get("source_implementations_verified") is True
         and ifeval_audit.get("expected_prompts_per_arm") == expected_ifeval,
         "IFEval official audit contract drifted.",
     )
@@ -91,9 +101,7 @@ def summarize(
             == expected_ifeval
             and all(
                 isinstance(metrics.get(name), (int, float))
-                for name in manifest["benchmarks"]["IFEval"]["protocol"][
-                    "official_metrics"
-                ]
+                for name in manifest["benchmarks"]["IFEval"]["protocol"]["official_metrics"]
             ),
             f"IFEval official accounting is incomplete: {arm}.",
         )
@@ -123,6 +131,7 @@ def summarize(
             "ifeval_input_pairing_verified": True,
             "ifeval_expected_prompts_per_arm": expected_ifeval,
             "failure_accounting_complete": True,
+            "source_implementations_verified": True,
             "comparative_long_context_safety_claim_available": False,
         },
         "longsafety": {

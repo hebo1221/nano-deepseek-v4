@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -33,6 +34,21 @@ class FakeOfficial:
         )
 
     test_instruction_following_loose = test_instruction_following_strict
+
+
+def _generation_source() -> dict[str, object]:
+    commit = subprocess.run(
+        ["git", "rev-parse", "HEAD"], check=True, capture_output=True, text=True
+    ).stdout.strip()
+    path = "research/adaptive_v4_memory/scripts/run_p3_natural_safety_generation.py"
+    blob = subprocess.run(
+        ["git", "show", f"{commit}:{path}"], check=True, capture_output=True
+    ).stdout
+    return {
+        "commit": commit,
+        "dirty": False,
+        "implementation_sha256": hashlib.sha256(blob).hexdigest(),
+    }
 
 
 def _inputs() -> list[dict[str, object]]:
@@ -114,6 +130,7 @@ def test_ifeval_main_contract_exposes_p5_audit_fields() -> None:
         "required_arms_terminal",
         "input_pairing_verified",
         "official_scoring_accounted",
+        "source_implementations_verified",
         "expected_prompts_per_arm",
     ):
         assert f'"{field}"' in source
@@ -135,7 +152,7 @@ def test_ifeval_cell_rejects_record_arm_drift(tmp_path: Path) -> None:
                 "benchmark": "IFEval",
                 "arm": "native-dense",
                 "status": "terminal",
-                "source": {"dirty": False},
+                "source": _generation_source(),
                 "expected_generations": 1,
                 "manifest": {"sha256": "c" * 64},
                 "asset_inventory": {"sha256": "d" * 64},

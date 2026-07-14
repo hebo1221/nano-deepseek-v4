@@ -167,6 +167,7 @@ def classify_evidence(
         safety_audit.get("required_arms_terminal") is True
         and safety_audit.get("failure_accounting_complete") is True
         and safety_audit.get("input_pairing_verified") is True
+        and safety_audit.get("source_implementations_verified") is True
         and safety_audit.get("protected_prefix_physical_budget_verified") is True
         and safety_audit.get("examples_accounted_per_arm") == 1_200
         and safety_audit.get("families_terminal") == 4
@@ -184,6 +185,7 @@ def classify_evidence(
         and natural_safety_audit.get("ifeval_input_pairing_verified") is True
         and natural_safety_audit.get("ifeval_expected_prompts_per_arm") == 541
         and natural_safety_audit.get("failure_accounting_complete") is True
+        and natural_safety_audit.get("source_implementations_verified") is True
         and natural_safety_audit.get("comparative_long_context_safety_claim_available") is False
     )
     ifeval_audit = p3_ifeval["audit"]
@@ -191,6 +193,7 @@ def classify_evidence(
         ifeval_audit.get("required_arms_terminal") is True
         and ifeval_audit.get("input_pairing_verified") is True
         and ifeval_audit.get("official_scoring_accounted") is True
+        and ifeval_audit.get("source_implementations_verified") is True
         and ifeval_audit.get("expected_prompts_per_arm") == 541
     )
     longsafety_audit = p3_longsafety["audit"]
@@ -198,6 +201,7 @@ def classify_evidence(
         longsafety_audit.get("generation_arms_terminal") is True
         and longsafety_audit.get("input_pairing_verified") is True
         and longsafety_audit.get("generation_failure_accounting_complete") is True
+        and longsafety_audit.get("source_implementations_verified") is True
         and longsafety_audit.get("expected_generations_total") == 6_172
         and longsafety_audit.get("official_judge_status") == "complete"
     )

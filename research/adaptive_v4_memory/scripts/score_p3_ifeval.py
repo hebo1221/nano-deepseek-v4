@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from p3_source_provenance import verify_git_implementation
 from prepare_p3_natural_safety_assets import (
     sha256,
     tree_sha256,
@@ -20,6 +21,7 @@ from prepare_p3_natural_safety_assets import (
 from validate_p3_natural_safety_manifest import validate_manifest
 
 ARMS = ("native-dense", "strongest-memory-matched-fixed")
+GENERATION_RUNNER_PATH = "research/adaptive_v4_memory/scripts/run_p3_natural_safety_generation.py"
 
 
 def _require(condition: bool, message: str) -> None:
@@ -189,6 +191,11 @@ def _records(
         cell.get("manifest", {}).get("sha256") == manifest_digest
         and cell.get("asset_inventory", {}).get("sha256") == inventory_digest,
         f"IFEval generation provenance drifted: {arm}.",
+    )
+    cell["verified_source_implementation"] = verify_git_implementation(
+        cell.get("source"),
+        expected_path=GENERATION_RUNNER_PATH,
+        label=f"IFEval/{arm}",
     )
     path = Path(cell.get("raw_records", {}).get("path", ""))
     _require(
@@ -402,6 +409,16 @@ def main() -> None:
         ),
         "IFEval generation arms are not input paired.",
     )
+    _require(
+        len(
+            {
+                json.dumps(cells[arm]["verified_source_implementation"], sort_keys=True)
+                for arm in ARMS
+            }
+        )
+        == 1,
+        "IFEval generation arms used different source implementations.",
+    )
     scored = {
         arm: score_arm(inputs=inputs, records=generation[arm], official=official) for arm in ARMS
     }
@@ -445,6 +462,7 @@ def main() -> None:
             "required_arms_terminal": True,
             "input_pairing_verified": True,
             "official_scoring_accounted": True,
+            "source_implementations_verified": True,
             "expected_prompts_per_arm": expected,
         },
         "arms": {

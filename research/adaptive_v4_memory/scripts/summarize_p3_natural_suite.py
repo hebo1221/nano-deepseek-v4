@@ -199,6 +199,7 @@ def audit_safety_stress(
         "required_arms_terminal": True,
         "failure_accounting_complete": True,
         "input_pairing_verified": True,
+        "source_implementations_verified": True,
         "protected_prefix_physical_budget_verified": True,
         "examples_accounted_per_arm": contract["examples_per_required_arm"],
         "families_terminal": contract["families"],
@@ -241,6 +242,7 @@ def audit_safety_stress(
         "contexts": contract["contexts"],
         "required_arms": list(safety_arms),
         "protected_prefix_physical_budget_verified": True,
+        "source_implementations_verified": True,
         "protected_prefix_causal_contrast": contrast,
         "summary": {"path": str(path), "sha256": sha256(path)},
         "arms": arms,
@@ -284,6 +286,7 @@ def audit_natural_safety(
         and audit.get("ifeval_expected_prompts_per_arm")
         == contract["ifeval_prompts_per_arm"]
         and audit.get("failure_accounting_complete") is True
+        and audit.get("source_implementations_verified") is True
         and audit.get("comparative_long_context_safety_claim_available")
         is contract["comparative_long_context_safety_claim_available"],
         "Natural safety coverage or claim boundary is incomplete.",
@@ -302,6 +305,7 @@ def audit_natural_safety(
         "ifeval_prompts_per_arm": contract["ifeval_prompts_per_arm"],
         "longsafety_official_judge_status": audit["longsafety_official_judge_status"],
         "comparative_long_context_safety_claim_available": False,
+        "source_implementations_verified": True,
         "summary": {"path": str(path), "sha256": sha256(path)},
         "classification": payload.get("classification"),
         "claim_boundary": payload.get("claim_boundary"),
