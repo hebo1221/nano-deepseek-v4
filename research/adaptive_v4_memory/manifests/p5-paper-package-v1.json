@@ -392,6 +392,36 @@
         }
       }
     },
+    "p3_natural_adaptive_quota_longmemeval": {
+      "path": "artifacts/adaptive_v4_memory/paper_grade/p3/natural-adaptive-quota/longmemeval-qwen3-4b.summary.json",
+      "experiment_id": "p3-natural-adaptive-quota-longmemeval-audit-v1",
+      "required_audit": {
+        "required_arms_terminal": true,
+        "terminal_arms": 2,
+        "predictions_per_arm": 500,
+        "total_predictions": 1000,
+        "paired_examples": 500,
+        "all_raw_records_verified": true,
+        "all_dependency_digests_verified": true,
+        "all_runtime_kvpress_bindings_verified": true,
+        "exact_input_pairing_verified": true,
+        "exact_token_id_pairing_verified": true,
+        "quota_physical_audits_verified": true,
+        "same_initial_global_token_budget_verified": true,
+        "causal_layer_order_verified": true,
+        "failure_accounting_complete": true,
+        "operational_failure_vocabulary_verified": true,
+        "record_revision_provenance_verified": true,
+        "model_snapshot_digest_set_verified": true,
+        "successful_response_generation_retained": true,
+        "judge_blocked_not_scored_as_zero": true,
+        "official_scores_verified": false,
+        "proxy_metric_substitution": false,
+        "adaptive_allocation_scope": "initial context prefill only",
+        "continuous_refresh_claim_available": false,
+        "outcome_dependent_execution": false
+      }
+    },
     "p3_natural_adaptive_quota_scbench": {
       "path": "artifacts/adaptive_v4_memory/paper_grade/p3/natural-adaptive-quota/scbench-qwen3-4b.summary.json",
       "experiment_id": "p3-natural-adaptive-quota-scbench-audit-v1",
@@ -767,6 +797,7 @@
     "natural_adaptive_quota": "research/adaptive_v4_memory/manifests/p3-natural-adaptive-quota-ruler-v1.json",
     "natural_adaptive_quota_scbench": "research/adaptive_v4_memory/manifests/p3-natural-adaptive-quota-scbench-v1.json",
     "natural_adaptive_quota_longbench_v2": "research/adaptive_v4_memory/manifests/p3-natural-adaptive-quota-longbench-v2-v1.json",
+    "natural_adaptive_quota_longmemeval": "research/adaptive_v4_memory/manifests/p3-natural-adaptive-quota-longmemeval-v1.json",
     "natural_adaptive_quota_mrcr": "research/adaptive_v4_memory/manifests/p3-natural-adaptive-quota-mrcr-v1.json",
     "natural_adaptive_quota_suite": "research/adaptive_v4_memory/manifests/p3-natural-adaptive-quota-suite-v1.json",
     "natural_suite": "research/adaptive_v4_memory/manifests/p3-natural-suite-v1.json",
@@ -816,6 +847,8 @@
     "table-p3-natural-adaptive-longbench-summary.csv",
     "table-p3-natural-adaptive-longbench-categories.csv",
     "table-p3-natural-adaptive-longbench-slices.csv",
+    "table-p3-natural-adaptive-longmemeval-summary.csv",
+    "table-p3-natural-adaptive-longmemeval-question-types.csv",
     "table-p3-natural-adaptive-mrcr-summary.csv",
     "table-p3-natural-adaptive-mrcr-cells.csv",
     "table-p3-natural-adaptive-suite.csv",

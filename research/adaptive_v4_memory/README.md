@@ -193,6 +193,14 @@ Without an explicitly enabled `gpt-4o-2024-08-06` judge, generations and
 physical measurements are retained as `judge-blocked` terminal records and no
 auxiliary score is substituted for the official metric.
 
+The adaptive compatibility expansion separately pairs `fixed+pins` with the
+causal layer-quota arm on Qwen3-4B RULER, SCBench, LongBench-v2, and MRCR
+(89,578 predictions total). A fifth 1,000-generation LongMemEval cohort preserves
+the same raw-response and physical-budget evidence but remains quality-unverified
+while the official judge is blocked. Phi-4-mini runs the same adaptive contrast
+on RULER and LongBench-v2 as a bounded two-model × two-benchmark transfer grid;
+no Qwen/Phi scores or p-values are pooled.
+
 SCBench executes all 12 tasks in both official multi-turn and multi-request
 modes (10,286 turn predictions per arm). Multi-turn retains the official
 golden-answer follow-up prompts while removing generated answer tokens;

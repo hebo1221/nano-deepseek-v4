@@ -279,6 +279,7 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
         "p3_natural_adaptive_quota",
         "p3_natural_adaptive_quota_scbench",
         "p3_natural_adaptive_quota_longbench_v2",
+        "p3_natural_adaptive_quota_longmemeval",
         "p3_natural_adaptive_quota_mrcr",
         "p3_natural_adaptive_quota_suite",
         "p3_natural",
@@ -341,6 +342,19 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
         "continuous_refresh_claim_available"
     ] is False
     assert adaptive_longbench["required_audit"]["secondary_slices_are_descriptive"] is True
+    adaptive_longmemeval = manifest["evidence"][
+        "p3_natural_adaptive_quota_longmemeval"
+    ]
+    assert adaptive_longmemeval["required_audit"]["total_predictions"] == 1_000
+    assert adaptive_longmemeval["required_audit"]["paired_examples"] == 500
+    assert adaptive_longmemeval["required_audit"][
+        "successful_response_generation_retained"
+    ] is True
+    assert adaptive_longmemeval["required_audit"][
+        "judge_blocked_not_scored_as_zero"
+    ] is True
+    assert adaptive_longmemeval["required_audit"]["official_scores_verified"] is False
+    assert adaptive_longmemeval["required_audit"]["proxy_metric_substitution"] is False
     adaptive_mrcr = manifest["evidence"]["p3_natural_adaptive_quota_mrcr"]
     assert adaptive_mrcr["required_audit"]["total_predictions"] == 3_000
     assert adaptive_mrcr["required_audit"]["paired_examples"] == 1_500
@@ -1014,6 +1028,29 @@ def test_cross_family_adaptive_longbench_boundary_rejects_phi_reselection(
         )
 
 
+def test_adaptive_longmemeval_boundary_rejects_proxy_quality_metric(
+    tmp_path: Path,
+) -> None:
+    root = Path(__file__).resolve().parents[1]
+    source = (
+        root
+        / "research/adaptive_v4_memory/manifests/"
+        "p3-natural-adaptive-quota-longmemeval-v1.json"
+    )
+    payload = json.loads(source.read_text())
+    package._validate_boundary_manifest("natural_adaptive_quota_longmemeval", source)
+
+    payload["official_metric_contract"]["auxiliary_metric_policy"] = (
+        "use a local lexical proxy as the quality result"
+    )
+    tampered = tmp_path / "adaptive-longmemeval.json"
+    tampered.write_text(json.dumps(payload))
+    with pytest.raises(ValueError, match="adaptive LongMemEval boundary drifted"):
+        package._validate_boundary_manifest(
+            "natural_adaptive_quota_longmemeval", tampered
+        )
+
+
 def test_experiment_scale_audit_recomputes_headline_counts(tmp_path: Path) -> None:
     root = Path(__file__).resolve().parents[1]
     source = root / "research/adaptive_v4_memory/manifests/experiment-scale-audit-v1.json"
@@ -1489,6 +1526,39 @@ def test_cross_family_adaptive_longbench_v2_classification_is_gate_bound(
         p3_cross_family_adaptive_quota_longbench_v2=evidence,
     )
     assert classifications["p3_cross_family_adaptive_quota_longbench_v2"] == expected
+
+
+def test_adaptive_longmemeval_remains_unverified_without_official_judge() -> None:
+    evidence = {
+        "status": "terminal",
+        "classification": "unverified",
+        "audit": {
+            "total_predictions": 1_000,
+            "successful_response_generation_retained": True,
+            "official_scores_verified": False,
+            "proxy_metric_substitution": False,
+        },
+        "confirmation_gate": {"available": False, "passed": None},
+    }
+    classifications = package.classify_evidence(
+        _p2_core_evidence(),
+        _m5_pilot_evidence(),
+        _m3_offline_learned_risk_evidence(),
+        _online_learned_lookahead_evidence(),
+        {"primary_causal_gate": {"passed": False}},
+        {"benchmark_complete": False},
+        {"audit": {}},
+        {"audit": {}},
+        {"audit": {}},
+        {"audit": {}},
+        {"audit": {}},
+        {"audit": {}},
+        {"audit": {}},
+        {"audit": {}},
+        {"audit": {}},
+        p3_natural_adaptive_quota_longmemeval=evidence,
+    )
+    assert classifications["p3_natural_adaptive_quota_longmemeval"] == "unverified"
 
 
 @pytest.mark.parametrize(
@@ -2495,6 +2565,64 @@ def test_adaptive_longbench_tables_preserve_holm_and_descriptive_slice_boundary(
     assert categories[0]["holm_family_size"] == 6
     assert slices[0]["field"] == "difficulty"
     assert slices[0]["confirmation_gate_role"] is False
+
+
+def test_adaptive_longmemeval_tables_preserve_unverified_quality_boundary() -> None:
+    payload = {
+        "generation_audits": {
+            "fixed+pins": {
+                "response_generations_completed": 490,
+                "quality_status": "unverified",
+            },
+            "natural-adaptive-quota+pins": {
+                "response_generations_completed": 492,
+                "quality_status": "unverified",
+            },
+        },
+        "analysis": {
+            "quality": {
+                "status": "unverified",
+                "official_metric_status": "blocked",
+                "proxy_metric_substitution": False,
+            },
+            "response_generation": {
+                "adaptive_minus_fixed_completion_rate": 0.004,
+                "paired_completion_outcomes": {"both_completed": 488},
+            },
+            "measurements_by_arm": {
+                "fixed+pins": {"completed_response_generations": {"observations": 490}},
+                "natural-adaptive-quota+pins": {
+                    "completed_response_generations": {"observations": 492}
+                },
+            },
+            "by_question_type": {
+                "single-session-user": {
+                    "fixed+pins": {"response_completed": 100},
+                    "natural-adaptive-quota+pins": {"response_completed": 101},
+                }
+            },
+            "initial_prefill_physical": {
+                "paired_successful_quota_examples": 488,
+                "same_initial_global_token_budget_verified": True,
+            },
+        },
+    }
+
+    summary = package._p3_adaptive_longmemeval_summary_rows(payload)
+    question_types = package._p3_adaptive_longmemeval_question_type_rows(payload)
+
+    assert {row["scope"] for row in summary} == {
+        "quality",
+        "response-generation",
+        "initial-prefill-physical",
+        "arm-generation-audit",
+        "arm-measurements",
+    }
+    quality = next(row for row in summary if row["scope"] == "quality")
+    assert quality["status"] == "unverified"
+    assert quality["proxy_metric_substitution"] is False
+    assert question_types[0]["question_type"] == "single-session-user"
+    assert question_types[0]["response_completed"] == 100
 
 
 def test_adaptive_mrcr_tables_preserve_cell_holm_and_physical_scope() -> None:

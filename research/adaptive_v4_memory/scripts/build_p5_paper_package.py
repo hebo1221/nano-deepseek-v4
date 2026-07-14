@@ -61,6 +61,9 @@ REPRODUCTION_REQUIRED_MARKERS = [
     "validate_p3_natural_adaptive_quota_longbench_v2_manifest.py",
     "run_p3_longbench_v2.py --cohort adaptive-quota",
     "summarize_p3_natural_adaptive_quota_longbench_v2.py",
+    "validate_p3_natural_adaptive_quota_longmemeval_manifest.py",
+    "run_p3_longmemeval.py --cohort adaptive-quota",
+    "summarize_p3_natural_adaptive_quota_longmemeval.py",
     "validate_p3_natural_adaptive_quota_mrcr_manifest.py",
     "run_p3_mrcr.py --cohort adaptive-quota",
     "summarize_p3_natural_adaptive_quota_mrcr.py",
@@ -110,6 +113,9 @@ BOUNDARY_EXPERIMENT_IDS = {
     "natural_adaptive_quota_longbench_v2": (
         "p3-natural-adaptive-quota-longbench-v2-v1"
     ),
+    "natural_adaptive_quota_longmemeval": (
+        "p3-natural-adaptive-quota-longmemeval-v1"
+    ),
     "natural_adaptive_quota_mrcr": "p3-natural-adaptive-quota-mrcr-v1",
     "natural_adaptive_quota_suite": "p3-natural-adaptive-quota-suite-v1",
     "natural_suite": "p3-natural-language-suite-v1",
@@ -153,6 +159,10 @@ SCALE_AUDIT_SOURCE_MANIFESTS = {
     "natural_adaptive_quota_longbench_v2": Path(
         "research/adaptive_v4_memory/manifests/"
         "p3-natural-adaptive-quota-longbench-v2-v1.json"
+    ),
+    "natural_adaptive_quota_longmemeval": Path(
+        "research/adaptive_v4_memory/manifests/"
+        "p3-natural-adaptive-quota-longmemeval-v1.json"
     ),
     "natural_adaptive_quota_mrcr": Path(
         "research/adaptive_v4_memory/manifests/p3-natural-adaptive-quota-mrcr-v1.json"
@@ -628,6 +638,36 @@ def _validate_experiment_scale_audit(payload: dict[str, Any]) -> None:
         "P3 adaptive LongBench-v2 scale count drifted.",
     )
 
+    adaptive_longmemeval = sources["natural_adaptive_quota_longmemeval"]
+    adaptive_longmemeval_benchmark = adaptive_longmemeval.get("benchmark", {})
+    adaptive_longmemeval_lifecycle = adaptive_longmemeval.get(
+        "cache_lifecycle_contract", {}
+    )
+    expected_adaptive_longmemeval = {
+        "predictions": adaptive_longmemeval_benchmark.get("paired_predictions_total"),
+        "predictions_per_arm": adaptive_longmemeval_benchmark.get("examples_per_arm"),
+        "paired_arms": len(adaptive_longmemeval.get("arms", {})),
+        "same_initial_global_token_budget": adaptive_longmemeval_lifecycle.get(
+            "same_initial_global_kept_tokens"
+        ),
+        "official_judge_available": adaptive_longmemeval.get(
+            "official_metric_contract", {}
+        ).get("initial_execution_mode")
+        != "blocked",
+        "quality_claim_available": adaptive_longmemeval.get(
+            "official_metric_contract", {}
+        ).get("confirmation_gate_available_before_official_judging"),
+        "proxy_metric_substitution": False,
+        "continuous_refresh_claim_available": adaptive_longmemeval_lifecycle.get(
+            "continuous_refresh_claim_available"
+        ),
+    }
+    _require(
+        planned.get("p3_natural_adaptive_quota_longmemeval_qwen3_4b")
+        == expected_adaptive_longmemeval,
+        "P3 adaptive LongMemEval scale count drifted.",
+    )
+
     adaptive_mrcr = sources["natural_adaptive_quota_mrcr"]
     adaptive_mrcr_benchmark = adaptive_mrcr.get("benchmark", {})
     adaptive_mrcr_lifecycle = adaptive_mrcr.get("cache_lifecycle_contract", {})
@@ -932,6 +972,33 @@ def _validate_boundary_manifest(name: str, path: Path) -> dict[str, Any]:
             and "does not establish continuous adaptive reallocation"
             in payload.get("claim_boundary", ""),
             "P3 adaptive LongBench-v2 boundary drifted.",
+        )
+    elif name == "natural_adaptive_quota_longmemeval":
+        benchmark = payload.get("benchmark", {})
+        lifecycle = payload.get("cache_lifecycle_contract", {})
+        metric = payload.get("official_metric_contract", {})
+        failures = payload.get("failure_reporting", {})
+        _require(
+            payload.get("status")
+            == "frozen_before_any_adaptive_longmemeval_generation"
+            and benchmark.get("examples_per_arm") == 500
+            and benchmark.get("paired_predictions_total") == 1_000
+            and lifecycle.get("adaptive_allocation_scope")
+            == "initial history-context prefill only"
+            and lifecycle.get("same_initial_global_kept_tokens") is True
+            and lifecycle.get("continuous_refresh_claim_available") is False
+            and metric.get("judge_model") == "gpt-4o-2024-08-06"
+            and metric.get("initial_execution_mode") == "blocked"
+            and metric.get("quality_classification_before_official_judging")
+            == "unverified"
+            and metric.get("confirmation_gate_available_before_official_judging")
+            is False
+            and "no deterministic" in metric.get("auxiliary_metric_policy", "")
+            and "separately frozen manifest" in metric.get("paid_judge_policy", "")
+            and "judge-blocked" in failures.get("allowed_failure_types", [])
+            and "no model-quality success"
+            in payload.get("claim_boundary", ""),
+            "P3 adaptive LongMemEval boundary drifted.",
         )
     elif name == "natural_adaptive_quota_mrcr":
         benchmark = payload.get("benchmark", {})
@@ -1536,6 +1603,7 @@ def classify_evidence(
     p3_natural_adaptive_quota: dict[str, Any] | None = None,
     p3_natural_adaptive_quota_scbench: dict[str, Any] | None = None,
     p3_natural_adaptive_quota_longbench_v2: dict[str, Any] | None = None,
+    p3_natural_adaptive_quota_longmemeval: dict[str, Any] | None = None,
     p3_natural_adaptive_quota_mrcr: dict[str, Any] | None = None,
     p3_natural_adaptive_quota_suite: dict[str, Any] | None = None,
 ) -> dict[str, str]:
@@ -1982,6 +2050,8 @@ def classify_evidence(
             if longbench_terminal and longbench_gate.get("passed") is False
             else "unverified"
         )
+    if isinstance(p3_natural_adaptive_quota_longmemeval, dict):
+        result["p3_natural_adaptive_quota_longmemeval"] = "unverified"
     if isinstance(p3_natural_adaptive_quota_mrcr, dict):
         mrcr_audit = p3_natural_adaptive_quota_mrcr.get("audit", {})
         mrcr_terminal = (
@@ -2658,6 +2728,42 @@ def _p3_adaptive_longbench_slice_rows(
     ]
 
 
+def _p3_adaptive_longmemeval_summary_rows(
+    payload: dict[str, Any],
+) -> list[dict[str, Any]]:
+    analysis = payload["analysis"]
+    rows = [
+        {"scope": "quality", **_flatten_json_row(analysis["quality"])},
+        {
+            "scope": "response-generation",
+            **_flatten_json_row(analysis["response_generation"]),
+        },
+        {
+            "scope": "initial-prefill-physical",
+            **_flatten_json_row(analysis["initial_prefill_physical"]),
+        },
+    ]
+    rows.extend(
+        {"scope": "arm-generation-audit", "arm": arm, **_flatten_json_row(audit)}
+        for arm, audit in payload["generation_audits"].items()
+    )
+    rows.extend(
+        {"scope": "arm-measurements", "arm": arm, **_flatten_json_row(measurements)}
+        for arm, measurements in analysis["measurements_by_arm"].items()
+    )
+    return rows
+
+
+def _p3_adaptive_longmemeval_question_type_rows(
+    payload: dict[str, Any],
+) -> list[dict[str, Any]]:
+    return [
+        {"question_type": question_type, "arm": arm, **counts}
+        for question_type, by_arm in payload["analysis"]["by_question_type"].items()
+        for arm, counts in by_arm.items()
+    ]
+
+
 def _p3_adaptive_mrcr_summary_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
     analysis = payload["analysis"]
     rows = [{"scope": "overall", **_flatten_json_row(analysis["overall"])}]
@@ -3180,6 +3286,7 @@ def _report(
     p3_natural_adaptive_quota: dict[str, Any],
     p3_natural_adaptive_quota_scbench: dict[str, Any],
     p3_natural_adaptive_quota_longbench_v2: dict[str, Any],
+    p3_natural_adaptive_quota_longmemeval: dict[str, Any],
     p3_natural_adaptive_quota_mrcr: dict[str, Any],
     p3_natural_adaptive_quota_suite: dict[str, Any],
     p3_natural: dict[str, Any],
@@ -3332,6 +3439,13 @@ user request, is outside the completion gate, and is never reported as passed.
   **{p3_natural_adaptive_quota_longbench_v2["confirmation_gate"]["passed"]}**. Secondary
   sub-domain, difficulty, and length slices are descriptive only, and this result does
   not claim continuous adaptive reallocation.
+- P3 adaptive LongMemEval generation cohort:
+  {p3_natural_adaptive_quota_longmemeval["audit"]["total_predictions"]:,} paired
+  Qwen3-4B response attempts cover all 500 frozen questions with exact token-id pairing
+  and equal initial global KV tokens. Successful raw generations and physical audits are
+  retained, but the official GPT-4o judge remains blocked. Consequently its quality
+  classification and confirmation gate remain **unverified**; no proxy score or zero-score
+  substitution is used, and it is excluded from the scored adaptive natural-suite gate.
 - P3 adaptive MRCR replication:
   {p3_natural_adaptive_quota_mrcr["audit"]["total_predictions"]:,} Qwen3-4B
   predictions cover 2/4/8 needles and all five frozen token bins through 128K.
@@ -3560,6 +3674,9 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         p3_natural_adaptive_quota_longbench_v2=loaded[
             "p3_natural_adaptive_quota_longbench_v2"
         ],
+        p3_natural_adaptive_quota_longmemeval=loaded[
+            "p3_natural_adaptive_quota_longmemeval"
+        ],
         p3_natural_adaptive_quota_mrcr=loaded["p3_natural_adaptive_quota_mrcr"],
         p3_natural_adaptive_quota_suite=loaded[
             "p3_natural_adaptive_quota_suite"
@@ -3767,6 +3884,24 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         output_root / "table-p3-natural-adaptive-longbench-slices.csv",
         p3_adaptive_longbench_slices,
         _field_union(p3_adaptive_longbench_slices),
+    )
+    p3_adaptive_longmemeval_summary = _p3_adaptive_longmemeval_summary_rows(
+        loaded["p3_natural_adaptive_quota_longmemeval"]
+    )
+    _write_csv(
+        output_root / "table-p3-natural-adaptive-longmemeval-summary.csv",
+        p3_adaptive_longmemeval_summary,
+        _field_union(p3_adaptive_longmemeval_summary),
+    )
+    p3_adaptive_longmemeval_question_types = (
+        _p3_adaptive_longmemeval_question_type_rows(
+            loaded["p3_natural_adaptive_quota_longmemeval"]
+        )
+    )
+    _write_csv(
+        output_root / "table-p3-natural-adaptive-longmemeval-question-types.csv",
+        p3_adaptive_longmemeval_question_types,
+        _field_union(p3_adaptive_longmemeval_question_types),
     )
     p3_adaptive_mrcr_summary = _p3_adaptive_mrcr_summary_rows(
         loaded["p3_natural_adaptive_quota_mrcr"]
@@ -4009,6 +4144,9 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         ],
         p3_natural_adaptive_quota_longbench_v2=loaded[
             "p3_natural_adaptive_quota_longbench_v2"
+        ],
+        p3_natural_adaptive_quota_longmemeval=loaded[
+            "p3_natural_adaptive_quota_longmemeval"
         ],
         p3_natural_adaptive_quota_mrcr=loaded["p3_natural_adaptive_quota_mrcr"],
         p3_natural_adaptive_quota_suite=loaded[

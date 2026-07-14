@@ -131,6 +131,17 @@ the document-context prefill; the question is appended identically under both ar
 .venv/bin/python research/adaptive_v4_memory/scripts/summarize_p3_natural_adaptive_quota_longbench_v2.py
 ```
 
+After the adaptive RULER audit and baseline LongMemEval audit are terminal, run the
+separately frozen judge-blocked generation cohort. It retains all raw responses and
+physical quota audits, but emits no quality, non-inferiority, or negative-result claim.
+
+```bash
+.venv/bin/python research/adaptive_v4_memory/scripts/validate_p3_natural_adaptive_quota_longmemeval_manifest.py
+.venv/bin/python research/adaptive_v4_memory/scripts/run_p3_longmemeval.py --cohort adaptive-quota \
+  --kvpress-root "$KVPRESS_ROOT" --model-snapshot "$MODEL_SNAPSHOT" --judge-mode blocked
+.venv/bin/python research/adaptive_v4_memory/scripts/summarize_p3_natural_adaptive_quota_longmemeval.py
+```
+
 After the adaptive RULER audit and baseline MRCR audit are terminal, run the
 separately frozen multi-needle replication. Adaptive allocation applies only to
 the long context prefill; the final query is appended identically under both arms.

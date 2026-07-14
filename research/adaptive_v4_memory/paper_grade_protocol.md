@@ -1,8 +1,8 @@
 # Paper-grade expansion protocol
 
-Protocol version: 1.9
+Protocol version: 2.0
 Frozen: 2026-07-14  
-Amended: 2026-07-14, before causal-factorial held-out execution
+Amended: 2026-07-15, before the added adaptive natural-language cohorts
 Status: active; P2 synthetic core runs first, followed by causal ablations,
 natural-language evaluation, and systems evaluation
 
@@ -69,6 +69,15 @@ selected by the complete Qwen3-1.7B screen on 13 RULER tasks at 8K, 32K, and
 128K with 100 paired examples per task-length (7,800 predictions). Phi-specific
 reselection or tuning is prohibited. This cohort is reported separately from
 the full Qwen3 natural suite and cannot be pooled into a larger apparent sample.
+
+Version 2.0 freezes the paper-scale adaptive natural-language expansion before
+the added cohort outcomes: 65,000 Qwen RULER, 20,572 SCBench, 1,006 LongBench-v2,
+and 3,000 MRCR predictions form a separately audited 89,578-prediction scored
+suite with no cross-benchmark score or p-value pooling. A separate 1,000-generation
+LongMemEval cohort retains raw responses and physical audits while its official
+GPT-4o judge is blocked; it cannot enter the scored suite. Phi-4-mini adds 7,800
+adaptive RULER and 1,006 adaptive LongBench-v2 predictions, completing a bounded
+Qwen/Phi × RULER/LongBench-v2 transfer grid without Phi-specific tuning.
 
 ## 1. Primary questions
 
@@ -340,6 +349,15 @@ Its example-paired bootstrap uses seed `9171501`. Memory compliance gates the
 maximum of 39 task-by-length ratios, each computed as summed selected-arm hot
 resident bytes divided by summed native bytes over pairs with positive
 measurements in both arms; a cell without a measurable pair does not pass.
+
+The adaptive compatibility evidence is also frozen separately. Qwen3-4B runs
+44,789 paired examples per arm over RULER, SCBench, LongBench-v2, and MRCR, with
+each benchmark retaining its own metric, interval, multiplicity correction,
+failure accounting, and confirmation gate. LongMemEval adds 500 paired raw
+generations per arm but remains quality-unverified until its official judge is
+explicitly provisioned. Phi-4-mini reuses the Qwen-selected scorer and 50%-KV
+operating point for RULER and LongBench-v2 only; its two benchmark results are
+reported separately and are never pooled with Qwen.
 
 Official DeepSeek-V4 Flash evaluation is a separate evidence tier. If the
 pinned checkpoint and supported runtime cannot be provisioned, the report must
