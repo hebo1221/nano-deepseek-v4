@@ -91,6 +91,8 @@ control under the native V4 architecture.
 | [FlashMemory-DeepSeek-V4](https://arxiv.org/abs/2606.09079) | CPU cold pool, lookahead Memory Indexer, GPU working set, native second-stage top-k | refresh interval 64, threshold 0.5, layers 10/12/20, OR aggregation | False positives grow with irrelevant context; dense MRCR memory fails | Can uncertainty-controlled budgets, refresh, and fallback handle both sparse and dense demand? |
 | [Tangram](https://arxiv.org/abs/2606.06302) | static reservation, ragged paging, ahead-of-time load balancing for non-uniform budgets | calibrated head ranking and bounded ratios | Dynamic heterogeneity otherwise causes fragmentation, reclamation, and load imbalance | How should V4 block classes and adaptive layer budgets map to real pages and batches? |
 | [NOSA](https://arxiv.org/abs/2510.13602) | query-aware and query-agnostic locality for CPU offload | learned transfer selection | Targets long generation by reducing unnecessary transfers | Strong P4 transfer-aware comparison; useful bytes and late misses must accompany quality |
+| [EVICPRESS](https://arxiv.org/abs/2512.14946) | jointly profiles lossy compression and adaptive eviction across storage tiers and contexts | periodic quality-delay utility profiling plus global placement heuristic | Multi-context placement can trade conservative compression against fast-tier hit rate | Our within-request residency policy is not a substitute for fleet-level placement; quality, hit rate, and TTFT must be compared at equal workload and resource limits |
+| [KV-Direct](https://arxiv.org/abs/2603.19664) | checkpoints residual vectors and reconstructs exact K/V on demand | lossless representation choice plus recomputation | Claims token-identical recovery with much smaller state and favorable moderate-batch recomputation cost | A cold KV copy is not the only reversible design; compare checkpoint bytes, recomputation, kernel support, and exactness before claiming the best cold representation |
 | [AsymCache](https://arxiv.org/abs/2606.02964) | lossless GPU eviction, position-aware recomputation, Multi-Segment Attention, adaptive chunking | cache hit rate and attention-kernel cost model | Non-contiguous layout and recomputation cost alter TTFT/TPOT even when logical hit rate is unchanged | P4 must report layout/kernel evidence separately from HBM and transfer savings; the current reference runtime cannot claim this production benefit |
 
 FlashMemory is the minimum direct baseline. A method that only replaces its
@@ -142,6 +144,8 @@ limited form.
 | LAVa | No | No | Query-adaptive | Yes | No | No | No | No |
 | IndexCache | Sparse-index model | N/A | No | Indexer on/off | Static/calibrated | No | No | No |
 | [SP-KV](https://arxiv.org/abs/2605.14037) | No | No | Per-token write gate | Yes | N/A | Threshold only | No | Kernel-aware |
+| [EVICPRESS](https://arxiv.org/abs/2512.14946) | No | Partial (lossy/tiered) | Periodic cross-context | Profiled configurations | No | Utility-based conservative compression | Yes | Yes |
+| [KV-Direct](https://arxiv.org/abs/2603.19664) | No | Yes (residual checkpoints) | On-demand recomputation | N/A | No | Exact reconstruction | Yes | Recompute-aware |
 | FlashMemory-V4 | Yes | Yes | Fixed threshold/interval | Three fixed predictors | Periodic fixed | No | Limited | Yes |
 | Adaptive V4 Memory (planned) | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
 
@@ -185,6 +189,10 @@ The final row is a research specification, not an achieved feature list.
     can avoid storing a token, a sparse reader can skip it for one query, and a
     residency controller can move it to a recoverable tier. These actions have
     different query-shift risks and cannot share one accuracy or memory claim.
+14. **Compare reversible representations, not only placements.** A cold KV
+    block, a residual checkpoint reconstructed on demand, and a lossy latent
+    summary occupy different bytes and impose different transfer, recompute,
+    and exactness costs. Report those axes before selecting a cold tier.
 
 ## 10. Reading queue
 
@@ -197,6 +205,9 @@ It should be reviewed before expanding the controller action space:
 - [FastKV](https://arxiv.org/abs/2502.01068): separating context reduction from
   decode cache compression;
 - [Retrieval Head Mechanistically Explains Long-Context Factuality](https://arxiv.org/abs/2404.15574): retrieval-head causal analysis;
+- [WorldKV](https://arxiv.org/abs/2605.22718): cross-domain evidence for
+  evicting video-world KV chunks to GPU/CPU memory and reinserting
+  scene-relevant chunks without re-encoding;
 - [The Sparse Frontier](https://arxiv.org/abs/2504.17768): sparse-attention
   trade-offs; and
 - [Understanding the Physics of KV Cache Compression](https://arxiv.org/abs/2603.01426): attention-dynamics analysis.
