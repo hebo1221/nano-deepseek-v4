@@ -7,7 +7,7 @@ import json
 import math
 import platform
 import subprocess
-from collections import defaultdict
+from collections import Counter, defaultdict
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
@@ -152,19 +152,6 @@ def _load_arm(
         f"Phi RULER sequence dependencies drifted for {arm}.",
     )
     verify_sequence_dependencies(dependencies, arm=arm)
-    dependencies = identity.get("sequence_gate_dependencies", {})
-    _require(
-        set(dependencies)
-        == {"primary_core", "primary_causal", "nine_seed_causal", "fixed_selection"}
-        and cell.get("sequence_gate", {}).get("dependencies") == dependencies,
-        f"Phi RULER sequence dependencies drifted for {arm}.",
-    )
-    for name, metadata in dependencies.items():
-        dependency_path = Path(metadata.get("path", ""))
-        _require(
-            dependency_path.is_file() and metadata.get("sha256") == sha256(dependency_path),
-            f"Phi RULER {name} dependency drifted for {arm}.",
-        )
     verify_runtime_kvpress_binding(cell.get("environment", {}).get("kvpress_binding"))
     raw = cell.get("raw_records", {})
     records_path = Path(raw.get("path", ""))
@@ -442,6 +429,161 @@ def analyze_pairs(
                 for dense, compressed in zip(native, candidate, strict=True)
             ]
         ),
+    }
+
+
+def _group_row(
+    pairs: list[tuple[dict[str, Any], dict[str, Any]]], *, label: dict[str, Any]
+) -> dict[str, Any]:
+    _require(bool(pairs), "Phi statistical cell is empty.")
+    native_scores = np.asarray([pair[0]["effective_score"] for pair in pairs])
+    candidate_scores = np.asarray([pair[1]["effective_score"] for pair in pairs])
+    native_failures = sum(pair[0]["status"] != "scored" for pair in pairs)
+    candidate_failures = sum(pair[1]["status"] != "scored" for pair in pairs)
+    measurable = [
+        (pair[0]["hot_resident_bytes"], pair[1]["hot_resident_bytes"])
+        for pair in pairs
+        if pair[0]["hot_resident_bytes"] > 0 and pair[1]["hot_resident_bytes"] > 0
+    ]
+    delta = candidate_scores - native_scores
+    return {
+        **label,
+        "paired_examples": len(pairs),
+        "native_accuracy_intention_to_treat": float(native_scores.mean()),
+        "qwen_selected_accuracy_intention_to_treat": float(candidate_scores.mean()),
+        "mean_difference": float(delta.mean()),
+        "mean_difference_percentage_points": float(delta.mean() * 100.0),
+        "native_failures": native_failures,
+        "qwen_selected_failures": candidate_failures,
+        "native_failure_rate": native_failures / len(pairs),
+        "qwen_selected_failure_rate": candidate_failures / len(pairs),
+        "failure_rate_difference": (candidate_failures - native_failures) / len(pairs),
+        "measurable_kv_pairs": len(measurable),
+        "realized_kv_fraction": (
+            sum(candidate_bytes for _native_bytes, candidate_bytes in measurable)
+            / sum(native_bytes for native_bytes, _candidate_bytes in measurable)
+            if measurable
+            else None
+        ),
+        "native_hot_resident_bytes_sum": sum(row[0] for row in measurable),
+        "qwen_selected_hot_resident_bytes_sum": sum(row[1] for row in measurable),
+    }
+
+
+def summarize_pairs(
+    native: list[dict[str, Any]],
+    candidate: list[dict[str, Any]],
+    *,
+    manifest: dict[str, Any],
+) -> dict[str, Any]:
+    _require(len(native) == len(candidate) == EXPECTED_EXAMPLES, "Paired record count drifted.")
+    analysis = analyze_pairs(
+        native,
+        candidate,
+        bootstrap_seed=manifest["statistics"]["paired_bootstrap_seed"],
+        bootstrap_resamples=manifest["statistics"]["paired_bootstrap_resamples"],
+    )
+    pairs = list(zip(native, candidate, strict=True))
+    task_length_rows = [
+        _group_row(
+            [
+                pair
+                for pair in pairs
+                if pair[0]["length_tokens"] == length and pair[0]["task"] == task
+            ],
+            label={"length_tokens": length, "task": task},
+        )
+        for length in LENGTHS
+        for task in TASKS
+    ]
+    length_rows: list[dict[str, Any]] = []
+    for length in LENGTHS:
+        row = _group_row(
+            [pair for pair in pairs if pair[0]["length_tokens"] == length],
+            label={"length_tokens": length},
+        )
+        exact = next(
+            value
+            for value in analysis["by_length_exact_task_sign_flip"]
+            if value["length_tokens"] == length
+        )
+        row.update(
+            exact_task_cluster_sign_flip_two_sided_p=exact["two_sided_p"],
+            task_clusters=exact["task_clusters"],
+            exact_sign_assignments=exact["exact_assignments"],
+            holm_adjusted_task_cluster_p=exact["holm_adjusted_p"],
+        )
+        length_rows.append(row)
+    task_rows = [
+        _group_row(
+            [pair for pair in pairs if pair[0]["task"] == task],
+            label={"task": task},
+        )
+        for task in TASKS
+    ]
+    overall = _group_row(pairs, label={})
+    overall.update(analysis["overall"])
+    worst = min(task_length_rows, key=lambda row: row["mean_difference"])
+    measurable_cells = [row for row in task_length_rows if row["realized_kv_fraction"] is not None]
+    maximum_kv_fraction = (
+        max(float(row["realized_kv_fraction"]) for row in measurable_cells)
+        if len(measurable_cells) == len(task_length_rows)
+        else None
+    )
+    gate = manifest["transfer_gate"]
+    checks = {
+        "overall_mean_accuracy_difference": (
+            overall["mean_difference"] >= gate["overall_mean_accuracy_difference_minimum"]
+        ),
+        "overall_paired_bootstrap_lower_bound": (
+            overall["paired_bootstrap_95_ci"][0]
+            >= gate["overall_paired_bootstrap_lower_bound_minimum"]
+        ),
+        "worst_task_length_regression": (
+            worst["mean_difference"] >= gate["worst_task_length_regression_minimum"]
+        ),
+        "failure_rate_increase": (
+            overall["failure_rate_difference"] <= gate["maximum_failure_rate_increase"]
+        ),
+        "maximum_realized_kv_fraction": (
+            maximum_kv_fraction is not None
+            and maximum_kv_fraction <= gate["maximum_realized_kv_fraction"]
+        ),
+    }
+    return {
+        "overall": overall,
+        "by_length_with_exact_task_cluster_inference": length_rows,
+        "by_task": task_rows,
+        "by_task_length": task_length_rows,
+        "worst_task_length": worst,
+        "operational_failures_by_arm": {
+            arm: dict(
+                sorted(
+                    Counter(
+                        row["failure_type"] for row in records if row["status"] != "scored"
+                    ).items()
+                )
+            )
+            for arm, records in zip(ARMS, (native, candidate), strict=True)
+        },
+        "memory": {
+            "aggregation": gate["realized_kv_fraction_aggregation"],
+            "measurable_task_length_cells": len(measurable_cells),
+            "required_task_length_cells": len(task_length_rows),
+            "maximum_task_length_realized_kv_fraction": maximum_kv_fraction,
+        },
+        "transfer_gate": {
+            "passed": all(checks.values()),
+            "all_required": gate["all_required"],
+            "checks": checks,
+            "thresholds": gate,
+            "interpretation": (
+                "bounded cross-family transfer supported"
+                if all(checks.values())
+                else "negative or bounded transfer result retained without Phi reselection"
+            ),
+        },
+        "paired_record_digest": analysis["paired_record_digest"],
     }
 
 
