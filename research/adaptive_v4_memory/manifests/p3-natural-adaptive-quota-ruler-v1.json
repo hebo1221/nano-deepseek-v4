@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "experiment_id": "p3-natural-adaptive-quota-ruler-v1",
+  "status": "frozen_before_any_compatibility_arm_prediction",
+  "date": "2026-07-15",
+  "role": "real-model architecture-compatibility test of adaptive layer quota allocation",
+  "sequence_gate": {
+    "required_nine_seed_causal_summary": "artifacts/adaptive_v4_memory/paper_grade/p2-nine-seed-causal.summary.json",
+    "required_fixed_selection": "artifacts/adaptive_v4_memory/paper_grade/p3/fixed-baseline-selection.json",
+    "required_ruler_dataset_root": "artifacts/adaptive_v4_memory/paper_grade/p3/natural/ruler-qwen3-4b/data",
+    "policy": "no compatibility-arm prediction before terminal nine-seed P2, frozen score-compatible baseline selection, and audited natural RULER datasets"
+  },
+  "model": {
+    "repo_id": "Qwen/Qwen3-4B-Instruct-2507",
+    "revision": "cdbee75f17c01a7cc42f958dc650907174af0554",
+    "architecture": "Qwen3ForCausalLM",
+    "dtype": "bfloat16",
+    "num_hidden_layers": 36,
+    "maximum_supported_context_tokens": 262144
+  },
+  "benchmark": {
+    "name": "RULER",
+    "lengths_tokens": [8192, 16384, 32768, 65536, 131072],
+    "tasks": 13,
+    "samples_per_task_length": 500,
+    "predictions_per_arm": 32500,
+    "paired_predictions_total": 65000,
+    "generation_seed": 42,
+    "paired_unit": "same frozen generated example under both compatibility arms"
+  },
+  "score_compatible_baseline_selection": {
+    "eligible_arms": [
+      "streaming_llm",
+      "snapkv",
+      "pyramidkv",
+      "critical_expected_attention"
+    ],
+    "compression_ratio": 0.5,
+    "rule": "choose the highest row-weighted mean accuracy from the already frozen Qwen3-1.7B selection artifact, breaking ties lexicographically; do not inspect Qwen3-4B compatibility outcomes",
+    "reason": "the protected-prefix and quota wrappers require a direct ScorerPress and cannot silently unwrap AdaKV"
+  },
+  "arms": {
+    "fixed+pins": {
+      "quota": "floor(context_tokens * 0.5) at every layer",
+      "selection": "top score positions after forcing protected positions into the same budget"
+    },
+    "natural-adaptive-quota+pins": {
+      "global_quota": "36 * floor(context_tokens * 0.5), exactly equal to fixed+pins",
+      "layer_signal": "normalized entropy concentration of z-scored current-layer scorer values",
+      "causal_prior": "running mean of earlier-layer concentrations only",
+      "maximum_layer_adjustment_fraction": 0.25,
+      "feasibility_rule": "clip each allocation so every remaining layer can satisfy its frozen minimum and maximum; the last layer consumes the exact residual",
+      "selection": "top score positions after forcing protected positions into the allocated layer budget"
+    }
+  },
+  "pins": {
+    "span": [0, 4],
+    "meaning": "four leading attention-sink/chat-prefix token positions",
+    "same_budget": true,
+    "failure_policy": "fail closed if pins cannot fit without budget expansion"
+  },
+  "statistics": {
+    "paired_bootstrap_resamples": 10000,
+    "paired_bootstrap_seed": 9171502,
+    "confidence": 0.95,
+    "task_cluster_sign_flip": true,
+    "holm_family_size": 5,
+    "report": [
+      "overall and per-length paired accuracy differences",
+      "all task-by-length effects and worst regression",
+      "failure-rate difference",
+      "hot-resident bytes, peak HBM, latency, and controller time",
+      "per-layer quota and score-concentration distributions"
+    ]
+  },
+  "confirmation_gate": {
+    "all_required": true,
+    "overall_accuracy_difference_minimum": 0.0,
+    "paired_bootstrap_lower_bound_minimum": -0.01,
+    "nonnegative_length_count_minimum": 4,
+    "worst_task_length_regression_minimum": -0.05,
+    "maximum_failure_rate_increase": 0.005,
+    "maximum_global_kept_token_relative_error": 0.0,
+    "maximum_hot_resident_byte_relative_difference": 0.01
+  },
+  "outputs": {
+    "result_root": "artifacts/adaptive_v4_memory/paper_grade/p3/natural-adaptive-quota/ruler-qwen3-4b",
+    "summary": "artifacts/adaptive_v4_memory/paper_grade/p3/natural-adaptive-quota/ruler-qwen3-4b.summary.json"
+  },
+  "claim_boundary": "This cohort tests a repository-owned causal same-global-budget compatibility controller on a real dense-attention model. It is not an unchanged transfer of the synthetic DeepSeek-style controller, not official DeepSeek-V4 evidence, and is never pooled with the preregistered native-versus-fixed natural suite."
+}
