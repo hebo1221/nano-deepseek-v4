@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 import pytest
+import tomllib
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "research/adaptive_v4_memory/scripts"
 sys.path.insert(0, str(SCRIPTS))
@@ -29,6 +30,11 @@ def test_natural_safety_manifest_freezes_official_counts_and_paid_judge_guard() 
         "ifeval_predictions_per_arm": 541,
         "paid_judge_default_blocked": True,
     }
+    official = tomllib.loads((root / "pyproject.toml").read_text())["project"][
+        "optional-dependencies"
+    ]["official"]
+    assert any(value.startswith("immutabledict") for value in official)
+    assert any(value.startswith("langdetect") for value in official)
     protocol = json.loads(path.read_text())["benchmarks"]["LongSafety"]["prompt_protocol"]
     assert protocol["front"].format(instruction="I", context="C") == (
         "Based on the following long context, I\n\nC"

@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import importlib
+import importlib.metadata
 import json
 import subprocess
 import sys
@@ -227,6 +228,22 @@ def _atomic_json(path: Path, payload: dict[str, Any]) -> None:
     temporary.replace(path)
 
 
+def runtime_environment() -> dict[str, Any]:
+    freeze = subprocess.run(
+        [sys.executable, "-m", "pip", "freeze", "--all"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    return {
+        "packages": {
+            name: importlib.metadata.version(name)
+            for name in ("absl-py", "immutabledict", "langdetect", "nltk")
+        },
+        "pip_freeze_sha256": hashlib.sha256(freeze.encode()).hexdigest(),
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Score P3 IFEval with pinned official code.")
     parser.add_argument(
@@ -340,6 +357,7 @@ def main() -> None:
             for arm in ARMS
         },
         "official_source_revision": contract["upstream_code"]["revision"],
+        "environment": runtime_environment(),
         "input_pairing_verified": True,
         "audit": {
             "required_arms_terminal": True,

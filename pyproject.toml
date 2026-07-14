@@ -32,7 +32,11 @@ adaptive-v4-replay = "nano_deepseek_v4.memory_replay:main"
 
 [project.optional-dependencies]
 official = [
+    "absl-py>=2.1",
     "huggingface_hub>=0.20",
+    "immutabledict>=4.2",
+    "langdetect>=1.0.9",
+    "nltk>=3.9",
     "tokenizers>=0.20",
 ]
 dev = [
