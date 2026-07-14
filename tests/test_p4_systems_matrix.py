@@ -267,6 +267,8 @@ def test_p4_partial_artifact_preserves_surviving_policy(tmp_path: Path) -> None:
                     cell, "tiered-native", f"{index:064x}"
                 ),
             },
+            "policy_failures": {},
+            "greedy_predictions_identical": None,
         }
         for index in range(systems.MEASURED_REPETITIONS)
     ]
@@ -304,10 +306,17 @@ def test_p4_partial_artifact_preserves_surviving_policy(tmp_path: Path) -> None:
         "repetitions": repetitions,
         "policy_status": {
             "resident-native": {
+                "status": "failed",
                 "measured_repetitions": 0,
-                "failure": {"failure_type": "oom", "phase": "measured"},
+                "failure": {
+                    "failure_type": "oom",
+                    "error_type": "OutOfMemoryError",
+                    "error": "terminal failure",
+                    "phase": "measured",
+                },
             },
             "tiered-native": {
+                "status": "complete",
                 "measured_repetitions": systems.MEASURED_REPETITIONS,
                 "failure": None,
             },
@@ -340,6 +349,17 @@ def test_p4_partial_artifact_preserves_surviving_policy(tmp_path: Path) -> None:
         "peak_allocated_bytes"
     )
     artifact.write_text(json.dumps(missing_metric))
+    assert not systems._artifact_valid(
+        artifact,
+        cell=cell,
+        digest="implementation",
+        manifest_digest="manifest",
+        p3_digest="p3",
+    )
+
+    empty_error = json.loads(payload_json)
+    empty_error["policy_status"]["resident-native"]["failure"]["error"] = ""
+    artifact.write_text(json.dumps(empty_error))
     assert not systems._artifact_valid(
         artifact,
         cell=cell,

@@ -440,19 +440,26 @@ def _artifact_valid(
         policy: sum(policy in row.get("policies", {}) for row in repetitions) for policy in POLICIES
     }
     if any(
-        policy_status[policy].get("measured_repetitions") != counts[policy] for policy in POLICIES
+        not isinstance(policy_status[policy], dict)
+        or policy_status[policy].get("measured_repetitions") != counts[policy]
+        or policy_status[policy].get("status")
+        != ("complete" if counts[policy] == MEASURED_REPETITIONS else "failed")
+        for policy in POLICIES
     ):
         return False
     for policy in POLICIES:
         failure = policy_status[policy].get("failure")
         if warmup_policy_runs[policy] < WARMUPS:
             if not (
-                isinstance(failure, dict)
+                _valid_failure(failure, phases={"warmup"})
                 and failure.get("phase") == "warmup"
                 and failure in warmup_failures
             ):
                 return False
-        elif isinstance(failure, dict) and failure.get("phase") == "warmup":
+        elif counts[policy] == MEASURED_REPETITIONS:
+            if failure is not None:
+                return False
+        elif not _valid_failure(failure, phases={"measured"}):
             return False
     if len(warmup_failures) != sum(
         isinstance(policy_status[policy].get("failure"), dict)
@@ -577,6 +584,23 @@ def _valid_policy_run(
     return True
 
 
+def _valid_failure(value: Any, *, phases: set[str]) -> bool:
+    return (
+        isinstance(value, dict)
+        and value.get("failure_type") in {"oom", "timeout", "error"}
+        and isinstance(value.get("error_type"), str)
+        and bool(value["error_type"])
+        and isinstance(value.get("error"), str)
+        and bool(value["error"])
+        and value.get("phase") in phases
+        and (
+            "repetition" not in value
+            or type(value.get("repetition")) is int
+            and value["repetition"] >= 0
+        )
+    )
+
+
 def _valid_repetition(
     row: dict[str, Any],
     index: int,
@@ -584,6 +608,7 @@ def _valid_repetition(
     cell: tuple[str, int, int, str, int, int],
 ) -> bool:
     policies = row.get("policies", {})
+    policy_failures = row.get("policy_failures")
     input_digest = row.get("input_digest")
     expected_order = POLICIES if index % 2 == 0 else tuple(reversed(POLICIES))
     if not (
@@ -594,6 +619,14 @@ def _valid_repetition(
         and tuple(row.get("execution_order", ())) == expected_order
         and isinstance(policies, dict)
         and set(policies).issubset(POLICIES)
+        and isinstance(policy_failures, dict)
+        and set(policy_failures).issubset(POLICIES)
+        and not (set(policies) & set(policy_failures))
+        and all(
+            _valid_failure(failure, phases={"measured"})
+            and failure.get("repetition") == index + WARMUPS
+            for failure in policy_failures.values()
+        )
         and all(
             _valid_policy_run(
                 policy_run,
@@ -606,7 +639,7 @@ def _valid_repetition(
     ):
         return False
     if set(policies) != set(POLICIES):
-        return True
+        return row.get("greedy_predictions_identical") is None
     identical = (
         policies[POLICIES[0]].get("prediction_digest")
         == policies[POLICIES[1]].get("prediction_digest")
