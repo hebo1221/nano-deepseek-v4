@@ -15,10 +15,11 @@
         ".venv/bin/python -m build",
         ".venv/bin/twine check dist/*"
       ],
-      "github_actions": "required_before_goal_completion",
-      "github_actions_current_status": "disabled_manually",
+      "github_actions": "disabled_by_user_not_required",
+      "github_actions_current_status": "disabled_by_user",
       "github_actions_passed": false,
-      "interpretation": "Local release gates and a successful GitHub Actions CI run on the final source are mandatory. Package generation may record the current disabled state, but it does not satisfy or waive the CI completion requirement."
+      "github_actions_required_for_completion": false,
+      "interpretation": "The five digest-bound local release checks on the final clean source are mandatory. GitHub Actions remains disabled by user request, is outside the completion gate, and is never classified as passed."
     }
   },
   "requirements": [
@@ -254,7 +255,7 @@
     {
       "id": "P5.4",
       "phase": "P5",
-      "requirement": "Pass Ruff, mypy, full pytest, build, twine, and GitHub Actions CI on the final source.",
+      "requirement": "Pass Ruff, mypy, full pytest, build, and twine on the final clean source; keep GitHub Actions disabled by user request.",
       "sources": [{"kind": "verification-contract", "name": "final-local-release-gate"}]
     },
     {

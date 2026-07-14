@@ -250,9 +250,11 @@ def _p4_500k_evidence(successful: int = 2) -> dict[str, object]:
 
 def test_p5_manifest_requires_every_digest_bound_stage() -> None:
     root = Path(__file__).resolve().parents[1]
-    manifest = json.loads(
-        (root / "research/adaptive_v4_memory/manifests/p5-paper-package-v1.json").read_text()
-    )
+    manifest_path = root / "research/adaptive_v4_memory/manifests/p5-paper-package-v1.json"
+    manifest_text = manifest_path.read_text()
+    manifest = json.loads(manifest_text)
+
+    assert manifest_text.count('"p2_causal_confirmatory":') == 1
 
     assert set(manifest["evidence"]) == {
         "p2_core",
@@ -617,8 +619,8 @@ def test_p5_reproduction_guide_binds_every_stage_and_failure_boundary(tmp_path: 
     normalized = " ".join(rendered.split())
 
     assert "resume-safe" in normalized
-    assert "do not report CI as passed" in normalized
-    assert "does not waive it" in normalized
+    assert "must not be reported as passed" in normalized
+    assert "outside the completion gate" in normalized
     assert all(marker in normalized for marker in package.REPRODUCTION_REQUIRED_MARKERS)
 
     incomplete = tmp_path / "reproduction.md"
@@ -714,7 +716,7 @@ def test_p5_traceability_covers_every_requirement_and_fails_closed() -> None:
         {
             "requirement_id": "P5.4",
             "phase": "P5",
-            "requirement": "Pass Ruff, mypy, full pytest, build, twine, and GitHub Actions CI on the final source.",
+            "requirement": "Pass Ruff, mypy, full pytest, build, and twine on the final clean source; keep GitHub Actions disabled by user request.",
             "source_kind": "verification-contract",
             "source_name": "final-local-release-gate",
             "binding_status": "scheduled-final-verification",
@@ -725,6 +727,7 @@ def test_p5_traceability_covers_every_requirement_and_fails_closed() -> None:
     assert final_gate["runner"].endswith("run_p5_release_gate.py")
     assert (root / final_gate["runner"]).is_file()
     assert final_gate["github_actions_passed"] is False
+    assert final_gate["github_actions_required_for_completion"] is False
 
     incomplete = json.loads(json.dumps(traceability))
     incomplete["requirements"].pop()

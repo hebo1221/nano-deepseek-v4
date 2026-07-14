@@ -131,16 +131,17 @@ def build_payload(
             "all_local_checks_passed": all_local_checks_passed,
             "failed_checks": [check["name"] for check in checks if not check.get("passed")],
             "github_actions": {
-                "status": "disabled_manually",
+                "status": "disabled_by_user",
                 "passed": False,
-                "completion_gate_satisfied": False,
+                "required_for_completion": False,
             },
         },
         "checks": checks,
         "environment": {"python": platform.python_version()},
         "claim_boundary": (
             "This artifact proves only the five local release checks at one clean source "
-            "commit. GitHub Actions is disabled and is not classified as passed."
+            "commit. GitHub Actions remains disabled by user request, is outside the "
+            "completion gate, and is not classified as passed."
         ),
     }
 

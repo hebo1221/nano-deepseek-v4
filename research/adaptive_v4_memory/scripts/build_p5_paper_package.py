@@ -65,7 +65,7 @@ REPRODUCTION_REQUIRED_MARKERS = [
     "build_p5_paper_package.py",
     "run_p5_release_gate.py",
     *FINAL_RELEASE_COMMANDS,
-    "A successful final GitHub Actions CI run remains mandatory before goal completion",
+    "GitHub Actions remains disabled by user request",
     "Official DeepSeek-V4 boundary",
 ]
 BOUNDARY_EXPERIMENT_IDS = {
@@ -802,8 +802,8 @@ def _validate_reproduction_guide(path: Path) -> str:
     _require(
         "resume-safe" in normalized_guide
         and "Never delete a terminal failure artifact" in normalized_guide
-        and "do not report CI as passed" in normalized_guide
-        and "does not waive it" in normalized_guide,
+        and "must not be reported as passed" in normalized_guide
+        and "outside the completion gate" in normalized_guide,
         "Reproduction failure and CI boundaries drifted.",
     )
     return guide
@@ -826,9 +826,10 @@ def _traceability_rows(
     release = cast(dict[str, Any], raw_release)
     _require(
         release.get("commands") == FINAL_RELEASE_COMMANDS
-        and release.get("github_actions") == "required_before_goal_completion"
-        and release.get("github_actions_current_status") == "disabled_manually"
+        and release.get("github_actions") == "disabled_by_user_not_required"
+        and release.get("github_actions_current_status") == "disabled_by_user"
         and release.get("github_actions_passed") is False
+        and release.get("github_actions_required_for_completion") is False
         and release.get("runner") == "research/adaptive_v4_memory/scripts/run_p5_release_gate.py"
         and release.get("output")
         == "artifacts/adaptive_v4_memory/paper_grade/p5/local-release-gate.summary.json"
@@ -2069,8 +2070,8 @@ They validate execution semantics and do not receive a scientific conclusion cla
 completion conditions through {len(traceability_rows)} source links. Trace coverage means that
 the relevant evidence, boundary, execution audit, generated output, or final verification
 contract is explicit; it does not upgrade any scientific conclusion class. The final local
-release gate remains scheduled after package generation. GitHub Actions is currently disabled
-manually, remains mandatory before goal completion, and is never reported as passed or waived.
+release gate remains scheduled after package generation. GitHub Actions remains disabled by
+user request, is outside the completion gate, and is never reported as passed.
 
 ## Experiment volume
 
@@ -2208,9 +2209,8 @@ and final local release checks are frozen in [the reproduction guide](reproducti
 The CSV tables next to this report are generated from the same frozen audits. Their digests,
 the input digests, source commit, protocol manifests, and reproduction guide are recorded in
 `artifact-index.json`; missing or incomplete evidence causes generation to fail rather than
-being imputed. GitHub Actions is currently disabled manually and is not reported as passed;
-a successful final CI run remains mandatory before goal completion, and package generation
-does not waive it.
+being imputed. GitHub Actions remains disabled by user request and is not reported as passed;
+the digest-bound local release gate is the final source-verification contract.
 """
 
 

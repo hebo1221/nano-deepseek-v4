@@ -32,11 +32,12 @@ def test_release_gate_separates_local_success_from_disabled_ci() -> None:
 
     assert payload["audit"]["all_local_checks_passed"] is True
     assert payload["audit"]["github_actions"] == {
-        "status": "disabled_manually",
+        "status": "disabled_by_user",
         "passed": False,
-        "completion_gate_satisfied": False,
+        "required_for_completion": False,
     }
     assert "only the five local release checks" in payload["claim_boundary"]
+    assert "outside the completion gate" in payload["claim_boundary"]
 
 
 def test_release_gate_fails_closed_on_partial_failure_or_dirty_source() -> None:

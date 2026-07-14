@@ -150,9 +150,9 @@ the digest-bound package:
 
 The final package is valid only from a clean source tree. Check
 `artifacts/adaptive_v4_memory/paper_grade/p5/artifact-index.json` for every input
-and generated SHA-256. GitHub Actions is currently disabled manually; do not report CI as
-passed. A successful final GitHub Actions CI run remains mandatory before goal completion,
-and package generation or the five local release commands above does not waive it.
+and generated SHA-256. GitHub Actions remains disabled by user request and must not be
+reported as passed. It is outside the completion gate; the five digest-bound local release
+checks above are the final source-verification contract.
 
 ## Official DeepSeek-V4 boundary
 
