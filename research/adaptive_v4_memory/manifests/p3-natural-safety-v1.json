@@ -161,6 +161,7 @@
     "asset_preparation": "research/adaptive_v4_memory/scripts/prepare_p3_natural_safety_assets.py",
     "generation_runner": "research/adaptive_v4_memory/scripts/run_p3_natural_safety_generation.py",
     "ifeval_official_scorer": "research/adaptive_v4_memory/scripts/score_p3_ifeval.py",
+    "longsafety_generation_audit": "research/adaptive_v4_memory/scripts/summarize_p3_longsafety.py",
     "asset_inventory": "artifacts/adaptive_v4_memory/paper_grade/p3/natural-safety/assets/inventory.json",
     "default_judge_mode": "blocked"
   },
