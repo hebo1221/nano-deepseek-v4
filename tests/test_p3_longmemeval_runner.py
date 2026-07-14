@@ -6,6 +6,8 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 SCRIPTS = Path(__file__).resolve().parents[1] / "research/adaptive_v4_memory/scripts"
 sys.path.insert(0, str(SCRIPTS))
 
@@ -13,6 +15,7 @@ from run_p3_longmemeval import (  # noqa: E402
     _existing_records,
     judge_blocked_record,
     judge_response,
+    load_adaptive_prerequisite,
     prompt_parts,
 )
 
@@ -112,6 +115,117 @@ def test_longmemeval_progress_recovers_empty_crash_window(tmp_path: Path) -> Non
     assert _existing_records(progress, partial, identity) == []
 
 
+def test_adaptive_longmemeval_accepts_complete_audited_prerequisites(
+    tmp_path: Path,
+) -> None:
+    adaptive = tmp_path / "adaptive-ruler.json"
+    adaptive.write_text(
+        json.dumps(
+            {
+                "experiment_id": "p3-natural-adaptive-quota-ruler-audit-v1",
+                "status": "terminal",
+                "classification": "bounded-negative-result",
+                "audit": {
+                    "total_predictions": 65_000,
+                    "all_raw_records_verified": True,
+                    "all_dependency_digests_verified": True,
+                    "failure_accounting_complete": True,
+                    "quota_physical_audits_verified": True,
+                    "same_global_token_budget_verified": True,
+                    "causal_layer_order_verified": True,
+                },
+            }
+        )
+    )
+    baseline = tmp_path / "baseline-longmemeval.json"
+    baseline.write_text(
+        json.dumps(
+            {
+                "experiment_id": "p3-natural-longmemeval-audit-v1",
+                "audit": {
+                    "all_raw_artifacts_verified": True,
+                    "all_failure_accounting_complete": True,
+                    "all_required_arms_input_paired": True,
+                    "all_reported_scores_recomputed_from_raw_response": True,
+                },
+                "arms": {
+                    "native-dense": {"accounted_examples": 500},
+                    "strongest-memory-matched-fixed": {"accounted_examples": 500},
+                },
+            }
+        )
+    )
+
+    adaptive_dependency = load_adaptive_prerequisite(
+        adaptive,
+        experiment_id="p3-natural-adaptive-quota-ruler-audit-v1",
+        predictions=65_000,
+        label="adaptive RULER",
+    )
+    baseline_dependency = load_adaptive_prerequisite(
+        baseline,
+        experiment_id="p3-natural-longmemeval-audit-v1",
+        predictions=1_000,
+        label="baseline LongMemEval",
+    )
+
+    assert len(adaptive_dependency["sha256"]) == 64
+    assert len(baseline_dependency["sha256"]) == 64
+
+
+def test_adaptive_longmemeval_rejects_unverified_quota_or_incomplete_baseline(
+    tmp_path: Path,
+) -> None:
+    adaptive = tmp_path / "adaptive-ruler.json"
+    adaptive.write_text(
+        json.dumps(
+            {
+                "experiment_id": "p3-natural-adaptive-quota-ruler-audit-v1",
+                "status": "terminal",
+                "audit": {
+                    "total_predictions": 65_000,
+                    "all_raw_records_verified": True,
+                    "all_dependency_digests_verified": True,
+                    "failure_accounting_complete": True,
+                    "quota_physical_audits_verified": False,
+                    "same_global_token_budget_verified": True,
+                    "causal_layer_order_verified": True,
+                },
+            }
+        )
+    )
+    with pytest.raises(ValueError, match="lacks verified quota evidence"):
+        load_adaptive_prerequisite(
+            adaptive,
+            experiment_id="p3-natural-adaptive-quota-ruler-audit-v1",
+            predictions=65_000,
+            label="adaptive RULER",
+        )
+
+    baseline = tmp_path / "baseline-longmemeval.json"
+    baseline.write_text(
+        json.dumps(
+            {
+                "experiment_id": "p3-natural-longmemeval-audit-v1",
+                "audit": {
+                    "all_raw_artifacts_verified": True,
+                    "all_failure_accounting_complete": True,
+                    "all_required_arms_input_paired": True,
+                    "all_reported_scores_recomputed_from_raw_response": True,
+                },
+                "arms": {"native-dense": {"accounted_examples": 1_000}},
+            }
+        )
+    )
+    with pytest.raises(ValueError, match="not a complete audited generation result"):
+        load_adaptive_prerequisite(
+            baseline,
+            experiment_id="p3-natural-longmemeval-audit-v1",
+            predictions=1_000,
+            label="baseline LongMemEval",
+        )
+
+
 def test_longmemeval_is_sequence_gated_before_model_dataset_or_judge_io(
     tmp_path: Path,
 ) -> None:
@@ -146,4 +260,37 @@ def test_longmemeval_is_sequence_gated_before_model_dataset_or_judge_io(
     assert completed.returncode != 0
     assert "21/4500 shards" in completed.stderr
     assert "OPENAI_API_KEY" not in completed.stderr
+    assert not output.exists()
+
+
+def test_adaptive_longmemeval_is_strictly_gated_before_model_or_manifest_io(
+    tmp_path: Path,
+) -> None:
+    root = Path(__file__).resolve().parents[1]
+    output = tmp_path / "output"
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(root / "research/adaptive_v4_memory/scripts/run_p3_longmemeval.py"),
+            "--cohort",
+            "adaptive-quota",
+            "--kvpress-root",
+            str(tmp_path / "missing-kvpress"),
+            "--model-snapshot",
+            str(tmp_path / "missing-model"),
+            "--primary-core-summary",
+            str(tmp_path / "missing-primary-core.json"),
+            "--adaptive-quota-manifest",
+            str(tmp_path / "missing-adaptive-manifest.json"),
+            "--output-root",
+            str(output),
+        ],
+        cwd=root,
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode != 0
+    assert "primary P2 core audit is not available yet" in completed.stderr
+    assert "missing-adaptive-manifest" not in completed.stderr
     assert not output.exists()

@@ -13,6 +13,7 @@ from typing import Any
 import numpy as np
 import torch
 from adaptive_v4_gpu_lock import acquire_gpu_lock
+from p3_cross_family_sequence_gate import require_cross_family_sequence_gate
 from p3_natural_workloads import build_longmem_full_history_prompt
 from p3_sequence_gate import require_p3_sequence_gate
 from run_p3_longbench_v2 import rendered_input
@@ -23,11 +24,23 @@ from run_p3_mrcr import (
     infer_one,
     runtime_environment,
 )
+from run_p3_natural_ruler import compatibility_arm_config
 from run_p3_ruler_matrix import KVPRESS_REVISION, git_dirty, git_head, load_evaluator
+from validate_p3_natural_adaptive_quota_longmemeval_manifest import (
+    validate_manifest as validate_adaptive_longmemeval_manifest,
+)
 from verify_p3_natural_model import sha256, verify_snapshot
 
 BENCHMARK = "LongMemEval"
 ARMS = ("native-dense", "strongest-memory-matched-fixed")
+ADAPTIVE_QUOTA_ARMS = ("fixed+pins", "natural-adaptive-quota+pins")
+DEFAULT_OUTPUT_ROOT = Path(
+    "artifacts/adaptive_v4_memory/paper_grade/p3/natural/longmemeval"
+)
+ADAPTIVE_QUOTA_OUTPUT_ROOT = Path(
+    "artifacts/adaptive_v4_memory/paper_grade/p3/natural-adaptive-quota/"
+    "longmemeval-qwen3-4b"
+)
 EXPECTED_EXAMPLES = 500
 GENERATION_RESERVE = 512
 MODEL_REVISION = "cdbee75f17c01a7cc42f958dc650907174af0554"
@@ -39,6 +52,48 @@ JUDGE_MODEL = "gpt-4o-2024-08-06"
 def _require(condition: bool, message: str) -> None:
     if not condition:
         raise ValueError(message)
+
+
+def load_adaptive_prerequisite(
+    path: Path, *, experiment_id: str, predictions: int, label: str
+) -> dict[str, str]:
+    _require(path.is_file(), f"Adaptive LongMemEval prerequisite is unavailable: {label}.")
+    payload = json.loads(path.read_text())
+    audit = payload.get("audit", {})
+    _require(payload.get("experiment_id") == experiment_id, f"Wrong prerequisite: {label}.")
+    if experiment_id == "p3-natural-adaptive-quota-ruler-audit-v1":
+        _require(
+            payload.get("status") == "terminal"
+            and audit.get("total_predictions") == predictions
+            and audit.get("all_raw_records_verified") is True
+            and audit.get("all_dependency_digests_verified") is True
+            and audit.get("failure_accounting_complete") is True
+            and audit.get("quota_physical_audits_verified") is True
+            and audit.get("same_global_token_budget_verified") is True
+            and audit.get("causal_layer_order_verified") is True,
+            "Adaptive RULER prerequisite lacks verified quota evidence.",
+        )
+    elif experiment_id == "p3-natural-longmemeval-audit-v1":
+        arms = payload.get("arms", {})
+        expected_arms = {"native-dense", "strongest-memory-matched-fixed"}
+        _require(
+            audit.get("all_raw_artifacts_verified") is True
+            and audit.get("all_failure_accounting_complete") is True
+            and audit.get("all_required_arms_input_paired") is True
+            and audit.get("all_reported_scores_recomputed_from_raw_response") is True
+            and isinstance(arms, dict)
+            and set(arms) == expected_arms
+            and predictions % len(expected_arms) == 0
+            and all(
+                isinstance(arms[arm], dict)
+                and arms[arm].get("accounted_examples") == predictions // len(expected_arms)
+                for arm in expected_arms
+            ),
+            "Baseline LongMemEval prerequisite is not a complete audited generation result.",
+        )
+    else:
+        raise ValueError(f"Unsupported adaptive LongMemEval prerequisite: {experiment_id}.")
+    return {"path": str(path), "sha256": sha256(path)}
 
 
 def prompt_parts(row: dict[str, Any]) -> tuple[str, str]:
@@ -285,6 +340,7 @@ def _completed(cell_path: Path, arm: str, identity: dict[str, Any]) -> bool:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run frozen Qwen3-4B LongMemEval arms.")
+    parser.add_argument("--cohort", choices=("baseline", "adaptive-quota"), default="baseline")
     parser.add_argument("--kvpress-root", type=Path, required=True)
     parser.add_argument("--model-snapshot", type=Path, required=True)
     parser.add_argument(
@@ -322,12 +378,50 @@ def main() -> None:
         default=Path("artifacts/adaptive_v4_memory/paper_grade/p2-core-quality-matrix.json"),
     )
     parser.add_argument(
+        "--primary-core-summary",
+        type=Path,
+        default=Path(
+            "artifacts/adaptive_v4_memory/paper_grade/"
+            "p2-core-quality-matrix.strict.summary.json"
+        ),
+    )
+    parser.add_argument(
+        "--nine-seed-causal-summary",
+        type=Path,
+        default=Path(
+            "artifacts/adaptive_v4_memory/paper_grade/p2-nine-seed-causal.summary.json"
+        ),
+    )
+    parser.add_argument(
+        "--adaptive-quota-manifest",
+        type=Path,
+        default=Path(
+            "research/adaptive_v4_memory/manifests/"
+            "p3-natural-adaptive-quota-longmemeval-v1.json"
+        ),
+    )
+    parser.add_argument(
+        "--adaptive-ruler-summary",
+        type=Path,
+        default=Path(
+            "artifacts/adaptive_v4_memory/paper_grade/p3/natural-adaptive-quota/"
+            "ruler-qwen3-4b.summary.json"
+        ),
+    )
+    parser.add_argument(
+        "--baseline-longmemeval-summary",
+        type=Path,
+        default=Path(
+            "artifacts/adaptive_v4_memory/paper_grade/p3/natural/longmemeval.summary.json"
+        ),
+    )
+    parser.add_argument(
         "--output-root",
         type=Path,
-        default=Path("artifacts/adaptive_v4_memory/paper_grade/p3/natural/longmemeval"),
+        default=DEFAULT_OUTPUT_ROOT,
     )
     parser.add_argument("--judge-mode", choices=("blocked", "openai"), default="blocked")
-    parser.add_argument("--arm", action="append", choices=ARMS)
+    parser.add_argument("--arm", action="append", choices=(*ARMS, *ADAPTIVE_QUOTA_ARMS))
     parser.add_argument("--max-new-examples", type=int)
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
@@ -335,7 +429,39 @@ def main() -> None:
         args.max_new_examples is None or args.max_new_examples > 0,
         "max-new-examples must be positive.",
     )
-    sequence_decision = require_p3_sequence_gate(args.p2_matrix, args.causal_gate)
+    adaptive_manifest: dict[str, Any] | None = None
+    adaptive_prerequisites: dict[str, dict[str, str]] = {}
+    if args.cohort == "adaptive-quota":
+        _require(
+            args.judge_mode == "blocked",
+            "Adaptive LongMemEval is frozen as judge-blocked generation evidence only.",
+        )
+        sequence_decision = require_cross_family_sequence_gate(
+            primary_core=args.primary_core_summary,
+            primary_causal=args.causal_gate,
+            nine_seed_causal=args.nine_seed_causal_summary,
+            fixed_selection=args.fixed_selection,
+        )
+        adaptive_manifest = json.loads(args.adaptive_quota_manifest.read_text())
+        validate_adaptive_longmemeval_manifest(adaptive_manifest)
+        adaptive_prerequisites = {
+            "adaptive_ruler": load_adaptive_prerequisite(
+                args.adaptive_ruler_summary,
+                experiment_id="p3-natural-adaptive-quota-ruler-audit-v1",
+                predictions=65_000,
+                label="Qwen3-4B adaptive-quota RULER audit",
+            ),
+            "baseline_longmemeval": load_adaptive_prerequisite(
+                args.baseline_longmemeval_summary,
+                experiment_id="p3-natural-longmemeval-audit-v1",
+                predictions=1_000,
+                label="Qwen3-4B baseline LongMemEval audit",
+            ),
+        }
+        if args.output_root == DEFAULT_OUTPUT_ROOT:
+            args.output_root = ADAPTIVE_QUOTA_OUTPUT_ROOT
+    else:
+        sequence_decision = require_p3_sequence_gate(args.p2_matrix, args.causal_gate)
     source_commit = git_head(Path.cwd())
     if git_dirty(Path.cwd()):
         raise RuntimeError("LongMemEval requires a clean source tree.")
@@ -354,6 +480,23 @@ def main() -> None:
     model_snapshot = args.model_snapshot.resolve()
     verify_snapshot(model_snapshot, manifest["model"])
     rows = load_rows(data_path)
+    if adaptive_manifest is not None:
+        benchmark_contract = adaptive_manifest["benchmark"]
+        base_contract = manifest["benchmarks"][BENCHMARK]
+        _require(
+            benchmark_contract["examples_per_arm"] == len(rows)
+            and benchmark_contract["generation_seed"] == args.seed
+            and benchmark_contract["generation_reserve_tokens"] == GENERATION_RESERVE
+            and adaptive_manifest["model"]["snapshot_digest_set_sha256"]
+            == manifest["model"]["snapshot_digest_set_sha256"]
+            and benchmark_contract["dataset_sha256"]
+            == base_contract["dataset"]["files"][0]["sha256"]
+            and benchmark_contract["official_judge_source_sha256"]
+            == base_contract["upstream_code"]["files_sha256"][
+                "src/evaluation/evaluate_qa.py"
+            ],
+            "Adaptive LongMemEval immutable inputs drifted from the base suite.",
+        )
 
     judge_module = None
     judge_client = None
@@ -371,12 +514,21 @@ def main() -> None:
     source_inventory_digest = sha256(args.source_inventory)
     selection_digest = sha256(args.fixed_selection)
     causal_digest = sha256(args.causal_gate)
-    runner_digest = sha256(Path(__file__))
+    runner_digest = sha256(Path(__file__).resolve())
+    adaptive_manifest_digest = (
+        sha256(args.adaptive_quota_manifest) if adaptive_manifest is not None else None
+    )
     scorer_digest = manifest["benchmarks"][BENCHMARK]["upstream_code"]["files_sha256"][
         "src/evaluation/evaluate_qa.py"
     ]
     maximum_context = manifest["model"]["maximum_supported_context_tokens"]
-    selected_arms = tuple(args.arm or ARMS)
+    cohort_arms = ADAPTIVE_QUOTA_ARMS if args.cohort == "adaptive-quota" else ARMS
+    selected_arms = tuple(args.arm or cohort_arms)
+    _require(
+        len(selected_arms) == len(set(selected_arms))
+        and all(arm in cohort_arms for arm in selected_arms),
+        f"Selected LongMemEval arms do not belong to the {args.cohort} cohort.",
+    )
     identities = {
         arm: {
             "source_commit": source_commit,
@@ -386,8 +538,21 @@ def main() -> None:
             "source_inventory_sha256": source_inventory_digest,
             "causal_gate_sha256": causal_digest,
             "fixed_selection_sha256": selection_digest,
+            "cohort": args.cohort,
+            "adaptive_quota_manifest_sha256": adaptive_manifest_digest,
+            "adaptive_prerequisite_sha256": {
+                name: metadata["sha256"] for name, metadata in adaptive_prerequisites.items()
+            },
+            "sequence_gate_dependency_sha256": {
+                name: metadata["sha256"]
+                for name, metadata in sequence_decision.get("dependencies", {}).items()
+            },
             "model_snapshot_digest_set_sha256": manifest["model"]["snapshot_digest_set_sha256"],
-            "arm_config": arm_config(arm, selection, selection_digest),
+            "arm_config": (
+                compatibility_arm_config(arm, selection, selection_digest)
+                if args.cohort == "adaptive-quota"
+                else arm_config(arm, selection, selection_digest)
+            ),
             "judge_mode": args.judge_mode,
             "seed": args.seed,
         }
@@ -405,6 +570,11 @@ def main() -> None:
 
     lock = acquire_gpu_lock("p3-longmemeval")
     try:
+        from p3_protected_prefix_press import (
+            wrap_same_budget_adaptive_quota_protected_prefix,
+            wrap_same_budget_protected_prefix,
+        )
+
         EvaluationConfig, EvaluationRunner, _scorer = load_evaluator(kvpress_root)
         config = EvaluationConfig(
             dataset="longbench-v2",
@@ -432,6 +602,17 @@ def main() -> None:
             runner.config.press_name = settings["press_name"]
             runner.config.compression_ratio = settings["compression_ratio"]
             runner._setup_press()
+            active_press: Any = runner.press
+            compatibility_press: Any = None
+            if args.cohort == "adaptive-quota":
+                if arm == "fixed+pins":
+                    compatibility_press = wrap_same_budget_protected_prefix(runner.press)
+                else:
+                    compatibility_press = wrap_same_budget_adaptive_quota_protected_prefix(
+                        runner.press,
+                        max_adjustment_fraction=settings["max_adjustment_fraction"],
+                    )
+                active_press = compatibility_press
             root = args.output_root / arm
             progress = root / "progress.json"
             partial = root / "records.partial.jsonl"
@@ -459,6 +640,7 @@ def main() -> None:
                         "exact_input_tokens": rendered["exact_input_tokens"],
                         "generation_reserve_tokens": GENERATION_RESERVE,
                         "raw_prompt_sha256": rendered["raw_prompt_sha256"],
+                        "input_token_ids_sha256": rendered["input_token_ids_sha256"],
                         "token_boundary_retreat": rendered["token_boundary_retreat"],
                         "arm_config": settings,
                         "revisions": {
@@ -470,6 +652,8 @@ def main() -> None:
                         "question_type": row["question_type"],
                         "abstention": "_abs" in row["question_id"],
                     }
+                    if args.cohort == "adaptive-quota":
+                        base["quota_physical_audit"] = None
                     if rendered["exact_input_tokens"] + GENERATION_RESERVE > maximum_context:
                         record = failure_record(
                             base,
@@ -485,12 +669,24 @@ def main() -> None:
                         response: str | None = None
                         resident_bytes = 0
                         try:
+                            if compatibility_press is not None:
+                                span = settings["protected_prefix_token_span"]
+                                compatibility_press.configure(
+                                    protected_start=span["start"], protected_end=span["end"]
+                                )
                             response, resident_bytes = infer_one(
                                 pipeline=runner.pipeline,
-                                press=runner.press,
+                                press=active_press,
                                 rendered=rendered,
                                 max_new_tokens=GENERATION_RESERVE,
                             )
+                            compatibility_audit = (
+                                compatibility_press.audit()
+                                if compatibility_press is not None
+                                else None
+                            )
+                            if args.cohort == "adaptive-quota":
+                                base["quota_physical_audit"] = compatibility_audit
                             torch.cuda.synchronize()
                             latency_ms = (time.perf_counter_ns() - started) / 1_000_000.0
                             peak_hbm = torch.cuda.max_memory_allocated()
@@ -610,6 +806,7 @@ def main() -> None:
                 "experiment_id": "p3-natural-benchmark-arm-cell-v1",
                 "benchmark": BENCHMARK,
                 "arm": arm,
+                "cohort": args.cohort,
                 "status": "terminal",
                 "source": {
                     "commit": source_commit,
@@ -618,6 +815,15 @@ def main() -> None:
                 },
                 "run_identity": identities[arm],
                 "experiment_manifest": {"path": str(args.manifest), "sha256": manifest_digest},
+                "adaptive_quota_manifest": (
+                    {
+                        "path": str(args.adaptive_quota_manifest),
+                        "sha256": adaptive_manifest_digest,
+                    }
+                    if adaptive_manifest_digest is not None
+                    else None
+                ),
+                "adaptive_prerequisites": adaptive_prerequisites,
                 "causal_gate": {"path": str(args.causal_gate), "sha256": causal_digest},
                 "dataset_inventory": {
                     "path": str(args.dataset_inventory),
