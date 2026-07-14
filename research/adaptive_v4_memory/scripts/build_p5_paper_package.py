@@ -37,6 +37,9 @@ FINAL_RELEASE_COMMANDS = [
     ".venv/bin/python -m build",
     ".venv/bin/twine check dist/*",
 ]
+P5_GENERATOR_PATH = Path(
+    "research/adaptive_v4_memory/scripts/build_p5_paper_package.py"
+)
 CONTROLLER_CONTRACT_TESTS = {
     "deterministic_replay": (
         "tests/test_causal_memory_controller.py::"
@@ -251,6 +254,32 @@ def _analysis_implementation_metadata(paths: tuple[str, ...]) -> dict[str, Any]:
         "paths": list(canonical_paths),
         "tracked_file_count": len(canonical_paths),
         "git_index_sha256": hashlib.sha256(tracked.encode()).hexdigest(),
+    }
+
+
+def _paper_package_generator_input() -> dict[str, str]:
+    """Bind generated tables and figures to the exact generator source."""
+
+    path = P5_GENERATOR_PATH
+    _require(
+        path.is_file() and path.resolve() == Path(__file__).resolve(),
+        f"P5 generator path drifted: {path}",
+    )
+    tracked = subprocess.run(
+        ["git", "ls-files", "--error-unmatch", str(path)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    _require(
+        tracked.returncode == 0 and tracked.stdout.strip() == str(path),
+        f"P5 generator is not tracked: {path}",
+    )
+    return {
+        "name": "paper_package_generator",
+        "kind": "generator",
+        "path": str(path),
+        "sha256": sha256(path),
     }
 
 
@@ -3464,6 +3493,7 @@ def _report(
             "traceability-contract",
             "reproduction-guide",
             "verification-runner",
+            "generator",
         }
     )
     execution_lines = "\n".join(
@@ -3735,7 +3765,7 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         "Wrong P5 package manifest.",
     )
     loaded: dict[str, dict[str, Any]] = {}
-    inputs: list[dict[str, Any]] = []
+    inputs: list[dict[str, Any]] = [_paper_package_generator_input()]
     reproduction_path = Path(manifest.get("reproduction_guide", {}).get("path", ""))
     reproduction_guide = _validate_reproduction_guide(reproduction_path)
     inputs.append(
@@ -3853,6 +3883,7 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
             "traceability-contract",
             "reproduction-guide",
             "verification-runner",
+            "generator",
         }
     ]
     _write_csv(
@@ -4329,6 +4360,10 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
     ]
     commit, dirty = _clean_source()
     _require(not dirty, "P5 package generation requires a clean source tree.")
+    _require(
+        inputs[0] == _paper_package_generator_input(),
+        "P5 generator changed while outputs were being generated.",
+    )
     index = {
         "schema_version": 1,
         "experiment_id": "adaptive-v4-memory-p5-artifact-index-v1",

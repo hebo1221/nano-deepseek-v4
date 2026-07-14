@@ -12,6 +12,19 @@ sys.path.insert(0, str(SCRIPTS))
 import build_p5_paper_package as package  # noqa: E402
 
 
+def test_p5_generator_is_a_digest_bound_index_input() -> None:
+    metadata = package._paper_package_generator_input()
+    path = Path(metadata["path"])
+
+    assert metadata == {
+        "name": "paper_package_generator",
+        "kind": "generator",
+        "path": str(package.P5_GENERATOR_PATH),
+        "sha256": package.sha256(path),
+    }
+    assert path.resolve() == Path(package.__file__).resolve()
+
+
 def _p2_core_evidence(*, passed: bool = False) -> dict[str, object]:
     return {
         "audit": {
