@@ -75,6 +75,7 @@ def validate(
     evaluation_seed = shard._evaluation_seed(training_seed)
     checked_records = 0
     checked_predictions = 0
+    first_mismatch: dict[str, Any] | None = None
     target_wall_ms = 0.0
     reference_wall_ms = 0.0
     started = time.perf_counter()
@@ -119,11 +120,36 @@ def validate(
                         zip(target["predictions"], reference_predictions, strict=True)
                     ):
                         if left != right:
-                            raise RuntimeError(
-                                "Batch prediction mismatch: "
-                                f"{scale}/{policy.name}/{family}/{context}/row-{row}"
-                            )
-                    raise RuntimeError("Batch predictions differ without a located row.")
+                            first_mismatch = {
+                                "scale": scale,
+                                "policy": policy.name,
+                                "family": family,
+                                "context": context,
+                                "row": row,
+                                "target_predictions": left,
+                                "reference_predictions": right,
+                            }
+                            break
+                    if first_mismatch is None:
+                        raise RuntimeError(
+                            "Batch predictions differ without a located row."
+                        )
+                    return {
+                        "scale": scale,
+                        "chunk_size": chunk_size,
+                        "target_batch_size": TARGET_BATCH_SIZE,
+                        "reference_batch_size": REFERENCE_BATCH_SIZE,
+                        "core_policies": shard.CORE_POLICIES,
+                        "families": PAPER_GRADE_WORKLOAD_FAMILIES,
+                        "contexts": shard.CONTEXTS,
+                        "checked_policy_conversation_records": checked_records,
+                        "checked_predictions": checked_predictions,
+                        "target_wall_ms_sum": target_wall_ms,
+                        "reference_wall_ms_sum": reference_wall_ms,
+                        "wall_seconds": time.perf_counter() - started,
+                        "all_predictions_identical": False,
+                        "first_mismatch": first_mismatch,
+                    }
                 checked_records += TARGET_BATCH_SIZE
                 checked_predictions += sum(len(row) for row in target["predictions"])
     return {
@@ -140,6 +166,7 @@ def validate(
         "reference_wall_ms_sum": reference_wall_ms,
         "wall_seconds": time.perf_counter() - started,
         "all_predictions_identical": True,
+        "first_mismatch": None,
     }
 
 
