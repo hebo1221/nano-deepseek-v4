@@ -12,6 +12,7 @@ import benchmark_m5_online_controller as pilot
 import evaluate_p1_heldout_policy_pilot as heldout
 import torch
 import validate_p1_full_forward_equivalence as full_validation
+from adaptive_v4_gpu_lock import acquire_gpu_lock
 
 from nano_deepseek_v4 import (
     PAPER_GRADE_WORKLOAD_FAMILIES,
@@ -121,6 +122,7 @@ def main() -> None:
     parser.add_argument("--chunk-size", type=int, required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
+    gpu_lock = acquire_gpu_lock("p1-chunked-equivalence")
     if not torch.cuda.is_available():
         raise RuntimeError("Chunked equivalence validation requires CUDA.")
     if args.chunk_size <= 0:
@@ -170,6 +172,7 @@ def main() -> None:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
     print(json.dumps(validation, sort_keys=True))
+    gpu_lock.close()
 
 
 if __name__ == "__main__":

@@ -11,6 +11,7 @@ import benchmark_m5_online_controller as pilot
 import evaluate_p1_heldout_policy_pilot as heldout
 import evaluate_p2_core_shard as shard
 import torch
+from adaptive_v4_gpu_lock import acquire_gpu_lock
 
 from nano_deepseek_v4 import PAPER_GRADE_WORKLOAD_FAMILIES
 
@@ -196,6 +197,7 @@ def main() -> None:
         default=Path("artifacts/adaptive_v4_memory/paper_grade/p2-core-quality-matrix.json"),
     )
     args = parser.parse_args()
+    gpu_lock = acquire_gpu_lock("p2-core-matrix")
     if not torch.cuda.is_available():
         raise RuntimeError("P2 core matrix requires CUDA.")
     if args.max_new_shards is not None and args.max_new_shards <= 0:
@@ -323,6 +325,7 @@ def main() -> None:
                         _write_matrix(args.matrix_summary, source_commit, completed_runs)
             del model
             torch.cuda.empty_cache()
+    gpu_lock.close()
 
 
 if __name__ == "__main__":
