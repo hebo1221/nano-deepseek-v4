@@ -959,6 +959,10 @@ def classify_evidence(
         and safety_audit.get("failure_accounting_complete") is True
         and safety_audit.get("input_pairing_verified") is True
         and safety_audit.get("source_implementations_verified") is True
+        and safety_audit.get("coordinate_grid_verified") is True
+        and safety_audit.get("record_revisions_verified") is True
+        and safety_audit.get("terminal_measurement_schema_verified") is True
+        and safety_audit.get("target_and_canary_pairing_verified") is True
         and safety_audit.get("protected_prefix_physical_budget_verified") is True
         and safety_audit.get("examples_accounted_per_arm") == 1_200
         and safety_audit.get("families_terminal") == 4
