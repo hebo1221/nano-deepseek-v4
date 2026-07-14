@@ -52,7 +52,7 @@ def _records_digest(records: list[dict[str, Any]]) -> str:
 def _completed(
     output: Path,
     *,
-    source_commit: str,
+    implementation_digest: str,
     scale: str,
     training_seed: int,
     family: str,
@@ -70,7 +70,9 @@ def _completed(
     payload = json.loads(output.read_text())
     if (
         payload.get("experiment_id") != "p2-core-quality-shard-v1"
-        or payload.get("source") != {"commit": source_commit, "dirty": False}
+        or payload.get("source", {}).get("dirty") is not False
+        or payload.get("source", {}).get("implementation_digest")
+        != implementation_digest
         or payload.get("scale") != scale
         or payload.get("training_seed") != training_seed
         or payload.get("evaluation_seed") != shard._evaluation_seed(training_seed)
@@ -106,7 +108,12 @@ def _completed(
     return payload
 
 
-def _write_matrix(path: Path, source_commit: str, runs: list[dict[str, Any]]) -> None:
+def _write_matrix(
+    path: Path,
+    source_commit: str,
+    implementation_digest: str,
+    runs: list[dict[str, Any]],
+) -> None:
     runs.sort(
         key=lambda run: (
             run["scale"],
@@ -120,6 +127,7 @@ def _write_matrix(path: Path, source_commit: str, runs: list[dict[str, Any]]) ->
         "schema_version": 1,
         "experiment_id": "p2-core-quality-matrix-progress-v1",
         "source_commit": source_commit,
+        "implementation_digest": implementation_digest,
         "frozen_design": {
             "scales": SCALES,
             "training_seeds": shard.TRAINING_SEEDS,
@@ -207,6 +215,7 @@ def main() -> None:
     if _dirty():
         raise RuntimeError("P2 core matrix requires a clean source tree.")
     source_commit = _head()
+    implementation_digest = shard._implementation_digest()
     equivalence_paths = {
         "s55": args.equivalence_s55,
         "s151": args.equivalence_s151,
@@ -255,7 +264,7 @@ def main() -> None:
                         )
                         payload = _completed(
                             output,
-                            source_commit=source_commit,
+                            implementation_digest=implementation_digest,
                             scale=scale,
                             training_seed=training_seed,
                             family=family,
@@ -270,7 +279,12 @@ def main() -> None:
                         )
                         if payload is None:
                             if args.max_new_shards is not None and new_shards >= args.max_new_shards:
-                                _write_matrix(args.matrix_summary, source_commit, completed_runs)
+                                _write_matrix(
+                                    args.matrix_summary,
+                                    source_commit,
+                                    implementation_digest,
+                                    completed_runs,
+                                )
                                 return
                             if model is None:
                                 model = pilot._load_model(checkpoint)
@@ -290,7 +304,11 @@ def main() -> None:
                                 checkpoint_sha256=checkpoint_sha256,
                                 calibration_sha256=calibration_sha256,
                                 equivalence_sha256=equivalence_sha256,
-                                source_state={"commit": source_commit, "dirty": False},
+                                source_state={
+                                    "commit": source_commit,
+                                    "dirty": False,
+                                    "implementation_digest": implementation_digest,
+                                },
                             )
                             output.parent.mkdir(parents=True, exist_ok=True)
                             output.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
@@ -322,7 +340,12 @@ def main() -> None:
                                 "wall_seconds": payload["wall_seconds"],
                             }
                         )
-                        _write_matrix(args.matrix_summary, source_commit, completed_runs)
+                        _write_matrix(
+                            args.matrix_summary,
+                            source_commit,
+                            implementation_digest,
+                            completed_runs,
+                        )
             del model
             torch.cuda.empty_cache()
     gpu_lock.close()

@@ -39,6 +39,14 @@ EXAMPLES_PER_SHARD = 20
 BATCH_SIZE = 4
 REPLICATES = tuple(range(10))
 CHUNK_SIZE_BY_SCALE = {"s55": 2, "s151": 1}
+IMPLEMENTATION_PATHS = (
+    "nano_deepseek_v4",
+    "research/adaptive_v4_memory/scripts/adaptive_v4_gpu_lock.py",
+    "research/adaptive_v4_memory/scripts/benchmark_m5_online_controller.py",
+    "research/adaptive_v4_memory/scripts/evaluate_p1_heldout_policy_pilot.py",
+    "research/adaptive_v4_memory/scripts/evaluate_p2_core_shard.py",
+    "research/adaptive_v4_memory/scripts/run_p2_core_matrix.py",
+)
 
 
 def _sha256(path: Path) -> str:
@@ -47,6 +55,18 @@ def _sha256(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _implementation_digest() -> str:
+    tracked_tree = subprocess.run(
+        ["git", "ls-files", "-s", "--", *IMPLEMENTATION_PATHS],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    if not tracked_tree:
+        raise RuntimeError("P2 implementation paths are not tracked by git.")
+    return hashlib.sha256(tracked_tree.encode()).hexdigest()
 
 
 def _source_state() -> dict[str, str | bool]:
@@ -61,7 +81,11 @@ def _source_state() -> dict[str, str | bool]:
             text=True,
         ).stdout.strip()
     )
-    return {"commit": commit, "dirty": dirty}
+    return {
+        "commit": commit,
+        "dirty": dirty,
+        "implementation_digest": _implementation_digest(),
+    }
 
 
 def _equivalence(path: Path, scale: str) -> dict[str, Any]:
