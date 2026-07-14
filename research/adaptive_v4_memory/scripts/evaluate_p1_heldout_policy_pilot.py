@@ -187,17 +187,27 @@ def _run_policy(
         raise RuntimeError("Model replaced the configured same-token cache.")
     cache = returned_cache
 
+    # TieredBlockStore currently keeps one shared set of block-position indices
+    # for the whole batch. Per-row top-k selections can therefore have a union
+    # of at most batch_size * k positions. The controller's logical quota stays
+    # per row; only the physical reference-store capacity covers that union.
+    batch_size = workload.input_ids.shape[0]
+    physical_hot_budget_blocks_per_store: int | None = None
     if policy.kind == "fixed":
         if policy.multiplier is None:
             raise ValueError("Fixed policy requires a multiplier.")
-        cache.enable_csa_tiering(fixed_topk * policy.multiplier)
+        physical_hot_budget_blocks_per_store = fixed_topk * policy.multiplier * batch_size
+        cache.enable_csa_tiering(physical_hot_budget_blocks_per_store)
     elif controller_config is not None:
         active = (
             controller_config.dense_layer_budgets
             if policy.dense_fallback
             else controller_config.layer_budgets
         )
-        cache.enable_csa_tiering(max(budget for _, budget in active))
+        physical_hot_budget_blocks_per_store = (
+            max(budget for _, budget in active) * batch_size
+        )
+        cache.enable_csa_tiering(physical_hot_budget_blocks_per_store)
 
     predictions = torch.full_like(workload.targets, -1)
     torch.cuda.synchronize()
@@ -238,6 +248,7 @@ def _run_policy(
         },
         "controller": asdict(controller) if controller is not None else None,
         "controller_config": asdict(controller_config) if controller_config is not None else None,
+        "physical_hot_budget_blocks_per_store": physical_hot_budget_blocks_per_store,
         "budget_violations": 0,
     }
 
@@ -351,6 +362,9 @@ def evaluate(
                             "late_misses": run["tier"]["late_misses"],
                             "evictions": run["tier"]["evictions"],
                             "controller": run["controller"],
+                            "physical_hot_budget_blocks_per_store": run[
+                                "physical_hot_budget_blocks_per_store"
+                            ],
                             "budget_violations": run["budget_violations"],
                         }
                     )
@@ -420,6 +434,10 @@ def main() -> None:
         "contexts": EVALUATION_CONTEXTS,
         "examples_per_family_policy": args.examples_per_family,
         "batch_size": args.batch_size,
+        "reference_store_batch_semantics": (
+            "logical quotas are per conversation; physical per-store capacity covers "
+            "the union of batch_size per-row selections"
+        ),
         "policies": policies,
         "fixed_topk_floor": pilot._fixed_topk(args.scale),
         "records_digest": record_digest,
