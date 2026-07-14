@@ -187,7 +187,10 @@ concurrent serving; they remain bounded reference evidence even at 108/108.
 The separate P4 production manifest freezes another 108 cells behind an
 external serving-adapter contract. Its c8/c32 cells pass only when raw request
 admission, first-token, and completion timestamps reconstruct the requested
-overlap. The adapter executable, runtime revision, deployment image or explicit
+overlap and the per-request, per-token execution records prove either a
+multi-request decode batch or genuinely overlapping decode execution. Merely
+keeping request lifecycles open around a serial decode loop is rejected. The
+adapter executable, runtime revision, deployment image or explicit
 bare-metal mode, accelerator, driver, P3 audit, and every cell artifact are
 digest-bound. A serial loop, projected metric, aggregate-only latency, or
 unreported failure cannot satisfy the production gate.

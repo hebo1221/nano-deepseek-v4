@@ -154,6 +154,118 @@ def maximum_request_overlap(requests: list[dict[str, Any]]) -> int:
     return maximum
 
 
+def maximum_decode_execution_overlap(records: list[dict[str, Any]]) -> int:
+    """Return the maximum number of distinct requests executing a token at once."""
+    events: list[tuple[int, int, str]] = []
+    for record in records:
+        request_id = record["request_id"]
+        events.append((record["dispatch_ns"], 1, request_id))
+        events.append((record["completed_ns"], -1, request_id))
+    active: dict[str, int] = {}
+    maximum = 0
+    for _timestamp, delta, request_id in sorted(events, key=lambda row: (row[0], row[1])):
+        if delta < 0:
+            count = active.get(request_id, 0) - 1
+            if count > 0:
+                active[request_id] = count
+            else:
+                active.pop(request_id, None)
+        else:
+            active[request_id] = active.get(request_id, 0) + 1
+        maximum = max(maximum, len(active))
+    return maximum
+
+
+def validate_decode_execution_proof(
+    payload: dict[str, Any],
+    *,
+    requests: list[dict[str, Any]],
+    generation: int,
+    concurrency: int,
+) -> None:
+    """Reject lifecycle-only concurrency claims without model-execution evidence."""
+    records = payload.get("decode_token_records")
+    if not isinstance(records, list) or len(records) != concurrency * generation:
+        raise ValueError("Decode token execution coverage is incomplete.")
+    request_by_id: dict[str, dict[str, Any]] = {}
+    for request in requests:
+        request_id = request.get("request_id")
+        if not isinstance(request_id, str) or not request_id or request_id in request_by_id:
+            raise ValueError("Request identifiers are missing or duplicated.")
+        request_by_id[request_id] = request
+    _require(len(request_by_id) == concurrency, "Request identifier count drifted.")
+    expected = {
+        (request_id, token_index)
+        for request_id in request_by_id
+        for token_index in range(generation)
+    }
+    observed: set[tuple[str, int]] = set()
+    batch_requests: dict[str, set[str]] = {}
+    batch_windows: dict[str, tuple[int, int]] = {}
+    request_windows: dict[str, list[tuple[int, int, int]]] = {
+        request_id: [] for request_id in request_by_id
+    }
+    for record in records:
+        request_id = record.get("request_id")
+        token_index = record.get("token_index")
+        batch_id = record.get("execution_batch_id")
+        dispatch_ns = record.get("dispatch_ns")
+        completed_ns = record.get("completed_ns")
+        _require(
+            isinstance(request_id, str)
+            and request_id in request_by_id
+            and isinstance(token_index, int)
+            and 0 <= token_index < generation
+            and isinstance(batch_id, str)
+            and bool(batch_id)
+            and isinstance(dispatch_ns, int)
+            and isinstance(completed_ns, int)
+            and dispatch_ns < completed_ns,
+            "Invalid decode token execution record.",
+        )
+        request = request_by_id[request_id]
+        _require(
+            request["admitted_ns"] <= dispatch_ns and completed_ns <= request["completed_ns"],
+            "Decode execution falls outside its request lifecycle.",
+        )
+        coordinate = (request_id, token_index)
+        _require(coordinate not in observed, "Duplicate decode token execution record.")
+        observed.add(coordinate)
+        batch_requests.setdefault(batch_id, set()).add(request_id)
+        window = (dispatch_ns, completed_ns)
+        _require(
+            batch_id not in batch_windows or batch_windows[batch_id] == window,
+            "One decode execution batch has inconsistent timestamps.",
+        )
+        batch_windows[batch_id] = window
+        request_windows[request_id].append((token_index, dispatch_ns, completed_ns))
+    _require(observed == expected, "Decode token execution coordinates drifted.")
+    for windows in request_windows.values():
+        ordered = sorted(windows)
+        _require(
+            all(ordered[index - 1][2] <= ordered[index][1] for index in range(1, len(ordered))),
+            "Autoregressive decode token executions overlap within one request.",
+        )
+    maximum_batch_requests = max(map(len, batch_requests.values()))
+    maximum_execution_overlap = maximum_decode_execution_overlap(records)
+    execution = payload["load_execution"]
+    _require(
+        execution.get("concurrency_proof_mode")
+        in {"continuous-batching", "dynamic-batching", "overlapped-independent"},
+        "Serving execution does not declare an accepted concurrency proof mode.",
+    )
+    _require(
+        execution.get("maximum_requests_per_decode_batch") == maximum_batch_requests
+        and execution.get("maximum_decode_execution_overlap") == maximum_execution_overlap,
+        "Decode execution concurrency summary does not match raw records.",
+    )
+    if concurrency > 1:
+        _require(
+            maximum_batch_requests > 1 or maximum_execution_overlap > 1,
+            "Request lifecycles overlap but decode execution remains serial.",
+        )
+
+
 def validate_policy_run(
     payload: dict[str, Any], *, cell: tuple[str, int, int, str, int, int]
 ) -> None:
@@ -195,6 +307,12 @@ def validate_policy_run(
         execution.get("maximum_active_requests") == observed_overlap
         and execution.get("overlap_window_ns") == overlap_window,
         "Serving scheduler overlap summary does not match raw timestamps.",
+    )
+    validate_decode_execution_proof(
+        payload,
+        requests=requests,
+        generation=generation,
+        concurrency=concurrency,
     )
     steps = payload.get("decode_step_latency_ms")
     _require(

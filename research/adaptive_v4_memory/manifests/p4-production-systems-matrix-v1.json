@@ -33,16 +33,18 @@
       "container-image-digest-or-explicit-bare-metal",
       "accelerator-model-count-and-driver"
     ],
-    "actual_concurrency_proof": "request records must independently reconstruct maximum lifecycle overlap equal to the frozen concurrency; c8/c32 require a positive overlap window",
+    "actual_concurrency_proof": "request records must independently reconstruct maximum lifecycle overlap equal to the frozen concurrency; every request-token coordinate must also have a decode execution record, and c8/c32 require either a multi-request decode batch or overlapping decode execution intervals",
     "forbidden": [
       "serial-round-robin labeled concurrent",
       "projected latency or throughput",
       "aggregate-only latency without request timestamps",
+      "overlapping request lifecycles with serial decode execution",
       "silent retry, truncation, or dropped failure"
     ]
   },
   "required_measurements": [
     "request admission, first-token, and completion timestamps",
+    "per-request per-token decode dispatch/completion timestamps and execution-batch identity",
     "TTFT, TPOT, end-to-end p50/p95/p99 and maximum",
     "generated-token throughput and terminal request failures",
     "allocated, reserved, peak, process-total, and device-total HBM",

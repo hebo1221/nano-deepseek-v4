@@ -30,6 +30,17 @@ def _policy_run(cell: tuple[str, int, int, str, int, int], policy: str) -> dict[
     overlap_window = min(row["completed_ns"] for row in requests) - max(
         row["admitted_ns"] for row in requests
     )
+    decode_token_records = [
+        {
+            "request_id": f"request-{request_index}",
+            "token_index": token_index,
+            "execution_batch_id": f"decode-{token_index}",
+            "dispatch_ns": 100 + token_index * 10,
+            "completed_ns": 109 + token_index * 10,
+        }
+        for token_index in range(generation)
+        for request_index in range(concurrency)
+    ]
     return {
         "policy": policy,
         "input_digest": "1" * 64,
@@ -38,8 +49,12 @@ def _policy_run(cell: tuple[str, int, int, str, int, int], policy: str) -> dict[
             "requested_concurrency": concurrency,
             "maximum_active_requests": concurrency,
             "overlap_window_ns": overlap_window,
+            "concurrency_proof_mode": "continuous-batching",
+            "maximum_requests_per_decode_batch": concurrency,
+            "maximum_decode_execution_overlap": concurrency,
         },
         "request_records": requests,
+        "decode_token_records": decode_token_records,
         "decode_step_latency_ms": [1.0] * (concurrency * generation),
         "generated_token_throughput_per_second": 100.0,
         "prediction_digest": "3" * 64,
@@ -62,9 +77,7 @@ def _adapter_payload(
                 "repetition": index,
                 "input_digest": "1" * 64,
                 "execution_order": list(
-                    production.POLICIES
-                    if index % 2 == 0
-                    else tuple(reversed(production.POLICIES))
+                    production.POLICIES if index % 2 == 0 else tuple(reversed(production.POLICIES))
                 ),
                 "greedy_predictions_identical": True,
                 "policies": {policy: _policy_run(cell, policy) for policy in production.POLICIES},
@@ -135,6 +148,47 @@ def test_production_adapter_rejects_nonoverlapping_request_records() -> None:
         request["completed_ns"] = index * 100 + 99
 
     with pytest.raises(ValueError, match="do not prove frozen concurrency"):
+        production.validate_adapter_payload(payload, cell=cell, executable_digest=digest)
+
+
+def test_production_adapter_rejects_lifecycle_only_concurrency() -> None:
+    cell = next(cell for cell in production.frozen_cells() if cell[5] == 8)
+    digest = "a" * 64
+    payload = _adapter_payload(cell, digest)
+    run = payload["repetitions"][0]["policies"]["resident-native"]
+    for index, record in enumerate(run["decode_token_records"]):
+        record["execution_batch_id"] = f"serial-{index}"
+        record["dispatch_ns"] = 100 + index * 5
+        record["completed_ns"] = 104 + index * 5
+    run["load_execution"]["maximum_requests_per_decode_batch"] = 1
+    run["load_execution"]["maximum_decode_execution_overlap"] = 1
+
+    with pytest.raises(ValueError, match="decode execution remains serial"):
+        production.validate_adapter_payload(payload, cell=cell, executable_digest=digest)
+
+
+def test_production_adapter_rejects_fabricated_batch_identity() -> None:
+    cell = next(cell for cell in production.frozen_cells() if cell[5] == 8)
+    digest = "a" * 64
+    payload = _adapter_payload(cell, digest)
+    run = payload["repetitions"][0]["policies"]["resident-native"]
+    run["decode_token_records"][1]["dispatch_ns"] += 1
+
+    with pytest.raises(ValueError, match="inconsistent timestamps"):
+        production.validate_adapter_payload(payload, cell=cell, executable_digest=digest)
+
+
+def test_production_adapter_rejects_overlapping_autoregressive_tokens() -> None:
+    cell = next(cell for cell in production.frozen_cells() if cell[5] == 8)
+    digest = "a" * 64
+    payload = _adapter_payload(cell, digest)
+    run = payload["repetitions"][0]["policies"]["resident-native"]
+    for record in run["decode_token_records"]:
+        if record["token_index"] == 1:
+            record["dispatch_ns"] = 108
+            record["completed_ns"] = 119
+
+    with pytest.raises(ValueError, match="Autoregressive decode token executions overlap"):
         production.validate_adapter_payload(payload, cell=cell, executable_digest=digest)
 
 
