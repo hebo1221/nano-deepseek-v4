@@ -271,6 +271,12 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
     )
     assert (
         manifest["evidence"]["p2_causal"]["required_audit"][
+            "seed_p_values_used_as_success_gate"
+        ]
+        is False
+    )
+    assert (
+        manifest["evidence"]["p2_causal"]["required_audit"][
             "preregistered_component_contrasts_verified"
         ]
         is True
