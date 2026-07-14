@@ -42,17 +42,14 @@
         "terminal_cells": 108,
         "all_terminal_cells_verified": true,
         "all_artifact_digests_verified": true,
-        "actual_concurrency_verified": true,
-        "all_required_metrics_verified": true,
-        "backend_provenance_consistent": true,
-        "tail_failure_accounting_complete": true,
-        "all_paired_predictions_identical": true
+        "tail_failure_accounting_complete": true
       }
     }
   },
   "boundary_manifests": {
     "natural_suite": "research/adaptive_v4_memory/manifests/p3-natural-suite-v1.json",
-    "official_deepseek_v4": "research/adaptive_v4_memory/manifests/p3-flashmemory-deepseek-v4-v1.json"
+    "official_deepseek_v4": "research/adaptive_v4_memory/manifests/p3-flashmemory-deepseek-v4-v1.json",
+    "production_runtime_blocker": "research/adaptive_v4_memory/manifests/p4-production-resource-blocker-v1.json"
   },
   "generated_files": [
     "table-evidence.csv",

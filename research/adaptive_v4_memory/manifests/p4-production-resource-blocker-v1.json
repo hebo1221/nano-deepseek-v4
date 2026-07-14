@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "experiment_id": "p4-production-resource-blocker-v1",
+  "status": "external-runtime-unavailable",
+  "blocked_scope": "P4 actual-concurrency production serving matrix",
+  "available_evidence": "P4 reference PyTorch matrix remains executable and is reported separately",
+  "missing_requirements": [
+    "a production serving runtime implementing the frozen executable adapter contract",
+    "runtime and source revision provenance for that backend",
+    "actual concurrent request scheduling with lifecycle timestamps",
+    "production HBM, transfer, controller, indexer, and tail-failure telemetry"
+  ],
+  "failure_policy": "publish all 108 production cells as explicit terminal adapter failures; never substitute reference, projected, or serial-interleaved measurements",
+  "resolution": "provide an executable conforming to p4-production-systems-matrix-v1.json and rerun the same frozen Cartesian matrix",
+  "claim_boundary": "The blocker is not evidence about production performance and cannot be relabeled as an executed production benchmark."
+}

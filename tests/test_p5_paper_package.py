@@ -34,17 +34,17 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
         ]
         is True
     )
-    assert (
-        manifest["evidence"]["p4_production_systems"]["required_audit"][
-            "actual_concurrency_verified"
-        ]
-        is True
-    )
+    assert "actual_concurrency_verified" not in manifest["evidence"][
+        "p4_production_systems"
+    ]["required_audit"]
     assert (
         manifest["evidence"]["p4_production_systems"]["required_audit"][
             "all_artifact_digests_verified"
         ]
         is True
+    )
+    assert manifest["boundary_manifests"]["production_runtime_blocker"].endswith(
+        "p4-production-resource-blocker-v1.json"
     )
 
 
@@ -91,6 +91,7 @@ def test_p5_classification_preserves_claim_boundaries() -> None:
         "p3_natural": "bounded-result",
         "p4_reference_systems": "bounded-result",
         "p4_production_systems": "bounded-result",
+        "production_runtime_blocker": "unverified",
         "official_deepseek_v4": "unverified",
     }
 
@@ -135,6 +136,39 @@ def test_p5_success_requires_full_system_coverage() -> None:
     assert classifications["p2_causal"] == "success"
     assert classifications["p4_reference_systems"] == "bounded-result"
     assert classifications["p4_production_systems"] == "success"
+
+
+def test_p5_marks_all_failed_production_coverage_unverified() -> None:
+    classifications = package.classify_evidence(
+        {"quality_gate": [{"passes_fixed_baseline_component": True}]},
+        {"primary_causal_gate": {"passed": True}},
+        {"benchmark_complete": True},
+        {
+            "audit": {
+                "all_required_artifacts_verified": True,
+                "all_required_baseline_cells_terminal": True,
+                "all_failure_accounting_complete": True,
+                "benchmarks_terminal": 5,
+                "minimum_protocol_examples_accounted_per_arm": 45_289,
+            }
+        },
+        {"audit": {"terminal_cells": 108}},
+        {
+            "audit": {
+                "terminal_cells": 108,
+                "complete_cells": 0,
+                "partial_cells": 0,
+                "failed_cells": 108,
+                "actual_concurrency_verified": False,
+                "all_required_metrics_verified": False,
+                "backend_provenance_consistent": False,
+                "tail_failure_accounting_complete": True,
+                "all_paired_predictions_identical": False,
+            }
+        },
+    )
+
+    assert classifications["p4_production_systems"] == "unverified"
 
 
 def test_p5_p4_table_retains_terminal_failure() -> None:

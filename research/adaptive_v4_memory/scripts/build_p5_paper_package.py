@@ -92,13 +92,22 @@ def classify_evidence(
         and production_audit.get("tail_failure_accounting_complete") is True
         and production_audit.get("all_paired_predictions_identical") is True
     )
+    production_terminal = production_audit.get("terminal_cells") == 108
+    production_class = (
+        "success"
+        if production_full
+        else "bounded-result"
+        if production_terminal and production_audit.get("complete_cells", 0) > 0
+        else "unverified"
+    )
     result = {
         "p2_core": "success" if core_passed else "negative-result",
         "p2_causal": "success" if causal_passed else "bounded-result",
         "p3_ruler": "bounded-result" if p3_complete else "unverified",
         "p3_natural": "bounded-result" if natural_complete else "unverified",
         "p4_reference_systems": "bounded-result" if reference_complete else "unverified",
-        "p4_production_systems": "success" if production_full else "bounded-result",
+        "p4_production_systems": production_class,
+        "production_runtime_blocker": "unverified",
         "official_deepseek_v4": "unverified",
     }
     _require(set(result.values()).issubset(ALLOWED_CLASSES), "Unknown conclusion class.")
@@ -213,9 +222,8 @@ def _report(
     p4_reference = p4_reference_systems["audit"]
     p4_production = p4_production_systems["audit"]
     evidence_lines = "\n".join(
-        f"| {row['name']} | {classifications[row['name']]} | `{row['sha256']}` |"
+        f"| {row['name']} | {classifications.get(row['name'], 'unverified')} | `{row['sha256']}` |"
         for row in inputs
-        if row["name"] in classifications
     )
     return f"""# Adaptive V4 Memory: paper-grade empirical report
 
