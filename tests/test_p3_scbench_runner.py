@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
 import torch
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "research/adaptive_v4_memory/scripts"
@@ -15,6 +16,7 @@ from run_p3_scbench import (  # noqa: E402
     _existing_records,
     encode_segment,
     generate_turn,
+    load_adaptive_prerequisite,
     prompt_sequence_digest,
     token_sequence_digest,
 )
@@ -119,6 +121,97 @@ def test_scbench_progress_recovers_empty_crash_window(tmp_path: Path) -> None:
     assert _existing_records(progress, partial, identity, 10_286) == []
     progress.unlink()
     assert _existing_records(progress, partial, identity, 10_286) == []
+
+
+def test_adaptive_scbench_prerequisite_accepts_terminal_negative_outcome(tmp_path: Path) -> None:
+    path = tmp_path / "adaptive-ruler.json"
+    path.write_text(
+        json.dumps(
+            {
+                "experiment_id": "p3-natural-adaptive-quota-ruler-audit-v1",
+                "status": "terminal",
+                "classification": "bounded-negative-result",
+                "audit": {
+                    "total_predictions": 65_000,
+                    "all_raw_records_verified": True,
+                    "all_dependency_digests_verified": True,
+                    "failure_accounting_complete": True,
+                    "quota_physical_audits_verified": True,
+                    "same_global_token_budget_verified": True,
+                    "causal_layer_order_verified": True,
+                },
+            }
+        )
+    )
+
+    dependency = load_adaptive_prerequisite(
+        path,
+        experiment_id="p3-natural-adaptive-quota-ruler-audit-v1",
+        predictions=65_000,
+        label="adaptive RULER",
+    )
+
+    assert dependency["path"] == str(path)
+    assert len(dependency["sha256"]) == 64
+
+
+def test_adaptive_scbench_prerequisite_rejects_unverified_quota(tmp_path: Path) -> None:
+    path = tmp_path / "adaptive-ruler.json"
+    path.write_text(
+        json.dumps(
+            {
+                "experiment_id": "p3-natural-adaptive-quota-ruler-audit-v1",
+                "status": "terminal",
+                "audit": {
+                    "total_predictions": 65_000,
+                    "all_raw_records_verified": True,
+                    "all_dependency_digests_verified": True,
+                    "failure_accounting_complete": True,
+                    "quota_physical_audits_verified": False,
+                    "same_global_token_budget_verified": True,
+                    "causal_layer_order_verified": True,
+                },
+            }
+        )
+    )
+
+    with pytest.raises(ValueError, match="lacks verified quota evidence"):
+        load_adaptive_prerequisite(
+            path,
+            experiment_id="p3-natural-adaptive-quota-ruler-audit-v1",
+            predictions=65_000,
+            label="adaptive RULER",
+        )
+
+
+def test_adaptive_scbench_accepts_audited_baseline_scbench_schema(tmp_path: Path) -> None:
+    path = tmp_path / "baseline-scbench.json"
+    path.write_text(
+        json.dumps(
+            {
+                "experiment_id": "p3-natural-scbench-audit-v1",
+                "audit": {
+                    "all_raw_artifacts_verified": True,
+                    "all_failure_accounting_complete": True,
+                    "all_required_arms_input_paired": True,
+                    "all_reported_scores_recomputed_from_raw_response": True,
+                },
+                "arms": {
+                    "native-dense": {"accounted_examples": 10_286},
+                    "strongest-memory-matched-fixed": {"accounted_examples": 10_286},
+                },
+            }
+        )
+    )
+
+    dependency = load_adaptive_prerequisite(
+        path,
+        experiment_id="p3-natural-scbench-audit-v1",
+        predictions=20_572,
+        label="baseline SCBench",
+    )
+
+    assert dependency["path"] == str(path)
 
 
 def test_scbench_is_sequence_gated_before_model_dataset_or_metric_io(tmp_path: Path) -> None:

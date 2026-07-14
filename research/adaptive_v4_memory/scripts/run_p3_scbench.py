@@ -14,6 +14,7 @@ import numpy as np
 import pyarrow.parquet as pq
 import torch
 from adaptive_v4_gpu_lock import acquire_gpu_lock
+from p3_cross_family_sequence_gate import require_cross_family_sequence_gate
 from p3_natural_workloads import build_scbench_workload
 from p3_scbench_official import (
     ROUGE_REVISION,
@@ -24,12 +25,21 @@ from p3_scbench_official import (
 from p3_sequence_gate import require_p3_sequence_gate
 from run_p3_longbench_v2 import cache_bytes
 from run_p3_mrcr import arm_config, atomic_json, failure_record, runtime_environment
+from run_p3_natural_ruler import compatibility_arm_config
 from run_p3_ruler_matrix import KVPRESS_REVISION, git_dirty, git_head, load_evaluator
 from transformers import DynamicCache
+from validate_p3_natural_adaptive_quota_scbench_manifest import (
+    validate_manifest as validate_adaptive_scbench_manifest,
+)
 from verify_p3_natural_model import sha256, verify_snapshot
 
 BENCHMARK = "SCBench"
 ARMS = ("native-dense", "strongest-memory-matched-fixed")
+ADAPTIVE_QUOTA_ARMS = ("fixed+pins", "natural-adaptive-quota+pins")
+DEFAULT_OUTPUT_ROOT = Path("artifacts/adaptive_v4_memory/paper_grade/p3/natural/scbench")
+ADAPTIVE_QUOTA_OUTPUT_ROOT = Path(
+    "artifacts/adaptive_v4_memory/paper_grade/p3/natural-adaptive-quota/scbench-qwen3-4b"
+)
 MODEL_REVISION = "cdbee75f17c01a7cc42f958dc650907174af0554"
 DATASET_REVISION = "283310bb8c5ba6909dd9a6b1be087d2937f76f6d"
 CODE_REVISION = "a4eb395f949ea39e871f9bc586d683390692c6be"
@@ -38,6 +48,45 @@ CODE_REVISION = "a4eb395f949ea39e871f9bc586d683390692c6be"
 def _require(condition: bool, message: str) -> None:
     if not condition:
         raise ValueError(message)
+
+
+def load_adaptive_prerequisite(
+    path: Path, *, experiment_id: str, predictions: int, label: str
+) -> dict[str, str]:
+    _require(path.is_file(), f"Adaptive SCBench prerequisite is unavailable: {label}.")
+    payload = json.loads(path.read_text())
+    audit = payload.get("audit", {})
+    _require(payload.get("experiment_id") == experiment_id, f"Wrong prerequisite: {label}.")
+    if experiment_id == "p3-natural-adaptive-quota-ruler-audit-v1":
+        _require(
+            payload.get("status") == "terminal"
+            and audit.get("total_predictions") == predictions
+            and audit.get("all_raw_records_verified") is True
+            and audit.get("all_dependency_digests_verified") is True
+            and audit.get("failure_accounting_complete") is True
+            and audit.get("quota_physical_audits_verified") is True
+            and audit.get("same_global_token_budget_verified") is True
+            and audit.get("causal_layer_order_verified") is True,
+            "Adaptive RULER prerequisite lacks verified quota evidence.",
+        )
+    elif experiment_id == "p3-natural-scbench-audit-v1":
+        arms = payload.get("arms", {})
+        _require(
+            audit.get("all_raw_artifacts_verified") is True
+            and audit.get("all_failure_accounting_complete") is True
+            and audit.get("all_required_arms_input_paired") is True
+            and audit.get("all_reported_scores_recomputed_from_raw_response") is True
+            and sum(
+                int(row.get("accounted_examples", -predictions))
+                for row in arms.values()
+                if isinstance(row, dict)
+            )
+            == predictions,
+            "Baseline SCBench prerequisite is not a complete audited result.",
+        )
+    else:
+        raise ValueError(f"Unsupported adaptive SCBench prerequisite: {experiment_id}.")
+    return {"path": str(path), "sha256": sha256(path)}
 
 
 def encode_segment(tokenizer: Any, text: str) -> torch.Tensor:
@@ -325,6 +374,7 @@ def base_record(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run frozen Qwen3-4B SCBench arms.")
+    parser.add_argument("--cohort", choices=("baseline", "adaptive-quota"), default="baseline")
     parser.add_argument("--kvpress-root", type=Path, required=True)
     parser.add_argument("--model-snapshot", type=Path, required=True)
     parser.add_argument(
@@ -357,6 +407,40 @@ def main() -> None:
         default=Path("artifacts/adaptive_v4_memory/paper_grade/p2-causal-ablation.summary.json"),
     )
     parser.add_argument(
+        "--primary-core-summary",
+        type=Path,
+        default=Path(
+            "artifacts/adaptive_v4_memory/paper_grade/p2-core-quality-matrix.strict.summary.json"
+        ),
+    )
+    parser.add_argument(
+        "--nine-seed-causal-summary",
+        type=Path,
+        default=Path("artifacts/adaptive_v4_memory/paper_grade/p2-nine-seed-causal.summary.json"),
+    )
+    parser.add_argument(
+        "--adaptive-quota-manifest",
+        type=Path,
+        default=Path(
+            "research/adaptive_v4_memory/manifests/p3-natural-adaptive-quota-scbench-v1.json"
+        ),
+    )
+    parser.add_argument(
+        "--adaptive-ruler-summary",
+        type=Path,
+        default=Path(
+            "artifacts/adaptive_v4_memory/paper_grade/p3/natural-adaptive-quota/"
+            "ruler-qwen3-4b.summary.json"
+        ),
+    )
+    parser.add_argument(
+        "--baseline-scbench-summary",
+        type=Path,
+        default=Path(
+            "artifacts/adaptive_v4_memory/paper_grade/p3/natural/scbench.summary.json"
+        ),
+    )
+    parser.add_argument(
         "--p2-matrix",
         type=Path,
         default=Path("artifacts/adaptive_v4_memory/paper_grade/p2-core-quality-matrix.json"),
@@ -364,9 +448,9 @@ def main() -> None:
     parser.add_argument(
         "--output-root",
         type=Path,
-        default=Path("artifacts/adaptive_v4_memory/paper_grade/p3/natural/scbench"),
+        default=DEFAULT_OUTPUT_ROOT,
     )
-    parser.add_argument("--arm", action="append", choices=ARMS)
+    parser.add_argument("--arm", action="append", choices=(*ARMS, *ADAPTIVE_QUOTA_ARMS))
     parser.add_argument("--max-new-examples", type=int)
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
@@ -374,7 +458,35 @@ def main() -> None:
         args.max_new_examples is None or args.max_new_examples > 0,
         "max-new-examples must be positive.",
     )
-    sequence_decision = require_p3_sequence_gate(args.p2_matrix, args.causal_gate)
+    adaptive_manifest: dict[str, Any] | None = None
+    adaptive_prerequisites: dict[str, dict[str, str]] = {}
+    if args.cohort == "adaptive-quota":
+        sequence_decision = require_cross_family_sequence_gate(
+            primary_core=args.primary_core_summary,
+            primary_causal=args.causal_gate,
+            nine_seed_causal=args.nine_seed_causal_summary,
+            fixed_selection=args.fixed_selection,
+        )
+        adaptive_manifest = json.loads(args.adaptive_quota_manifest.read_text())
+        validate_adaptive_scbench_manifest(adaptive_manifest)
+        adaptive_prerequisites = {
+            "adaptive_ruler": load_adaptive_prerequisite(
+                args.adaptive_ruler_summary,
+                experiment_id="p3-natural-adaptive-quota-ruler-audit-v1",
+                predictions=65_000,
+                label="Qwen3-4B adaptive-quota RULER audit",
+            ),
+            "baseline_scbench": load_adaptive_prerequisite(
+                args.baseline_scbench_summary,
+                experiment_id="p3-natural-scbench-audit-v1",
+                predictions=20_572,
+                label="Qwen3-4B baseline SCBench audit",
+            ),
+        }
+        if args.output_root == DEFAULT_OUTPUT_ROOT:
+            args.output_root = ADAPTIVE_QUOTA_OUTPUT_ROOT
+    else:
+        sequence_decision = require_p3_sequence_gate(args.p2_matrix, args.causal_gate)
     source_commit = git_head(Path.cwd())
     if git_dirty(Path.cwd()):
         raise RuntimeError("SCBench requires a clean source tree.")
@@ -396,12 +508,20 @@ def main() -> None:
     model_snapshot = args.model_snapshot.resolve()
     verify_snapshot(model_snapshot, manifest["model"])
     expected = manifest["benchmarks"][BENCHMARK]["expected_predictions_per_arm"]
+    if adaptive_manifest is not None:
+        _require(
+            adaptive_manifest["benchmark"]["predictions_per_arm"] == expected,
+            "Adaptive SCBench prediction count drifted from the base suite.",
+        )
     runner_digest = sha256(Path(__file__))
     manifest_digest = sha256(args.manifest)
     inventory_digest = sha256(args.dataset_inventory)
     source_inventory_digest = sha256(args.source_inventory)
     selection_digest = sha256(args.fixed_selection)
     causal_digest = sha256(args.causal_gate)
+    adaptive_manifest_digest = (
+        sha256(args.adaptive_quota_manifest) if adaptive_manifest is not None else None
+    )
     scorer_bundle = hashlib.sha256(
         "\n".join(
             sorted(
@@ -422,7 +542,13 @@ def main() -> None:
         "rouge_revision": ROUGE_REVISION,
         "rouge_script_sha256": ROUGE_SCRIPT_SHA256,
     }
-    selected_arms = tuple(args.arm or ARMS)
+    cohort_arms = ADAPTIVE_QUOTA_ARMS if args.cohort == "adaptive-quota" else ARMS
+    selected_arms = tuple(args.arm or cohort_arms)
+    _require(
+        len(selected_arms) == len(set(selected_arms))
+        and all(arm in cohort_arms for arm in selected_arms),
+        f"Selected SCBench arms do not belong to the {args.cohort} cohort.",
+    )
     identities = {
         arm: {
             "source_commit": source_commit,
@@ -432,9 +558,18 @@ def main() -> None:
             "source_inventory_sha256": source_inventory_digest,
             "causal_gate_sha256": causal_digest,
             "fixed_selection_sha256": selection_digest,
+            "cohort": args.cohort,
+            "adaptive_quota_manifest_sha256": adaptive_manifest_digest,
+            "adaptive_prerequisite_sha256": {
+                name: metadata["sha256"] for name, metadata in adaptive_prerequisites.items()
+            },
             "model_snapshot_digest_set_sha256": manifest["model"]["snapshot_digest_set_sha256"],
             "scorer_bundle_sha256": scorer_bundle,
-            "arm_config": arm_config(arm, selection, selection_digest),
+            "arm_config": (
+                compatibility_arm_config(arm, selection, selection_digest)
+                if args.cohort == "adaptive-quota"
+                else arm_config(arm, selection, selection_digest)
+            ),
             "seed": args.seed,
         }
         for arm in selected_arms
@@ -451,6 +586,11 @@ def main() -> None:
 
     lock = acquire_gpu_lock("p3-scbench")
     try:
+        from p3_protected_prefix_press import (
+            wrap_same_budget_adaptive_quota_protected_prefix,
+            wrap_same_budget_protected_prefix,
+        )
+
         EvaluationConfig, EvaluationRunner, _unused = load_evaluator(kvpress_root)
         config = EvaluationConfig(
             dataset="longbench-v2",
@@ -486,6 +626,17 @@ def main() -> None:
             runner.config.press_name = settings["press_name"]
             runner.config.compression_ratio = settings["compression_ratio"]
             runner._setup_press()
+            active_press: Any = runner.press
+            compatibility_press: Any = None
+            if args.cohort == "adaptive-quota":
+                if arm == "fixed+pins":
+                    compatibility_press = wrap_same_budget_protected_prefix(runner.press)
+                else:
+                    compatibility_press = wrap_same_budget_adaptive_quota_protected_prefix(
+                        runner.press,
+                        max_adjustment_fraction=settings["max_adjustment_fraction"],
+                    )
+                active_press = compatibility_press
             root = args.output_root / arm
             progress = root / "progress.json"
             partial = root / "record-parts"
@@ -542,6 +693,7 @@ def main() -> None:
                         "initial_prefill_latency_ms": 0.0,
                         "initial_prefill_peak_hbm_bytes": 0,
                         "initial_prefill_hot_resident_bytes": 0,
+                        "quota_physical_audit": None,
                     }
                     row_error: BaseException | None = None
                     row_blocked_by_unsupported = False
@@ -556,10 +708,15 @@ def main() -> None:
                         torch.cuda.reset_peak_memory_stats()
                         torch.cuda.synchronize()
                         prefill_started = time.perf_counter_ns()
+                        if compatibility_press is not None:
+                            span = settings["protected_prefix_token_span"]
+                            compatibility_press.configure(
+                                protected_start=span["start"], protected_end=span["end"]
+                            )
                         if mode == "multi-request":
                             cache = prefill_cache(
                                 pipeline=runner.pipeline,
-                                press=runner.press,
+                                press=active_press,
                                 input_ids=token_segments[0],
                             )
                             logical_position = int(token_segments[0].shape[1])
@@ -568,16 +725,22 @@ def main() -> None:
                             _require(first.shape[1] >= 2, "SCBench first prompt is too short.")
                             cache = prefill_cache(
                                 pipeline=runner.pipeline,
-                                press=runner.press,
+                                press=active_press,
                                 input_ids=first[:, :-1],
                             )
                             logical_position = int(first.shape[1]) - 1
+                        compatibility_audit = (
+                            compatibility_press.audit()
+                            if compatibility_press is not None
+                            else None
+                        )
                         torch.cuda.synchronize()
                         shared_metrics = {
                             "initial_prefill_latency_ms": (time.perf_counter_ns() - prefill_started)
                             / 1_000_000.0,
                             "initial_prefill_peak_hbm_bytes": torch.cuda.max_memory_allocated(),
                             "initial_prefill_hot_resident_bytes": cache_bytes(cache),
+                            "quota_physical_audit": compatibility_audit,
                         }
                         if mode == "multi-turn" and start_turn > 0:
                             append_prompt(
@@ -766,6 +929,7 @@ def main() -> None:
                 "experiment_id": "p3-natural-benchmark-arm-cell-v1",
                 "benchmark": BENCHMARK,
                 "arm": arm,
+                "cohort": args.cohort,
                 "status": "terminal",
                 "source": {
                     "commit": source_commit,
@@ -774,6 +938,15 @@ def main() -> None:
                 },
                 "run_identity": identities[arm],
                 "experiment_manifest": {"path": str(args.manifest), "sha256": manifest_digest},
+                "adaptive_quota_manifest": (
+                    {
+                        "path": str(args.adaptive_quota_manifest),
+                        "sha256": adaptive_manifest_digest,
+                    }
+                    if adaptive_manifest_digest is not None
+                    else None
+                ),
+                "adaptive_prerequisites": adaptive_prerequisites,
                 "causal_gate": {"path": str(args.causal_gate), "sha256": causal_digest},
                 "dataset_inventory": {
                     "path": str(args.dataset_inventory),
