@@ -4,6 +4,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 SCRIPTS = Path(__file__).resolve().parents[1] / "research/adaptive_v4_memory/scripts"
 sys.path.insert(0, str(SCRIPTS))
 
@@ -75,9 +77,15 @@ def test_500k_terminal_status_retains_partial_and_failed_results() -> None:
 
 def test_500k_audit_accepts_terminal_negative_evidence(tmp_path: Path) -> None:
     implementation = preflight.implementation_digest()
+    manifest = tmp_path / "manifest.json"
+    p3_audit = tmp_path / "p3.json"
+    manifest.write_text("manifest")
+    p3_audit.write_text("p3")
+    manifest_digest = preflight.systems.sha256(manifest)
+    p3_digest = preflight.systems.sha256(p3_audit)
     rows = []
     for index, scale in enumerate(preflight.SCALES):
-        input_digest = f"input-{scale}"
+        input_digest = f"{index + 1:064x}"
         successful_run = {
             "context_tokens": preflight.CONTEXT,
             "generation_tokens": preflight.GENERATION,
@@ -122,8 +130,8 @@ def test_500k_audit_accepts_terminal_negative_evidence(tmp_path: Path) -> None:
                         "dirty": False,
                         "implementation_digest": implementation,
                     },
-                    "manifest": {"sha256": "manifest"},
-                    "p3_audit": {"sha256": "p3"},
+                    "manifest": {"sha256": manifest_digest},
+                    "p3_audit": {"sha256": p3_digest},
                 }
             )
         )
@@ -146,8 +154,8 @@ def test_500k_audit_accepts_terminal_negative_evidence(tmp_path: Path) -> None:
                 "expected_cells": 2,
                 "terminal_cells": 2,
                 "implementation_digest": implementation,
-                "manifest": {"sha256": "manifest"},
-                "p3_audit": {"sha256": "p3"},
+                "manifest": {"path": str(manifest), "sha256": manifest_digest},
+                "p3_audit": {"path": str(p3_audit), "sha256": p3_digest},
                 "runs": rows,
             }
         )
@@ -169,13 +177,42 @@ def test_500k_audit_accepts_terminal_negative_evidence(tmp_path: Path) -> None:
     }
 
     first_artifact = Path(rows[0]["artifact"]["path"])
-    without_timeout = json.loads(first_artifact.read_text())
+    original = json.loads(first_artifact.read_text())
+    missing_memory = json.loads(json.dumps(original))
+    missing_memory["policy_attempts"]["resident-native"]["run"]["cuda"].pop(
+        "peak_allocated_bytes"
+    )
+    first_artifact.write_text(json.dumps(missing_memory))
+    assert not preflight._artifact_valid(
+        first_artifact,
+        scale=rows[0]["scale"],
+        digest=implementation,
+        manifest_digest=manifest_digest,
+        p3_digest=p3_digest,
+    )
+
+    p3_audit.write_text("drifted-p3")
+    with pytest.raises(ValueError, match="p3_audit dependency drifted"):
+        summary.summarize(matrix)
+
+    missing_failure = json.loads(json.dumps(original))
+    missing_failure["policy_attempts"]["tiered-native"].pop("error")
+    first_artifact.write_text(json.dumps(missing_failure))
+    assert not preflight._artifact_valid(
+        first_artifact,
+        scale=rows[0]["scale"],
+        digest=implementation,
+        manifest_digest=manifest_digest,
+        p3_digest=p3_digest,
+    )
+
+    without_timeout = json.loads(json.dumps(original))
     without_timeout.pop("cell_timeout_seconds")
     first_artifact.write_text(json.dumps(without_timeout))
     assert not preflight._artifact_valid(
         first_artifact,
         scale=rows[0]["scale"],
         digest=implementation,
-        manifest_digest="manifest",
-        p3_digest="p3",
+        manifest_digest=manifest_digest,
+        p3_digest=p3_digest,
     )

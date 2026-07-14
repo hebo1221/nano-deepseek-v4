@@ -83,6 +83,14 @@ def _failure_status(error: Exception) -> str:
     return "error"
 
 
+def _sha256_value(value: Any) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) == 64
+        and all(character in "0123456789abcdef" for character in value)
+    )
+
+
 def _artifact_valid(
     path: Path,
     *,
@@ -114,12 +122,30 @@ def _artifact_valid(
         and payload.get("p3_audit", {}).get("sha256") == p3_digest
     ):
         return False
+    if any(
+        row["status"] != "success"
+        and (
+            "run" in row
+            or not isinstance(row.get("error_type"), str)
+            or not row["error_type"]
+            or not isinstance(row.get("error"), str)
+            or not row["error"]
+        )
+        for row in attempts.values()
+    ):
+        return False
     successful = [row for row in attempts.values() if row["status"] == "success"]
+    if successful and not _sha256_value(payload.get("input_digest")):
+        return False
     return all(
         row.get("run", {}).get("context_tokens") == CONTEXT
         and row.get("run", {}).get("generation_tokens") == GENERATION
         and row.get("run", {}).get("input_digest") == payload.get("input_digest")
-        and isinstance(row.get("run", {}).get("prediction_digest"), str)
+        and _sha256_value(row.get("run", {}).get("prediction_digest"))
+        and type(row.get("run", {}).get("cuda", {}).get("peak_allocated_bytes")) is int
+        and row["run"]["cuda"]["peak_allocated_bytes"] >= 0
+        and type(row.get("run", {}).get("cache", {}).get("pinned_host_bytes")) is int
+        and row["run"]["cache"]["pinned_host_bytes"] >= 0
         for row in successful
     )
 

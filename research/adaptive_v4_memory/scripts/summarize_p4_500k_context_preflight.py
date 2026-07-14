@@ -31,6 +31,17 @@ def summarize(matrix_path: Path) -> dict[str, Any]:
         matrix.get("implementation_digest") == preflight.implementation_digest(),
         "P4 500K implementation is not the checked-out implementation.",
     )
+    for dependency_name in ("manifest", "p3_audit"):
+        dependency = matrix.get(dependency_name, {})
+        dependency_path = Path(dependency.get("path", ""))
+        _require(
+            dependency_path.is_file(),
+            f"Missing P4 500K {dependency_name} dependency.",
+        )
+        _require(
+            dependency.get("sha256") == systems.sha256(dependency_path),
+            f"P4 500K {dependency_name} dependency drifted.",
+        )
     seen: set[str] = set()
     cells: list[dict[str, Any]] = []
     raw_digests: list[str] = []
