@@ -9,7 +9,7 @@
   "controller_calibration": {
     "quantile": 0.95,
     "allowed_features": [
-      "ranked-score-top-p-cardinality",
+      "score-derived-requested-block-count",
       "candidate-block-count"
     ],
     "forbidden_features": [

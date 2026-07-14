@@ -173,9 +173,11 @@ def calibrate_same_token_layer_quotas(
 ) -> SameTokenLayerQuotaCalibration:
     """Fit deterministic non-uniform quotas from disjoint calibration queries.
 
-    Normal quotas use per-layer top-p score cardinality. Dense quotas use the
-    candidate count and are allocated only after preserving every normal quota.
-    No targets, model answers, or held-out queries enter this calculation.
+    Normal quotas use the controller's per-layer score-derived requested-block
+    count, including its entropy and boundary uncertainty allowance. Dense
+    quotas use candidate count and are allocated only after preserving every
+    normal quota. No targets, model answers, or held-out queries enter this
+    calculation.
     """
 
     if not queries:
@@ -203,7 +205,7 @@ def calibrate_same_token_layer_quotas(
     score_demand = {
         layer: max(
             min_blocks_per_layer,
-            _nearest_rank([signal.top_p_cardinality for signal in signals], quantile),
+            _nearest_rank([signal.requested_blocks for signal in signals], quantile),
         )
         for layer, signals in by_layer.items()
     }

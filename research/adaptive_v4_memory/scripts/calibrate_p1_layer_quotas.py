@@ -189,7 +189,7 @@ def main() -> None:
         "leakage_guard": {
             "targets_used_for_quota_fit": False,
             "held_out_evaluation_seed_used": False,
-            "fit_inputs": "ranked score cardinality and candidate count only",
+            "fit_inputs": "score-derived requested-block count and candidate count only",
         },
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)

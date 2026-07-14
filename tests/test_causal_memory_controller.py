@@ -98,7 +98,7 @@ def test_same_token_quota_calibration_is_bounded_and_digest_bound():
     repeated = calibrate_same_token_layer_quotas(queries, signal, quantile=1.0)
 
     assert calibrated == repeated
-    assert calibrated.layer_budgets == ((2, 1), (5, 4))
+    assert calibrated.layer_budgets == ((2, 2), (5, 4))
     assert calibrated.dense_layer_budgets == ((2, 4), (5, 4))
     assert sum(dict(calibrated.layer_budgets).values()) <= signal.global_block_budget
     assert sum(dict(calibrated.dense_layer_budgets).values()) <= signal.dense_fallback_block_budget

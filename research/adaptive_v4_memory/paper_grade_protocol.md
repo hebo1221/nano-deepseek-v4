@@ -74,11 +74,11 @@ Controller quota-calibration seeds:
 ```
 
 Each calibration seed is paired with the model seed at the same index and may
-use only ranked-score cardinality and candidate counts. It cannot use targets,
-native correctness, or the 807-series held-out examples. Layer quotas use the
-nearest-rank 95th percentile and retain the fixed-policy minimum in every CSA
-layer. The 1x point remains uniform; non-uniform allocation is tested only when
-2x or 4x capacity leaves room above that floor.
+use only score-derived requested-block counts and candidate counts. It cannot
+use targets, native correctness, or the 807-series held-out examples. Layer
+quotas use the nearest-rank 95th percentile and retain the fixed-policy minimum
+in every CSA layer. The 1x point remains uniform; non-uniform allocation is
+tested only when 2x or 4x capacity leaves room above that floor.
 
 ## 4. Tier-S workloads and sample size
 
