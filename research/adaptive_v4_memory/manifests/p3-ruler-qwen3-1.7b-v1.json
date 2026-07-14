@@ -86,6 +86,8 @@
     "total_predictions": 253500,
     "dataset_generator": "research/adaptive_v4_memory/scripts/prepare_p3_ruler_dataset.py",
     "matrix_runner": "research/adaptive_v4_memory/scripts/run_p3_ruler_matrix.py",
+    "audit_runner": "research/adaptive_v4_memory/scripts/summarize_p3_ruler_matrix.py",
+    "audit_output": "artifacts/adaptive_v4_memory/paper_grade/p3/ruler-qwen3-1.7b.summary.json",
     "raw_output_root": "artifacts/adaptive_v4_memory/paper_grade/p3/ruler-qwen3-1.7b",
     "record_required": [
       "exact_command",
