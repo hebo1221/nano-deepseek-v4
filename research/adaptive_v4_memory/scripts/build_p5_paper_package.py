@@ -1397,17 +1397,23 @@ def _causal_seed_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _causal_worst_slice_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
-    return [
-        _flatten_json_row(
-            {
-                "contrast": contrast,
-                "candidate": statistics["candidate"],
-                "comparator": statistics["comparator"],
-                **statistics["worst_slice"],
-            }
+    rows: list[dict[str, Any]] = []
+    for contrast, statistics in payload["paired_statistics"].items():
+        identity = {
+            "contrast": contrast,
+            "candidate": statistics["candidate"],
+            "comparator": statistics["comparator"],
+        }
+        rows.append(
+            _flatten_json_row(
+                {**identity, "scope": "global", **statistics["worst_slice"]}
+            )
         )
-        for contrast, statistics in payload["paired_statistics"].items()
-    ]
+        rows.extend(
+            _flatten_json_row({**identity, "scope": "budget-scale", **row})
+            for row in statistics["worst_slice_by_budget_scale"]
+        )
+    return rows
 
 
 def _causal_physical_memory_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:

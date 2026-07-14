@@ -11,6 +11,34 @@ sys.path.insert(0, str(SCRIPTS))
 import summarize_p2_causal_factorial as causal  # noqa: E402
 
 
+def test_causal_worst_slice_is_retained_for_every_budget_scale_cell() -> None:
+    slices = [
+        {
+            "scale": scale,
+            "budget": budget,
+            "family": family,
+            "context": context,
+            "mean_difference": difference,
+        }
+        for scale in ("s55", "s151")
+        for budget in causal.shard.BUDGET_LABELS
+        for family, context, difference in (
+            ("single-remote-retrieval", 80, 0.02),
+            ("dense-global-aggregation", 1024, -0.01),
+        )
+    ]
+
+    worst = causal.worst_slices_by_budget_scale(slices)
+
+    assert len(worst) == 4
+    assert {(row["scale"], row["budget"]) for row in worst} == {
+        (scale, budget)
+        for scale in ("s55", "s151")
+        for budget in causal.shard.BUDGET_LABELS
+    }
+    assert all(row["family"] == "dense-global-aggregation" for row in worst)
+
+
 def _raw_metadata() -> tuple[dict, dict]:
     scale = "s55"
     training_seed = causal.shard.TRAINING_SEEDS[0]

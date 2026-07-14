@@ -1372,6 +1372,15 @@ def test_p5_p2_detailed_tables_retain_seed_family_worst_slice_and_memory() -> No
             "context": 1024,
             "mean_difference": -0.01,
         },
+        "worst_slice_by_budget_scale": [
+            {
+                "scale": "s55",
+                "budget": "2x",
+                "family": "dense-global-aggregation",
+                "context": 1024,
+                "mean_difference": -0.01,
+            }
+        ],
     }
     causal = {
         "paired_statistics": {"adaptive_quota_with_pins": contrast},
@@ -1412,7 +1421,9 @@ def test_p5_p2_detailed_tables_retain_seed_family_worst_slice_and_memory() -> No
         == "exact-sign-flip-enumeration"
     )
     assert package._causal_seed_rows(causal)[0]["training_seed"] == 6071401
-    assert package._causal_worst_slice_rows(causal)[0]["context"] == 1024
+    causal_worst = package._causal_worst_slice_rows(causal)
+    assert causal_worst[0]["context"] == 1024
+    assert {row["scope"] for row in causal_worst} == {"global", "budget-scale"}
     assert {row["scope"] for row in package._causal_physical_memory_rows(causal)} == {
         "seed-match",
         "aggregate-match",

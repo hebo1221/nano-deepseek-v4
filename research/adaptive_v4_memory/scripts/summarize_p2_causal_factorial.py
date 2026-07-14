@@ -263,6 +263,22 @@ def _merge(groups: Iterable[list[float]]) -> list[float]:
     return result
 
 
+def worst_slices_by_budget_scale(
+    slices: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    worst: list[dict[str, Any]] = []
+    for scale in ("s55", "s151"):
+        for budget in shard.BUDGET_LABELS:
+            candidates = [
+                row
+                for row in slices
+                if row.get("scale") == scale and row.get("budget") == budget
+            ]
+            _require(bool(candidates), f"Missing causal slices for {scale}/{budget}.")
+            worst.append(min(candidates, key=lambda row: row["mean_difference"]))
+    return worst
+
+
 def contrast_statistics(
     differences: dict[tuple[str, str, int, str, int], list[float]],
     *,
@@ -417,6 +433,7 @@ def contrast_statistics(
         "by_family_with_holm_bonferroni": families,
         "by_family_context": slices,
         "worst_slice": min(slices, key=lambda row: row["mean_difference"]),
+        "worst_slice_by_budget_scale": worst_slices_by_budget_scale(slices),
     }
 
 
