@@ -238,11 +238,16 @@ pinned checkpoint and supported runtime cannot be provisioned, the report must
 provide the exact revision, launch command, minimum accelerator/storage
 requirement, and estimated cost while withholding official-scale claims.
 
-Natural-language comparisons include native/dense, strongest memory-matched
-fixed, `fixed+pins`, and any synthetic-qualified calibrated arm. FlashMemory-
-and IndexCache-family baselines are included when their pinned implementations
-support the selected model/runtime; incompatibility is recorded explicitly and
-never replaced by a projected number.
+Natural-language comparisons always include native/dense and the strongest
+memory-matched fixed method supported by the selected model. `fixed+pins` and a
+synthetic-qualified calibrated arm are included only after an
+architecture-preserving port passes prediction/cache equivalence. Qwen3 does
+not expose the DeepSeek sparse-attention pin/indexer contract, so a generic
+Qwen KV-compression method cannot be relabeled as the Adaptive V4 controller.
+FlashMemory- and IndexCache-family baselines are likewise included only when
+their pinned implementations support the selected model/runtime;
+incompatibility is recorded explicitly and never replaced by a projected
+number.
 
 ## 8. Systems matrix
 

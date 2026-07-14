@@ -68,6 +68,18 @@ def test_external_dsa_baselines_cannot_be_claimed_on_qwen() -> None:
     assert "DeepSeek Sparse Attention" in baselines["IndexCache"]["supported_architecture_boundary"]
 
 
+def test_v4_controller_arms_require_an_architecture_preserving_port() -> None:
+    protocol = _manifest()["common_protocol"]
+
+    assert protocol["mandatory_compatible_arms"] == [
+        "native-dense",
+        "strongest-memory-matched-fixed",
+    ]
+    assert "fixed+pins" in protocol["conditional_arms"]
+    assert "architecture-preserving port" in protocol["conditional_arm_rule"]
+    assert "incompatible" in protocol["conditional_arm_rule"]
+
+
 def test_pinned_longbench_and_mrcr_metrics_match_official_behavior() -> None:
     assert extract_longbench_v2_choice("**The correct answer is (C)**") == "C"
     assert extract_longbench_v2_choice("The answer might be C") is None

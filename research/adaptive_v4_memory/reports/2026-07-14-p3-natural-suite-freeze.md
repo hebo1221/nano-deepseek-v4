@@ -60,6 +60,13 @@ supported DeepSeek Sparse Attention tier. The same separation applies to the
 existing official FlashMemory feasibility manifest. No projected Qwen number
 may stand in for either DSA result.
 
+The same architecture boundary applies to this project's controller. Qwen3
+always runs native and memory-matched fixed KV baselines. `fixed+pins` and
+`calibrated+pins` are not assigned Qwen proxy implementations: they become
+eligible only if a separate architecture-preserving port passes prediction and
+cache equivalence. Otherwise their natural-suite cells are reported as
+incompatible while the baseline study continues.
+
 ## Conflict-free continuation
 
 `scripts/prepare_p3_natural_datasets.py` verifies all 20 source files and writes

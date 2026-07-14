@@ -60,6 +60,17 @@ def validate_manifest(payload: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("The primary model does not cover the 128K protocol point.")
     if payload["common_protocol"]["overflow_action"] != "report_unsupported_without_truncation":
         raise ValueError("Natural evaluation must not silently truncate prompts.")
+    if tuple(payload["common_protocol"]["mandatory_compatible_arms"]) != (
+        "native-dense",
+        "strongest-memory-matched-fixed",
+    ):
+        raise ValueError("The always-runnable Qwen baseline arms drifted.")
+    conditional_rule = payload["common_protocol"]["conditional_arm_rule"]
+    if (
+        "architecture-preserving port" not in conditional_rule
+        or "incompatible" not in conditional_rule
+    ):
+        raise ValueError("Conditional adaptive arms must retain the architecture boundary.")
 
     ruler = _benchmark(payload, "RULER")
     if tuple(ruler["lengths_tokens"]) != EXPECTED_RULER_LENGTHS:

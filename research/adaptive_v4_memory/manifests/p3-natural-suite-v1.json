@@ -59,13 +59,12 @@
       "top_p": 1.0,
       "record_stop_reason": true
     },
-    "required_arms": [
+    "mandatory_compatible_arms": [
       "native-dense",
-      "strongest-memory-matched-fixed",
-      "fixed+pins",
-      "synthetic-qualified-calibrated+pins"
+      "strongest-memory-matched-fixed"
     ],
-    "conditional_arm_rule": "calibrated+pins is withheld if the P2 central causal gate fails; native and fixed arms remain mandatory",
+    "conditional_arms": ["fixed+pins", "synthetic-qualified-calibrated+pins"],
+    "conditional_arm_rule": "fixed+pins and calibrated+pins require both a passed P2 causal gate and an architecture-preserving port with prediction/cache equivalence. Qwen3 has no DeepSeek sparse-attention pin/indexer contract, so these arms are recorded as incompatible unless such a port is separately validated; native and fixed Qwen baselines remain mandatory.",
     "quality_memory_pairing": "quality comparisons use the same example and measured hot-resident-byte target",
     "failure_accounting": [
       "unsupported-context",
