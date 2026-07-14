@@ -54,12 +54,15 @@
         "budgets": 2,
         "all_raw_digests_verified": true,
         "all_dependencies_verified": true,
+        "implementation_digests_verified": true,
+        "dependency_artifact_digests_verified": true,
         "all_inputs_paired": true,
         "zero_budget_violations": true,
         "complete_failure_accounting": true,
         "online_token_offset_verified": true,
         "native_bootstrap_accounted": true,
-        "cache_replay_contract_tested": true
+        "cache_replay_contract_tested": true,
+        "resolution_aware_gate_verified": true
       }
     },
     "p2_causal": {

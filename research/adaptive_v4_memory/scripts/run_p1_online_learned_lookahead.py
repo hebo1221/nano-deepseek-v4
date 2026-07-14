@@ -12,6 +12,7 @@ from typing import Any
 import collect_p1_online_lookahead_labels as labels
 import evaluate_p1_online_learned_lookahead_shard as evaluator
 import evaluate_p2_causal_factorial_shard as causal
+import fit_p1_online_learned_lookahead_policy as fitter
 from adaptive_v4_gpu_lock import acquire_gpu_lock
 
 SCALES = ("s55", "s151")
@@ -33,6 +34,7 @@ EXPECTED_TEST_SHARDS = (
     * len(labels.CONTEXTS)
     * 10
 )
+_DIGEST_CACHE: dict[tuple[Path, int, int], str] = {}
 
 
 def sha256(path: Path) -> str:
@@ -41,6 +43,14 @@ def sha256(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _cached_sha256(path: Path) -> str:
+    stat = path.stat()
+    key = (path.resolve(), stat.st_mtime_ns, stat.st_size)
+    if key not in _DIGEST_CACHE:
+        _DIGEST_CACHE[key] = sha256(path)
+    return _DIGEST_CACHE[key]
 
 
 def _clean() -> bool:
@@ -113,16 +123,39 @@ def _test_path(
     )
 
 
-def _valid(path: Path, experiment_id: str, expected: dict[str, Any]) -> bool:
+def _valid(
+    path: Path,
+    experiment_id: str,
+    expected: dict[str, Any],
+    *,
+    implementation_digest: str,
+) -> bool:
     try:
         payload = json.loads(path.read_text())
     except (OSError, json.JSONDecodeError):
         return False
-    return (
+    if not (
         payload.get("experiment_id") == experiment_id
         and payload.get("source", {}).get("dirty") is False
+        and payload.get("source", {}).get("implementation_digest") == implementation_digest
+        and payload.get("design", {}).get("path") == str(DESIGN)
+        and payload.get("design", {}).get("sha256") == _cached_sha256(DESIGN)
         and all(payload.get(name) == value for name, value in expected.items())
-    )
+    ):
+        return False
+    for name in ("checkpoint", "quota_calibration", "physical_memory_match"):
+        metadata = payload.get(name)
+        if metadata is None:
+            continue
+        dependency = Path(metadata.get("path", ""))
+        if not dependency.is_file() or metadata.get("sha256") != _cached_sha256(dependency):
+            return False
+    policy_metadata = payload.get("policy")
+    if isinstance(policy_metadata, dict) and "path" in policy_metadata:
+        policy = Path(policy_metadata.get("path", ""))
+        if not policy.is_file() or policy_metadata.get("sha256") != _cached_sha256(policy):
+            return False
+    return True
 
 
 def _run(command: list[str]) -> None:
@@ -136,6 +169,9 @@ def _matrix_payload(
     policy_root: Path,
     test_root: Path,
 ) -> dict[str, Any]:
+    label_implementation = labels.implementation_digest()
+    fit_implementation = fitter.implementation_digest()
+    evaluation_implementation = evaluator.implementation_digest()
     completed_labels = []
     for scale, seed, family, context in product(
         SCALES,
@@ -157,6 +193,7 @@ def _matrix_payload(
                         "context": context,
                         "replicate": replicate,
                     },
+                    implementation_digest=label_implementation,
                 ):
                     completed_labels.append({"path": str(path), "sha256": sha256(path)})
     completed_policies = []
@@ -166,6 +203,7 @@ def _matrix_payload(
             path,
             "p1-online-learned-lookahead-policy-v1",
             {"scale": scale, "training_seed": seed, "budget": budget},
+            implementation_digest=fit_implementation,
         ):
             completed_policies.append({"path": str(path), "sha256": sha256(path)})
     completed_tests = []
@@ -189,6 +227,7 @@ def _matrix_payload(
                 "context": context,
                 "replicate": replicate,
             },
+            implementation_digest=evaluation_implementation,
         ):
             completed_tests.append({"path": str(path), "sha256": sha256(path)})
     commit = subprocess.run(
@@ -292,6 +331,9 @@ def main() -> None:
     ):
         raise RuntimeError("The complete frozen online-lookahead design is required.")
     gpu_lock = acquire_gpu_lock("p1-online-learned-lookahead")
+    label_implementation = labels.implementation_digest()
+    fit_implementation = fitter.implementation_digest()
+    evaluation_implementation = evaluator.implementation_digest()
     scales = tuple(args.scale or SCALES)
     seeds = tuple(args.training_seed or labels.TRAINING_SEEDS)
     budgets = tuple(args.budget or causal.BUDGET_LABELS)
@@ -325,6 +367,7 @@ def main() -> None:
                         "context": context,
                         "replicate": replicate,
                     },
+                    implementation_digest=label_implementation,
                 ):
                     if limited():
                         _write_matrix(
@@ -376,6 +419,7 @@ def main() -> None:
             policy,
             "p1-online-learned-lookahead-policy-v1",
             {"scale": scale, "training_seed": seed, "budget": budget},
+            implementation_digest=fit_implementation,
         ):
             if limited():
                 break
@@ -415,6 +459,7 @@ def main() -> None:
                     "context": context,
                     "replicate": replicate,
                 },
+                implementation_digest=evaluation_implementation,
             ):
                 continue
             if limited():

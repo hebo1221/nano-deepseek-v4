@@ -29,6 +29,7 @@ sys.path.insert(0, str(SCRIPTS))
 import collect_p1_online_lookahead_labels as labels  # noqa: E402
 import evaluate_p1_online_learned_lookahead_shard as lookahead_eval  # noqa: E402
 import run_p1_online_learned_lookahead as lookahead_matrix  # noqa: E402
+import summarize_p1_online_learned_lookahead as lookahead_summary  # noqa: E402
 
 
 def _examples(prefix: str, count: int, *, dense: bool = True) -> tuple[RiskExample, ...]:
@@ -150,6 +151,7 @@ def test_online_learned_lookahead_protocol_freezes_full_separate_matrix() -> Non
     assert matrix["test_examples_per_family_seed_scale_budget"] == 1000
     assert matrix["test_examples_per_arm"] == 180_000
     assert "online-learned-lookahead+pins" in manifest["arms"]
+    assert "minimum attainable p=0.0625" in manifest["positive_gate"]["five_seed_test_resolution"]
     assert manifest["claim_boundary"]["legacy_m3"].endswith("no online-lookahead evidence")
     assert lookahead_matrix.EXPECTED_LABEL_SHARDS == 6_750
     assert lookahead_matrix.EXPECTED_POLICIES == 20
@@ -157,6 +159,51 @@ def test_online_learned_lookahead_protocol_freezes_full_separate_matrix() -> Non
     assert tuple(manifest["arms"]) == lookahead_eval.ARMS
     for name in ("matrix_runner", "summary_runner"):
         assert (root / manifest["implementation"][name]).is_file()
+
+
+def test_online_matrix_rejects_stale_implementation_and_dependency(tmp_path: Path) -> None:
+    checkpoint = tmp_path / "checkpoint.pt"
+    checkpoint.write_bytes(b"checkpoint-v1")
+    artifact = tmp_path / "label.json"
+    payload = {
+        "experiment_id": "label-v1",
+        "scale": "s55",
+        "source": {"dirty": False, "implementation_digest": "implementation"},
+        "design": {
+            "path": str(lookahead_matrix.DESIGN),
+            "sha256": lookahead_matrix.sha256(lookahead_matrix.DESIGN),
+        },
+        "checkpoint": {
+            "path": str(checkpoint),
+            "sha256": lookahead_matrix.sha256(checkpoint),
+        },
+    }
+    artifact.write_text(json.dumps(payload))
+
+    assert lookahead_matrix._valid(
+        artifact,
+        "label-v1",
+        {"scale": "s55"},
+        implementation_digest="implementation",
+    )
+    lookahead_summary._verify_common(
+        payload,
+        implementation_digest="implementation",
+        label="test label",
+    )
+    assert not lookahead_matrix._valid(
+        artifact,
+        "label-v1",
+        {"scale": "s55"},
+        implementation_digest="stale",
+    )
+    checkpoint.write_bytes(b"checkpoint-v2")
+    assert not lookahead_matrix._valid(
+        artifact,
+        "label-v1",
+        {"scale": "s55"},
+        implementation_digest="implementation",
+    )
 
 
 def test_label_builder_uses_prior_token_and_dense_prediction_not_target() -> None:

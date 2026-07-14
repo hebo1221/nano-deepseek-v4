@@ -11,16 +11,20 @@ from typing import Any
 import collect_p1_online_lookahead_labels as labels
 import evaluate_p1_online_learned_lookahead_shard as evaluator
 import evaluate_p2_causal_factorial_shard as causal
+import fit_p1_online_learned_lookahead_policy as fitter
 import numpy as np
 import run_p1_online_learned_lookahead as matrix_runner
 from summarize_p2_causal_factorial import contrast_statistics
 from summarize_p2_core_matrix import holm_bonferroni
+
+from nano_deepseek_v4 import LearnedLookaheadPolicy
 
 PRIMARY = "online-learned-lookahead+pins"
 ONE_TOKEN = "one-token-training-free+pins"
 FIXED = "memory-matched-fixed+pins"
 MAXIMUM_HBM_DIFFERENCE = 0.01
 MAXIMUM_WORST_SLICE_REGRESSION = -0.02
+_DIGEST_CACHE: dict[tuple[Path, int, int], str] = {}
 
 
 def sha256(path: Path) -> str:
@@ -31,9 +35,37 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _cached_sha256(path: Path) -> str:
+    stat = path.stat()
+    key = (path.resolve(), stat.st_mtime_ns, stat.st_size)
+    if key not in _DIGEST_CACHE:
+        _DIGEST_CACHE[key] = sha256(path)
+    return _DIGEST_CACHE[key]
+
+
 def _require(condition: bool, message: str) -> None:
     if not condition:
         raise ValueError(message)
+
+
+def _bound_path(metadata: dict[str, Any], label: str) -> Path:
+    path = Path(metadata.get("path", ""))
+    _require(path.is_file(), f"Missing {label}: {path}")
+    _require(metadata.get("sha256") == _cached_sha256(path), f"{label} digest drifted: {path}")
+    return path
+
+
+def _verify_common(payload: dict[str, Any], *, implementation_digest: str, label: str) -> None:
+    _require(
+        payload.get("source", {}).get("dirty") is False
+        and payload.get("source", {}).get("implementation_digest") == implementation_digest,
+        f"{label} source implementation drifted.",
+    )
+    _require(
+        payload.get("design", {}).get("path") == str(matrix_runner.DESIGN)
+        and payload.get("design", {}).get("sha256") == _cached_sha256(matrix_runner.DESIGN),
+        f"{label} design dependency drifted.",
+    )
 
 
 def summarize(matrix_path: Path) -> dict[str, Any]:
@@ -71,10 +103,78 @@ def summarize(matrix_path: Path) -> dict[str, Any]:
         and len(matrix.get("test_shards", [])) == matrix_runner.EXPECTED_TEST_SHARDS,
         "Online-lookahead matrix index coverage drifted.",
     )
-    for category in ("label_shards", "policies"):
-        for metadata in matrix[category]:
-            path = Path(metadata["path"])
-            _require(path.is_file() and metadata["sha256"] == sha256(path), f"{category} drifted.")
+    _require(
+        matrix.get("design", {}).get("path") == str(matrix_runner.DESIGN)
+        and matrix.get("design", {}).get("sha256") == _cached_sha256(matrix_runner.DESIGN),
+        "Online-lookahead matrix design drifted.",
+    )
+    causal_gate_path = _bound_path(matrix.get("p2_causal_gate", {}), "P2 causal gate")
+    matrix_runner.require_causal_gate(causal_gate_path)
+    label_implementation = labels.implementation_digest()
+    fit_implementation = fitter.implementation_digest()
+    evaluation_implementation = evaluator.implementation_digest()
+    for category in ("label_shards", "policies", "test_shards"):
+        _require(
+            len({metadata.get("path") for metadata in matrix[category]}) == len(matrix[category]),
+            f"Duplicate {category} paths detected.",
+        )
+    for metadata in matrix["label_shards"]:
+        path = _bound_path(metadata, "online-lookahead label shard")
+        shard = json.loads(path.read_text())
+        _require(
+            shard.get("experiment_id") == "p1-online-learned-lookahead-label-shard-v1",
+            f"Wrong label shard id: {path}",
+        )
+        _verify_common(
+            shard,
+            implementation_digest=label_implementation,
+            label=f"label shard {path}",
+        )
+        _bound_path(shard.get("checkpoint", {}), f"label checkpoint for {path}")
+        rows = shard.get("rows", [])
+        _require(
+            shard.get("conversations") == labels.EXAMPLES_PER_SHARD
+            and shard.get("risk_examples") == len(rows)
+            and shard.get("failure_count") == len(shard.get("failures", []))
+            and hashlib.sha256(
+                json.dumps(rows, sort_keys=True, separators=(",", ":")).encode()
+            ).hexdigest()
+            == shard.get("rows_digest")
+            and shard.get("leakage_guard", {}).get("features_use_prior_token_only") is True
+            and shard.get("leakage_guard", {}).get("causal_offset") == 1,
+            f"Invalid label shard accounting: {path}",
+        )
+    for metadata in matrix["policies"]:
+        path = _bound_path(metadata, "online-lookahead policy")
+        policy_payload = json.loads(path.read_text())
+        _require(
+            policy_payload.get("experiment_id") == "p1-online-learned-lookahead-policy-v1",
+            f"Wrong policy id: {path}",
+        )
+        _verify_common(
+            policy_payload,
+            implementation_digest=fit_implementation,
+            label=f"policy {path}",
+        )
+        for dependency_name in (
+            "checkpoint",
+            "quota_calibration",
+            "physical_memory_match",
+        ):
+            _bound_path(
+                policy_payload.get(dependency_name, {}),
+                f"policy {dependency_name} for {path}",
+            )
+        policy = LearnedLookaheadPolicy.from_dict(policy_payload["policy"])
+        _require(
+            policy_payload.get("policy_digest") == policy.policy_digest
+            and policy_payload.get("leakage_guard", {}).get("test_split_loaded") is False,
+            f"Policy integrity or split boundary drifted: {path}",
+        )
+        for split in ("train", "calibration"):
+            split_payload = policy_payload.get("splits", {}).get(split, {})
+            for shard_metadata in split_payload.get("shard_digests", []):
+                _bound_path(shard_metadata, f"policy {split} label shard for {path}")
 
     differences: dict[str, dict[tuple[str, str, int, str, int], list[float]]] = {
         "learned_vs_one_token": defaultdict(list),
@@ -102,14 +202,17 @@ def summarize(matrix_path: Path) -> dict[str, Any]:
     policy_digests: set[str] = set()
     paired_conversations = 0
     for metadata in matrix["test_shards"]:
-        path = Path(metadata["path"])
-        _require(path.is_file() and metadata["sha256"] == sha256(path), "Test shard drifted.")
+        path = _bound_path(metadata, "online-lookahead test shard")
         shard = json.loads(path.read_text())
+        _verify_common(
+            shard,
+            implementation_digest=evaluation_implementation,
+            label=f"test shard {path}",
+        )
         records = shard.get("records", [])
         metrics = shard.get("batch_metrics", [])
         _require(
             shard.get("experiment_id") == "p1-online-learned-lookahead-test-shard-v1"
-            and shard.get("source", {}).get("dirty") is False
             and tuple(shard.get("arms", ())) == evaluator.ARMS
             and shard.get("examples") == 20
             and len(records) == 20 * len(evaluator.ARMS)
@@ -120,10 +223,33 @@ def summarize(matrix_path: Path) -> dict[str, Any]:
             == shard.get("records_digest"),
             f"Invalid online-lookahead test shard: {path}",
         )
-        policy_path = Path(shard["policy"]["path"])
+        policy_path = _bound_path(shard["policy"], "test shard policy dependency")
+        policy_payload = json.loads(policy_path.read_text())
         _require(
-            policy_path.is_file() and shard["policy"]["sha256"] == sha256(policy_path),
-            "Test shard policy dependency drifted.",
+            shard.get("policy_digest") == policy_payload.get("policy_digest"),
+            "Test shard policy digest drifted.",
+        )
+        for dependency_name in (
+            "checkpoint",
+            "quota_calibration",
+            "physical_memory_match",
+        ):
+            _bound_path(
+                shard.get(dependency_name, {}),
+                f"test shard {dependency_name} for {path}",
+            )
+        _require(
+            shard.get("generation_seed")
+            == evaluator.generation_seed(
+                training_seed=int(shard["training_seed"]),
+                family=str(shard["family"]),
+                context=int(shard["context"]),
+                replicate=int(shard["replicate"]),
+            )
+            and shard.get("leakage_guard", {}).get("test_examples_used_for_training") is False
+            and shard.get("leakage_guard", {}).get("policy_frozen_before_test") is True
+            and shard.get("leakage_guard", {}).get("paired_inputs_shared_across_arms") is True,
+            f"Test split or deterministic seed boundary drifted: {path}",
         )
         policy_digests.add(str(shard["policy_digest"]))
         by_arm_id = {(row["arm"], row["conversation_id"]): row for row in records}
@@ -197,6 +323,8 @@ def summarize(matrix_path: Path) -> dict[str, Any]:
                 "seed_cluster_bootstrap_ci": ci,
                 "exact_resolution_aware_p": seed_inference["paired_randomization_two_sided_p"],
                 "holm_adjusted_p_descriptive": adjusted[cell_name],
+                "minimum_attainable_two_sided_exact_p": 0.0625,
+                "p_value_used_as_success_gate": False,
                 "passed": passed,
             }
         )
@@ -266,12 +394,15 @@ def summarize(matrix_path: Path) -> dict[str, Any]:
             "policy_digests": len(policy_digests),
             "all_raw_digests_verified": True,
             "all_dependencies_verified": True,
+            "implementation_digests_verified": True,
+            "dependency_artifact_digests_verified": True,
             "all_inputs_paired": True,
             "zero_budget_violations": budget_violations == 0,
             "complete_failure_accounting": True,
             "online_token_offset_verified": True,
             "native_bootstrap_accounted": True,
             "cache_replay_contract_tested": True,
+            "resolution_aware_gate_verified": True,
         },
         "contrasts": contrast_payloads,
         "primary_gate": {

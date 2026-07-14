@@ -138,12 +138,15 @@ def classify_evidence(
         and learned_audit.get("budgets") == 2
         and learned_audit.get("all_raw_digests_verified") is True
         and learned_audit.get("all_dependencies_verified") is True
+        and learned_audit.get("implementation_digests_verified") is True
+        and learned_audit.get("dependency_artifact_digests_verified") is True
         and learned_audit.get("all_inputs_paired") is True
         and learned_audit.get("zero_budget_violations") is True
         and learned_audit.get("complete_failure_accounting") is True
         and learned_audit.get("online_token_offset_verified") is True
         and learned_audit.get("native_bootstrap_accounted") is True
         and learned_audit.get("cache_replay_contract_tested") is True
+        and learned_audit.get("resolution_aware_gate_verified") is True
     )
     learned_passed = p1_online_learned_lookahead["primary_gate"].get("passed") is True
     causal_passed = p2_causal["primary_causal_gate"].get("passed") is True
