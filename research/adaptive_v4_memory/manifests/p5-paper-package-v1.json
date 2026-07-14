@@ -13,6 +13,7 @@
     "p2_core": {
       "path": "artifacts/adaptive_v4_memory/paper_grade/p2-core-quality-matrix.strict.summary.json",
       "experiment_id": "p2-core-quality-matrix-audit-v1",
+      "required_artifacts": ["raw_matrix"],
       "required_audit": {
         "unique_shards": 4500,
         "all_raw_shards_verified": true,
@@ -46,6 +47,7 @@
     "p2_core_confirmatory": {
       "path": "artifacts/adaptive_v4_memory/paper_grade/p2-nine-seed-core.summary.json",
       "experiment_id": "p2-nine-seed-core-matrix-audit-v1",
+      "required_artifacts": ["raw_matrix"],
       "required_audit": {
         "unique_shards": 8100,
         "all_raw_shards_verified": true,
@@ -160,6 +162,7 @@
     "p2_causal": {
       "path": "artifacts/adaptive_v4_memory/paper_grade/p2-causal-ablation.summary.json",
       "experiment_id": "p2-causal-ablation-audit-v1",
+      "required_artifacts": ["raw_matrix"],
       "required_audit": {
         "unique_shards": 9000,
         "exact_config_reuse_verified": true,
@@ -207,6 +210,7 @@
     "p2_causal_confirmatory": {
       "path": "artifacts/adaptive_v4_memory/paper_grade/p2-nine-seed-causal.summary.json",
       "experiment_id": "p2-nine-seed-causal-ablation-audit-v1",
+      "required_artifacts": ["raw_matrix"],
       "required_audit": {
         "unique_shards": 16200,
         "all_raw_shards_verified": true,

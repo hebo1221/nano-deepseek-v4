@@ -1398,6 +1398,8 @@ def _validate_evidence(name: str, path: Path, contract: dict[str, Any]) -> dict[
                 observed.get(field) == expected,
                 f"{name} section {section}.{field} drifted.",
             )
+    for artifact_field in contract.get("required_artifacts", []):
+        _bound_artifact(payload.get(artifact_field), f"{name} {artifact_field}")
     analysis_paths = P2_ANALYSIS_PATHS.get(name)
     if analysis_paths is not None:
         _require(

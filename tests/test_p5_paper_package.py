@@ -291,6 +291,14 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
 
     manifest = json.loads(manifest_text, object_pairs_hook=reject_duplicate_keys)
 
+    for name in (
+        "p2_core",
+        "p2_core_confirmatory",
+        "p2_causal",
+        "p2_causal_confirmatory",
+    ):
+        assert manifest["evidence"][name]["required_artifacts"] == ["raw_matrix"]
+
     assert set(manifest["evidence"]) == {
         "p2_core",
         "p2_core_confirmatory",
@@ -882,6 +890,8 @@ def test_p2_core_evidence_requires_execution_provenance(tmp_path: Path) -> None:
         (root / "research/adaptive_v4_memory/manifests/p5-paper-package-v1.json").read_text()
     )
     contract = manifest["evidence"]["p2_core"]
+    raw_matrix = tmp_path / "p2-core-matrix.json"
+    raw_matrix.write_text('{"completed_shards": 4500}\n')
     evidence = _p2_core_evidence()
     evidence.update(
         {
@@ -890,6 +900,10 @@ def test_p2_core_evidence_requires_execution_provenance(tmp_path: Path) -> None:
             "analysis_implementation": package._analysis_implementation_metadata(
                 package.P2_ANALYSIS_PATHS["p2_core"]
             ),
+            "raw_matrix": {
+                "path": str(raw_matrix),
+                "sha256": package.sha256(raw_matrix),
+            },
         }
     )
     path = tmp_path / "p2-core.json"
@@ -902,6 +916,33 @@ def test_p2_core_evidence_requires_execution_provenance(tmp_path: Path) -> None:
     path.write_text(json.dumps(evidence))
     with pytest.raises(ValueError, match="raw_execution_commit_trees_verified drifted"):
         package._validate_evidence("p2_core", path, contract)
+
+
+def test_p2_evidence_rejects_raw_matrix_digest_drift(tmp_path: Path) -> None:
+    raw_matrix = tmp_path / "combined-matrix.json"
+    raw_matrix.write_text('{"completed_shards": 8100}\n')
+    evidence = _p2_confirmatory_evidence(passed=True)
+    evidence.update(
+        {
+            "experiment_id": "p2-nine-seed-core-matrix-audit-v1",
+            "raw_matrix": {
+                "path": str(raw_matrix),
+                "sha256": package.sha256(raw_matrix),
+            },
+        }
+    )
+    path = tmp_path / "summary.json"
+    path.write_text(json.dumps(evidence))
+    contract = {
+        "experiment_id": "p2-nine-seed-core-matrix-audit-v1",
+        "required_audit": {"unique_shards": 8_100},
+        "required_artifacts": ["raw_matrix"],
+    }
+
+    assert package._validate_evidence("p2_core_confirmatory", path, contract) == evidence
+    raw_matrix.write_text('{"completed_shards": 0}\n')
+    with pytest.raises(ValueError, match="Digest mismatch"):
+        package._validate_evidence("p2_core_confirmatory", path, contract)
 
 
 def test_confirmatory_causal_requires_pooling_and_exact_inference(
