@@ -202,6 +202,7 @@ def main() -> None:
                 implementation=matrix["implementation_digest"],
                 dependencies=dependencies,
                 arms=bundle_cache[key],
+                p2_gate_passed=bool(p2_payload["primary_causal_gate"]["passed"]),
             ),
             f"Adaptive P4 artifact audit failed: {path}",
         )

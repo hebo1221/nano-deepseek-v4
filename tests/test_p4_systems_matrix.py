@@ -8,6 +8,8 @@ from pathlib import Path
 
 import pytest
 
+from nano_deepseek_v4 import SameTokenControllerConfig, TrainingFreeControllerConfig
+
 SCRIPTS = Path(__file__).resolve().parents[1] / "research/adaptive_v4_memory/scripts"
 sys.path.insert(0, str(SCRIPTS))
 
@@ -16,6 +18,10 @@ import run_p4_production_systems_matrix as production  # noqa: E402
 import run_p4_systems_matrix as systems  # noqa: E402
 import summarize_p4_adaptive_systems_matrix as adaptive_summary  # noqa: E402
 import summarize_p4_systems_matrix as summary  # noqa: E402
+from freeze_p2_causal_factorial_arms import (  # noqa: E402
+    BuiltCausalArm,
+    CausalArmSpec,
+)
 
 
 def _latency(observations: int) -> dict[str, float | int]:
@@ -83,6 +89,53 @@ def _reference_policy_run(
         "untimed_indexer_probe": {"indexer_time_ns": 1, "selection_calls": 1},
         "controller_time_ns": 0,
     }
+
+
+def _adaptive_config() -> SameTokenControllerConfig:
+    return SameTokenControllerConfig(
+        signal=TrainingFreeControllerConfig(
+            global_block_budget=2,
+            dense_fallback_block_budget=2,
+            top_p=0.8,
+            min_blocks_per_layer=1,
+            max_extra_blocks_per_layer=0,
+            uncertainty_threshold=1.0,
+            dense_cardinality_threshold=1.0,
+            stable_reuse_threshold=0.8,
+            min_refresh_interval=1,
+            max_refresh_interval=4,
+        ),
+        layer_budgets=((2, 1), (5, 1)),
+        dense_layer_budgets=((2, 1), (5, 1)),
+        enable_protected_pins=True,
+    )
+
+
+def _adaptive_policy_run(
+    cell: adaptive.Cell,
+    policy: str,
+    input_digest: str,
+    config: SameTokenControllerConfig,
+) -> dict[str, object]:
+    reference_cell = (cell[0], cell[2], cell[3], cell[4], cell[5], cell[6])
+    run = _reference_policy_run(reference_cell, policy, input_digest)
+    configured = dict(config.layer_budgets)
+    physical = {layer: blocks * cell[5] * cell[6] for layer, blocks in config.layer_budgets}
+    run["controller_time_ns"] = 1
+    run["adaptive_controller"] = {
+        "enabled": True,
+        "protected_end_positions": list(adaptive.PROTECTED_END_POSITIONS),
+        "config_sha256": adaptive._config_sha256(config),
+        "configured_blocks_per_sequence_by_layer": configured,
+        "configured_physical_hot_blocks_by_layer": physical,
+        "observed_hot_blocks_by_layer": physical,
+        "selected_queries": 1,
+        "finalized_control_points": 1,
+        "fallback_control_points": 0,
+        "telemetry_time_ns": 1,
+        "controller_time_ns": 1,
+    }
+    return run
 
 
 def test_p4_frozen_matrix_has_full_batch_load_factorial() -> None:
@@ -224,6 +277,131 @@ def test_p4_adaptive_summary_preserves_paired_system_costs() -> None:
     assert result["metrics"]["controller_time_ns"]["paired_observations"] == 1
     assert (
         result["metrics"]["controller_time_ns"]["calibrated_minus_fixed"]["mean_difference"] == 2.0
+    )
+
+
+def test_p4_adaptive_artifact_recomputes_schedule_and_dependencies(tmp_path: Path) -> None:
+    cell = adaptive.frozen_cells()[0]
+    config = _adaptive_config()
+    arms = {
+        policy: BuiltCausalArm(
+            spec=CausalArmSpec(
+                policy,
+                "uniform" if policy == "fixed+pins" else "calibrated",
+                False,
+                False,
+                False,
+                False,
+                True,
+            ),
+            configs=(config,),
+        )
+        for policy in adaptive.POLICIES
+    }
+    dependencies: dict[str, str] = {}
+    dependency_metadata: dict[str, dict[str, str]] = {}
+    for name in (
+        "manifest",
+        "p2_audit",
+        "p3_audit",
+        "checkpoint",
+        "calibration",
+        "memory_match",
+    ):
+        path = tmp_path / f"{name}.json"
+        path.write_text("{}")
+        digest = systems.sha256(path)
+        dependencies[name] = digest
+        dependency_metadata[name] = {"path": str(path), "sha256": digest}
+    repetitions = []
+    for index in range(adaptive.MEASURED_REPETITIONS):
+        input_digest = f"{index:064x}"
+        order = adaptive.POLICIES if index % 2 == 0 else tuple(reversed(adaptive.POLICIES))
+        policy_runs = {
+            policy: _adaptive_policy_run(cell, policy, input_digest, config)
+            for policy in adaptive.POLICIES
+        }
+        repetitions.append(
+            {
+                "repetition": index,
+                "input_seed": adaptive.INPUT_SEED_BASE + adaptive.WARMUPS + index,
+                "execution_order": list(order),
+                "input_digest": input_digest,
+                "prediction_digests_equal": True,
+                "policy_configs": {
+                    policy: {
+                        "sha256": adaptive._config_sha256(config),
+                        "variant": "single",
+                    }
+                    for policy in adaptive.POLICIES
+                },
+                "policies": policy_runs,
+                "policy_failures": {},
+            }
+        )
+    payload = {
+        "schema_version": 1,
+        "experiment_id": "p4-adaptive-systems-cell-v1",
+        "status": "complete",
+        "cell": dict(
+            zip(
+                (
+                    "scale",
+                    "budget",
+                    "context",
+                    "generation",
+                    "profile",
+                    "batch",
+                    "active_requests",
+                ),
+                cell,
+                strict=True,
+            )
+        ),
+        "source": {"dirty": False, "implementation_digest": "implementation"},
+        "input_seed_base": adaptive.INPUT_SEED_BASE,
+        "p2_causal_gate_passed": False,
+        "warmups": adaptive.WARMUPS,
+        "warmup_accounting_available": True,
+        "warmup_repetitions_attempted": adaptive.WARMUPS,
+        "warmup_paired_repetitions_completed": adaptive.WARMUPS,
+        "warmup_policy_runs_completed": {policy: adaptive.WARMUPS for policy in adaptive.POLICIES},
+        "warmup_failures": [],
+        "measured_repetitions": adaptive.MEASURED_REPETITIONS,
+        "cell_timeout_seconds": adaptive.CELL_TIMEOUT_SECONDS,
+        "repetitions": repetitions,
+        "policy_status": {
+            policy: {
+                "status": "complete",
+                "measured_repetitions": adaptive.MEASURED_REPETITIONS,
+                "failure": None,
+            }
+            for policy in adaptive.POLICIES
+        },
+        **dependency_metadata,
+    }
+    artifact = tmp_path / "cell.json"
+    artifact.write_text(json.dumps(payload))
+
+    assert adaptive._artifact_valid(
+        artifact,
+        cell=cell,
+        implementation="implementation",
+        dependencies=dependencies,
+        arms=arms,
+        p2_gate_passed=False,
+    )
+
+    drifted = deepcopy(payload)
+    drifted["p2_causal_gate_passed"] = True
+    artifact.write_text(json.dumps(drifted))
+    assert not adaptive._artifact_valid(
+        artifact,
+        cell=cell,
+        implementation="implementation",
+        dependencies=dependencies,
+        arms=arms,
+        p2_gate_passed=False,
     )
 
 

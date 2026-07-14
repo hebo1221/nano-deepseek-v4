@@ -275,6 +275,7 @@ def _artifact_valid(
     implementation: str,
     dependencies: dict[str, str],
     arms: dict[str, BuiltCausalArm],
+    p2_gate_passed: bool,
 ) -> bool:
     if not path.is_file():
         return False
@@ -292,6 +293,20 @@ def _artifact_valid(
         )
     )
     repetitions = payload.get("repetitions", [])
+    warmup_attempted = payload.get("warmup_repetitions_attempted")
+    warmup_paired = payload.get("warmup_paired_repetitions_completed")
+    warmup_runs = payload.get("warmup_policy_runs_completed")
+    warmup_failures = payload.get("warmup_failures")
+
+    def dependency_valid(name: str, digest: str) -> bool:
+        metadata = payload.get(name, {})
+        dependency_path = Path(metadata.get("path", ""))
+        return (
+            dependency_path.is_file()
+            and metadata.get("sha256") == digest
+            and reference.sha256(dependency_path) == digest
+        )
+
     if not (
         payload.get("schema_version") == 1
         and payload.get("experiment_id") == "p4-adaptive-systems-cell-v1"
@@ -300,13 +315,28 @@ def _artifact_valid(
         and payload.get("source", {}).get("dirty") is False
         and payload.get("source", {}).get("implementation_digest") == implementation
         and payload.get("input_seed_base") == INPUT_SEED_BASE
+        and payload.get("p2_causal_gate_passed") is p2_gate_passed
         and payload.get("warmups") == WARMUPS
+        and payload.get("warmup_accounting_available") is True
+        and type(warmup_attempted) is int
+        and 0 <= warmup_attempted <= WARMUPS
+        and type(warmup_paired) is int
+        and 0 <= warmup_paired <= warmup_attempted
+        and isinstance(warmup_runs, dict)
+        and set(warmup_runs) == set(POLICIES)
+        and all(
+            type(warmup_runs[policy]) is int and 0 <= warmup_runs[policy] <= warmup_attempted
+            for policy in POLICIES
+        )
+        and warmup_paired == min(warmup_runs.values())
+        and isinstance(warmup_failures, list)
+        and all(reference._valid_failure(failure, phases={"warmup"}) for failure in warmup_failures)
         and payload.get("measured_repetitions") == MEASURED_REPETITIONS
+        and type(payload.get("cell_timeout_seconds")) in (int, float)
+        and 0.0 < payload["cell_timeout_seconds"] <= CELL_TIMEOUT_SECONDS
         and isinstance(repetitions, list)
         and len(repetitions) <= MEASURED_REPETITIONS
-        and all(
-            payload.get(name, {}).get("sha256") == digest for name, digest in dependencies.items()
-        )
+        and all(dependency_valid(name, digest) for name, digest in dependencies.items())
         and all(
             _valid_repetition(row, cell=cell, repetition=index, arms=arms)
             for index, row in enumerate(repetitions)
@@ -325,6 +355,13 @@ def _artifact_valid(
         policy_status[policy].get("measured_repetitions") == counts[policy]
         and policy_status[policy].get("status")
         == ("complete" if counts[policy] == MEASURED_REPETITIONS else "failed")
+        and (
+            policy_status[policy].get("failure") is None
+            if counts[policy] == MEASURED_REPETITIONS
+            else reference._valid_failure(
+                policy_status[policy].get("failure"), phases={"warmup", "measured"}
+            )
+        )
         for policy in POLICIES
     )
 
@@ -483,6 +520,31 @@ def main() -> None:
                 "memory_match": _dependency(memory_match),
             }
     runs: dict[Cell, dict[str, Any]] = {}
+    p2_gate_passed = bool(p2["primary_causal_gate"]["passed"])
+    for existing_cell in frozen_cells():
+        existing_scale, existing_budget = existing_cell[:2]
+        existing_arms, _metadata = bundles[(existing_scale, existing_budget)]
+        existing_dependencies = {
+            **base_dependencies,
+            **{
+                name: value["sha256"]
+                for name, value in dependency_metadata[(existing_scale, existing_budget)].items()
+            },
+        }
+        existing_artifact = cell_path(args.output_root, existing_cell) / "cell.json"
+        if _artifact_valid(
+            existing_artifact,
+            cell=existing_cell,
+            implementation=implementation,
+            dependencies=existing_dependencies,
+            arms=existing_arms,
+            p2_gate_passed=p2_gate_passed,
+        ):
+            runs[existing_cell] = _run_row(
+                existing_cell,
+                existing_artifact,
+                json.loads(existing_artifact.read_text()),
+            )
     new_cells = 0
     for cell in selected:
         scale, budget, context, generation, profile, batch, active_requests = cell
@@ -501,6 +563,7 @@ def main() -> None:
             implementation=implementation,
             dependencies=per_cell_dependencies,
             arms=arms,
+            p2_gate_passed=p2_gate_passed,
         ):
             payload = json.loads(artifact.read_text())
         else:
@@ -645,7 +708,7 @@ def main() -> None:
                     "repetitions": repetitions,
                     "policy_status": policy_status,
                     "arm_metadata": arm_metadata,
-                    "p2_causal_gate_passed": p2["primary_causal_gate"]["passed"],
+                    "p2_causal_gate_passed": p2_gate_passed,
                     "elapsed_seconds": time.monotonic() - started,
                 }
             except Exception as error:
@@ -702,7 +765,7 @@ def main() -> None:
                         for policy in POLICIES
                     },
                     "arm_metadata": arm_metadata,
-                    "p2_causal_gate_passed": p2["primary_causal_gate"]["passed"],
+                    "p2_causal_gate_passed": p2_gate_passed,
                     "elapsed_seconds": time.monotonic() - started,
                 }
                 reference._cleanup()
