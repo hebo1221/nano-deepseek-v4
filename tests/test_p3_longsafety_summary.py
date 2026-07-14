@@ -16,10 +16,35 @@ import summarize_p3_longsafety as longsafety  # noqa: E402
 from summarize_p3_longsafety import audit_arm  # noqa: E402
 
 RUNNER_PATH = "research/adaptive_v4_memory/scripts/run_p3_natural_safety_generation.py"
+TEST_KVPRESS_BINDING = {
+    "checkout_root": "/test/pinned-kvpress",
+    "module_path": "/test/pinned-kvpress/kvpress/__init__.py",
+    "module_sha256": "a" * 64,
+    "registry_path": "/test/pinned-kvpress/evaluation/evaluate_registry.py",
+    "registry_sha256": "b" * 64,
+}
+
+
+@pytest.fixture(autouse=True)
+def _verify_fixture_kvpress_binding(monkeypatch: pytest.MonkeyPatch) -> None:
+    def verify(binding: object) -> dict[str, str]:
+        if binding != TEST_KVPRESS_BINDING:
+            raise ValueError("Fixture runtime KVPress binding drifted.")
+        return {
+            "checkout_root": TEST_KVPRESS_BINDING["checkout_root"],
+            "module_sha256": TEST_KVPRESS_BINDING["module_sha256"],
+            "registry_sha256": TEST_KVPRESS_BINDING["registry_sha256"],
+        }
+
+    monkeypatch.setattr(longsafety, "verify_runtime_kvpress_binding", verify)
 
 
 def _digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _kvpress_binding() -> dict[str, str]:
+    return dict(TEST_KVPRESS_BINDING)
 
 
 def _source() -> dict[str, Any]:
@@ -118,6 +143,7 @@ def _fixture(tmp_path: Path) -> tuple[Path, dict[str, Any], str]:
         "arm": arm,
         "status": "terminal",
         "source": source,
+        "environment": {"kvpress_binding": _kvpress_binding()},
         "expected_generations": 2,
         "manifest": {"path": str(manifest_path), "sha256": manifest_digest},
         **dependencies,

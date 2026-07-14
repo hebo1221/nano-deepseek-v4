@@ -131,6 +131,10 @@ def audit_benchmark(
         f"{name} source implementation audit failed.",
     )
     _require(
+        audit.get("all_runtime_kvpress_bindings_verified") is True,
+        f"{name} runtime KVPress binding audit failed.",
+    )
+    _require(
         audit.get("all_record_revisions_verified") is True,
         f"{name} record revision audit failed.",
     )
@@ -459,6 +463,7 @@ def audit_safety_stress(
         "failure_accounting_complete": True,
         "input_pairing_verified": True,
         "source_implementations_verified": True,
+        "runtime_kvpress_bindings_verified": True,
         "coordinate_grid_verified": True,
         "record_revisions_verified": True,
         "terminal_measurement_schema_verified": True,
@@ -667,6 +672,7 @@ def audit_natural_safety(
         == contract["ifeval_prompts_per_arm"]
         and audit.get("failure_accounting_complete") is True
         and audit.get("source_implementations_verified") is True
+        and audit.get("runtime_kvpress_bindings_verified") is True
         and audit.get("comparative_long_context_safety_claim_available")
         is contract["comparative_long_context_safety_claim_available"],
         "Natural safety coverage or claim boundary is incomplete.",
@@ -686,6 +692,7 @@ def audit_natural_safety(
         "longsafety_official_judge_status": audit["longsafety_official_judge_status"],
         "comparative_long_context_safety_claim_available": False,
         "source_implementations_verified": True,
+        "runtime_kvpress_bindings_verified": True,
         "summary": {"path": str(path), "sha256": sha256(path)},
         "classification": payload.get("classification"),
         "claim_boundary": payload.get("claim_boundary"),
@@ -908,6 +915,7 @@ def summarize(
             "all_required_baseline_cells_terminal": True,
             "all_failure_accounting_complete": True,
             "all_source_implementations_verified": True,
+            "all_runtime_kvpress_bindings_verified": True,
             "all_record_revisions_verified": True,
             "all_run_identities_verified": True,
             "all_terminal_measurement_schema_verified": True,

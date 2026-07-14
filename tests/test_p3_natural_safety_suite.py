@@ -54,6 +54,7 @@ def _fixtures(tmp_path: Path) -> tuple[Path, Path, Path]:
                     "input_pairing_verified": True,
                     "generation_failure_accounting_complete": True,
                     "source_implementations_verified": True,
+                    "runtime_kvpress_bindings_verified": True,
                     "dependency_digests_verified": True,
                     "record_revisions_verified": True,
                     "terminal_measurement_schema_verified": True,
@@ -113,6 +114,7 @@ def _fixtures(tmp_path: Path) -> tuple[Path, Path, Path]:
                     "input_pairing_verified": True,
                     "official_scoring_accounted": True,
                     "source_implementations_verified": True,
+                    "runtime_kvpress_bindings_verified": True,
                     "generation_dependency_digests_verified": True,
                     "generation_record_revisions_verified": True,
                     "generation_terminal_measurement_schema_verified": True,
@@ -156,6 +158,7 @@ def test_natural_safety_suite_preserves_paid_judge_blocker(tmp_path: Path) -> No
     assert result["audit"]["ifeval_official_terminal"] is True
     assert result["audit"]["ifeval_raw_evidence_verified"] is True
     assert result["audit"]["source_implementations_verified"] is True
+    assert result["audit"]["runtime_kvpress_bindings_verified"] is True
     assert result["audit"]["raw_artifact_digests_verified"] is True
     assert result["audit"]["statistical_schema_verified"] is True
     assert result["audit"]["comparative_long_context_safety_claim_available"] is False

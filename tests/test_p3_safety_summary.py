@@ -12,6 +12,7 @@ import pytest
 SCRIPTS = Path(__file__).resolve().parents[1] / "research/adaptive_v4_memory/scripts"
 sys.path.insert(0, str(SCRIPTS))
 
+import summarize_p3_safety_stress as safety_summary  # noqa: E402
 from p3_safety_workloads import FAMILIES  # noqa: E402
 from run_p3_safety_stress import failure_safety_fields  # noqa: E402
 from summarize_p3_safety_stress import (  # noqa: E402
@@ -21,9 +22,35 @@ from summarize_p3_safety_stress import (  # noqa: E402
     summarize,
 )
 
+TEST_KVPRESS_BINDING = {
+    "checkout_root": "/test/pinned-kvpress",
+    "module_path": "/test/pinned-kvpress/kvpress/__init__.py",
+    "module_sha256": "a" * 64,
+    "registry_path": "/test/pinned-kvpress/evaluation/evaluate_registry.py",
+    "registry_sha256": "b" * 64,
+}
+
+
+@pytest.fixture(autouse=True)
+def _verify_fixture_kvpress_binding(monkeypatch: pytest.MonkeyPatch) -> None:
+    def verify(binding: object) -> dict[str, str]:
+        if binding != TEST_KVPRESS_BINDING:
+            raise ValueError("Fixture runtime KVPress binding drifted.")
+        return {
+            "checkout_root": TEST_KVPRESS_BINDING["checkout_root"],
+            "module_sha256": TEST_KVPRESS_BINDING["module_sha256"],
+            "registry_sha256": TEST_KVPRESS_BINDING["registry_sha256"],
+        }
+
+    monkeypatch.setattr(safety_summary, "verify_runtime_kvpress_binding", verify)
+
 
 def _digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _kvpress_binding() -> dict[str, str]:
+    return dict(TEST_KVPRESS_BINDING)
 
 
 def _source() -> tuple[dict[str, object], dict[str, object]]:
@@ -162,6 +189,7 @@ def _fixture(tmp_path: Path) -> tuple[Path, dict[str, Path]]:
             "arm": arm,
             "status": "terminal",
             "source": source,
+            "environment": {"kvpress_binding": _kvpress_binding()},
             "run_identity": {
                 **run_identity,
                 "manifest_sha256": _digest(manifest_path),
@@ -195,6 +223,7 @@ def test_safety_summary_audits_all_slices_and_pairs_inputs(tmp_path: Path) -> No
         "failure_accounting_complete": True,
         "input_pairing_verified": True,
         "source_implementations_verified": True,
+        "runtime_kvpress_bindings_verified": True,
         "coordinate_grid_verified": True,
         "record_revisions_verified": True,
         "terminal_measurement_schema_verified": True,

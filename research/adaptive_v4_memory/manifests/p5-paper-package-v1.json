@@ -262,6 +262,7 @@
         "benchmarks_terminal": 5,
         "minimum_protocol_examples_accounted_per_arm": 45289,
         "all_source_implementations_verified": true,
+        "all_runtime_kvpress_bindings_verified": true,
         "all_record_revisions_verified": true,
         "all_run_identities_verified": true,
         "all_terminal_measurement_schema_verified": true,
@@ -289,6 +290,7 @@
         "failure_accounting_complete": true,
         "input_pairing_verified": true,
         "source_implementations_verified": true,
+        "runtime_kvpress_bindings_verified": true,
         "coordinate_grid_verified": true,
         "record_revisions_verified": true,
         "terminal_measurement_schema_verified": true,
@@ -318,6 +320,7 @@
         "ifeval_raw_evidence_verified": true,
         "failure_accounting_complete": true,
         "source_implementations_verified": true,
+        "runtime_kvpress_bindings_verified": true,
         "raw_artifact_digests_verified": true,
         "statistical_schema_verified": true,
         "comparative_long_context_safety_claim_available": false

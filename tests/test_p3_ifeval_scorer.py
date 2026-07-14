@@ -12,6 +12,34 @@ import pytest
 SCRIPTS = Path(__file__).resolve().parents[1] / "research/adaptive_v4_memory/scripts"
 sys.path.insert(0, str(SCRIPTS))
 
+import score_p3_ifeval as ifeval_scorer  # noqa: E402
+
+TEST_KVPRESS_BINDING = {
+    "checkout_root": "/test/pinned-kvpress",
+    "module_path": "/test/pinned-kvpress/kvpress/__init__.py",
+    "module_sha256": "a" * 64,
+    "registry_path": "/test/pinned-kvpress/evaluation/evaluate_registry.py",
+    "registry_sha256": "b" * 64,
+}
+
+
+@pytest.fixture(autouse=True)
+def _verify_fixture_kvpress_binding(monkeypatch: pytest.MonkeyPatch) -> None:
+    def verify(binding: object) -> dict[str, str]:
+        if binding != TEST_KVPRESS_BINDING:
+            raise ValueError("Fixture runtime KVPress binding drifted.")
+        return {
+            "checkout_root": TEST_KVPRESS_BINDING["checkout_root"],
+            "module_sha256": TEST_KVPRESS_BINDING["module_sha256"],
+            "registry_sha256": TEST_KVPRESS_BINDING["registry_sha256"],
+        }
+
+    monkeypatch.setattr(ifeval_scorer, "verify_runtime_kvpress_binding", verify)
+
+
+def _kvpress_binding() -> dict[str, str]:
+    return dict(TEST_KVPRESS_BINDING)
+
 from score_p3_ifeval import (  # noqa: E402
     _records as load_cell_records,
 )
@@ -135,6 +163,7 @@ def test_ifeval_main_contract_exposes_p5_audit_fields() -> None:
         "input_pairing_verified",
         "official_scoring_accounted",
         "source_implementations_verified",
+        "runtime_kvpress_bindings_verified",
         "generation_dependency_digests_verified",
         "generation_record_revisions_verified",
         "generation_terminal_measurement_schema_verified",
@@ -232,6 +261,7 @@ def _cell_fixture(tmp_path: Path) -> tuple[Path, dict[str, object]]:
                 "arm": "native-dense",
                 "status": "terminal",
                 "source": source,
+                "environment": {"kvpress_binding": _kvpress_binding()},
                 "run_identity": {
                     "source_commit": source["commit"],
                     "implementation_sha256": source["implementation_sha256"],

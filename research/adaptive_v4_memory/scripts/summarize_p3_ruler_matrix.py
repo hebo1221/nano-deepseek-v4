@@ -5,12 +5,12 @@ import hashlib
 import json
 import platform
 import subprocess
-from functools import cache
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
-from run_p3_ruler_matrix import ARMS, KVPRESS_REVISION, LENGTHS, cell_dir, cells, sha256
+from p3_source_provenance import verify_runtime_kvpress_binding
+from run_p3_ruler_matrix import ARMS, LENGTHS, cell_dir, cells, sha256
 from summarize_p2_core_matrix import bootstrap_paired_mean, holm_bonferroni
 
 EXPECTED_ROWS_PER_CELL = 6_500
@@ -28,52 +28,6 @@ def _records_digest(frame: pd.DataFrame) -> str:
     return hashlib.sha256(
         json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
     ).hexdigest()
-
-
-@cache
-def _verify_kvpress_checkout(root_text: str) -> Path:
-    root = Path(root_text).resolve()
-    _require(root.is_dir(), f"Missing runtime KVPress checkout: {root}")
-    revision = subprocess.run(
-        ["git", "rev-parse", "HEAD"],
-        cwd=root,
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout.strip()
-    dirty = subprocess.run(
-        ["git", "status", "--porcelain"],
-        cwd=root,
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout.strip()
-    _require(
-        revision == KVPRESS_REVISION and not dirty,
-        "Runtime KVPress checkout revision or cleanliness drifted.",
-    )
-    return root
-
-
-def verify_runtime_kvpress_binding(binding: Any) -> dict[str, str]:
-    _require(isinstance(binding, dict), "Missing runtime KVPress import binding.")
-    root = _verify_kvpress_checkout(str(binding.get("checkout_root", "")))
-    module = Path(binding.get("module_path", "")).resolve()
-    registry = Path(binding.get("registry_path", "")).resolve()
-    _require(
-        module == root / "kvpress/__init__.py"
-        and registry == root / "evaluation/evaluate_registry.py"
-        and module.is_file()
-        and registry.is_file()
-        and binding.get("module_sha256") == sha256(module)
-        and binding.get("registry_sha256") == sha256(registry),
-        "Runtime KVPress import binding drifted.",
-    )
-    return {
-        "checkout_root": str(root),
-        "module_sha256": str(binding["module_sha256"]),
-        "registry_sha256": str(binding["registry_sha256"]),
-    }
 
 
 def _load_cell(

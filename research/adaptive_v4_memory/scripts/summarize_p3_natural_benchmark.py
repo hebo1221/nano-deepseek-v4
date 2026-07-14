@@ -10,7 +10,10 @@ from pathlib import Path
 from typing import Any, cast
 
 import numpy as np
-from p3_source_provenance import verify_git_implementation
+from p3_source_provenance import (
+    verify_git_implementation,
+    verify_runtime_kvpress_binding,
+)
 from summarize_p3_natural_suite import BENCHMARK_IDS, sha256
 
 STATUS_VALUES = {"scored", "failure"}
@@ -625,6 +628,9 @@ def audit_arm(
         f"{benchmark}/{arm} implementation",
     )
     source_implementation = _verify_source_implementation(artifact, benchmark)
+    runtime_kvpress_binding = verify_runtime_kvpress_binding(
+        artifact.get("environment", {}).get("kvpress_binding")
+    )
     _require(
         artifact.get("experiment_manifest", {}).get("sha256") == manifest_digest,
         f"{benchmark}/{arm} manifest drifted.",
@@ -915,6 +921,7 @@ def audit_arm(
                 "\n".join(sorted(record_digests)).encode()
             ).hexdigest(),
             "source_implementation": source_implementation,
+            "runtime_kvpress_binding": runtime_kvpress_binding,
             "run_identity_verified": True,
             "terminal_measurement_schema_verified": True,
             "dataset_example_identities_verified": expected_identifiers is not None,
@@ -1005,6 +1012,11 @@ def summarize_benchmark(
         len(source_implementations) == 1,
         "Natural arms used different source implementations.",
     )
+    runtime_bindings = {
+        json.dumps(row["runtime_kvpress_binding"], sort_keys=True)
+        for row in arms.values()
+    }
+    _require(len(runtime_bindings) == 1, "Natural arms used different KVPress runtimes.")
     paired_quality, paired_measurements = _paired_contrasts(
         benchmark=benchmark,
         arm_artifacts=arm_artifacts,
@@ -1027,6 +1039,7 @@ def summarize_benchmark(
             "all_failure_accounting_complete": True,
             "all_required_arms_input_paired": True,
             "all_source_implementations_verified": True,
+            "all_runtime_kvpress_bindings_verified": True,
             "all_record_revisions_verified": True,
             "all_run_identities_verified": True,
             "all_terminal_measurement_schema_verified": True,

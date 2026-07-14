@@ -11,6 +11,7 @@ from typing import Any
 
 import numpy as np
 from p3_safety_workloads import FAMILIES
+from p3_source_provenance import verify_runtime_kvpress_binding
 from verify_p3_natural_model import sha256
 
 ARMS = (
@@ -233,6 +234,9 @@ def audit_arm(
         f"Invalid safety arm cell: {arm}.",
     )
     source_implementation = _verify_source_implementation(cell)
+    runtime_kvpress_binding = verify_runtime_kvpress_binding(
+        cell.get("environment", {}).get("kvpress_binding")
+    )
     _require(cell.get("manifest", {}).get("sha256") == manifest_digest, "Safety manifest drifted.")
     records_path = Path(cell.get("raw_records", {}).get("path", ""))
     _require(
@@ -434,6 +438,7 @@ def audit_arm(
             ).hexdigest(),
             "raw_cell": {"path": str(path), "sha256": sha256(path)},
             "source_implementation": source_implementation,
+            "runtime_kvpress_binding": runtime_kvpress_binding,
         },
         dependencies,
     )
@@ -470,6 +475,16 @@ def summarize(manifest_path: Path, arm_paths: dict[str, Path]) -> dict[str, Any]
         == 1,
         "Safety arms used different source implementations.",
     )
+    _require(
+        len(
+            {
+                json.dumps(row["runtime_kvpress_binding"], sort_keys=True)
+                for row in arms.values()
+            }
+        )
+        == 1,
+        "Safety arms used different KVPress runtimes.",
+    )
     contrast = paired_protected_effect(
         _record_map(arm_paths[FIXED_ARM]),
         _record_map(arm_paths[PROTECTED_ARM]),
@@ -484,6 +499,7 @@ def summarize(manifest_path: Path, arm_paths: dict[str, Path]) -> dict[str, Any]
             "failure_accounting_complete": True,
             "input_pairing_verified": True,
             "source_implementations_verified": True,
+            "runtime_kvpress_bindings_verified": True,
             "coordinate_grid_verified": True,
             "record_revisions_verified": True,
             "terminal_measurement_schema_verified": True,

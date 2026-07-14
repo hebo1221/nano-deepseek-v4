@@ -9,7 +9,10 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
-from p3_source_provenance import verify_git_implementation
+from p3_source_provenance import (
+    verify_git_implementation,
+    verify_runtime_kvpress_binding,
+)
 from prepare_p3_natural_safety_assets import sha256
 from validate_p3_natural_safety_manifest import validate_manifest
 
@@ -90,6 +93,9 @@ def audit_arm(
         cell.get("source"),
         expected_path=GENERATION_RUNNER_PATH,
         label=f"LongSafety/{arm}",
+    )
+    runtime_kvpress_binding = verify_runtime_kvpress_binding(
+        cell.get("environment", {}).get("kvpress_binding")
     )
     identity = cell.get("run_identity", {})
     arm_config = identity.get("arm_config") if isinstance(identity, dict) else None
@@ -226,6 +232,7 @@ def audit_arm(
             "slices": slices,
             "raw_cell": {"path": str(cell_path), "sha256": sha256(cell_path)},
             "source_implementation": source_implementation,
+            "runtime_kvpress_binding": runtime_kvpress_binding,
         },
         by_id,
     )
@@ -259,6 +266,16 @@ def summarize(manifest_path: Path, arm_paths: dict[str, Path]) -> dict[str, Any]
         len({json.dumps(arms[arm]["source_implementation"], sort_keys=True) for arm in ARMS}) == 1,
         "LongSafety generation arms used different source implementations.",
     )
+    _require(
+        len(
+            {
+                json.dumps(arms[arm]["runtime_kvpress_binding"], sort_keys=True)
+                for arm in ARMS
+            }
+        )
+        == 1,
+        "LongSafety generation arms used different KVPress runtimes.",
+    )
     _require(set(records[ARMS[0]]) == set(records[ARMS[1]]), "LongSafety identities diverged.")
     _require(
         all(
@@ -285,6 +302,7 @@ def summarize(manifest_path: Path, arm_paths: dict[str, Path]) -> dict[str, Any]
             "input_pairing_verified": True,
             "generation_failure_accounting_complete": True,
             "source_implementations_verified": True,
+            "runtime_kvpress_bindings_verified": True,
             "dependency_digests_verified": True,
             "record_revisions_verified": True,
             "terminal_measurement_schema_verified": True,

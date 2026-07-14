@@ -12,6 +12,7 @@ import pytest
 SCRIPTS = Path(__file__).resolve().parents[1] / "research/adaptive_v4_memory/scripts"
 sys.path.insert(0, str(SCRIPTS))
 
+import summarize_p3_natural_benchmark as natural_benchmark_summary  # noqa: E402
 from p3_natural_metrics import (  # noqa: E402
     classify_context_fit,
     extract_longbench_v2_choice,
@@ -39,6 +40,30 @@ from summarize_p3_natural_suite import (  # noqa: E402
     summarize,
 )
 from validate_p3_natural_suite_manifest import validate_manifest  # noqa: E402
+
+TEST_KVPRESS_BINDING = {
+    "checkout_root": "/test/pinned-kvpress",
+    "module_path": "/test/pinned-kvpress/kvpress/__init__.py",
+    "module_sha256": "a" * 64,
+    "registry_path": "/test/pinned-kvpress/evaluation/evaluate_registry.py",
+    "registry_sha256": "b" * 64,
+}
+
+
+@pytest.fixture(autouse=True)
+def _verify_fixture_kvpress_binding(monkeypatch: pytest.MonkeyPatch) -> None:
+    def verify(binding: object) -> dict[str, str]:
+        if binding != TEST_KVPRESS_BINDING:
+            raise ValueError("Fixture runtime KVPress binding drifted.")
+        return {
+            "checkout_root": TEST_KVPRESS_BINDING["checkout_root"],
+            "module_sha256": TEST_KVPRESS_BINDING["module_sha256"],
+            "registry_sha256": TEST_KVPRESS_BINDING["registry_sha256"],
+        }
+
+    monkeypatch.setattr(
+        natural_benchmark_summary, "verify_runtime_kvpress_binding", verify
+    )
 
 
 def _manifest() -> dict:
@@ -242,6 +267,10 @@ def _digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _kvpress_binding() -> dict[str, str]:
+    return dict(TEST_KVPRESS_BINDING)
+
+
 def _source_for(benchmark: str) -> dict[str, object]:
     commit = subprocess.run(
         ["git", "rev-parse", "HEAD"],
@@ -355,6 +384,7 @@ def _natural_benchmark_summaries(tmp_path: Path, manifest_path: Path) -> dict[st
                 "all_failure_accounting_complete": True,
                 "all_required_arms_input_paired": True,
                 "all_source_implementations_verified": True,
+                "all_runtime_kvpress_bindings_verified": True,
                 "all_record_revisions_verified": True,
                 "all_run_identities_verified": True,
                 "all_terminal_measurement_schema_verified": True,
@@ -580,6 +610,7 @@ def _safety_summary(tmp_path: Path, manifest_path: Path) -> Path:
                     "failure_accounting_complete": True,
                     "input_pairing_verified": True,
                     "source_implementations_verified": True,
+                    "runtime_kvpress_bindings_verified": True,
                     "coordinate_grid_verified": True,
                     "record_revisions_verified": True,
                     "terminal_measurement_schema_verified": True,
@@ -666,6 +697,7 @@ def _natural_safety_summary(tmp_path: Path, manifest_path: Path) -> Path:
                     "ifeval_expected_prompts_per_arm": contract["ifeval_prompts_per_arm"],
                     "failure_accounting_complete": True,
                     "source_implementations_verified": True,
+                    "runtime_kvpress_bindings_verified": True,
                     "comparative_long_context_safety_claim_available": contract[
                         "comparative_long_context_safety_claim_available"
                     ],
@@ -1014,6 +1046,7 @@ def _raw_arm_cell(tmp_path: Path) -> tuple[Path, Path, Path]:
                 "arm": "native-dense",
                 "status": "terminal",
                 "source": source,
+                "environment": {"kvpress_binding": _kvpress_binding()},
                 "experiment_manifest": {"sha256": "4" * 64},
                 "raw_records": {"path": str(raw), "sha256": _digest(raw)},
                 "causal_gate": {"path": str(causal), "sha256": causal_digest},

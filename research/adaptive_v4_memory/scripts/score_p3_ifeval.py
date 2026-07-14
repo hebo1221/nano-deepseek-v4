@@ -12,7 +12,10 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from p3_source_provenance import verify_git_implementation
+from p3_source_provenance import (
+    verify_git_implementation,
+    verify_runtime_kvpress_binding,
+)
 from prepare_p3_natural_safety_assets import (
     sha256,
     tree_sha256,
@@ -287,6 +290,9 @@ def _records(
         cell.get("source"),
         expected_path=GENERATION_RUNNER_PATH,
         label=f"IFEval/{arm}",
+    )
+    cell["verified_runtime_kvpress_binding"] = verify_runtime_kvpress_binding(
+        cell.get("environment", {}).get("kvpress_binding")
     )
     natural_manifest = json.loads(Path(cell["natural_manifest"]["path"]).read_text())
     fixed_selection = json.loads(Path(cell["fixed_selection"]["path"]).read_text())
@@ -611,6 +617,18 @@ def main() -> None:
         == 1,
         "IFEval generation arms used different source implementations.",
     )
+    _require(
+        len(
+            {
+                json.dumps(
+                    cells[arm]["verified_runtime_kvpress_binding"], sort_keys=True
+                )
+                for arm in ARMS
+            }
+        )
+        == 1,
+        "IFEval generation arms used different KVPress runtimes.",
+    )
     scored = {
         arm: score_arm(inputs=inputs, records=generation[arm], official=official) for arm in ARMS
     }
@@ -657,6 +675,7 @@ def main() -> None:
             "input_pairing_verified": True,
             "official_scoring_accounted": True,
             "source_implementations_verified": True,
+            "runtime_kvpress_bindings_verified": True,
             "generation_dependency_digests_verified": True,
             "generation_record_revisions_verified": True,
             "generation_terminal_measurement_schema_verified": True,

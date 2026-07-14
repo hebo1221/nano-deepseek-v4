@@ -77,6 +77,7 @@ def summarize(*, manifest_path: Path, longsafety_path: Path, ifeval_path: Path) 
         and long_audit.get("input_pairing_verified") is True
         and long_audit.get("generation_failure_accounting_complete") is True
         and long_audit.get("source_implementations_verified") is True
+        and long_audit.get("runtime_kvpress_bindings_verified") is True
         and long_audit.get("dependency_digests_verified") is True
         and long_audit.get("record_revisions_verified") is True
         and long_audit.get("terminal_measurement_schema_verified") is True
@@ -133,6 +134,7 @@ def summarize(*, manifest_path: Path, longsafety_path: Path, ifeval_path: Path) 
         and ifeval_audit.get("input_pairing_verified") is True
         and ifeval_audit.get("official_scoring_accounted") is True
         and ifeval_audit.get("source_implementations_verified") is True
+        and ifeval_audit.get("runtime_kvpress_bindings_verified") is True
         and ifeval_audit.get("generation_dependency_digests_verified") is True
         and ifeval_audit.get("generation_record_revisions_verified") is True
         and ifeval_audit.get("generation_terminal_measurement_schema_verified") is True
@@ -220,6 +222,7 @@ def summarize(*, manifest_path: Path, longsafety_path: Path, ifeval_path: Path) 
             "ifeval_raw_evidence_verified": True,
             "failure_accounting_complete": True,
             "source_implementations_verified": True,
+            "runtime_kvpress_bindings_verified": True,
             "raw_artifact_digests_verified": True,
             "statistical_schema_verified": True,
             "comparative_long_context_safety_claim_available": False,
