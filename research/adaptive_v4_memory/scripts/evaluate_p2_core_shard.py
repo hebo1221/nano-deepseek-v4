@@ -78,6 +78,20 @@ def _equivalence(path: Path, scale: str) -> dict[str, Any]:
         or tuple(validation.get("core_policies", ())) != CORE_POLICIES
     ):
         raise ValueError("Chunked-cache equivalence contract drifted.")
+    raw_metadata = payload.get("raw_artifact", {})
+    raw_path = Path(raw_metadata.get("path", ""))
+    if (
+        not raw_path.is_file()
+        or raw_metadata.get("sha256") != _sha256(raw_path)
+    ):
+        raise ValueError("Chunked-cache equivalence raw artifact drifted.")
+    raw_payload = json.loads(raw_path.read_text())
+    if (
+        raw_payload.get("experiment_id") != "p1-chunked-cache-equivalence-v1"
+        or raw_payload.get("source", {}).get("dirty") is not False
+        or raw_payload.get("validation") != validation
+    ):
+        raise ValueError("Chunked-cache equivalence raw audit failed.")
     return payload
 
 
