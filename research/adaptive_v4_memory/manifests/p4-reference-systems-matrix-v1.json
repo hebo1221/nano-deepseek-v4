@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "experiment_id": "p4-reference-systems-matrix-v1",
+  "status": "frozen_before_execution",
+  "evidence_tier": "single-accelerator-reference-pytorch-runtime",
+  "prerequisite": "complete digest-bound P3 RULER audit; P4 baselines run even if the adaptive causal arm is withheld",
+  "scales": ["s55", "s151"],
+  "checkpoint_training_seed": 6071401,
+  "policies": ["resident-native", "tiered-native"],
+  "contexts_tokens": [8192, 32768, 131072],
+  "optional_context_tokens": 500000,
+  "optional_context_gate": "run only after both policies complete 131072 tokens at batch 1, concurrency 1",
+  "generation_tokens": [128, 512, 2048],
+  "load_profiles": [
+    {"name": "batch-b1", "batch": 1, "concurrency": 1},
+    {"name": "batch-b4", "batch": 4, "concurrency": 1},
+    {"name": "batch-b8", "batch": 8, "concurrency": 1},
+    {"name": "batch-b16", "batch": 16, "concurrency": 1},
+    {"name": "serving-c8", "batch": 1, "concurrency": 8},
+    {"name": "serving-c32", "batch": 1, "concurrency": 32}
+  ],
+  "matrix_interpretation": "batch and serving-concurrency sweeps are separate profiles; their Cartesian product is not treated as a realistic serving configuration",
+  "prefill_chunk_tokens": 256,
+  "warmups_per_paired_cell": 5,
+  "measured_repetitions_per_paired_cell": 30,
+  "paired_policy_order": "alternate resident-first and tiered-first by repetition",
+  "primary_paired_cells": 108,
+  "primary_measured_policy_runs": 6480,
+  "primary_total_policy_runs_including_warmup": 7560,
+  "measurements": [
+    "per-request and aggregate TTFT",
+    "TPOT mean and p50/p95/p99",
+    "end-to-end latency and generated-token throughput",
+    "CUDA allocated/reserved/peak bytes and allocator fragmentation",
+    "logical/hot/cold cache bytes and pinned host bytes",
+    "H2D/D2H/useful bytes and counts",
+    "prefetches, evictions, late misses, useful-transfer ratio",
+    "native indexer time from a separate untimed one-token trace",
+    "greedy prediction digest equality under identical teacher-forced tokens",
+    "OOM, timeout, numerical failure, and unexpected exception records"
+  ],
+  "execution": {
+    "runner": "research/adaptive_v4_memory/scripts/run_p4_systems_matrix.py",
+    "audit_runner": "research/adaptive_v4_memory/scripts/summarize_p4_systems_matrix.py",
+    "raw_output_root": "artifacts/adaptive_v4_memory/paper_grade/p4/reference-systems",
+    "matrix_progress": "artifacts/adaptive_v4_memory/paper_grade/p4/reference-systems-matrix.json",
+    "audit_output": "artifacts/adaptive_v4_memory/paper_grade/p4/reference-systems.summary.json",
+    "resume_unit": "one scale-context-generation-load-profile paired cell",
+    "policy_failure_isolated": "if either resident or tiered fails, continue all 30 measured repetitions for the surviving policy and report the cell as partial",
+    "failure_is_terminal_and_reported": true
+  },
+  "claim_boundary": "Reference PyTorch evidence only. It is not a fused-kernel, multi-GPU, or production-serving throughput claim."
+}
