@@ -37,6 +37,7 @@ def validate_manifest(payload: dict[str, Any]) -> None:
         "Adaptive LongBench-v2 cohort is not frozen before prediction.",
     )
     benchmark = payload.get("benchmark", {})
+    model = payload.get("model", {})
     _require(
         benchmark.get("dataset_revision") == "2b48e494f2c7a2f0af81aae178e05c7e1dde0fe9"
         and benchmark.get("code_revision") == "2e00731f8d0bff23dc4325161044d0ed8af94c1e"
@@ -46,6 +47,21 @@ def validate_manifest(payload: dict[str, Any]) -> None:
         and benchmark.get("generation_reserve_tokens") == 128
         and "never truncate" in benchmark.get("overflow_policy", ""),
         "Adaptive LongBench-v2 coverage drifted.",
+    )
+    _require(
+        model.get("snapshot_digest_set_sha256")
+        == "c01e398afbd27d139b203e4b4b13d34dedec6d0a2db521083f55c50522c76e35"
+        and benchmark.get("dataset_sha256")
+        == "15d61c22d92c96900b3c4948b6aeea218d3214b676a65df48e7b8555604c7fe2"
+        and benchmark.get("prompt_sha256")
+        == "68a162252bc9ff71d5d7abca3d69bb31aac3c35f832d657a2866f2018b8a6950"
+        and benchmark.get("answer_parser")
+        == "research/adaptive_v4_memory/scripts/p3_natural_metrics.py"
+        and benchmark.get("secondary_slice_fields")
+        == ["sub_domain", "difficulty", "length_stratum"]
+        and "no secondary slice is a confirmation gate"
+        in benchmark.get("secondary_slice_policy", ""),
+        "Adaptive LongBench-v2 immutable input contract drifted.",
     )
     _require(tuple(payload.get("arms", {})) == ARMS, "Adaptive arm pair drifted.")
     selection = payload.get("scorer_selection", {})
@@ -72,6 +88,8 @@ def validate_manifest(payload: dict[str, Any]) -> None:
         and statistics.get("holm_family_size") == len(CATEGORIES)
         and statistics.get("report_by_difficulty") is True
         and statistics.get("report_by_length_stratum") is True
+        and statistics.get("secondary_slices_are_descriptive") is True
+        and statistics.get("outcome_dependent_model_or_slice_selection") is False
         and "scores zero" in statistics.get("failure_policy", ""),
         "Adaptive LongBench-v2 statistics drifted.",
     )

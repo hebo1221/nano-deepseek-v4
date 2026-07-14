@@ -10,19 +10,23 @@
     "terminal baseline Qwen3-4B LongBench-v2 audit regardless of outcome",
     "verified frozen LongBench-v2 dataset, prompt, scorer, model, and fixed-baseline selection"
   ],
-  "execution_policy": "run all 503 frozen examples under both arms; prerequisite outcomes never select domains, difficulties, length strata, or examples",
+  "execution_policy": "run all 503 frozen examples under both arms; prerequisite outcomes never select, cancel, truncate, or reorder domains, difficulties, length strata, or examples",
   "model": {
     "repo_id": "Qwen/Qwen3-4B-Instruct-2507",
     "revision": "cdbee75f17c01a7cc42f958dc650907174af0554",
     "dtype": "bfloat16",
     "num_hidden_layers": 36,
-    "maximum_supported_context_tokens": 262144
+    "maximum_supported_context_tokens": 262144,
+    "snapshot_digest_set_sha256": "c01e398afbd27d139b203e4b4b13d34dedec6d0a2db521083f55c50522c76e35"
   },
   "benchmark": {
     "name": "LongBench-v2",
     "base_manifest": "research/adaptive_v4_memory/manifests/p3-natural-suite-v1.json",
     "dataset_revision": "2b48e494f2c7a2f0af81aae178e05c7e1dde0fe9",
     "code_revision": "2e00731f8d0bff23dc4325161044d0ed8af94c1e",
+    "dataset_sha256": "15d61c22d92c96900b3c4948b6aeea218d3214b676a65df48e7b8555604c7fe2",
+    "prompt_sha256": "68a162252bc9ff71d5d7abca3d69bb31aac3c35f832d657a2866f2018b8a6950",
+    "answer_parser": "research/adaptive_v4_memory/scripts/p3_natural_metrics.py",
     "categories": [
       "single-document-qa",
       "multi-document-qa",
@@ -37,7 +41,9 @@
     "generation_reserve_tokens": 128,
     "primary_metric": "exact multiple-choice accuracy",
     "paired_unit": "the same frozen example with identical rendered prompt and exact context/question token ids",
-    "overflow_policy": "retain unsupported-context as an intention-to-evaluate failure scored zero; never truncate"
+    "overflow_policy": "retain unsupported-context as an intention-to-evaluate failure scored zero; never truncate",
+    "secondary_slice_fields": ["sub_domain", "difficulty", "length_stratum"],
+    "secondary_slice_policy": "report observed frozen metadata levels with n >= 10 descriptively; no secondary slice is a confirmation gate"
   },
   "arms": {
     "fixed+pins": {
@@ -84,6 +90,8 @@
     "report_by_difficulty": true,
     "report_by_length_stratum": true,
     "holm_family_size": 6,
+    "secondary_slices_are_descriptive": true,
+    "outcome_dependent_model_or_slice_selection": false,
     "failure_policy": "intention-to-evaluate; every allowed operational or unsupported-context failure scores zero and is never dropped or silently retried"
   },
   "failure_reporting": {
