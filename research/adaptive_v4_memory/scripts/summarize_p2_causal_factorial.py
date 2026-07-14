@@ -63,10 +63,20 @@ def _require(condition: bool, message: str) -> None:
         raise ValueError(message)
 
 
-def _verify_dependency(metadata: dict[str, Any], name: str) -> Path:
+def _verify_dependency(
+    metadata: dict[str, Any],
+    name: str,
+    verified: set[tuple[str, str, str]] | None = None,
+) -> Path:
     path = Path(metadata.get("path", ""))
+    expected = metadata.get("sha256")
     _require(path.is_file(), f"Missing {name}: {path}")
-    _require(metadata.get("sha256") == sha256(path), f"{name} digest drifted: {path}")
+    _require(isinstance(expected, str), f"Missing {name} digest: {path}")
+    identity = (name, str(path), cast(str, expected))
+    if verified is None or identity not in verified:
+        _require(expected == sha256(path), f"{name} digest drifted: {path}")
+        if verified is not None:
+            verified.add(identity)
     return path
 
 
@@ -101,10 +111,17 @@ def seed_cluster_statistics(
     randomization_p = (
         np.count_nonzero(np.abs(null_means) >= threshold) + 1
     ) / (resamples + 1)
+    standard_deviation = float(values.std(ddof=1))
     return {
         "independent_seed_clusters": len(values),
         "seed_means": values.tolist(),
         "mean_difference": observed,
+        "mean_difference_percentage_points": observed * 100.0,
+        "seed_mean_sample_standard_deviation": standard_deviation,
+        "seed_mean_range": [float(values.min()), float(values.max())],
+        "cohens_dz_across_seeds": (
+            observed / standard_deviation if standard_deviation > 0.0 else None
+        ),
         "confidence_level": confidence,
         "seed_cluster_bootstrap_ci": [float(lower), float(upper)],
         "paired_randomization_two_sided_p": float(randomization_p),
@@ -446,6 +463,9 @@ def main() -> None:
     ] = {name: defaultdict(list) for name in CONTRASTS}
     physical: dict[tuple[str, str, int, str], list[int]] = defaultdict(list)
     raw_digests: list[str] = []
+    verified_dependencies: set[tuple[str, str, str]] = set()
+    validated_memory_matches: set[Path] = set()
+    validated_equivalences: set[Path] = set()
     for run in runs:
         identity = (
             run["scale"],
@@ -476,28 +496,39 @@ def main() -> None:
             "Causal record count drifted.",
         )
         _require(records_digest(records) == raw.get("records_digest"), "Record digest drifted.")
-        checkpoint_path = _verify_dependency(raw["checkpoint"], "checkpoint")
+        checkpoint_path = _verify_dependency(
+            raw["checkpoint"], "checkpoint", verified_dependencies
+        )
         del checkpoint_path
         calibration_path = _verify_dependency(
-            raw["calibration_artifact"], "calibration artifact"
+            raw["calibration_artifact"], "calibration artifact", verified_dependencies
         )
         memory_match_path = _verify_dependency(
-            raw["memory_match_artifact"], "memory-match artifact"
+            raw["memory_match_artifact"], "memory-match artifact", verified_dependencies
         )
         equivalence_path = _verify_dependency(
-            raw["equivalence_artifact"], "equivalence artifact"
+            raw["equivalence_artifact"], "equivalence artifact", verified_dependencies
         )
-        _verify_dependency(raw["design_manifest"], "causal design")
-        shard._memory_match(
-            memory_match_path,
-            scale=raw["scale"],
-            training_seed=raw["training_seed"],
-            calibration_path=calibration_path,
-        )
-        shard._equivalence(
-            equivalence_path,
-            raw["scale"],
-            training_seed=raw["training_seed"],
+        _verify_dependency(raw["design_manifest"], "causal design", verified_dependencies)
+        if memory_match_path not in validated_memory_matches:
+            shard._memory_match(
+                memory_match_path,
+                scale=raw["scale"],
+                training_seed=raw["training_seed"],
+                calibration_path=calibration_path,
+            )
+            validated_memory_matches.add(memory_match_path)
+        if equivalence_path not in validated_equivalences:
+            shard._equivalence(
+                equivalence_path,
+                raw["scale"],
+                training_seed=raw["training_seed"],
+            )
+            validated_equivalences.add(equivalence_path)
+        _require(
+            len(raw["batch_metrics"])
+            == shard.BATCHES_PER_SHARD * len(shard.ALL_ARM_NAMES),
+            "Causal batch metric coverage drifted.",
         )
         _require(
             all(metric.get("budget_violations") == 0 for metric in raw["batch_metrics"]),
@@ -517,6 +548,10 @@ def main() -> None:
         )
         conversation_ids = sorted(
             record["conversation_id"] for record in records if record["arm"] == PRIMARY_COMPARATOR
+        )
+        _require(
+            len(conversation_ids) == shard.EXAMPLES_PER_SHARD,
+            "Causal conversation coverage drifted.",
         )
         for record in records:
             predictions = record["predictions"]
@@ -578,6 +613,22 @@ def main() -> None:
                 int(measurement["accounting"]["hot_resident_bytes"])
             )
     _require(seen == expected, "Causal Cartesian shard coverage drifted.")
+    expected_groups = (
+        len(("s55", "s151"))
+        * len(shard.BUDGET_LABELS)
+        * len(shard.TRAINING_SEEDS)
+        * len(PAPER_GRADE_WORKLOAD_FAMILIES)
+        * len(shard.CONTEXTS)
+    )
+    expected_conversations = len(shard.REPLICATES) * shard.EXAMPLES_PER_SHARD
+    _require(
+        all(
+            len(values) == expected_groups
+            and all(len(group) == expected_conversations for group in values.values())
+            for values in differences.values()
+        ),
+        "Causal paired-difference coverage drifted.",
+    )
     contrast_payload = {
         name: contrast_statistics(
             values,
@@ -587,6 +638,26 @@ def main() -> None:
         )
         for name, values in differences.items()
     }
+    for scale in ("s55", "s151"):
+        for budget in shard.BUDGET_LABELS:
+            cell_rows = {
+                name: next(
+                    row
+                    for row in payload["cells"]
+                    if row["scale"] == scale and row["budget"] == budget
+                )
+                for name, payload in contrast_payload.items()
+            }
+            adjusted = holm_bonferroni(
+                {
+                    name: row["seed_cluster_inference"][
+                        "paired_randomization_two_sided_p"
+                    ]
+                    for name, row in cell_rows.items()
+                }
+            )
+            for name, row in cell_rows.items():
+                row["holm_adjusted_p_across_contrasts"] = adjusted[name]
     primary = contrast_payload["adaptive_quota_with_pins"]
     for cell in primary["cells"]:
         seed_means = [

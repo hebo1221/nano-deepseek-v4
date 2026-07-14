@@ -214,7 +214,7 @@ def main() -> None:
         "--causal-gate",
         type=Path,
         default=Path(
-            "research/adaptive_v4_memory/results/p2-causal-ablation.summary.json"
+            "artifacts/adaptive_v4_memory/paper_grade/p2-causal-ablation.summary.json"
         ),
     )
     args = parser.parse_args()

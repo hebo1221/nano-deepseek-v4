@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from time import perf_counter_ns
 
@@ -719,7 +720,7 @@ class DeepSeekV4Cache:
 
     def enable_csa_tiering(
         self,
-        hot_budget_blocks: int,
+        hot_budget_blocks: int | Mapping[int, int],
         *,
         protected_blocks: tuple[int, ...] = (),
         inherit_controller_pins: bool = True,
@@ -734,6 +735,28 @@ class DeepSeekV4Cache:
         layer_types = self.config.layer_types
         if layer_types is None:
             raise RuntimeError("config.layer_types was not initialized.")
+        csa_layers = tuple(
+            index
+            for index, layer_type in enumerate(layer_types)
+            if layer_type == "compressed_sparse_attention"
+        )
+        if isinstance(hot_budget_blocks, Mapping):
+            layer_hot_budgets = dict(hot_budget_blocks)
+            if set(layer_hot_budgets) != set(csa_layers):
+                raise ValueError("Layer hot budgets must exactly match the CSA layer schedule.")
+            if any(
+                isinstance(value, bool) or not isinstance(value, int) or value <= 0
+                for value in layer_hot_budgets.values()
+            ):
+                raise ValueError("Every layer hot budget must be a positive integer.")
+        else:
+            if (
+                isinstance(hot_budget_blocks, bool)
+                or not isinstance(hot_budget_blocks, int)
+                or hot_budget_blocks <= 0
+            ):
+                raise ValueError("hot_budget_blocks must be a positive integer.")
+            layer_hot_budgets = {index: hot_budget_blocks for index in csa_layers}
         if not isinstance(inherit_controller_pins, bool):
             raise ValueError("inherit_controller_pins must be boolean.")
         inherited_end_positions: set[int] = set()
@@ -749,7 +772,9 @@ class DeepSeekV4Cache:
         if inherit_controller_pins and not protected_blocks and online is not None:
             inherited_end_positions.update(online.protected_end_positions)
         stats: list[TieredMemoryStats] = []
-        for layer, layer_type in zip(self.layers, layer_types, strict=True):
+        for layer_index, (layer, layer_type) in enumerate(
+            zip(self.layers, layer_types, strict=True)
+        ):
             if layer_type != "compressed_sparse_attention":
                 continue
             if layer.tiered_compressor is not None:
@@ -772,7 +797,7 @@ class DeepSeekV4Cache:
             layer.tiered_compressor = TieredBlockStore.from_device_tensors(
                 values,
                 positions,
-                hot_budget_blocks=hot_budget_blocks,
+                hot_budget_blocks=layer_hot_budgets[layer_index],
                 device=values.device,
                 protected_blocks=layer_protected_blocks,
                 async_transfer=async_transfer,

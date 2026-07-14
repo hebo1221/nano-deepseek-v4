@@ -139,7 +139,13 @@ def cell_dir(root: Path, length: int, arm: str, ratio: float) -> Path:
     return root / str(length) / arm / f"ratio-{ratio:.2f}"
 
 
-def completed(cell: Path, runner_digest: str, manifest_digest: str, dataset_digest: str) -> bool:
+def completed(
+    cell: Path,
+    runner_digest: str,
+    manifest_digest: str,
+    dataset_digest: str,
+    causal_gate_digest: str,
+) -> bool:
     audit_path = cell / "audit.json"
     if not audit_path.is_file():
         if cell.exists():
@@ -152,6 +158,7 @@ def completed(cell: Path, runner_digest: str, manifest_digest: str, dataset_dige
         or audit.get("source", {}).get("implementation_sha256") != runner_digest
         or audit.get("experiment_manifest", {}).get("sha256") != manifest_digest
         or audit.get("dataset_manifest", {}).get("sha256") != dataset_digest
+        or audit.get("upstreams", {}).get("causal_gate_sha256") != causal_gate_digest
     ):
         raise ValueError(f"Existing P3 cell has stale provenance: {cell}")
     for artifact in audit["outputs"].values():
@@ -253,11 +260,12 @@ def main() -> None:
         "--causal-gate",
         type=Path,
         default=Path(
-            "research/adaptive_v4_memory/results/p2-causal-ablation.summary.json"
+            "artifacts/adaptive_v4_memory/paper_grade/p2-causal-ablation.summary.json"
         ),
     )
     args = parser.parse_args()
-    require_p3_sequence_gate(args.p2_matrix, args.causal_gate)
+    p3_decision = require_p3_sequence_gate(args.p2_matrix, args.causal_gate)
+    causal_gate_digest = sha256(args.causal_gate)
     if args.max_new_cells is not None and args.max_new_cells <= 0:
         raise ValueError("max-new-cells must be positive.")
     source_commit = git_head(Path.cwd())
@@ -300,6 +308,7 @@ def main() -> None:
             runner_digest,
             manifest_digest,
             datasets[item[0]][1],
+            causal_gate_digest,
         )
     ]
     if args.max_new_cells is not None:
@@ -409,6 +418,9 @@ def main() -> None:
                     "kvpress_revision": KVPRESS_REVISION,
                     "ruler_revision": RULER_REVISION,
                     "model_revision": MODEL_REVISION,
+                    "causal_gate": str(args.causal_gate),
+                    "causal_gate_sha256": causal_gate_digest,
+                    "p3_sequence_decision": p3_decision,
                 },
                 "experiment_manifest": {"path": str(args.manifest), "sha256": manifest_digest},
                 "dataset_manifest": {

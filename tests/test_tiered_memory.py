@@ -106,6 +106,39 @@ def test_tiered_csa_decode_matches_resident_cache():
     assert all(item.hot_blocks <= model.config.index_topk for item in tiered.tiered_memory_stats())
 
 
+def test_tiered_cache_accepts_exact_per_layer_hot_budgets():
+    model, cache = _tiered_model_state()
+    layer_types = model.config.layer_types
+    assert layer_types is not None
+    csa_layers = tuple(
+        index
+        for index, layer_type in enumerate(layer_types)
+        if layer_type == "compressed_sparse_attention"
+    )
+    budgets = {layer: offset + 1 for offset, layer in enumerate(csa_layers)}
+
+    cache.enable_csa_tiering(budgets)
+
+    stores = [
+        layer.tiered_compressor for layer in cache.layers if layer.tiered_compressor is not None
+    ]
+    assert [store.hot_budget_blocks for store in stores] == list(budgets.values())
+
+
+def test_tiered_cache_rejects_incomplete_per_layer_hot_budgets():
+    model, cache = _tiered_model_state()
+    layer_types = model.config.layer_types
+    assert layer_types is not None
+    csa_layers = [
+        index
+        for index, layer_type in enumerate(layer_types)
+        if layer_type == "compressed_sparse_attention"
+    ]
+
+    with pytest.raises(ValueError, match="exactly match"):
+        cache.enable_csa_tiering({layer: 1 for layer in csa_layers[:-1]})
+
+
 def test_tiered_cache_persistence_preserves_runtime_mode(tmp_path: Path):
     model, cache = _tiered_model_state()
     cache.enable_csa_tiering(model.config.index_topk)

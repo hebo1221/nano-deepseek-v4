@@ -176,8 +176,9 @@ quality-qualified operating points.
 For every policy difference:
 
 - report seed-level values and the mean, standard deviation, and range;
-- compute a paired cluster bootstrap 95% confidence interval with 10,000
-  resamples at the example/conversation level;
+- compute conversation-paired 95% intervals with 10,000 resamples as
+  within-seed descriptive uncertainty, and use the five independent training
+  checkpoint seed means as the clusters for primary inference;
 - report the paired absolute effect and relative effect where defined;
 - apply Holm-Bonferroni correction across primary workload families;
 - report the worst context-length and worst seed slice; and
@@ -198,7 +199,9 @@ clause is required separately at both 2x and 4x; one budget cannot rescue the
 other. The four primary scale-by-budget cells use a Bonferroni-corrected 98.75%
 training-seed-cluster bootstrap interval over the five independent seed means;
 conversation-paired intervals remain descriptive within a seed. Family slices
-use Holm-Bonferroni separately within each scale and budget. The
+use Holm-Bonferroni separately within each contrast, scale, and budget, and the
+12 pooled preregistered contrasts form a second Holm family within each scale
+and budget. The
 contrasts `fixed+pins - fixed` and `calibrated+pins - calibrated-no-pins`
 estimate the pin contribution; `calibrated-no-pins - fixed` and
 `calibrated+pins - fixed+pins` estimate adaptive-quota contribution; shuffled

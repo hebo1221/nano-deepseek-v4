@@ -5,8 +5,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-import pytest
-
 SCRIPTS = Path(__file__).resolve().parents[1] / "research/adaptive_v4_memory/scripts"
 sys.path.insert(0, str(SCRIPTS))
 
@@ -112,9 +110,13 @@ def test_p3_gate_requires_each_budget_scale_causal_cell(tmp_path: Path) -> None:
     }
     causal.write_text(json.dumps(payload))
 
-    require_p3_sequence_gate(matrix, causal)
+    decision = require_p3_sequence_gate(matrix, causal)
+    assert decision["causal_candidate_qualified"] is True
+    assert decision["baseline_evaluation_required"] is True
 
     payload["primary_causal_gate"]["cells"][0]["passed"] = False
+    payload["primary_causal_gate"]["passed"] = False
     causal.write_text(json.dumps(payload))
-    with pytest.raises(RuntimeError, match="P3 is deferred"):
-        require_p3_sequence_gate(matrix, causal)
+    decision = require_p3_sequence_gate(matrix, causal)
+    assert decision["causal_candidate_qualified"] is False
+    assert decision["baseline_evaluation_required"] is True

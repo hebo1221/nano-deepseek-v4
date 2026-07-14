@@ -185,16 +185,20 @@
     "prerequisite_runner": "research/adaptive_v4_memory/scripts/run_p2_causal_prerequisites.py",
     "factorial_runner": "research/adaptive_v4_memory/scripts/run_p2_causal_factorial_matrix.py",
     "audit_runner": "research/adaptive_v4_memory/scripts/summarize_p2_causal_factorial.py",
-    "causal_gate_output": "research/adaptive_v4_memory/results/p2-causal-ablation.summary.json",
+    "causal_gate_output": "artifacts/adaptive_v4_memory/paper_grade/p2-causal-ablation.summary.json",
     "raw_output_root": "artifacts/adaptive_v4_memory/paper_grade/p2_causal_factorial"
   },
   "statistics": {
     "bootstrap_resamples": 10000,
     "confidence_level": 0.95,
+    "independent_cluster": "training checkpoint seed",
+    "primary_inference": "resample the five independent training-seed means; conversation-paired intervals are descriptive within seed",
     "paired_randomization_resamples": 10000,
+    "paired_randomization_unit": "training-seed mean paired difference",
     "primary_four_cell_confidence_level": 0.9875,
     "primary_four_cell_correction": "Bonferroni over the 2 scales x 2 required budget cells using the five independent training-seed means as bootstrap clusters",
-    "family_correction": "Holm-Bonferroni separately within each scale and budget",
+    "family_correction": "Holm-Bonferroni over the 9 families separately within each contrast, scale, and budget",
+    "contrast_correction": "Holm-Bonferroni over all 12 preregistered contrasts separately within each scale and budget",
     "required_slices": ["scale", "budget", "training-seed", "family", "context"]
   },
   "central_gate": {

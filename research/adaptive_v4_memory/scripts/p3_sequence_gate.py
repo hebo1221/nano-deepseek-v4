@@ -20,8 +20,8 @@ def _load(path: Path, name: str) -> dict[str, Any]:
     return payload
 
 
-def require_p3_sequence_gate(p2_matrix: Path, causal_gate: Path) -> None:
-    """Refuse P3 work until frozen P2 and its causal gate are complete."""
+def require_p3_sequence_gate(p2_matrix: Path, causal_gate: Path) -> dict[str, Any]:
+    """Require completed P2 evidence and report causal-arm qualification for P3."""
     matrix = _load(p2_matrix, "P2 matrix summary")
     design = matrix.get("frozen_design", {})
     if (
@@ -49,22 +49,38 @@ def require_p3_sequence_gate(p2_matrix: Path, causal_gate: Path) -> None:
         or audit.get("all_physical_predictions_identical") is not True
         or gate.get("candidate") != "calibrated+pins"
         or gate.get("comparator") != "fixed+pins"
-        or gate.get("passed") is not True
         or tuple(gate.get("scales", ())) != EXPECTED_SCALES
         or tuple(gate.get("budgets", ())) != EXPECTED_BUDGETS
         or gate.get("seeds_per_scale") != len(EXPECTED_TRAINING_SEEDS)
         or gate.get("required_cells") != len(EXPECTED_SCALES) * len(EXPECTED_BUDGETS)
         or not isinstance(cells, list)
         or len(cells) != len(EXPECTED_SCALES) * len(EXPECTED_BUDGETS)
+        or {
+            (cell.get("scale"), cell.get("budget")) for cell in cells
+        }
+        != {
+            (scale, budget) for scale in EXPECTED_SCALES for budget in EXPECTED_BUDGETS
+        }
         or any(
-            cell.get("passed") is not True
-            or cell.get("all_seed_effects_positive") is not True
-            or cell.get("four_cell_corrected_lower_bound_positive") is not True
-            or cell.get("all_seed_memory_cells_within_one_percent") is not True
+            not isinstance(cell.get("passed"), bool)
+            or not isinstance(cell.get("all_seed_effects_positive"), bool)
+            or not isinstance(cell.get("four_cell_corrected_lower_bound_positive"), bool)
+            or not isinstance(cell.get("all_seed_memory_cells_within_one_percent"), bool)
             for cell in cells
         )
     ):
         raise RuntimeError(
-            "P3 is deferred until calibrated+pins beats fixed+pins at matched "
-            "measured hot memory under the preregistered 5-seed, 2-scale gate."
+            "P3 is deferred until the complete preregistered 5-seed, 2-scale "
+            "causal audit is available, including failed or bounded cells."
         )
+    qualified = gate.get("passed") is True and all(cell["passed"] for cell in cells)
+    return {
+        "causal_candidate": "calibrated+pins",
+        "causal_candidate_qualified": qualified,
+        "baseline_evaluation_required": True,
+        "interpretation": (
+            "qualified for transfer"
+            if qualified
+            else "causal arm withheld; native and fixed external baselines still proceed"
+        ),
+    }
