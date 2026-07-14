@@ -2,6 +2,10 @@
   "schema_version": 1,
   "experiment_id": "adaptive-v4-memory-p5-paper-package-v1",
   "status": "frozen_before_final_generation",
+  "requirement_traceability": {
+    "path": "research/adaptive_v4_memory/manifests/p5-requirement-traceability-v1.json",
+    "experiment_id": "adaptive-v4-memory-p5-requirement-traceability-v1"
+  },
   "evidence": {
     "p2_core": {
       "path": "artifacts/adaptive_v4_memory/paper_grade/p2-core-quality-matrix.summary.json",
@@ -246,6 +250,7 @@
   },
   "generated_files": [
     "table-evidence.csv",
+    "table-requirement-traceability.csv",
     "table-p2-quality-gate.csv",
     "table-p2-core-policy-summary.csv",
     "table-p2-core-effects.csv",

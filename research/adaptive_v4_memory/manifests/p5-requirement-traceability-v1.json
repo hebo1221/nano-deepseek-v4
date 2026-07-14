@@ -1,0 +1,284 @@
+{
+  "schema_version": 1,
+  "experiment_id": "adaptive-v4-memory-p5-requirement-traceability-v1",
+  "status": "frozen_before_final_generation",
+  "purpose": "Bind every user-visible P0-P5 requirement and completion condition to auditable evidence, boundary, execution, generated-output, or final-verification contracts without treating trace coverage as scientific success.",
+  "verification_contracts": {
+    "final-local-release-gate": {
+      "timing": "after-final-paper-package-generation",
+      "commands": [
+        ".venv/bin/ruff check nano_deepseek_v4 research/adaptive_v4_memory/scripts tests",
+        ".venv/bin/mypy nano_deepseek_v4 research/adaptive_v4_memory/scripts",
+        ".venv/bin/pytest -q",
+        ".venv/bin/python -m build",
+        ".venv/bin/twine check dist/*"
+      ],
+      "github_actions": "required_before_goal_completion",
+      "github_actions_current_status": "disabled_manually",
+      "interpretation": "Local release gates and a successful GitHub Actions CI run on the final source are mandatory. Package generation may record the current disabled state, but it does not satisfy or waive the CI completion requirement."
+    }
+  },
+  "requirements": [
+    {
+      "id": "P0.1",
+      "phase": "P0",
+      "requirement": "Reclassify M5 as a pilot negative result for the tested one-token global M2 implementation.",
+      "sources": [
+        {"kind": "evidence", "name": "m5_one_token_pilot"},
+        {"kind": "boundary-manifest", "name": "paper_grade_study"}
+      ]
+    },
+    {
+      "id": "P0.2",
+      "phase": "P0",
+      "requirement": "Freeze a claim boundary that forbids general adaptive-memory impossibility claims.",
+      "sources": [{"kind": "boundary-manifest", "name": "paper_grade_study"}]
+    },
+    {
+      "id": "P0.3",
+      "phase": "P0",
+      "requirement": "Preregister splits, seeds, sample sizes, tests, versions, digests, early stopping, and failure reporting.",
+      "sources": [
+        {"kind": "boundary-manifest", "name": "paper_grade_study"},
+        {"kind": "boundary-manifest", "name": "experiment_scale_audit"}
+      ]
+    },
+    {
+      "id": "P1.1",
+      "phase": "P1",
+      "requirement": "Retain native, memory-matched fixed top-k/top-p, offline oracle M2, and one-token global M2 baselines.",
+      "sources": [
+        {"kind": "evidence", "name": "p2_causal"},
+        {"kind": "boundary-manifest", "name": "p2_causal_factorial"}
+      ]
+    },
+    {
+      "id": "P1.2",
+      "phase": "P1",
+      "requirement": "Evaluate an online same-token layer-local controller.",
+      "sources": [
+        {"kind": "evidence", "name": "p2_core"},
+        {"kind": "boundary-manifest", "name": "p2_causal_factorial"}
+      ]
+    },
+    {
+      "id": "P1.3",
+      "phase": "P1",
+      "requirement": "Evaluate hierarchical layer quotas separately from lightweight learned lookahead.",
+      "sources": [
+        {"kind": "evidence", "name": "p2_causal"},
+        {"kind": "evidence", "name": "p1_online_learned_lookahead"},
+        {"kind": "boundary-manifest", "name": "online_learned_lookahead"}
+      ]
+    },
+    {
+      "id": "P1.4",
+      "phase": "P1",
+      "requirement": "Run score, reuse, cross-layer, refresh, protected-pin, and fallback ablations.",
+      "sources": [
+        {"kind": "evidence", "name": "p2_causal"},
+        {"kind": "boundary-manifest", "name": "p2_causal_factorial"}
+      ]
+    },
+    {
+      "id": "P1.5",
+      "phase": "P1",
+      "requirement": "Verify deterministic replay, cache lifecycle, physical tier budget, and dense recovery contracts.",
+      "sources": [
+        {"kind": "evidence", "name": "p2_causal"},
+        {"kind": "execution-audit", "name": "p2_core_parallel_equivalence"},
+        {"kind": "execution-audit", "name": "p2_causal_parallel_equivalence"}
+      ]
+    },
+    {
+      "id": "P2.1",
+      "phase": "P2",
+      "requirement": "Use at least five independent training seeds at S55 and S151.",
+      "sources": [
+        {"kind": "evidence", "name": "p2_core"},
+        {"kind": "evidence", "name": "p2_causal"}
+      ]
+    },
+    {
+      "id": "P2.2",
+      "phase": "P2",
+      "requirement": "Evaluate at least 1,000 examples per seed-scale-workload family.",
+      "sources": [{"kind": "evidence", "name": "p2_core"}]
+    },
+    {
+      "id": "P2.3",
+      "phase": "P2",
+      "requirement": "Cover all nine preregistered synthetic workload families.",
+      "sources": [{"kind": "evidence", "name": "p2_core"}]
+    },
+    {
+      "id": "P2.4",
+      "phase": "P2",
+      "requirement": "Evaluate at least five context lengths and multiple hot-memory budgets.",
+      "sources": [
+        {"kind": "evidence", "name": "p2_core"},
+        {"kind": "boundary-manifest", "name": "paper_grade_study"}
+      ]
+    },
+    {
+      "id": "P2.5",
+      "phase": "P2",
+      "requirement": "Report paired bootstrap intervals, effects, paired tests, worst slices, and seed variance.",
+      "sources": [
+        {"kind": "evidence", "name": "p2_core"},
+        {"kind": "evidence", "name": "p2_causal"}
+      ]
+    },
+    {
+      "id": "P3.1",
+      "phase": "P3",
+      "requirement": "Freeze licensed/versioned harnesses for RULER, LongBench v2, SCBench, LongMemEval, and MRCR.",
+      "sources": [
+        {"kind": "evidence", "name": "p3_ruler"},
+        {"kind": "evidence", "name": "p3_natural"},
+        {"kind": "boundary-manifest", "name": "natural_suite"}
+      ]
+    },
+    {
+      "id": "P3.2",
+      "phase": "P3",
+      "requirement": "Compare strong KV-cache baselines on an available real long-context model.",
+      "sources": [{"kind": "evidence", "name": "p3_natural"}]
+    },
+    {
+      "id": "P3.3",
+      "phase": "P3",
+      "requirement": "Run official DeepSeek-V4 FlashMemory/native only when weights and runtime are available.",
+      "sources": [{"kind": "boundary-manifest", "name": "official_deepseek_v4"}]
+    },
+    {
+      "id": "P3.4",
+      "phase": "P3",
+      "requirement": "If official resources are unavailable, freeze GPU, storage, cost, and reproduction blockers without relabeling compatible-model evidence.",
+      "sources": [
+        {"kind": "boundary-manifest", "name": "official_deepseek_v4"},
+        {"kind": "boundary-manifest", "name": "production_runtime_blocker"}
+      ]
+    },
+    {
+      "id": "P3.5",
+      "phase": "P3",
+      "requirement": "Report instruction retention, refusal, leakage, and protected-prefix stress separately.",
+      "sources": [
+        {"kind": "evidence", "name": "p3_safety"},
+        {"kind": "evidence", "name": "p3_natural_safety"},
+        {"kind": "evidence", "name": "p3_ifeval"},
+        {"kind": "evidence", "name": "p3_longsafety"}
+      ]
+    },
+    {
+      "id": "P4.1",
+      "phase": "P4",
+      "requirement": "Evaluate the registered context, batch, concurrency, and generation matrix including a 500K attempt.",
+      "sources": [
+        {"kind": "evidence", "name": "p4_reference_systems"},
+        {"kind": "evidence", "name": "p4_production_systems"},
+        {"kind": "evidence", "name": "p4_500k_context"}
+      ]
+    },
+    {
+      "id": "P4.2",
+      "phase": "P4",
+      "requirement": "Use warmups and at least 30 timed repetitions with TTFT, TPOT, p50/p95/p99, and throughput.",
+      "sources": [
+        {"kind": "evidence", "name": "p4_reference_systems"},
+        {"kind": "evidence", "name": "p4_production_systems"}
+      ]
+    },
+    {
+      "id": "P4.3",
+      "phase": "P4",
+      "requirement": "Measure HBM, host memory, fragmentation, transfers, misses, and controller/index time.",
+      "sources": [
+        {"kind": "evidence", "name": "p4_reference_systems"},
+        {"kind": "evidence", "name": "p4_production_systems"}
+      ]
+    },
+    {
+      "id": "P4.4",
+      "phase": "P4",
+      "requirement": "Separate reference PyTorch from production runtime evidence and verify kernel/runtime contracts.",
+      "sources": [
+        {"kind": "evidence", "name": "p4_reference_systems"},
+        {"kind": "evidence", "name": "p4_production_systems"},
+        {"kind": "boundary-manifest", "name": "production_runtime_blocker"}
+      ]
+    },
+    {
+      "id": "P5.1",
+      "phase": "P5",
+      "requirement": "Regenerate every table and figure from digest-bound raw artifacts.",
+      "sources": [{"kind": "generated-output", "name": "artifact-index.json"}]
+    },
+    {
+      "id": "P5.2",
+      "phase": "P5",
+      "requirement": "Write a paper-style report separating success, bounded, negative, and unverified results.",
+      "sources": [{"kind": "generated-output", "name": "paper-report.md"}]
+    },
+    {
+      "id": "P5.3",
+      "phase": "P5",
+      "requirement": "Complete code, manifests, schemas, tests, runners, statistics, and reproduction guidance.",
+      "sources": [
+        {"kind": "generated-output", "name": "artifact-index.json"},
+        {"kind": "generated-output", "name": "paper-report.md"},
+        {"kind": "boundary-manifest", "name": "paper_grade_study"}
+      ]
+    },
+    {
+      "id": "P5.4",
+      "phase": "P5",
+      "requirement": "Pass Ruff, mypy, full pytest, build, twine, and GitHub Actions CI on the final source.",
+      "sources": [{"kind": "verification-contract", "name": "final-local-release-gate"}]
+    },
+    {
+      "id": "C.1",
+      "phase": "completion",
+      "requirement": "Report the core 5-seed by 2-scale by 1,000-example-per-family Tier-S result with uncertainty.",
+      "sources": [{"kind": "evidence", "name": "p2_core"}]
+    },
+    {
+      "id": "C.2",
+      "phase": "completion",
+      "requirement": "Render an explicit Pareto verdict for calibrated+pins versus the strongest fixed+pins baseline.",
+      "sources": [{"kind": "evidence", "name": "p2_causal"}]
+    },
+    {
+      "id": "C.3",
+      "phase": "completion",
+      "requirement": "Execute at least one natural-language long-context suite on a real model.",
+      "sources": [{"kind": "evidence", "name": "p3_natural"}]
+    },
+    {
+      "id": "C.4",
+      "phase": "completion",
+      "requirement": "Report repeated systems measurements including tail latency and failures.",
+      "sources": [
+        {"kind": "evidence", "name": "p4_reference_systems"},
+        {"kind": "evidence", "name": "p4_production_systems"}
+      ]
+    },
+    {
+      "id": "C.5",
+      "phase": "completion",
+      "requirement": "If official V4 is unexecuted, preserve a complete external-resource blocker and execution manifest.",
+      "sources": [{"kind": "boundary-manifest", "name": "official_deepseek_v4"}]
+    },
+    {
+      "id": "C.6",
+      "phase": "completion",
+      "requirement": "Push an overclaim-safe paper package and reproducibility artifacts after final local release gates.",
+      "sources": [
+        {"kind": "generated-output", "name": "paper-report.md"},
+        {"kind": "generated-output", "name": "artifact-index.json"},
+        {"kind": "verification-contract", "name": "final-local-release-gate"}
+      ]
+    }
+  ]
+}

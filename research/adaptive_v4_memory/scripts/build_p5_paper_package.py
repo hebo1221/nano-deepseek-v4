@@ -13,6 +13,29 @@ from typing import Any, cast
 
 ALLOWED_CLASSES = {"success", "bounded-result", "negative-result", "unverified"}
 P4_EXPECTED_CELLS = 216
+REQUIRED_TRACEABILITY_IDS = {
+    *(f"P0.{index}" for index in range(1, 4)),
+    *(f"P1.{index}" for index in range(1, 6)),
+    *(f"P2.{index}" for index in range(1, 6)),
+    *(f"P3.{index}" for index in range(1, 6)),
+    *(f"P4.{index}" for index in range(1, 5)),
+    *(f"P5.{index}" for index in range(1, 5)),
+    *(f"C.{index}" for index in range(1, 7)),
+}
+TRACEABILITY_SOURCE_KINDS = {
+    "evidence",
+    "execution-audit",
+    "boundary-manifest",
+    "generated-output",
+    "verification-contract",
+}
+FINAL_RELEASE_COMMANDS = [
+    ".venv/bin/ruff check nano_deepseek_v4 research/adaptive_v4_memory/scripts tests",
+    ".venv/bin/mypy nano_deepseek_v4 research/adaptive_v4_memory/scripts",
+    ".venv/bin/pytest -q",
+    ".venv/bin/python -m build",
+    ".venv/bin/twine check dist/*",
+]
 BOUNDARY_EXPERIMENT_IDS = {
     "paper_grade_study": "adaptive-v4-memory-paper-grade-v1",
     "experiment_scale_audit": "adaptive-v4-memory-experiment-scale-audit-v1",
@@ -217,6 +240,123 @@ def _validate_execution_audit(name: str, path: Path, contract: dict[str, Any]) -
                 f"{name} {artifact_field} artifact {coordinate}",
             )
     return payload
+
+
+def _traceability_rows(
+    payload: dict[str, Any],
+    package_manifest: dict[str, Any],
+    classifications: dict[str, str],
+) -> list[dict[str, Any]]:
+    _require(
+        payload.get("experiment_id") == "adaptive-v4-memory-p5-requirement-traceability-v1",
+        "Wrong P5 requirement traceability manifest.",
+    )
+    raw_contracts = payload.get("verification_contracts")
+    _require(isinstance(raw_contracts, dict), "Missing traceability verification contracts.")
+    contracts = cast(dict[str, Any], raw_contracts)
+    raw_release = contracts.get("final-local-release-gate")
+    _require(isinstance(raw_release, dict), "Missing final local release-gate contract.")
+    release = cast(dict[str, Any], raw_release)
+    _require(
+        release.get("commands") == FINAL_RELEASE_COMMANDS
+        and release.get("github_actions") == "required_before_goal_completion"
+        and release.get("github_actions_current_status") == "disabled_manually"
+        and release.get("timing") == "after-final-paper-package-generation",
+        "Final local release-gate contract drifted.",
+    )
+    raw_requirements = payload.get("requirements")
+    _require(isinstance(raw_requirements, list), "Missing traceability requirements.")
+    requirements = cast(list[Any], raw_requirements)
+    ids = [row.get("id") for row in requirements if isinstance(row, dict)]
+    _require(
+        len(ids) == len(REQUIRED_TRACEABILITY_IDS)
+        and len(set(ids)) == len(ids)
+        and set(ids) == REQUIRED_TRACEABILITY_IDS,
+        "P0-P5 completion traceability coverage drifted.",
+    )
+    evidence_names = set(cast(dict[str, Any], package_manifest["evidence"]))
+    execution_names = set(cast(dict[str, Any], package_manifest["execution_audits"]))
+    boundary_names = set(cast(dict[str, Any], package_manifest["boundary_manifests"]))
+    generated_names = set(cast(list[str], package_manifest["generated_files"]))
+    contract_names = set(contracts)
+    known = {
+        "evidence": evidence_names,
+        "execution-audit": execution_names,
+        "boundary-manifest": boundary_names,
+        "generated-output": generated_names,
+        "verification-contract": contract_names,
+    }
+    rows: list[dict[str, Any]] = []
+    for raw_requirement in requirements:
+        _require(isinstance(raw_requirement, dict), "Malformed traceability requirement.")
+        requirement = cast(dict[str, Any], raw_requirement)
+        requirement_id = requirement.get("id")
+        _require(isinstance(requirement_id, str), "Malformed traceability requirement id.")
+        requirement_id = cast(str, requirement_id)
+        expected_phase = "completion" if requirement_id.startswith("C.") else requirement_id[:2]
+        _require(
+            requirement.get("phase") == expected_phase,
+            f"Traceability phase drifted for {requirement_id}.",
+        )
+        description = requirement.get("requirement")
+        _require(
+            isinstance(description, str) and len(description.strip()) >= 20,
+            f"Traceability requirement text is incomplete for {requirement_id}.",
+        )
+        description = cast(str, description)
+        raw_sources = requirement.get("sources")
+        _require(
+            isinstance(raw_sources, list) and len(raw_sources) > 0,
+            f"Traceability sources are missing for {requirement_id}.",
+        )
+        sources = cast(list[Any], raw_sources)
+        seen_sources: set[tuple[str, str]] = set()
+        for raw_source in sources:
+            _require(isinstance(raw_source, dict), f"Malformed source for {requirement_id}.")
+            source = cast(dict[str, Any], raw_source)
+            raw_kind = source.get("kind")
+            raw_name = source.get("name")
+            _require(
+                isinstance(raw_kind, str)
+                and raw_kind in TRACEABILITY_SOURCE_KINDS
+                and isinstance(raw_name, str),
+                f"Unknown traceability source for {requirement_id}.",
+            )
+            kind = cast(str, raw_kind)
+            name = cast(str, raw_name)
+            coordinate = (kind, name)
+            _require(
+                name in known[kind] and coordinate not in seen_sources,
+                f"Unbound or duplicate traceability source for {requirement_id}: {coordinate}",
+            )
+            seen_sources.add(coordinate)
+            if kind == "evidence":
+                binding_status = "digest-bound-evidence"
+                scientific_classification = classifications[name]
+            elif kind == "execution-audit":
+                binding_status = "validated-execution-audit"
+                scientific_classification = "not-applicable"
+            elif kind == "boundary-manifest":
+                binding_status = "validated-claim-boundary"
+                scientific_classification = classifications.get(name, "not-applicable")
+            elif kind == "generated-output":
+                binding_status = "declared-digest-bound-output"
+                scientific_classification = "not-applicable"
+            else:
+                binding_status = "scheduled-final-verification"
+                scientific_classification = "not-applicable"
+            rows.append(
+                {
+                    "requirement_id": requirement_id,
+                    "phase": expected_phase,
+                    "requirement": description,
+                    "source_kind": kind,
+                    "source_name": name,
+                    "binding_status": binding_status,
+                    "scientific_classification": scientific_classification,
+                }
+            )
+    return rows
 
 
 def _classify_500k_preflight(payload: dict[str, Any]) -> str:
@@ -1111,6 +1251,7 @@ def _p4_500k_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
 def _report(
     *,
     classifications: dict[str, str],
+    traceability_rows: list[dict[str, Any]],
     p2_core: dict[str, Any],
     m5_one_token_pilot: dict[str, Any],
     m3_offline_learned_risk_pilot: dict[str, Any],
@@ -1135,7 +1276,7 @@ def _report(
     evidence_lines = "\n".join(
         f"| {row['name']} | {classifications.get(row['name'], 'unverified')} | `{row['sha256']}` |"
         for row in inputs
-        if row.get("kind") != "execution-audit"
+        if row.get("kind") not in {"execution-audit", "traceability-contract"}
     )
     execution_lines = "\n".join(
         f"| {row['name']} | verified | `{row['sha256']}` |"
@@ -1161,6 +1302,16 @@ mechanical and deliberately narrower than the motivating hypothesis.
 
 These audits bind the serial/parallel equivalence probes and their raw child artifacts.
 They validate execution semantics and do not receive a scientific conclusion class.
+
+## Requirement traceability
+
+`table-requirement-traceability.csv` binds all
+{len({row["requirement_id"] for row in traceability_rows})} frozen P0-P5 requirements and
+completion conditions through {len(traceability_rows)} source links. Trace coverage means that
+the relevant evidence, boundary, execution audit, generated output, or final verification
+contract is explicit; it does not upgrade any scientific conclusion class. The final local
+release gate remains scheduled after package generation. GitHub Actions is currently disabled
+manually, remains mandatory before goal completion, and is never reported as passed or waived.
 
 ## Experiment volume
 
@@ -1270,6 +1421,21 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
     )
     loaded: dict[str, dict[str, Any]] = {}
     inputs: list[dict[str, Any]] = []
+    traceability_contract = manifest.get("requirement_traceability", {})
+    traceability_path = Path(traceability_contract.get("path", ""))
+    traceability = _load(traceability_path)
+    _require(
+        traceability.get("experiment_id") == traceability_contract.get("experiment_id"),
+        "P5 requirement traceability contract drifted.",
+    )
+    inputs.append(
+        {
+            "name": "requirement_traceability",
+            "kind": "traceability-contract",
+            "path": str(traceability_path),
+            "sha256": sha256(traceability_path),
+        }
+    )
     for name, contract in manifest["evidence"].items():
         path = Path(contract["path"])
         loaded[name] = _validate_evidence(name, path, contract)
@@ -1310,16 +1476,30 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         loaded["p4_reference_systems"],
         loaded["p4_production_systems"],
     )
+    traceability_rows = _traceability_rows(traceability, manifest, classes)
     output_root.mkdir(parents=True, exist_ok=True)
     evidence_rows = [
         {**row, "classification": classes.get(row["name"], "unverified")}
         for row in inputs
-        if row.get("kind") != "execution-audit"
+        if row.get("kind") not in {"execution-audit", "traceability-contract"}
     ]
     _write_csv(
         output_root / "table-evidence.csv",
         evidence_rows,
         ["name", "classification", "path", "sha256"],
+    )
+    _write_csv(
+        output_root / "table-requirement-traceability.csv",
+        traceability_rows,
+        [
+            "requirement_id",
+            "phase",
+            "requirement",
+            "source_kind",
+            "source_name",
+            "binding_status",
+            "scientific_classification",
+        ],
     )
     quality = _p2_quality_rows(loaded["p2_core"])
     _write_csv(output_root / "table-p2-quality-gate.csv", quality, list(quality[0]))
@@ -1449,6 +1629,7 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
     )
     report = _report(
         classifications=classes,
+        traceability_rows=traceability_rows,
         p2_core=loaded["p2_core"],
         m5_one_token_pilot=loaded["m5_one_token_pilot"],
         m3_offline_learned_risk_pilot=loaded["m3_offline_learned_risk_pilot"],

@@ -262,7 +262,46 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
         "table-p2-causal-worst-slices.csv",
         "table-p2-causal-physical-memory.csv",
         "table-p2-causal-offline-oracle.csv",
+        "table-requirement-traceability.csv",
     }.issubset(manifest["generated_files"])
+
+
+def test_p5_traceability_covers_every_requirement_and_fails_closed() -> None:
+    root = Path(__file__).resolve().parents[1]
+    package_manifest = json.loads(
+        (root / "research/adaptive_v4_memory/manifests/p5-paper-package-v1.json").read_text()
+    )
+    contract = package_manifest["requirement_traceability"]
+    traceability = json.loads((root / contract["path"]).read_text())
+    classes = {name: "success" for name in package_manifest["evidence"]}
+
+    rows = package._traceability_rows(traceability, package_manifest, classes)
+
+    assert {row["requirement_id"] for row in rows} == package.REQUIRED_TRACEABILITY_IDS
+    assert len(package.REQUIRED_TRACEABILITY_IDS) == 32
+    assert all(row["binding_status"] for row in rows)
+    release = [row for row in rows if row["requirement_id"] == "P5.4"]
+    assert release == [
+        {
+            "requirement_id": "P5.4",
+            "phase": "P5",
+            "requirement": "Pass Ruff, mypy, full pytest, build, twine, and GitHub Actions CI on the final source.",
+            "source_kind": "verification-contract",
+            "source_name": "final-local-release-gate",
+            "binding_status": "scheduled-final-verification",
+            "scientific_classification": "not-applicable",
+        }
+    ]
+
+    incomplete = json.loads(json.dumps(traceability))
+    incomplete["requirements"].pop()
+    with pytest.raises(ValueError, match="coverage drifted"):
+        package._traceability_rows(incomplete, package_manifest, classes)
+
+    unbound = json.loads(json.dumps(traceability))
+    unbound["requirements"][0]["sources"][0]["name"] = "missing-evidence"
+    with pytest.raises(ValueError, match="Unbound or duplicate"):
+        package._traceability_rows(unbound, package_manifest, classes)
 
 
 def test_p5_execution_audit_binds_probe_artifacts(tmp_path: Path) -> None:
