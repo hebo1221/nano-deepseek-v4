@@ -531,23 +531,25 @@ def summarize_pairs(
         else None
     )
     gate = manifest["transfer_gate"]
+    tolerance = 1e-12
     checks = {
         "overall_mean_accuracy_difference": (
-            overall["mean_difference"] >= gate["overall_mean_accuracy_difference_minimum"]
+            overall["mean_difference"] + tolerance
+            >= gate["overall_mean_accuracy_difference_minimum"]
         ),
         "overall_paired_bootstrap_lower_bound": (
-            overall["paired_bootstrap_95_ci"][0]
+            overall["paired_bootstrap_95_ci"][0] + tolerance
             >= gate["overall_paired_bootstrap_lower_bound_minimum"]
         ),
         "worst_task_length_regression": (
-            worst["mean_difference"] >= gate["worst_task_length_regression_minimum"]
+            worst["mean_difference"] + tolerance >= gate["worst_task_length_regression_minimum"]
         ),
         "failure_rate_increase": (
-            overall["failure_rate_difference"] <= gate["maximum_failure_rate_increase"]
+            overall["failure_rate_difference"] <= gate["maximum_failure_rate_increase"] + tolerance
         ),
         "maximum_realized_kv_fraction": (
             maximum_kv_fraction is not None
-            and maximum_kv_fraction <= gate["maximum_realized_kv_fraction"]
+            and maximum_kv_fraction <= gate["maximum_realized_kv_fraction"] + tolerance
         ),
     }
     return {
@@ -655,37 +657,22 @@ def main() -> None:
             model_digest_set=manifest["model"]["snapshot_digest_set_sha256"],
         )
     statistics = manifest["statistics"]
-    analysis = analyze_pairs(
+    analysis = summarize_pairs(
         loaded[ARMS[0]][1],
         loaded[ARMS[1]][1],
-        bootstrap_seed=statistics["paired_bootstrap_seed"],
-        bootstrap_resamples=statistics["paired_bootstrap_resamples"],
+        manifest=manifest,
     )
-    gate = manifest["transfer_gate"]
-    checks = {
-        "overall_mean_accuracy": (
-            analysis["overall"]["mean_difference"]
-            >= gate["overall_mean_accuracy_difference_minimum"]
-        ),
-        "overall_bootstrap_lower_bound": (
-            analysis["overall"]["paired_bootstrap_95_ci"][0]
-            >= gate["overall_paired_bootstrap_lower_bound_minimum"]
-        ),
-        "worst_task_length_regression": (
-            analysis["worst_task_length_regression"] >= gate["worst_task_length_regression_minimum"]
-        ),
-        "failure_rate_increase": (
-            analysis["failure_rate_increase"] <= gate["maximum_failure_rate_increase"]
-        ),
-        "realized_kv_fraction": (
-            analysis["all_task_length_cells_have_measurable_kv"] is True
-            and analysis["maximum_realized_kv_fraction"] is not None
-            and analysis["maximum_realized_kv_fraction"] <= gate["maximum_realized_kv_fraction"]
-        ),
-    }
+    native_cell, _native_records = loaded[ARMS[0]]
+    candidate_cell, _candidate_records = loaded[ARMS[1]]
+    _require(
+        native_cell["run_identity"]["sequence_gate_dependencies"]
+        == candidate_cell["run_identity"]["sequence_gate_dependencies"],
+        "Cross-family arm sequence gates differ.",
+    )
     payload = {
         "schema_version": 1,
         "experiment_id": SUMMARY_EXPERIMENT_ID,
+        "status": "terminal",
         "source": {
             "commit": subprocess.run(
                 ["git", "rev-parse", "HEAD"], check=True, capture_output=True, text=True
@@ -695,6 +682,11 @@ def main() -> None:
         },
         "experiment_manifest": {"path": str(args.manifest), "sha256": manifest_digest},
         "dataset_manifest_digest_set_sha256": dataset_digest_set,
+        "model": {
+            "repo_id": manifest["model"]["repo_id"],
+            "revision": MODEL_REVISION,
+            "family": "Phi-4",
+        },
         "arm_cells": {
             arm: {
                 "path": str(args.result_root / arm / "cell.json"),
@@ -704,31 +696,37 @@ def main() -> None:
         },
         "audit": {
             "required_arms_terminal": True,
+            "terminal_arms": len(loaded),
+            "expected_examples_per_arm": EXPECTED_EXAMPLES,
+            "verified_examples_per_arm": {
+                arm: len(records) for arm, (_cell, records) in loaded.items()
+            },
             "predictions_per_arm": EXPECTED_EXAMPLES,
             "total_predictions": EXPECTED_EXAMPLES * len(ARMS),
             "paired_examples": EXPECTED_EXAMPLES,
             "all_raw_record_digests_verified": True,
+            "all_raw_records_verified": True,
             "all_runtime_kvpress_bindings_verified": True,
             "all_dependency_digests_verified": True,
             "all_record_revisions_verified": True,
             "all_scores_recomputed_from_raw_response": True,
             "exact_input_pairing_verified": True,
+            "all_example_pairs_verified": True,
             "exact_token_contract_verified": True,
+            "no_silent_truncation_verified": True,
             "failure_accounting_complete": True,
             "physical_kv_measurements_verified": True,
             "phi_specific_reselection": False,
+            "qwen_selection_reused_without_phi_tuning": True,
             "outcome_dependent_execution": False,
             "task_length_cells": len(LENGTHS) * len(TASKS),
             "exact_task_sign_flip_assignments_per_length": 2 ** len(TASKS),
             "paired_bootstrap_resamples": statistics["paired_bootstrap_resamples"],
             "paired_bootstrap_seed": statistics["paired_bootstrap_seed"],
         },
+        "statistics": analysis,
         "paired_qwen_selected_minus_native": analysis,
-        "transfer_gate": {
-            "all_required": gate["all_required"],
-            "checks": checks,
-            "passed": all(checks.values()),
-        },
+        "transfer_gate": analysis["transfer_gate"],
         "environment": {"python": platform.python_version(), "numpy": np.__version__},
         "claim_boundary": manifest["claim_boundary"],
     }

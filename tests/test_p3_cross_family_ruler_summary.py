@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import sys
 from pathlib import Path
 
@@ -96,6 +97,29 @@ def test_cross_family_exact_sign_flip_is_exhaustive() -> None:
     assert result["task_clusters"] == 3
     assert result["exact_assignments"] == 8
     assert 0.0 <= result["two_sided_p"] <= 1.0
+
+
+def test_cross_family_summary_preserves_paper_table_schema(monkeypatch: pytest.MonkeyPatch) -> None:
+    native = _records(summary.ARMS[0], score=0.8, hot_bytes=1_000)
+    candidate = _records(summary.ARMS[1], score=0.795, hot_bytes=500)
+    manifest = json.loads(
+        (
+            Path(__file__).resolve().parents[1]
+            / "research/adaptive_v4_memory/manifests/p3-cross-family-ruler-transfer-v1.json"
+        ).read_text()
+    )
+    manifest["statistics"]["paired_bootstrap_resamples"] = 100
+    monkeypatch.setattr(summary, "EXPECTED_EXAMPLES", len(native))
+
+    result = summary.summarize_pairs(native, candidate, manifest=manifest)
+
+    assert result["overall"]["paired_examples"] == 39
+    assert len(result["by_length_with_exact_task_cluster_inference"]) == 3
+    assert len(result["by_task"]) == 13
+    assert len(result["by_task_length"]) == 39
+    assert result["memory"]["maximum_task_length_realized_kv_fraction"] == 0.5
+    assert result["transfer_gate"]["passed"] is True
+    assert result["paired_record_digest"]
 
 
 def test_cross_family_sequence_dependencies_are_rehashed(tmp_path: Path) -> None:
