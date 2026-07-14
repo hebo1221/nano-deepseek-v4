@@ -182,6 +182,16 @@ def test_p5_strict_audit_fields_match_the_raw_verifier_contract() -> None:
     }
 
 
+def test_analysis_implementation_is_git_index_bound_and_fails_on_untracked_path() -> None:
+    metadata = core.analysis_implementation((core.CORE_ANALYSIS_PATH,))
+
+    assert metadata["paths"] == [core.CORE_ANALYSIS_PATH]
+    assert metadata["tracked_file_count"] == 1
+    assert len(metadata["git_index_sha256"]) == 64
+    with pytest.raises(ValueError, match="untracked or reordered"):
+        core.analysis_implementation(("research/adaptive_v4_memory/untracked.py",))
+
+
 def test_bootstrap_paired_mean_is_deterministic_and_uses_paired_units() -> None:
     values = [0.25] * 20
     first = bootstrap_paired_mean(values, label="constant-test", resamples=1_000)

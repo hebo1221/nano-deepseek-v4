@@ -44,6 +44,9 @@ def _p2_core_evidence(*, passed: bool = False) -> dict[str, object]:
 def _p2_confirmatory_evidence(*, passed: bool = False) -> dict[str, object]:
     return {
         "source": {"dirty": False},
+        "analysis_implementation": package._analysis_implementation_metadata(
+            package.P2_ANALYSIS_PATHS["p2_core_confirmatory"]
+        ),
         "audit": {
             "unique_shards": 8_100,
             "independent_seed_clusters_per_cell": 9,
@@ -65,6 +68,9 @@ def _p2_confirmatory_evidence(*, passed: bool = False) -> dict[str, object]:
 def _p2_causal_confirmatory_evidence(*, passed: bool = False) -> dict[str, object]:
     return {
         "source": {"dirty": False},
+        "analysis_implementation": package._analysis_implementation_metadata(
+            package.P2_ANALYSIS_PATHS["p2_causal_confirmatory"]
+        ),
         "audit": {
             "unique_shards": 16_200,
             "independent_seed_clusters_per_cell": 9,
@@ -386,7 +392,7 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
     assert causal_confirmatory["required_sections"]["confirmatory_inference"][
         "exact_sign_assignments"
     ] == 512
-    assert manifest["evidence"]["p3_ruler"]["required_audit"]["total_predictions"] == 253500
+    assert manifest["evidence"]["p3_ruler"]["required_audit"]["total_predictions"] == 370500
     assert manifest["evidence"]["p3_safety"]["required_audit"]["examples_accounted_per_arm"] == 1200
     assert manifest["evidence"]["p4_reference_systems"]["required_audit"]["terminal_cells"] == 216
     assert all(
@@ -660,6 +666,21 @@ def test_confirmatory_core_requires_pooling_and_exact_inference(
         package._validate_evidence("p2_core_confirmatory", path, contract)
 
     assert package._classify_validated_confirmatory_core({"quality_gate": []}) == "unverified"
+
+
+def test_p2_summary_rejects_analysis_implementation_drift(tmp_path: Path) -> None:
+    evidence = _p2_confirmatory_evidence(passed=True)
+    evidence["experiment_id"] = "p2-nine-seed-core-matrix-audit-v1"
+    evidence["analysis_implementation"]["git_index_sha256"] = "0" * 64  # type: ignore[index]
+    path = tmp_path / "analysis-drift.json"
+    path.write_text(json.dumps(evidence))
+    contract = {
+        "experiment_id": "p2-nine-seed-core-matrix-audit-v1",
+        "required_audit": {"unique_shards": 8_100},
+    }
+
+    with pytest.raises(ValueError, match="analysis implementation drifted"):
+        package._validate_evidence("p2_core_confirmatory", path, contract)
 
 
 def test_confirmatory_causal_requires_pooling_and_exact_inference(

@@ -14,6 +14,8 @@ from typing import Any, cast
 import evaluate_p2_causal_factorial_shard as shard
 import numpy as np
 from summarize_p2_core_matrix import (
+    CORE_ANALYSIS_PATH,
+    analysis_implementation,
     bootstrap_paired_mean,
     holm_bonferroni,
     seed_cluster_statistics,
@@ -22,6 +24,9 @@ from summarize_p2_core_matrix import (
 from nano_deepseek_v4 import PAPER_GRADE_WORKLOAD_FAMILIES
 
 EXPECTED_SHARDS = 9_000
+CAUSAL_ANALYSIS_PATH = (
+    "research/adaptive_v4_memory/scripts/summarize_p2_causal_factorial.py"
+)
 PRIMARY_CANDIDATE = "calibrated+pins"
 PRIMARY_COMPARATOR = "fixed+pins"
 PRIMARY_CELL_CONFIDENCE = 1.0 - 0.05 / 4.0
@@ -1067,6 +1072,9 @@ def main() -> None:
         "schema_version": 1,
         "experiment_id": "p2-causal-ablation-audit-v1",
         "source": {"commit": source_commit, "dirty": False},
+        "analysis_implementation": analysis_implementation(
+            (CORE_ANALYSIS_PATH, CAUSAL_ANALYSIS_PATH)
+        ),
         "raw_matrix": {"path": str(args.matrix), "sha256": sha256(args.matrix)},
         "design_manifest": {
             "path": str(design_manifest_path),

@@ -105,6 +105,25 @@ SCALE_AUDIT_SOURCE_MANIFESTS = {
     ),
 }
 SCALE_AUDIT_CORE_DESIGN = Path("research/adaptive_v4_memory/scripts/evaluate_p2_core_shard.py")
+P2_ANALYSIS_PATHS = {
+    "p2_core": (
+        "research/adaptive_v4_memory/scripts/summarize_p2_core_matrix.py",
+    ),
+    "p2_core_confirmatory": (
+        "research/adaptive_v4_memory/scripts/summarize_p2_core_matrix.py",
+        "research/adaptive_v4_memory/scripts/summarize_p2_seed_extension.py",
+    ),
+    "p2_causal": (
+        "research/adaptive_v4_memory/scripts/summarize_p2_causal_factorial.py",
+        "research/adaptive_v4_memory/scripts/summarize_p2_core_matrix.py",
+    ),
+    "p2_causal_confirmatory": (
+        "research/adaptive_v4_memory/scripts/summarize_p2_causal_factorial.py",
+        "research/adaptive_v4_memory/scripts/summarize_p2_core_matrix.py",
+        "research/adaptive_v4_memory/scripts/summarize_p2_seed_extension.py",
+        "research/adaptive_v4_memory/scripts/summarize_p2_seed_extension_causal.py",
+    ),
+}
 
 
 def sha256(path: Path) -> str:
@@ -125,6 +144,30 @@ def _load(path: Path) -> dict[str, Any]:
     payload = json.loads(path.read_text())
     _require(isinstance(payload, dict), f"P5 input is not a JSON object: {path}")
     return payload
+
+
+def _analysis_implementation_metadata(paths: tuple[str, ...]) -> dict[str, Any]:
+    """Recompute the Git-index binding for code that produced P2 statistics."""
+
+    canonical_paths = tuple(sorted(paths))
+    tracked = subprocess.run(
+        ["git", "ls-files", "-s", "--", *canonical_paths],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    observed = tuple(
+        line.split("\t", 1)[1] for line in tracked.splitlines() if "\t" in line
+    )
+    _require(
+        observed == canonical_paths,
+        f"P2 analysis implementation paths are untracked or reordered: {observed}",
+    )
+    return {
+        "paths": list(canonical_paths),
+        "tracked_file_count": len(canonical_paths),
+        "git_index_sha256": hashlib.sha256(tracked.encode()).hexdigest(),
+    }
 
 
 def _literal_assignment(path: Path, name: str) -> Any:
@@ -769,6 +812,13 @@ def _validate_evidence(name: str, path: Path, contract: dict[str, Any]) -> dict[
                 observed.get(field) == expected,
                 f"{name} section {section}.{field} drifted.",
             )
+    analysis_paths = P2_ANALYSIS_PATHS.get(name)
+    if analysis_paths is not None:
+        _require(
+            payload.get("analysis_implementation")
+            == _analysis_implementation_metadata(analysis_paths),
+            f"{name} analysis implementation drifted.",
+        )
     return payload
 
 
@@ -2099,6 +2149,8 @@ mechanical and deliberately narrower than the motivating hypothesis.
 
 These audits bind the serial/parallel equivalence probes and their raw child artifacts.
 They validate execution semantics and do not receive a scientific conclusion class.
+Every P2 statistical summary is also bound to the exact Git-index blobs of the analysis
+implementations that produced it; P5 fails closed if those implementations drift.
 
 ## Requirement traceability
 

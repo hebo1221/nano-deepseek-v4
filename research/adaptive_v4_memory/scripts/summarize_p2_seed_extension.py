@@ -41,6 +41,10 @@ POOLING_FIELDS = (
     "core_policies",
     "chunk_size_by_scale",
 )
+ANALYSIS_PATHS = (
+    primary_summary.CORE_ANALYSIS_PATH,
+    "research/adaptive_v4_memory/scripts/summarize_p2_seed_extension.py",
+)
 
 
 @dataclass
@@ -193,6 +197,9 @@ def _run_compatible_summary(
         compat_path.unlink(missing_ok=True)
     payload = json.loads(output.read_text(encoding="utf-8"))
     payload["experiment_id"] = output_experiment_id
+    payload["analysis_implementation"] = primary_summary.analysis_implementation(
+        ANALYSIS_PATHS
+    )
     payload["raw_matrix"] = final_raw_matrix
     payload["audit"]["independent_seed_clusters_per_cell"] = len(training_seeds)
     payload["audit"]["minimum_attainable_two_sided_seed_p"] = 2.0 / (

@@ -38,6 +38,12 @@ POOLING_FIELDS = (
     "physical_arms",
     "chunk_size_by_scale",
 )
+ANALYSIS_PATHS = (
+    primary_summary.CORE_ANALYSIS_PATH,
+    primary_summary.CAUSAL_ANALYSIS_PATH,
+    "research/adaptive_v4_memory/scripts/summarize_p2_seed_extension.py",
+    "research/adaptive_v4_memory/scripts/summarize_p2_seed_extension_causal.py",
+)
 
 
 def _require(condition: bool, message: str) -> None:
@@ -237,6 +243,9 @@ def _run_summary(
         compat.unlink(missing_ok=True)
     result = json.loads(output.read_text(encoding="utf-8"))
     result["experiment_id"] = experiment_id
+    result["analysis_implementation"] = primary_summary.analysis_implementation(
+        ANALYSIS_PATHS
+    )
     result["raw_matrix"] = {"path": str(matrix), "sha256": extension.sha256(matrix)}
     result["audit"]["independent_seed_clusters_per_cell"] = len(training_seeds)
     result["audit"]["minimum_attainable_two_sided_seed_p"] = 2.0 / (

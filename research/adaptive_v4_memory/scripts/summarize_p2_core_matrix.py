@@ -26,6 +26,31 @@ STRICT_RAW_AUDIT = {
 }
 CONFIDENCE_LEVEL = 0.95
 BUDGETS = (1, 2, 4)
+CORE_ANALYSIS_PATH = "research/adaptive_v4_memory/scripts/summarize_p2_core_matrix.py"
+
+
+def analysis_implementation(paths: tuple[str, ...]) -> dict[str, Any]:
+    """Bind analysis code independently from the raw evaluator implementation."""
+
+    canonical_paths = tuple(sorted(paths))
+    tracked = subprocess.run(
+        ["git", "ls-files", "-s", "--", *canonical_paths],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    observed = tuple(
+        line.split("\t", 1)[1] for line in tracked.splitlines() if "\t" in line
+    )
+    if observed != canonical_paths:
+        raise ValueError(
+            f"Analysis implementation paths are untracked or reordered: {observed}"
+        )
+    return {
+        "paths": list(canonical_paths),
+        "tracked_file_count": len(canonical_paths),
+        "git_index_sha256": hashlib.sha256(tracked.encode()).hexdigest(),
+    }
 
 
 def sha256(path: Path) -> str:
@@ -875,6 +900,7 @@ def main() -> None:
         "schema_version": 1,
         "experiment_id": "p2-core-quality-matrix-audit-v1",
         "source": {"commit": source_commit, "dirty": False},
+        "analysis_implementation": analysis_implementation((CORE_ANALYSIS_PATH,)),
         "raw_matrix": {"path": str(args.matrix), "sha256": sha256(args.matrix)},
         "implementation_digest": implementation_digest,
         "audit": {
