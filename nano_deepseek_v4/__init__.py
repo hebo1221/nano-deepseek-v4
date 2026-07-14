@@ -22,7 +22,9 @@ from .causal_memory_controller import (
     SameTokenControllerConfig,
     SameTokenControllerStats,
     SameTokenLayerAction,
+    SameTokenLayerQuotaCalibration,
     SameTokenTrainingFreeController,
+    calibrate_same_token_layer_quotas,
 )
 from .checkpoint import (
     CheckpointLoadReport,
@@ -167,8 +169,10 @@ __all__ = [
     "CausalLMOutput",
     "SameTokenControllerConfig",
     "SameTokenControllerStats",
+    "SameTokenLayerQuotaCalibration",
     "SameTokenLayerAction",
     "SameTokenTrainingFreeController",
+    "calibrate_same_token_layer_quotas",
     # Adaptive V4 Memory M0 trace
     "MEMORY_TRACE_SCHEMA_VERSION",
     "AdaptiveMemoryTraceCollector",

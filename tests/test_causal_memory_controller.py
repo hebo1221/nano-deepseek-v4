@@ -11,9 +11,12 @@ from nano_deepseek_v4 import (
     DeepSeekV4Cache,
     DeepSeekV4Config,
     DeepSeekV4ForCausalLM,
+    RankedBlock,
+    ReplayQuery,
     SameTokenControllerConfig,
     SameTokenTrainingFreeController,
     TrainingFreeControllerConfig,
+    calibrate_same_token_layer_quotas,
     load_deepseek_v4_cache,
     save_deepseek_v4_cache,
 )
@@ -64,6 +67,60 @@ def _select_layer(
         native_mask=torch.tensor([[[True, True, False, False]]]),
         block_bytes=64,
     )
+
+
+def _calibration_query(layer: int, scores: tuple[float, ...]) -> ReplayQuery:
+    return ReplayQuery(
+        trace_id="calibration-only",
+        request_id="request-0",
+        layer_index=layer,
+        batch_index=0,
+        query_position=31,
+        phase="decode",
+        logical_block_count=len(scores),
+        block_bytes=64,
+        native_block_ids=(),
+        ranked_blocks=tuple(
+            RankedBlock(block_id=f"l{layer}:b0:e{index * 4 + 3}", score=score)
+            for index, score in enumerate(scores)
+        ),
+    )
+
+
+def test_same_token_quota_calibration_is_bounded_and_digest_bound():
+    signal = _signal_config(global_budget=6, dense_budget=8)
+    queries = (
+        _calibration_query(2, (10.0, 0.0, 0.0, 0.0)),
+        _calibration_query(5, (1.0, 1.0, 1.0, 1.0)),
+    )
+
+    calibrated = calibrate_same_token_layer_quotas(queries, signal, quantile=1.0)
+    repeated = calibrate_same_token_layer_quotas(queries, signal, quantile=1.0)
+
+    assert calibrated == repeated
+    assert calibrated.layer_budgets == ((2, 1), (5, 4))
+    assert calibrated.dense_layer_budgets == ((2, 4), (5, 4))
+    assert sum(dict(calibrated.layer_budgets).values()) <= signal.global_block_budget
+    assert sum(dict(calibrated.dense_layer_budgets).values()) <= signal.dense_fallback_block_budget
+    assert len(calibrated.calibration_digest) == 64
+
+    changed = calibrate_same_token_layer_quotas(
+        (*queries, _calibration_query(2, (1.0, 1.0, 1.0, 1.0))),
+        signal,
+        quantile=1.0,
+    )
+    assert changed.calibration_digest != calibrated.calibration_digest
+
+
+def test_same_token_quota_calibration_preserves_uniform_minimum_floor():
+    queries = (
+        _calibration_query(2, (10.0, 0.0, 0.0, 0.0)),
+        _calibration_query(5, (1.0, 1.0, 1.0, 1.0)),
+    )
+    signal = _signal_config(global_budget=2, dense_budget=2)
+    calibrated = calibrate_same_token_layer_quotas(queries, signal)
+    assert calibrated.layer_budgets == ((2, 1), (5, 1))
+    assert calibrated.dense_layer_budgets == ((2, 1), (5, 1))
 
 
 @pytest.mark.parametrize("cross_layer", [False, True])
@@ -141,6 +198,36 @@ def test_same_token_controller_drives_current_tier_fetch():
     assert tiered.same_token_memory_controller is not None
     assert tiered.same_token_memory_controller.last_actions[0].query_position == 32
     assert tiered.tiered_memory_stats()[0].hot_blocks == 1
+
+
+def test_same_token_protected_positions_are_pinned_in_physical_tier():
+    torch.manual_seed(33)
+    config = DeepSeekV4Config(num_nextn_predict_layers=0)
+    model = DeepSeekV4ForCausalLM(config).eval()
+    prompt = torch.randint(0, config.vocab_size, (1, 32))
+    cache = model(prompt, use_cache=True).past_key_values
+    assert cache is not None
+    cache.enable_same_token_memory_controller(_model_config(), protected_end_positions=(3,))
+    cache.enable_csa_tiering(hot_budget_blocks=1)
+
+    stores = [
+        layer.tiered_compressor for layer in cache.layers if layer.tiered_compressor is not None
+    ]
+    assert stores
+    assert all(store.protected_blocks == (0,) for store in stores)
+    assert all(store.hot_indices == (0,) for store in stores)
+
+    ablated = model(prompt, use_cache=True).past_key_values
+    assert ablated is not None
+    ablated.enable_same_token_memory_controller(
+        replace(_model_config(), enable_protected_pins=False),
+        protected_end_positions=(3,),
+    )
+    ablated.enable_csa_tiering(hot_budget_blocks=1)
+    assert all(
+        layer.tiered_compressor is None or layer.tiered_compressor.protected_blocks == ()
+        for layer in ablated.layers
+    )
 
 
 def test_same_token_controller_can_govern_prefill_and_match_fixed_topk():

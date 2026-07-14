@@ -519,9 +519,7 @@ class DeepSeekV4Cache:
         self.online_memory_controller: OnlineTrainingFreeController | None = None
         self.same_token_memory_controller: SameTokenTrainingFreeController | None = None
 
-    def _attach_online_controller(
-        self, controller: OnlineTrainingFreeController | None
-    ) -> None:
+    def _attach_online_controller(self, controller: OnlineTrainingFreeController | None) -> None:
         self.online_memory_controller = controller
         for layer in self.layers:
             layer.online_memory_controller = controller
@@ -625,11 +623,7 @@ class DeepSeekV4Cache:
                 )
             other._attach_same_token_controller(
                 SameTokenTrainingFreeController.stack(
-                    [
-                        controller
-                        for controller in same_token_controllers
-                        if controller is not None
-                    ]
+                    [controller for controller in same_token_controllers if controller is not None]
                 )
             )
         else:
@@ -708,9 +702,7 @@ class DeepSeekV4Cache:
             if layer_type == "compressed_sparse_attention"
         )
         if config.csa_layer_indices != csa_layers:
-            raise ValueError(
-                "Same-token layer quotas do not match the model's CSA layer schedule."
-            )
+            raise ValueError("Same-token layer quotas do not match the model's CSA layer schedule.")
         self._attach_same_token_controller(
             SameTokenTrainingFreeController(
                 config,
@@ -730,6 +722,7 @@ class DeepSeekV4Cache:
         hot_budget_blocks: int,
         *,
         protected_blocks: tuple[int, ...] = (),
+        inherit_controller_pins: bool = True,
         async_transfer: bool = True,
     ) -> list[TieredMemoryStats]:
         """Move CSA value blocks to canonical pinned-CPU storage.
@@ -741,6 +734,20 @@ class DeepSeekV4Cache:
         layer_types = self.config.layer_types
         if layer_types is None:
             raise RuntimeError("config.layer_types was not initialized.")
+        if not isinstance(inherit_controller_pins, bool):
+            raise ValueError("inherit_controller_pins must be boolean.")
+        inherited_end_positions: set[int] = set()
+        same_token = self.same_token_memory_controller
+        if (
+            inherit_controller_pins
+            and not protected_blocks
+            and same_token is not None
+            and same_token.config.enable_protected_pins
+        ):
+            inherited_end_positions.update(same_token.protected_end_positions)
+        online = self.online_memory_controller
+        if inherit_controller_pins and not protected_blocks and online is not None:
+            inherited_end_positions.update(online.protected_end_positions)
         stats: list[TieredMemoryStats] = []
         for layer, layer_type in zip(self.layers, layer_types, strict=True):
             if layer_type != "compressed_sparse_attention":
@@ -751,14 +758,25 @@ class DeepSeekV4Cache:
             positions = layer.compressed_positions.pop("compressor", None)
             if values is None or positions is None:
                 continue
+            layer_protected_blocks = protected_blocks
+            if inherited_end_positions:
+                positions_cpu = positions.detach().to(device="cpu")
+                layer_protected_blocks = tuple(
+                    block_index
+                    for block_index in range(positions.shape[1])
+                    if any(
+                        int(positions_cpu[batch_index, block_index]) in inherited_end_positions
+                        for batch_index in range(positions.shape[0])
+                    )
+                )
             layer.tiered_compressor = TieredBlockStore.from_device_tensors(
                 values,
                 positions,
                 hot_budget_blocks=hot_budget_blocks,
                 device=values.device,
-                protected_blocks=protected_blocks,
+                protected_blocks=layer_protected_blocks,
                 async_transfer=async_transfer,
-                initial_hot_blocks=protected_blocks,
+                initial_hot_blocks=layer_protected_blocks,
             )
             stats.append(layer.tiered_compressor.stats())
         return stats
