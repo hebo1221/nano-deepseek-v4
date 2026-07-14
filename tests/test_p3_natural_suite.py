@@ -24,7 +24,11 @@ from summarize_p3_natural_benchmark import (  # noqa: E402
     audit_arm,
     summarize_benchmark,
 )
-from summarize_p3_natural_suite import BENCHMARK_IDS, summarize  # noqa: E402
+from summarize_p3_natural_suite import (  # noqa: E402
+    BENCHMARK_IDS,
+    audit_provenance_inventories,
+    summarize,
+)
 from validate_p3_natural_suite_manifest import validate_manifest  # noqa: E402
 
 
@@ -573,6 +577,12 @@ def test_natural_suite_audit_requires_all_examples_and_baselines(tmp_path: Path)
     assert payload["audit"]["safety_stress_terminal"] is True
     assert payload["audit"]["natural_safety_terminal"] is True
     assert payload["audit"]["all_paired_quality_contrasts_verified"] is True
+    assert payload["audit"]["dataset_license_revision_inventory_verified"] is True
+    assert payload["audit"]["upstream_code_license_revision_inventory_verified"] is True
+    assert payload["audit"]["ruler_license_revision_manifest_verified"] is True
+    assert payload["audit"]["model_license_revision_manifest_verified"] is True
+    assert payload["provenance"]["dataset_inventory"]["benchmarks_verified"] == 4
+    assert payload["provenance"]["source_inventory"]["benchmarks_verified"] == 3
     assert payload["supplemental_safety"]["examples_per_required_arm"] == 1200
     assert payload["audit"]["minimum_protocol_examples_accounted_per_arm"] == 45_289
     assert payload["audit"]["accounted_examples_by_required_arm"] == {
@@ -589,6 +599,98 @@ def test_natural_suite_audit_requires_all_examples_and_baselines(tmp_path: Path)
         == row["expected_examples_per_required_arm"]
         for row in payload["benchmarks"].values()
     )
+
+
+def test_natural_suite_audit_rejects_dataset_revision_drift(tmp_path: Path) -> None:
+    root = Path(__file__).resolve().parents[1]
+    manifest = root / "research/adaptive_v4_memory/manifests/p3-natural-suite-v1.json"
+    paths = _natural_benchmark_summaries(tmp_path, manifest)
+    dataset_inventory, source_inventory = _provenance_inventories(tmp_path, manifest, paths)
+    payload = json.loads(dataset_inventory.read_text())
+    payload["benchmarks"]["MRCR"]["revision"] = "0" * 40
+    dataset_inventory.write_text(json.dumps(payload))
+
+    with pytest.raises(ValueError, match="MRCR dataset license or revision drifted"):
+        audit_provenance_inventories(
+            manifest=json.loads(manifest.read_text()),
+            manifest_digest=_digest(manifest),
+            dataset_inventory_path=dataset_inventory,
+            source_inventory_path=source_inventory,
+        )
+
+
+def test_natural_suite_audit_rejects_upstream_license_drift(tmp_path: Path) -> None:
+    root = Path(__file__).resolve().parents[1]
+    manifest = root / "research/adaptive_v4_memory/manifests/p3-natural-suite-v1.json"
+    paths = _natural_benchmark_summaries(tmp_path, manifest)
+    dataset_inventory, source_inventory = _provenance_inventories(tmp_path, manifest, paths)
+    payload = json.loads(source_inventory.read_text())
+    payload["benchmarks"]["LongMemEval"]["license"] = "unknown"
+    source_inventory.write_text(json.dumps(payload))
+
+    with pytest.raises(ValueError, match="LongMemEval upstream source license or revision drifted"):
+        audit_provenance_inventories(
+            manifest=json.loads(manifest.read_text()),
+            manifest_digest=_digest(manifest),
+            dataset_inventory_path=dataset_inventory,
+            source_inventory_path=source_inventory,
+        )
+
+
+def test_natural_provenance_rejects_dataset_source_and_model_license_drift(
+    tmp_path: Path,
+) -> None:
+    root = Path(__file__).resolve().parents[1]
+    manifest_path = root / "research/adaptive_v4_memory/manifests/p3-natural-suite-v1.json"
+    manifest = json.loads(manifest_path.read_text())
+    paths = _natural_benchmark_summaries(tmp_path, manifest_path)
+    dataset_inventory, source_inventory = _provenance_inventories(
+        tmp_path, manifest_path, paths
+    )
+    manifest_digest = _digest(manifest_path)
+
+    audit_provenance_inventories(
+        manifest=manifest,
+        manifest_digest=manifest_digest,
+        dataset_inventory_path=dataset_inventory,
+        source_inventory_path=source_inventory,
+    )
+
+    datasets = json.loads(dataset_inventory.read_text())
+    datasets["benchmarks"]["SCBench"]["license"] = "wrong-license"
+    dataset_inventory.write_text(json.dumps(datasets))
+    with pytest.raises(ValueError, match="dataset license or revision drifted"):
+        audit_provenance_inventories(
+            manifest=manifest,
+            manifest_digest=manifest_digest,
+            dataset_inventory_path=dataset_inventory,
+            source_inventory_path=source_inventory,
+        )
+
+    dataset_inventory, source_inventory = _provenance_inventories(
+        tmp_path, manifest_path, paths
+    )
+    sources = json.loads(source_inventory.read_text())
+    sources["benchmarks"]["LongBench-v2"]["files"][0]["sha256"] = "0" * 64
+    source_inventory.write_text(json.dumps(sources))
+    with pytest.raises(ValueError, match="upstream source file provenance drifted"):
+        audit_provenance_inventories(
+            manifest=manifest,
+            manifest_digest=manifest_digest,
+            dataset_inventory_path=dataset_inventory,
+            source_inventory_path=source_inventory,
+        )
+
+    source_inventory = _provenance_inventories(tmp_path, manifest_path, paths)[1]
+    wrong_model = deepcopy(manifest)
+    wrong_model["model"]["license"] = "wrong-license"
+    with pytest.raises(ValueError, match="model license or revision contract drifted"):
+        audit_provenance_inventories(
+            manifest=wrong_model,
+            manifest_digest=manifest_digest,
+            dataset_inventory_path=dataset_inventory,
+            source_inventory_path=source_inventory,
+        )
 
 
 def test_natural_suite_audit_rejects_unaccounted_failure(tmp_path: Path) -> None:

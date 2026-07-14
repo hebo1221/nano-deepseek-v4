@@ -127,7 +127,7 @@
       "generation_seed": 42,
       "scorer": {
         "path": "evaluation/benchmarks/ruler/calculate_metrics.py",
-        "sha256": "1df51402a3948f14d96e1fe87b1a4aff10f619f81f80f8840d8e0118fc9b"
+        "sha256": "1df51402a394b1348f14d96e1fe87b1a4aff10f619f81f80f8840d8e0118fc9b"
       },
       "migration": "Regenerate the same frozen tasks with the Qwen3-4B tokenizer; do not reuse Qwen3-1.7B token-length labels for 64K or 128K.",
       "execution": {

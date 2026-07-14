@@ -509,6 +509,10 @@ def classify_evidence(
         and natural_audit.get("all_failure_accounting_complete") is True
         and natural_audit.get("all_source_implementations_verified") is True
         and natural_audit.get("all_paired_quality_contrasts_verified") is True
+        and natural_audit.get("dataset_license_revision_inventory_verified") is True
+        and natural_audit.get("upstream_code_license_revision_inventory_verified") is True
+        and natural_audit.get("ruler_license_revision_manifest_verified") is True
+        and natural_audit.get("model_license_revision_manifest_verified") is True
         and natural_audit.get("safety_stress_terminal") is True
         and natural_audit.get("natural_safety_terminal") is True
         and natural_audit.get("benchmarks_terminal") == 5

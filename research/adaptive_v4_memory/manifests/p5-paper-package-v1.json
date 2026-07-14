@@ -123,6 +123,7 @@
         "all_paired_quality_contrasts_verified": true,
         "dataset_license_revision_inventory_verified": true,
         "upstream_code_license_revision_inventory_verified": true,
+        "ruler_license_revision_manifest_verified": true,
         "model_license_revision_manifest_verified": true
       }
     },

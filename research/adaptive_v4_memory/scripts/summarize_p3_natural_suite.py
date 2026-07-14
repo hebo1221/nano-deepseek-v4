@@ -466,13 +466,30 @@ def audit_provenance_inventories(
             f"{benchmark} upstream source file provenance drifted.",
         )
     model = manifest["model"]
+    ruler = manifest["benchmarks"]["RULER"]
+    ruler_revision = ruler.get("upstream_revision")
+    ruler_scorer = ruler.get("scorer", {})
     _require(
-        isinstance(model.get("revision"), str)
-        and len(model["revision"]) == 40
+        isinstance(ruler.get("upstream_repository"), str)
+        and ruler["upstream_repository"].startswith("https://github.com/")
+        and isinstance(ruler_revision, str)
+        and len(ruler_revision) == 40
+        and set(ruler_revision) <= set("0123456789abcdef")
+        and ruler.get("license") == "apache-2.0"
+        and isinstance(ruler_scorer.get("path"), str),
+        "RULER upstream license or revision contract drifted.",
+    )
+    _sha256_value(ruler_scorer.get("sha256"), "RULER scorer")
+    model_revision = model.get("revision")
+    _require(
+        isinstance(model_revision, str)
+        and len(model_revision) == 40
+        and set(model_revision) <= set("0123456789abcdef")
         and model.get("license") == "apache-2.0"
-        and isinstance(model.get("snapshot_digest_set_sha256"), str),
+        and isinstance(model.get("repo_id"), str),
         "Natural model license or revision contract drifted.",
     )
+    _sha256_value(model.get("snapshot_digest_set_sha256"), "natural model snapshot set")
     return {
         "dataset_inventory": {
             "path": str(dataset_inventory_path),
@@ -486,6 +503,8 @@ def audit_provenance_inventories(
         },
         "model_license": model["license"],
         "model_revision": model["revision"],
+        "ruler_upstream_license": ruler["license"],
+        "ruler_upstream_revision": ruler["upstream_revision"],
     }
 
 
@@ -594,6 +613,7 @@ def summarize(
             "all_paired_quality_contrasts_verified": True,
             "dataset_license_revision_inventory_verified": True,
             "upstream_code_license_revision_inventory_verified": True,
+            "ruler_license_revision_manifest_verified": True,
             "model_license_revision_manifest_verified": True,
             "safety_stress_terminal": True,
             "natural_safety_terminal": True,
