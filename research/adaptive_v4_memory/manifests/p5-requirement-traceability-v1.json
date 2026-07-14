@@ -59,9 +59,7 @@
       "phase": "P1",
       "requirement": "Evaluate an online same-token layer-local controller.",
       "sources": [
-        {"kind": "evidence", "name": "p2_core"},
         {"kind": "evidence", "name": "p2_causal"},
-        {"kind": "evidence", "name": "m5_one_token_pilot"},
         {"kind": "boundary-manifest", "name": "p2_causal_factorial"}
       ]
     },
