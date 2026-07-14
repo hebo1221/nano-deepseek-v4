@@ -540,7 +540,12 @@ def main() -> None:
     rows = load_rows(dataset_path, prompt_template)
     if adaptive_manifest is not None:
         _require(
-            adaptive_manifest["benchmark"]["examples_per_arm"] == len(rows),
+            adaptive_manifest["benchmark"]["predictions_per_arm"] == len(rows)
+            and adaptive_manifest["model"]["snapshot_digest_set_sha256"]
+            == manifest["model"]["snapshot_digest_set_sha256"]
+            and adaptive_manifest["benchmark"]["dataset_sha256"]
+            == manifest["benchmarks"][BENCHMARK]["dataset"]["files"][0]["sha256"]
+            and adaptive_manifest["benchmark"]["prompt_sha256"] == sha256(prompt_path),
             "Adaptive LongBench v2 example count drifted from the base suite.",
         )
     runner_digest = sha256(Path(__file__).resolve())
