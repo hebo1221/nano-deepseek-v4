@@ -37,7 +37,12 @@ def implementation_digest() -> str:
         text=True,
     ).stdout
     paths = {line.split("\t", 1)[1] for line in tree.splitlines() if "\t" in line}
-    missing = [path for path in IMPLEMENTATION_PATHS if path not in paths]
+    missing = [
+        path
+        for path in IMPLEMENTATION_PATHS
+        if path not in paths
+        and not any(candidate.startswith(path.rstrip("/") + "/") for candidate in paths)
+    ]
     if missing:
         raise RuntimeError(f"Untracked P4 500K implementation paths: {missing}")
     return hashlib.sha256(tree.encode()).hexdigest()

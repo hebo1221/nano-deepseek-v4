@@ -38,9 +38,7 @@ from nano_deepseek_v4 import (
 BUDGET_LABELS = ("2x", "4x")
 PRIMARY_ARM_NAMES = tuple(arm.name for arm in PRIMARY_ARMS)
 COMPONENT_ARM_NAMES = tuple(arm.name for arm in COMPONENT_ARMS)
-SUPPLEMENTAL_BASELINE_ARM_NAMES = tuple(
-    arm.name for arm in SUPPLEMENTAL_BASELINE_ARMS
-)
+SUPPLEMENTAL_BASELINE_ARM_NAMES = tuple(arm.name for arm in SUPPLEMENTAL_BASELINE_ARMS)
 ALL_ARM_NAMES = (
     *PRIMARY_ARM_NAMES,
     *SUPPLEMENTAL_BASELINE_ARM_NAMES,
@@ -70,10 +68,7 @@ EXPECTED_EQUIVALENCE_RECORDS = (
 )
 MEMORY_MATCH_EXAMPLES_PER_FAMILY_CONTEXT = 20
 MEMORY_MATCH_MIXTURE_DENOMINATOR = (
-    len(PAPER_GRADE_WORKLOAD_FAMILIES)
-    * len(CONTEXTS)
-    * len(REPLICATES)
-    * BATCHES_PER_SHARD
+    len(PAPER_GRADE_WORKLOAD_FAMILIES) * len(CONTEXTS) * len(REPLICATES) * BATCHES_PER_SHARD
 )
 IMPLEMENTATION_PATHS = (
     "nano_deepseek_v4",
@@ -109,7 +104,12 @@ def implementation_digest() -> str:
     if not tracked_tree:
         raise RuntimeError("Causal-factorial implementation paths are not tracked by git.")
     tracked_paths = {line.split("\t", 1)[1] for line in tracked_tree.splitlines() if "\t" in line}
-    missing = [path for path in IMPLEMENTATION_PATHS if path not in tracked_paths]
+    missing = [
+        path
+        for path in IMPLEMENTATION_PATHS
+        if path not in tracked_paths
+        and not any(candidate.startswith(path.rstrip("/") + "/") for candidate in tracked_paths)
+    ]
     if missing:
         raise RuntimeError(f"Untracked causal-factorial implementation paths: {missing}")
     return hashlib.sha256(tracked_tree.encode()).hexdigest()
@@ -182,9 +182,7 @@ def schedule_batch_index(
     ) * BATCHES_PER_SHARD + local_batch_index
 
 
-def _equivalence(
-    path: Path, scale: str, *, training_seed: int | None = None
-) -> dict[str, Any]:
+def _equivalence(path: Path, scale: str, *, training_seed: int | None = None) -> dict[str, Any]:
     payload = json.loads(path.read_text())
     validation = payload.get("validation", {})
     if (
@@ -194,8 +192,7 @@ def _equivalence(
         or tuple(validation.get("budgets", ())) != BUDGET_LABELS
         or tuple(validation.get("arms", ())) != ALL_ARM_NAMES
         or validation.get("chunk_size") != CHUNK_SIZE_BY_SCALE[scale]
-        or validation.get("examples_per_family_context")
-        != EQUIVALENCE_EXAMPLES_PER_FAMILY_CONTEXT
+        or validation.get("examples_per_family_context") != EQUIVALENCE_EXAMPLES_PER_FAMILY_CONTEXT
         or validation.get("expected_records") != EXPECTED_EQUIVALENCE_RECORDS
         or validation.get("observed_records") != EXPECTED_EQUIVALENCE_RECORDS
         or validation.get("all_predictions_identical") is not True
@@ -250,10 +247,9 @@ def _memory_match(
     ):
         raise ValueError("A passing calibration-only physical hot-memory match is required.")
     calibration_metadata = payload.get("calibration_artifact", {})
-    if (
-        calibration_metadata.get("path") != str(calibration_path)
-        or calibration_metadata.get("sha256") != sha256(calibration_path)
-    ):
+    if calibration_metadata.get("path") != str(calibration_path) or calibration_metadata.get(
+        "sha256"
+    ) != sha256(calibration_path):
         raise ValueError("Physical hot-memory match calibration artifact drifted.")
     raw = json.loads(raw_path.read_text())
     if (
@@ -269,8 +265,7 @@ def _memory_match(
         != MEMORY_MATCH_EXAMPLES_PER_FAMILY_CONTEXT
         or raw.get("protocol", {}).get("heldout_mixture_denominator")
         != MEMORY_MATCH_MIXTURE_DENOMINATOR
-        or tuple(raw.get("protocol", {}).get("families", ()))
-        != PAPER_GRADE_WORKLOAD_FAMILIES
+        or tuple(raw.get("protocol", {}).get("families", ())) != PAPER_GRADE_WORKLOAD_FAMILIES
         or tuple(raw.get("protocol", {}).get("contexts", ())) != CONTEXTS
     ):
         raise ValueError("Physical hot-memory match raw audit failed.")
@@ -419,9 +414,7 @@ def run_sequential_physical(
     return {
         "predictions": predictions.cpu().tolist() if predictions is not None else None,
         "correct": (
-            predictions.eq(workload.targets).cpu().tolist()
-            if predictions is not None
-            else None
+            predictions.eq(workload.targets).cpu().tolist() if predictions is not None else None
         ),
         "wall_ms": wall_ms,
         "accounting": asdict(accounting),
@@ -478,9 +471,7 @@ def evaluate_shard(
         value_start=80,
         value_count=64,
     )
-    arms, arm_metadata = build_arm_configs(
-        calibration, budget_label, fixed_match=memory_match
-    )
+    arms, arm_metadata = build_arm_configs(calibration, budget_label, fixed_match=memory_match)
     records: list[dict[str, Any]] = []
     batch_metrics: list[dict[str, Any]] = []
     physical_measurements: list[dict[str, Any]] = []
@@ -505,9 +496,7 @@ def evaluate_shard(
         rotation = schedule_index % len(ALL_ARM_NAMES)
         execution_order = (*ALL_ARM_NAMES[rotation:], *ALL_ARM_NAMES[:rotation])
         quality_runs: dict[str, dict[str, Any]] = {}
-        quality_config_cache: dict[
-            str, tuple[str, SameTokenControllerConfig, dict[str, Any]]
-        ] = {}
+        quality_config_cache: dict[str, tuple[str, SameTokenControllerConfig, dict[str, Any]]] = {}
         for execution_index, arm_name in enumerate(execution_order):
             built_arm = arms[arm_name]
             config = built_arm.config_for_batch(schedule_index)
@@ -577,9 +566,7 @@ def evaluate_shard(
             *PHYSICAL_ARM_NAMES[physical_rotation:],
             *PHYSICAL_ARM_NAMES[:physical_rotation],
         )
-        physical_config_cache: dict[
-            str, tuple[str, SameTokenControllerConfig, dict[str, Any]]
-        ] = {}
+        physical_config_cache: dict[str, tuple[str, SameTokenControllerConfig, dict[str, Any]]] = {}
         for execution_index, arm_name in enumerate(physical_order):
             built_arm = arms[arm_name]
             config = built_arm.config_for_batch(schedule_index)
@@ -763,9 +750,7 @@ def main() -> None:
     args = parser.parse_args()
     if not torch.cuda.is_available():
         raise RuntimeError("P2 causal-factorial evaluation requires CUDA.")
-    equivalence = _equivalence(
-        args.equivalence, args.scale, training_seed=args.training_seed
-    )
+    equivalence = _equivalence(args.equivalence, args.scale, training_seed=args.training_seed)
     calibration = heldout._load_calibration(args.calibration, args.checkpoint, args.scale)
     memory_match = _memory_match(
         args.memory_match,
