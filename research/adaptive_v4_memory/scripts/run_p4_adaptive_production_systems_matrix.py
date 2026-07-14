@@ -39,6 +39,7 @@ IMPLEMENTATION_PATHS = (
     "research/adaptive_v4_memory/scripts/run_p4_adaptive_systems_matrix.py",
     "research/adaptive_v4_memory/scripts/run_p4_production_systems_matrix.py",
     "research/adaptive_v4_memory/scripts/run_p4_adaptive_production_systems_matrix.py",
+    "research/adaptive_v4_memory/scripts/summarize_p4_adaptive_production_systems_matrix.py",
 )
 
 
@@ -331,6 +332,64 @@ def _run_adapter(adapter: Path, spec: Path, output: Path, timeout: float) -> dic
     return json.loads(output.read_text())
 
 
+def terminal_adapter_failure(cell: Cell, error: Exception) -> dict[str, Any]:
+    failure = {
+        "failure_type": "adapter-contract-or-execution-failure",
+        "phase": "orchestrator",
+        "error_type": type(error).__name__,
+        "error": str(error),
+    }
+    return {
+        "schema_version": 1,
+        "experiment_id": "p4-adaptive-production-adapter-cell-v1",
+        "orchestrator_failure": True,
+        "cell": cell_dict(cell),
+        "status": "failed",
+        "input_seed_base": INPUT_SEED_BASE,
+        "warmups": WARMUPS,
+        "warmup_accounting_available": False,
+        "warmup_repetitions_attempted": None,
+        "warmup_paired_repetitions_completed": None,
+        "warmup_policy_runs_completed": {policy: None for policy in POLICIES},
+        "warmup_failures": [],
+        "measured_repetitions": MEASURED_REPETITIONS,
+        "repetitions": [],
+        "policy_status": {
+            policy: {
+                "status": "failed",
+                "measured_repetitions": 0,
+                "failure": failure,
+            }
+            for policy in POLICIES
+        },
+    }
+
+
+def valid_terminal_adapter_failure(payload: Any, *, cell: Cell) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    statuses = payload.get("policy_status")
+    if not isinstance(statuses, dict) or set(statuses) != set(POLICIES):
+        return False
+    failures = [status.get("failure") for status in statuses.values()]
+    return (
+        payload.get("experiment_id") == "p4-adaptive-production-adapter-cell-v1"
+        and payload.get("orchestrator_failure") is True
+        and payload.get("cell") == cell_dict(cell)
+        and payload.get("status") == "failed"
+        and payload.get("repetitions") == []
+        and all(
+            isinstance(failure, dict)
+            and failure.get("failure_type") == "adapter-contract-or-execution-failure"
+            and failure.get("phase") == "orchestrator"
+            and isinstance(failure.get("error"), str)
+            and bool(failure["error"])
+            for failure in failures
+        )
+        and all(failure == failures[0] for failure in failures[1:])
+    )
+
+
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(path.suffix + ".tmp")
@@ -470,7 +529,8 @@ def main() -> None:
                 existing = json.loads(artifact.read_text())
                 spec_path = Path(existing["adapter_spec"]["path"])
                 spec = adapter_contract.validate_spec(spec_path)
-                validate_adapter_payload(existing["adapter_payload"], cell=cell, spec=spec)
+                if not valid_terminal_adapter_failure(existing["adapter_payload"], cell=cell):
+                    validate_adapter_payload(existing["adapter_payload"], cell=cell, spec=spec)
                 runs[cell] = _run_row(cell, artifact, existing)
                 continue
             except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError):
@@ -494,8 +554,11 @@ def main() -> None:
         _write_json(spec_path, spec)
         adapter_contract.validate_spec(spec_path)
         started = time.monotonic()
-        adapter_payload = _run_adapter(adapter, spec_path, raw_path, args.cell_timeout_seconds)
-        validate_adapter_payload(adapter_payload, cell=cell, spec=spec)
+        try:
+            adapter_payload = _run_adapter(adapter, spec_path, raw_path, args.cell_timeout_seconds)
+            validate_adapter_payload(adapter_payload, cell=cell, spec=spec)
+        except Exception as error:
+            adapter_payload = terminal_adapter_failure(cell, error)
         payload = {
             "schema_version": 1,
             "experiment_id": "p4-adaptive-production-systems-cell-v1",
@@ -510,7 +573,11 @@ def main() -> None:
             "p3_adaptive_audit": _dependency(args.p3_adaptive_audit),
             "adapter": {"path": str(adapter), "sha256": production.sha256(adapter)},
             "adapter_spec": {"path": str(spec_path), "sha256": production.sha256(spec_path)},
-            "adapter_raw": {"path": str(raw_path), "sha256": production.sha256(raw_path)},
+            "adapter_raw": (
+                {"path": str(raw_path), "sha256": production.sha256(raw_path)}
+                if raw_path.is_file()
+                else None
+            ),
             "cell_timeout_seconds": args.cell_timeout_seconds,
             "wall_time_seconds": time.monotonic() - started,
             "adapter_payload": adapter_payload,

@@ -11,6 +11,7 @@ sys.path.insert(0, str(SCRIPTS))
 
 import p4_adaptive_continuous_batch_adapter as adapter  # noqa: E402
 import run_p4_adaptive_production_systems_matrix as runner  # noqa: E402
+import summarize_p4_adaptive_production_systems_matrix as summary  # noqa: E402
 
 
 def _config() -> SameTokenControllerConfig:
@@ -189,3 +190,44 @@ def test_adaptive_production_allows_causal_prediction_difference() -> None:
     }
 
     runner.validate_adapter_payload(payload, cell=cell, spec=spec)
+
+
+def test_orchestrator_failure_is_terminal_and_auditable() -> None:
+    cell = runner.frozen_cells()[0]
+    payload = runner.terminal_adapter_failure(cell, TimeoutError("deadline"))
+
+    assert runner.valid_terminal_adapter_failure(payload, cell=cell)
+    assert payload["status"] == "failed"
+    assert payload["repetitions"] == []
+    assert {
+        status["failure"]["error_type"] for status in payload["policy_status"].values()
+    } == {"TimeoutError"}
+
+
+def test_adaptive_production_bootstrap_and_holm_are_deterministic() -> None:
+    first = summary.paired_bootstrap([1.0, 2.0, 3.0], label="cell:metric")
+    repeated = summary.paired_bootstrap([1.0, 2.0, 3.0], label="cell:metric")
+    cells = [
+        {
+            "metrics": {
+                metric: {
+                    "calibrated_minus_fixed": {
+                        "two_sided_bootstrap_p": p_value
+                    }
+                }
+                for metric in summary.production_summary.METRICS
+            }
+        }
+        for p_value in (0.01, 0.02, 0.5)
+    ]
+
+    summary._holm(cells)
+
+    assert first == repeated
+    adjusted = [
+        cell["metrics"]["ttft_p50_ms"]["calibrated_minus_fixed"][
+            "holm_adjusted_p"
+        ]
+        for cell in cells
+    ]
+    assert adjusted == [0.03, 0.04, 0.5]
