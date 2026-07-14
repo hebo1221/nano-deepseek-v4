@@ -230,6 +230,9 @@ def test_production_adapter_accepts_explicitly_unavailable_process_hbm() -> None
     )
 
     process_total = summary["metrics"]["process_total_hbm_bytes"]
+    assert summary["warmup_repetitions_attempted"] == production.WARMUPS
+    assert summary["warmup_paired_repetitions_completed"] == production.WARMUPS
+    assert summary["warmup_failures"] == []
     assert process_total["resident"] is None
     assert process_total["tiered"] is None
     assert process_total["paired_observations"] == 0

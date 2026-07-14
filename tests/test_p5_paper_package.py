@@ -242,6 +242,7 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
         for field in (
             "available_measurement_schema_verified",
             "repetition_order_and_pairing_verified",
+            "warmup_failure_accounting_verified",
             "tail_latency_metrics_verified",
         )
     )
@@ -270,6 +271,12 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
     assert (
         manifest["evidence"]["p4_production_systems"]["required_audit"][
             "process_total_hbm_availability_accounted"
+        ]
+        is True
+    )
+    assert (
+        manifest["evidence"]["p4_production_systems"]["required_audit"][
+            "warmup_failure_accounting_verified"
         ]
         is True
     )
@@ -787,6 +794,9 @@ def test_p5_p4_table_retains_terminal_failure() -> None:
                         "batch": 16,
                         "concurrency": 1,
                     },
+                    "warmup_repetitions_attempted": 1,
+                    "warmup_paired_repetitions_completed": 0,
+                    "warmup_failures": [{"failure_type": "oom", "phase": "warmup"}],
                     "policy_status": {"resident-native": {"failure": "oom"}},
                 }
             ],
@@ -796,6 +806,8 @@ def test_p5_p4_table_retains_terminal_failure() -> None:
     assert rows[0]["status"] == "failed"
     assert rows[0]["active_requests"] == 1
     assert rows[0]["concurrency"] == 1
+    assert rows[0]["warmup_repetitions_attempted"] == 1
+    assert "warmup" in rows[0]["warmup_failures"]
     assert "oom" in rows[0]["failure"]
 
 

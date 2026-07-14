@@ -147,6 +147,12 @@ def summarize_cell(payload: dict[str, Any]) -> dict[str, Any]:
         "status": adapter["status"],
         "backend": adapter.get("backend"),
         "policy_status": adapter["policy_status"],
+        "warmup_repetitions_attempted": adapter["warmup_repetitions_attempted"],
+        "warmup_paired_repetitions_completed": adapter[
+            "warmup_paired_repetitions_completed"
+        ],
+        "warmup_policy_runs_completed": adapter["warmup_policy_runs_completed"],
+        "warmup_failures": adapter["warmup_failures"],
         "measured_repetitions": len(repetitions),
         "paired_repetitions": len(paired),
         "metrics": {},
@@ -291,6 +297,16 @@ def summarize(matrix_path: Path) -> dict[str, Any]:
                     "cell": payload["cell"],
                     "policy_status": adapter["policy_status"],
                     "orchestrator_failure": adapter.get("orchestrator_failure", False),
+                    "warmup_repetitions_attempted": adapter[
+                        "warmup_repetitions_attempted"
+                    ],
+                    "warmup_paired_repetitions_completed": adapter[
+                        "warmup_paired_repetitions_completed"
+                    ],
+                    "warmup_policy_runs_completed": adapter[
+                        "warmup_policy_runs_completed"
+                    ],
+                    "warmup_failures": adapter["warmup_failures"],
                 }
             )
             continue
@@ -340,6 +356,7 @@ def summarize(matrix_path: Path) -> dict[str, Any]:
             "failed_cells": len(failures),
             "actual_concurrency_verified": all_complete and all_concurrency,
             "all_required_metrics_verified": all_complete and all_metrics,
+            "warmup_failure_accounting_verified": True,
             "allocator_hbm_metrics_verified": successful_policy_runs > 0,
             "successful_policy_runs_with_allocator_hbm": successful_policy_runs,
             "process_total_hbm_availability_accounted": True,

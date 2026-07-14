@@ -213,6 +213,7 @@
         "all_artifact_digests_verified": true,
         "available_measurement_schema_verified": true,
         "repetition_order_and_pairing_verified": true,
+        "warmup_failure_accounting_verified": true,
         "tail_latency_metrics_verified": true
       }
     },
@@ -223,6 +224,7 @@
         "terminal_cells": 216,
         "all_terminal_cells_verified": true,
         "all_artifact_digests_verified": true,
+        "warmup_failure_accounting_verified": true,
         "tail_failure_accounting_complete": true,
         "allocator_hbm_metrics_verified": true,
         "process_total_hbm_availability_accounted": true,

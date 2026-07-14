@@ -88,6 +88,12 @@ def summarize_terminal_cell(payload: dict[str, Any]) -> dict[str, Any]:
         "cell": payload["cell"],
         "status": payload["status"],
         "policy_status": payload["policy_status"],
+        "warmup_repetitions_attempted": payload["warmup_repetitions_attempted"],
+        "warmup_paired_repetitions_completed": payload[
+            "warmup_paired_repetitions_completed"
+        ],
+        "warmup_policy_runs_completed": payload["warmup_policy_runs_completed"],
+        "warmup_failures": payload["warmup_failures"],
         "measured_repetitions": len(repetitions),
         "paired_repetitions": len(paired_rows),
         "all_available_paired_predictions_identical": all(
@@ -166,6 +172,16 @@ def main() -> None:
         matrix.get("implementation_digest") == systems.implementation_digest(),
         "P4 implementation is not the checked-out implementation.",
     )
+    for dependency_name in ("manifest", "p3_audit"):
+        dependency = matrix.get(dependency_name, {})
+        dependency_path = Path(dependency.get("path", ""))
+        _require(dependency_path.is_file(), f"Missing P4 {dependency_name} dependency.")
+        _require(
+            dependency.get("sha256") == systems.sha256(dependency_path),
+            f"P4 {dependency_name} dependency drifted.",
+        )
+    manifest_digest = matrix["manifest"]["sha256"]
+    p3_digest = matrix["p3_audit"]["sha256"]
     runs = matrix.get("runs", [])
     _require(len(runs) == systems.EXPECTED_CELLS, "P4 run count drifted.")
     expected = set(systems.frozen_cells())
@@ -196,6 +212,16 @@ def main() -> None:
         raw_digests.append(digest)
         payload = json.loads(path.read_text())
         _require(
+            systems._artifact_valid(
+                path,
+                cell=identity,
+                digest=matrix["implementation_digest"],
+                manifest_digest=manifest_digest,
+                p3_digest=p3_digest,
+            ),
+            f"Invalid P4 reference artifact: {path}",
+        )
+        _require(
             payload.get("source", {}).get("dirty") is False
             and payload.get("source", {}).get("implementation_digest")
             == matrix["implementation_digest"],
@@ -216,6 +242,16 @@ def main() -> None:
                     "completed_measured_repetitions": payload.get(
                         "completed_measured_repetitions", 0
                     ),
+                    "warmup_repetitions_attempted": payload[
+                        "warmup_repetitions_attempted"
+                    ],
+                    "warmup_paired_repetitions_completed": payload[
+                        "warmup_paired_repetitions_completed"
+                    ],
+                    "warmup_policy_runs_completed": payload[
+                        "warmup_policy_runs_completed"
+                    ],
+                    "warmup_failures": payload["warmup_failures"],
                     "policy_status": payload.get("policy_status"),
                 }
             )
@@ -240,6 +276,7 @@ def main() -> None:
             "all_artifact_digests_verified": True,
             "available_measurement_schema_verified": True,
             "repetition_order_and_pairing_verified": True,
+            "warmup_failure_accounting_verified": True,
             "tail_latency_metrics_verified": True,
             "terminal_cells": len(seen),
             "complete_cells": len(complete),

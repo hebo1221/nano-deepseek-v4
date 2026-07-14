@@ -1631,6 +1631,15 @@ def _p4_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
         row.update(
             {
                 "paired_repetitions": cell["paired_repetitions"],
+                "warmup_repetitions_attempted": cell[
+                    "warmup_repetitions_attempted"
+                ],
+                "warmup_paired_repetitions_completed": cell[
+                    "warmup_paired_repetitions_completed"
+                ],
+                "warmup_failures": json.dumps(
+                    cell["warmup_failures"], sort_keys=True, separators=(",", ":")
+                ),
                 "resident_ttft_p95_ms_mean": _metric_mean(cell, "ttft_p95_ms", "resident"),
                 "tiered_ttft_p95_ms_mean": _metric_mean(cell, "ttft_p95_ms", "tiered"),
                 "resident_throughput_mean": _metric_mean(
@@ -1655,6 +1664,15 @@ def _p4_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
                 "concurrency": failure["cell"].get("concurrency", ""),
                 "status": "failed",
                 "paired_repetitions": 0,
+                "warmup_repetitions_attempted": failure[
+                    "warmup_repetitions_attempted"
+                ],
+                "warmup_paired_repetitions_completed": failure[
+                    "warmup_paired_repetitions_completed"
+                ],
+                "warmup_failures": json.dumps(
+                    failure["warmup_failures"], sort_keys=True, separators=(",", ":")
+                ),
                 "failure": json.dumps(failure.get("policy_status"), sort_keys=True),
             }
         )
@@ -2103,6 +2121,9 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         "concurrency",
         "status",
         "paired_repetitions",
+        "warmup_repetitions_attempted",
+        "warmup_paired_repetitions_completed",
+        "warmup_failures",
         "resident_ttft_p95_ms_mean",
         "tiered_ttft_p95_ms_mean",
         "resident_throughput_mean",
