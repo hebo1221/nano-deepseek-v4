@@ -92,6 +92,19 @@ def summarize(matrix_path: Path) -> dict[str, Any]:
         )
     _require(seen == set(preflight.SCALES), "Scale coverage drifted.")
     statuses = [attempt["status"] for cell in cells for attempt in cell["policy_attempts"].values()]
+    paired_successes = [
+        cell
+        for cell in cells
+        if all(
+            cell["policy_attempts"][policy]["status"] == "success" for policy in preflight.POLICIES
+        )
+    ]
+    mismatches = [
+        cell["scale"]
+        for cell in paired_successes
+        if cell["policy_attempts"][preflight.POLICIES[0]]["prediction_digest"]
+        != cell["policy_attempts"][preflight.POLICIES[1]]["prediction_digest"]
+    ]
     return {
         "schema_version": 1,
         "experiment_id": "p4-500k-context-preflight-audit-v1",
@@ -110,6 +123,11 @@ def summarize(matrix_path: Path) -> dict[str, Any]:
                 "\n".join(sorted(raw_digests)).encode()
             ).hexdigest(),
             "performance_claim_available": False,
+        },
+        "correctness": {
+            "scales_with_both_policies_successful": len(paired_successes),
+            "all_successful_pair_predictions_identical": not mismatches,
+            "prediction_mismatch_scales": mismatches,
         },
         "cells": sorted(cells, key=lambda cell: cell["scale"]),
         "claim_boundary": (

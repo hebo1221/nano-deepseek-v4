@@ -81,19 +81,27 @@ def test_500k_audit_accepts_terminal_negative_evidence(tmp_path: Path) -> None:
         }
         attempts = {
             "resident-native": {"status": "success", "run": successful_run},
-            "tiered-native": {
-                "status": "oom" if index == 0 else "error",
-                "error_type": "OutOfMemoryError" if index == 0 else "RuntimeError",
-                "error": "terminal failure",
-            },
+            "tiered-native": (
+                {
+                    "status": "oom",
+                    "error_type": "OutOfMemoryError",
+                    "error": "terminal failure",
+                }
+                if index == 0
+                else {
+                    "status": "success",
+                    "run": {**successful_run, "prediction_digest": "b" * 64},
+                }
+            ),
         }
+        status = preflight._status(attempts)
         artifact = tmp_path / scale / "cell.json"
         artifact.parent.mkdir(parents=True)
         artifact.write_text(
             json.dumps(
                 {
                     "experiment_id": "p4-500k-context-preflight-cell-v1",
-                    "status": "partial",
+                    "status": status,
                     "scale": scale,
                     "context_tokens": preflight.CONTEXT,
                     "generation_tokens": preflight.GENERATION,
@@ -114,7 +122,7 @@ def test_500k_audit_accepts_terminal_negative_evidence(tmp_path: Path) -> None:
         rows.append(
             {
                 "scale": scale,
-                "status": "partial",
+                "status": status,
                 "policy_status": {policy: result["status"] for policy, result in attempts.items()},
                 "artifact": {
                     "path": str(artifact),
@@ -140,6 +148,11 @@ def test_500k_audit_accepts_terminal_negative_evidence(tmp_path: Path) -> None:
     audited = summary.summarize(matrix)
 
     assert audited["audit"]["terminal_policy_attempts"] == 4
-    assert audited["audit"]["successful_policy_attempts"] == 2
-    assert audited["audit"]["failed_policy_attempts"] == 2
+    assert audited["audit"]["successful_policy_attempts"] == 3
+    assert audited["audit"]["failed_policy_attempts"] == 1
     assert audited["audit"]["performance_claim_available"] is False
+    assert audited["correctness"] == {
+        "scales_with_both_policies_successful": 1,
+        "all_successful_pair_predictions_identical": False,
+        "prediction_mismatch_scales": ["s151"],
+    }
