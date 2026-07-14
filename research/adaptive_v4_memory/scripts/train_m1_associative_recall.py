@@ -5,6 +5,8 @@ import hashlib
 import json
 import os
 import platform
+import subprocess
+import sys
 import tempfile
 import time
 from dataclasses import asdict
@@ -37,6 +39,22 @@ SCALE_OVERRIDES = {
 }
 SEQUENCE_LENGTHS = (48, 64, 80)
 TRAIN_SEQUENCE_LENGTHS = (64, 80)
+
+
+def _source_state() -> dict[str, str | bool]:
+    commit = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    status = subprocess.run(
+        ["git", "status", "--porcelain"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    return {"commit": commit, "dirty": bool(status.strip())}
 
 
 def build_config(scale: str) -> DeepSeekV4Config:
@@ -330,6 +348,8 @@ def train(args: argparse.Namespace) -> dict:
         "initialization_seed": initialization_seed,
         "data_order_seed": data_order_seed,
         "training_evaluation_seed": training_evaluation_seed,
+        "source": _source_state(),
+        "command": [sys.executable, *sys.argv],
         "parameters": parameter_count,
         "auxiliary_parameters": auxiliary_parameter_count,
         "config": asdict(config),

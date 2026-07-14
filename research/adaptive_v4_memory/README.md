@@ -132,3 +132,20 @@ on the available host, so official-scale execution remains explicitly
 unverified. The checked M5 report records the pilot negative result, official
 feasibility audit, minimum fused-kernel contract, and the retained bounded M4
 fixed-top-k result.
+
+## P1 causal-controller pilot
+
+`nano_deepseek_v4/causal_memory_controller.py` now applies a layer-local action
+to the same token that produced its scores, with static global-to-layer quotas
+and optional earlier-layer signals. The controller governs both prefill and
+decode, drives the physical tier fetch, validates serialized replay digests,
+and supports the full cache lifecycle.
+
+The clean two-scale pilot recovered the one-token controller's quality loss but
+did not improve on fixed top-k. At the tested minimum quotas the no-fallback
+controller produced the same prediction digests as fixed top-k; dense fallback
+used 4--7x more hot blocks on multi-query workloads without an accuracy gain.
+This is a directional single-seed result, not paper-grade evidence. See the
+checked P1 report and summary. Calibration-only non-uniform quotas, protected
+pinning, learned lookahead, and the preregistered five-seed matrix remain active
+work.
