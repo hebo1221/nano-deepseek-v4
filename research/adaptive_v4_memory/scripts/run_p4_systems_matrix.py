@@ -14,7 +14,7 @@ from dataclasses import asdict, dataclass
 from itertools import product
 from pathlib import Path
 from types import FrameType
-from typing import Any, TypeGuard
+from typing import Any, TypeGuard, cast
 
 import torch
 from adaptive_v4_gpu_lock import acquire_gpu_lock
@@ -192,9 +192,7 @@ def _cell_timeout_handler(_signum: int, _frame: FrameType | None) -> None:
 
 def validate_cell_timeout(seconds: float) -> None:
     if not math.isfinite(seconds) or not 0.0 < seconds <= CELL_TIMEOUT_SECONDS:
-        raise ValueError(
-            f"cell-timeout-seconds must be finite and in (0, {CELL_TIMEOUT_SECONDS}]."
-        )
+        raise ValueError(f"cell-timeout-seconds must be finite and in (0, {CELL_TIMEOUT_SECONDS}].")
 
 
 def arm_cell_timeout(seconds: float) -> Any:
@@ -325,7 +323,7 @@ def run_policy(
                 )
             del output, token, greedy
     torch.cuda.synchronize()
-    decode_elapsed_s = (time.perf_counter_ns() - decode_started) / 1_000_000_000.0
+    decode_elapsed_ms = (time.perf_counter_ns() - decode_started) / 1_000_000.0
     end_to_end_ms = (time.perf_counter_ns() - cell_started) / 1_000_000.0
     totals = _cache_totals(caches)
     trace = IndexerTimingTrace()
@@ -349,11 +347,15 @@ def run_policy(
             "actual_concurrent_serving": False,
         },
         "request_prefill_ms": latency_summary(request_prefill_ms),
+        "request_prefill_latency_ms": request_prefill_ms,
         "aggregate_prefill_ms": (prefill_finished - cell_started) / 1_000_000.0,
         "ttft_ms": latency_summary(first_token_completion_ms),
+        "request_ttft_latency_ms": first_token_completion_ms,
         "decode_step_ms": latency_summary(step_latencies_ms),
+        "decode_step_latency_ms": step_latencies_ms,
+        "decode_elapsed_ms": decode_elapsed_ms,
         "end_to_end_ms": end_to_end_ms,
-        "generated_token_throughput_per_second": generated_tokens / decode_elapsed_s,
+        "generated_token_throughput_per_second": generated_tokens / (decode_elapsed_ms / 1_000.0),
         "cuda": {
             "cache_allocated_delta_bytes": allocated_after_prefill - baseline_allocated,
             "allocated_after_prefill_bytes": allocated_after_prefill,
@@ -433,10 +435,7 @@ def _artifact_valid(
         and payload.get("measured_repetitions") == MEASURED_REPETITIONS
         and isinstance(repetitions, list)
         and len(repetitions) <= MEASURED_REPETITIONS
-        and all(
-            _valid_repetition(row, index, cell=cell)
-            for index, row in enumerate(repetitions)
-        )
+        and all(_valid_repetition(row, index, cell=cell) for index, row in enumerate(repetitions))
     ):
         return False
     policy_status = payload.get("policy_status", {})
@@ -459,10 +458,7 @@ def _artifact_valid(
             if not (
                 _valid_failure(failure, phases={"warmup"})
                 and failure.get("phase") == "warmup"
-                and (
-                    "repetition" not in failure
-                    or failure["repetition"] < WARMUPS
-                )
+                and ("repetition" not in failure or failure["repetition"] < WARMUPS)
                 and failure in warmup_failures
             ):
                 return False
@@ -504,13 +500,39 @@ def _finite_nonnegative(value: Any) -> TypeGuard[int | float]:
 def _valid_latency_summary(value: Any, *, observations: int) -> bool:
     if not isinstance(value, dict) or value.get("observations") != observations:
         return False
-    metrics = tuple(value.get(name) for name in ("mean_ms", "p50_ms", "p95_ms", "p99_ms", "maximum_ms"))
+    metrics = tuple(
+        value.get(name) for name in ("mean_ms", "p50_ms", "p95_ms", "p99_ms", "maximum_ms")
+    )
     numeric: list[float] = []
     for metric in metrics:
         if not _finite_nonnegative(metric):
             return False
         numeric.append(float(metric))
     return numeric[1] <= numeric[2] <= numeric[3] <= numeric[4]
+
+
+def _valid_latency_samples(value: Any, *, observations: int) -> TypeGuard[list[float]]:
+    return (
+        isinstance(value, list)
+        and len(value) == observations
+        and all(_finite_nonnegative(sample) for sample in value)
+    )
+
+
+def _latency_summary_matches(samples: Any, summary: Any) -> bool:
+    if not isinstance(samples, list) or not isinstance(summary, dict):
+        return False
+    recomputed = latency_summary(cast(list[float], samples))
+    return all(
+        type(summary.get(name)) in (int, float)
+        and math.isclose(
+            float(summary[name]),
+            float(value),
+            rel_tol=1e-12,
+            abs_tol=1e-12,
+        )
+        for name, value in recomputed.items()
+    )
 
 
 def _valid_policy_run(
@@ -529,6 +551,9 @@ def _valid_policy_run(
     cache = run.get("cache", {})
     transfer = run.get("transfer", {})
     trace = run.get("untimed_indexer_probe", {})
+    request_prefill_latency = run.get("request_prefill_latency_ms")
+    request_ttft_latency = run.get("request_ttft_latency_ms")
+    decode_step_latency = run.get("decode_step_latency_ms")
     cuda_keys = (
         "cache_allocated_delta_bytes",
         "allocated_after_prefill_bytes",
@@ -568,16 +593,28 @@ def _valid_policy_run(
             "active_requests": active_requests,
             "actual_concurrent_serving": False,
         }
-        and _valid_latency_summary(
-            run.get("request_prefill_ms"), observations=active_requests
-        )
+        and _valid_latency_summary(run.get("request_prefill_ms"), observations=active_requests)
+        and _valid_latency_samples(request_prefill_latency, observations=active_requests)
+        and _latency_summary_matches(request_prefill_latency, run["request_prefill_ms"])
         and _valid_latency_summary(run.get("ttft_ms"), observations=active_requests)
+        and _valid_latency_samples(request_ttft_latency, observations=active_requests)
+        and _latency_summary_matches(request_ttft_latency, run["ttft_ms"])
         and _valid_latency_summary(
             run.get("decode_step_ms"), observations=active_requests * generation
         )
+        and _valid_latency_samples(decode_step_latency, observations=active_requests * generation)
+        and _latency_summary_matches(decode_step_latency, run["decode_step_ms"])
         and _finite_nonnegative(run.get("aggregate_prefill_ms"))
+        and _finite_nonnegative(run.get("decode_elapsed_ms"))
+        and run["decode_elapsed_ms"] > 0
         and _finite_nonnegative(run.get("end_to_end_ms"))
         and _finite_nonnegative(run.get("generated_token_throughput_per_second"))
+        and math.isclose(
+            run["generated_token_throughput_per_second"],
+            active_requests * batch * generation / (run["decode_elapsed_ms"] / 1_000.0),
+            rel_tol=1e-12,
+            abs_tol=1e-12,
+        )
         and isinstance(cuda, dict)
         and all(type(cuda.get(name)) is int and cuda[name] >= 0 for name in cuda_keys)
         and cuda["fragmentation_after_prefill_bytes"]
@@ -614,10 +651,7 @@ def _valid_failure(value: Any, *, phases: set[str]) -> bool:
         and value.get("phase") in phases
         and (
             "repetition" not in value
-            or (
-                type(value.get("repetition")) is int
-                and value["repetition"] >= 0
-            )
+            or (type(value.get("repetition")) is int and value["repetition"] >= 0)
         )
     )
 
@@ -662,9 +696,8 @@ def _valid_repetition(
         return False
     if set(policies) != set(POLICIES):
         return row.get("greedy_predictions_identical") is None
-    identical = (
-        policies[POLICIES[0]].get("prediction_digest")
-        == policies[POLICIES[1]].get("prediction_digest")
+    identical = policies[POLICIES[0]].get("prediction_digest") == policies[POLICIES[1]].get(
+        "prediction_digest"
     )
     return row.get("greedy_predictions_identical") is identical
 
@@ -730,9 +763,7 @@ def main() -> None:
         "--profile", action="append", choices=tuple(row[0] for row in LOAD_PROFILES)
     )
     parser.add_argument("--max-new-cells", type=int)
-    parser.add_argument(
-        "--cell-timeout-seconds", type=float, default=CELL_TIMEOUT_SECONDS
-    )
+    parser.add_argument("--cell-timeout-seconds", type=float, default=CELL_TIMEOUT_SECONDS)
     parser.add_argument(
         "--training-root",
         type=Path,
@@ -769,8 +800,7 @@ def main() -> None:
     if (
         manifest.get("experiment_id") != "p4-reference-systems-matrix-v1"
         or manifest.get("primary_paired_cells") != EXPECTED_CELLS
-        or manifest.get("execution", {}).get("maximum_cell_timeout_seconds")
-        != CELL_TIMEOUT_SECONDS
+        or manifest.get("execution", {}).get("maximum_cell_timeout_seconds") != CELL_TIMEOUT_SECONDS
         or manifest.get("input_seed_base") != INPUT_SEED_BASE
     ):
         raise RuntimeError("The frozen P4 systems manifest is required.")
@@ -961,9 +991,7 @@ def main() -> None:
                     "cell_timeout_seconds": args.cell_timeout_seconds,
                     "warmup_accounting_available": True,
                     "warmup_repetitions_attempted": warmup_repetitions_attempted,
-                    "warmup_paired_repetitions_completed": (
-                        warmup_paired_repetitions_completed
-                    ),
+                    "warmup_paired_repetitions_completed": (warmup_paired_repetitions_completed),
                     "warmup_policy_runs_completed": warmup_policy_runs_completed,
                     "warmup_failures": warmup_failures,
                     "measured_repetitions": MEASURED_REPETITIONS,
@@ -986,10 +1014,7 @@ def main() -> None:
                 )
                 orchestration_phase = (
                     "warmup"
-                    if any(
-                        warmup_policy_runs_completed[policy] < WARMUPS
-                        for policy in POLICIES
-                    )
+                    if any(warmup_policy_runs_completed[policy] < WARMUPS for policy in POLICIES)
                     else "measured"
                 )
                 terminal_failures = {
@@ -1027,9 +1052,7 @@ def main() -> None:
                     "cell_timeout_seconds": args.cell_timeout_seconds,
                     "warmup_accounting_available": True,
                     "warmup_repetitions_attempted": warmup_repetitions_attempted,
-                    "warmup_paired_repetitions_completed": (
-                        warmup_paired_repetitions_completed
-                    ),
+                    "warmup_paired_repetitions_completed": (warmup_paired_repetitions_completed),
                     "warmup_policy_runs_completed": warmup_policy_runs_completed,
                     "warmup_failures": warmup_failures,
                     "measured_repetitions": MEASURED_REPETITIONS,

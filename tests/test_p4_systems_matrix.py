@@ -45,11 +45,15 @@ def _reference_policy_run(
             "actual_concurrent_serving": False,
         },
         "request_prefill_ms": _latency(active_requests),
+        "request_prefill_latency_ms": [1.0] * active_requests,
         "aggregate_prefill_ms": 1.0,
         "ttft_ms": _latency(active_requests),
+        "request_ttft_latency_ms": [1.0] * active_requests,
         "decode_step_ms": _latency(active_requests * generation),
+        "decode_step_latency_ms": [1.0] * (active_requests * generation),
+        "decode_elapsed_ms": 1_000.0,
         "end_to_end_ms": 1.0,
-        "generated_token_throughput_per_second": 1.0,
+        "generated_token_throughput_per_second": active_requests * batch * generation,
         "cuda": {
             "cache_allocated_delta_bytes": 1,
             "allocated_after_prefill_bytes": 1,
@@ -93,13 +97,12 @@ def test_p4_frozen_matrix_has_full_batch_load_factorial() -> None:
 
     root = Path(__file__).resolve().parents[1]
     manifest = json.loads(
-        (root / "research/adaptive_v4_memory/manifests/p4-reference-systems-matrix-v1.json")
-        .read_text()
+        (
+            root / "research/adaptive_v4_memory/manifests/p4-reference-systems-matrix-v1.json"
+        ).read_text()
     )
-    assert (
-        manifest["execution"]["maximum_cell_timeout_seconds"]
-        == systems.CELL_TIMEOUT_SECONDS
-    )
+    assert manifest["execution"]["maximum_cell_timeout_seconds"] == systems.CELL_TIMEOUT_SECONDS
+    assert any("raw per-request" in metric for metric in manifest["measurements"])
 
 
 def test_p4_requires_full_natural_suite_not_ruler_only(tmp_path: Path) -> None:
@@ -259,6 +262,10 @@ def test_reference_summary_reports_full_latency_memory_and_transfer_contract() -
 
     assert required.issubset(summary.METRICS)
 
+    run = _reference_policy_run(systems.frozen_cells()[0], "resident-native", "a" * 64)
+    run["ttft_ms"]["p99_ms"] = 99.0  # type: ignore[index]
+    assert summary.METRICS["ttft_p99_ms"](run) == 1.0
+
 
 def test_p4_partial_artifact_preserves_surviving_policy(tmp_path: Path) -> None:
     cell = systems.frozen_cells()[0]
@@ -268,14 +275,10 @@ def test_p4_partial_artifact_preserves_surviving_policy(tmp_path: Path) -> None:
             "input_seed": systems.INPUT_SEED_BASE + systems.WARMUPS + index,
             "input_digest": f"{index:064x}",
             "execution_order": list(
-                systems.POLICIES
-                if index % 2 == 0
-                else tuple(reversed(systems.POLICIES))
+                systems.POLICIES if index % 2 == 0 else tuple(reversed(systems.POLICIES))
             ),
             "policies": {
-                "tiered-native": _reference_policy_run(
-                    cell, "tiered-native", f"{index:064x}"
-                ),
+                "tiered-native": _reference_policy_run(cell, "tiered-native", f"{index:064x}"),
             },
             "policy_failures": {},
             "greedy_predictions_identical": None,
@@ -309,9 +312,7 @@ def test_p4_partial_artifact_preserves_surviving_policy(tmp_path: Path) -> None:
         "warmup_accounting_available": True,
         "warmup_repetitions_attempted": systems.WARMUPS,
         "warmup_paired_repetitions_completed": systems.WARMUPS,
-        "warmup_policy_runs_completed": {
-            policy: systems.WARMUPS for policy in systems.POLICIES
-        },
+        "warmup_policy_runs_completed": {policy: systems.WARMUPS for policy in systems.POLICIES},
         "warmup_failures": [],
         "measured_repetitions": systems.MEASURED_REPETITIONS,
         "repetitions": repetitions,
@@ -343,6 +344,12 @@ def test_p4_partial_artifact_preserves_surviving_policy(tmp_path: Path) -> None:
         manifest_digest="manifest",
         p3_digest="p3",
     )
+    terminal_summary = summary.summarize_terminal_cell(payload)
+    expected_samples_per_run = 2 * cell[-1] + cell[-1] * cell[2]
+    assert terminal_summary["successful_policy_runs"] == systems.MEASURED_REPETITIONS
+    assert terminal_summary["raw_latency_sample_count"] == (
+        systems.MEASURED_REPETITIONS * expected_samples_per_run
+    )
 
     wrong_seed = deepcopy(payload)
     wrong_seed["repetitions"][0]["input_seed"] += 1
@@ -372,6 +379,43 @@ def test_p4_partial_artifact_preserves_surviving_policy(tmp_path: Path) -> None:
         "peak_allocated_bytes"
     )
     artifact.write_text(json.dumps(missing_metric))
+    assert not systems._artifact_valid(
+        artifact,
+        cell=cell,
+        digest="implementation",
+        manifest_digest="manifest",
+        p3_digest="p3",
+    )
+
+    derived_latency_tamper = json.loads(payload_json)
+    derived_latency_tamper["repetitions"][0]["policies"]["tiered-native"]["ttft_ms"]["p99_ms"] = 2.0
+    artifact.write_text(json.dumps(derived_latency_tamper))
+    assert not systems._artifact_valid(
+        artifact,
+        cell=cell,
+        digest="implementation",
+        manifest_digest="manifest",
+        p3_digest="p3",
+    )
+
+    raw_latency_tamper = json.loads(payload_json)
+    raw_latency_tamper["repetitions"][0]["policies"]["tiered-native"]["decode_step_latency_ms"][
+        0
+    ] = float("nan")
+    artifact.write_text(json.dumps(raw_latency_tamper))
+    assert not systems._artifact_valid(
+        artifact,
+        cell=cell,
+        digest="implementation",
+        manifest_digest="manifest",
+        p3_digest="p3",
+    )
+
+    throughput_tamper = json.loads(payload_json)
+    throughput_tamper["repetitions"][0]["policies"]["tiered-native"][
+        "generated_token_throughput_per_second"
+    ] += 1.0
+    artifact.write_text(json.dumps(throughput_tamper))
     assert not systems._artifact_valid(
         artifact,
         cell=cell,
@@ -441,9 +485,7 @@ def test_p4_partial_artifact_preserves_surviving_policy(tmp_path: Path) -> None:
     wrong_failure_repetition["repetitions"][0]["policy_failures"]["resident-native"][
         "repetition"
     ] += 1
-    wrong_failure_repetition["policy_status"]["resident-native"]["failure"][
-        "repetition"
-    ] += 1
+    wrong_failure_repetition["policy_status"]["resident-native"]["failure"]["repetition"] += 1
     artifact.write_text(json.dumps(wrong_failure_repetition))
     assert not systems._artifact_valid(
         artifact,
@@ -454,12 +496,8 @@ def test_p4_partial_artifact_preserves_surviving_policy(tmp_path: Path) -> None:
     )
 
     wrong_failure_phase = json.loads(json.dumps(recorded_failure))
-    wrong_failure_phase["repetitions"][0]["policy_failures"]["resident-native"][
-        "phase"
-    ] = "warmup"
-    wrong_failure_phase["policy_status"]["resident-native"]["failure"][
-        "phase"
-    ] = "warmup"
+    wrong_failure_phase["repetitions"][0]["policy_failures"]["resident-native"]["phase"] = "warmup"
+    wrong_failure_phase["policy_status"]["resident-native"]["failure"]["phase"] = "warmup"
     artifact.write_text(json.dumps(wrong_failure_phase))
     assert not systems._artifact_valid(
         artifact,
@@ -507,10 +545,7 @@ def test_production_manifest_requires_actual_overlap_and_backend_provenance() ->
     assert manifest["primary_paired_cells"] == 216
     assert manifest["primary_measured_policy_runs"] == 12_960
     assert manifest["primary_total_policy_runs_including_warmup"] == 15_120
-    assert (
-        manifest["execution"]["maximum_cell_timeout_seconds"]
-        == production.CELL_TIMEOUT_SECONDS
-    )
+    assert manifest["execution"]["maximum_cell_timeout_seconds"] == production.CELL_TIMEOUT_SECONDS
     assert "overlap" in manifest["adapter_contract"]["actual_concurrency_proof"]
     assert "serial-round-robin labeled concurrent" in manifest["adapter_contract"]["forbidden"]
     assert "runtime-name-and-version" in manifest["adapter_contract"]["required_backend_provenance"]

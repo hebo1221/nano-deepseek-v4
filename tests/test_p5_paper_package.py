@@ -218,9 +218,7 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
         is False
     )
     assert (
-        manifest["evidence"]["p2_core"]["required_audit"][
-            "seed_p_values_used_as_success_gate"
-        ]
+        manifest["evidence"]["p2_core"]["required_audit"]["seed_p_values_used_as_success_gate"]
         is False
     )
     assert all(
@@ -271,13 +269,12 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
             "warmup_failure_accounting_verified",
             "whole_cell_timeout_contract_verified",
             "tail_latency_metrics_verified",
+            "raw_latency_samples_and_derived_statistics_verified",
             "repetition_seed_schedule_verified",
         )
     )
     assert (
-        manifest["evidence"]["p4_reference_systems"]["required_audit"][
-            "input_seed_base"
-        ]
+        manifest["evidence"]["p4_reference_systems"]["required_audit"]["input_seed_base"]
         == 9_071_400
     )
     assert manifest["evidence"]["p4_500k_context"]["required_audit"] == {
@@ -340,9 +337,7 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
         is True
     )
     assert (
-        manifest["evidence"]["p4_production_systems"]["required_audit"][
-            "input_seed_base"
-        ]
+        manifest["evidence"]["p4_production_systems"]["required_audit"]["input_seed_base"]
         == 9_071_400
     )
     assert (
@@ -354,15 +349,11 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
     assert manifest["evidence"]["p2_causal"]["required_audit"]["registered_causal_arms"] == 16
     assert manifest["evidence"]["p2_causal"]["required_audit"]["registered_paired_contrasts"] == 15
     assert (
-        manifest["evidence"]["p2_causal"]["required_audit"][
-            "exact_seed_randomization_verified"
-        ]
+        manifest["evidence"]["p2_causal"]["required_audit"]["exact_seed_randomization_verified"]
         is True
     )
     assert (
-        manifest["evidence"]["p2_causal"]["required_audit"][
-            "seed_p_values_used_as_success_gate"
-        ]
+        manifest["evidence"]["p2_causal"]["required_audit"]["seed_p_values_used_as_success_gate"]
         is False
     )
     assert (
@@ -402,9 +393,7 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
         is True
     )
     assert (
-        manifest["evidence"]["p3_natural"]["required_audit"][
-            "all_record_revisions_verified"
-        ]
+        manifest["evidence"]["p3_natural"]["required_audit"]["all_record_revisions_verified"]
         is True
     )
     assert set(
@@ -413,10 +402,7 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
         ].values()
     ) == {42}
     assert (
-        manifest["evidence"]["p3_natural"]["required_audit"][
-            "all_run_identities_verified"
-        ]
-        is True
+        manifest["evidence"]["p3_natural"]["required_audit"]["all_run_identities_verified"] is True
     )
     assert (
         manifest["evidence"]["p3_natural"]["required_audit"][
@@ -437,40 +423,25 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
         is True
     )
     assert (
-        manifest["evidence"]["p3_natural_safety"]["required_audit"][
-            "raw_artifact_digests_verified"
-        ]
+        manifest["evidence"]["p3_natural_safety"]["required_audit"]["raw_artifact_digests_verified"]
         is True
     )
     assert (
-        manifest["evidence"]["p3_natural_safety"]["required_audit"][
-            "statistical_schema_verified"
-        ]
+        manifest["evidence"]["p3_natural_safety"]["required_audit"]["statistical_schema_verified"]
         is True
     )
     assert (
-        manifest["evidence"]["p3_safety"]["required_audit"][
-            "target_and_canary_pairing_verified"
-        ]
+        manifest["evidence"]["p3_safety"]["required_audit"]["target_and_canary_pairing_verified"]
         is True
     )
     assert (
-        manifest["evidence"]["p3_longsafety"]["required_audit"][
-            "record_revisions_verified"
-        ]
-        is True
+        manifest["evidence"]["p3_longsafety"]["required_audit"]["record_revisions_verified"] is True
     )
     assert (
-        manifest["evidence"]["p3_safety"]["required_audit"][
-            "raw_artifact_digests_verified"
-        ]
-        is True
+        manifest["evidence"]["p3_safety"]["required_audit"]["raw_artifact_digests_verified"] is True
     )
     assert (
-        manifest["evidence"]["p3_safety"]["required_audit"][
-            "statistical_schema_verified"
-        ]
-        is True
+        manifest["evidence"]["p3_safety"]["required_audit"]["statistical_schema_verified"] is True
     )
     assert manifest["boundary_manifests"]["production_runtime_blocker"].endswith(
         "p4-production-resource-blocker-v1.json"
@@ -686,9 +657,7 @@ def test_experiment_scale_audit_binds_umbrella_and_executable_p4_grids(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     root = Path(__file__).resolve().parents[1]
-    scale_audit = (
-        root / "research/adaptive_v4_memory/manifests/experiment-scale-audit-v1.json"
-    )
+    scale_audit = root / "research/adaptive_v4_memory/manifests/experiment-scale-audit-v1.json"
     study = json.loads(
         (root / "research/adaptive_v4_memory/manifests/paper-grade-study-v1.json").read_text()
     )
@@ -730,20 +699,20 @@ def test_p5_classification_preserves_claim_boundaries() -> None:
                 "all_required_artifacts_verified": True,
                 "all_required_baseline_cells_terminal": True,
                 "all_failure_accounting_complete": True,
-                    "all_source_implementations_verified": True,
-                    "all_record_revisions_verified": True,
-                        "all_run_identities_verified": True,
-                        "all_terminal_measurement_schema_verified": True,
-                        "all_dataset_example_identities_verified": True,
-                        "all_reported_scores_recomputed_from_raw_response": True,
-                    "generation_seed_by_benchmark": {
-                        "RULER": 42,
-                        "SCBench": 42,
-                        "LongBench-v2": 42,
-                        "LongMemEval": 42,
-                        "MRCR": 42,
-                    },
-                    "all_paired_quality_contrasts_verified": True,
+                "all_source_implementations_verified": True,
+                "all_record_revisions_verified": True,
+                "all_run_identities_verified": True,
+                "all_terminal_measurement_schema_verified": True,
+                "all_dataset_example_identities_verified": True,
+                "all_reported_scores_recomputed_from_raw_response": True,
+                "generation_seed_by_benchmark": {
+                    "RULER": 42,
+                    "SCBench": 42,
+                    "LongBench-v2": 42,
+                    "LongMemEval": 42,
+                    "MRCR": 42,
+                },
+                "all_paired_quality_contrasts_verified": True,
                 "dataset_license_revision_inventory_verified": True,
                 "upstream_code_license_revision_inventory_verified": True,
                 "ruler_license_revision_manifest_verified": True,
@@ -763,6 +732,7 @@ def test_p5_classification_preserves_claim_boundaries() -> None:
             "audit": {
                 "terminal_cells": package.P4_EXPECTED_CELLS,
                 "repetition_seed_schedule_verified": True,
+                "raw_latency_samples_and_derived_statistics_verified": True,
                 "input_seed_base": 9_071_400,
                 "complete_cells": 213,
                 "partial_cells": 1,
@@ -828,20 +798,20 @@ def test_p5_success_requires_full_system_coverage() -> None:
                 "all_required_artifacts_verified": True,
                 "all_required_baseline_cells_terminal": True,
                 "all_failure_accounting_complete": True,
-                    "all_source_implementations_verified": True,
-                    "all_record_revisions_verified": True,
-                        "all_run_identities_verified": True,
-                        "all_terminal_measurement_schema_verified": True,
-                        "all_dataset_example_identities_verified": True,
-                        "all_reported_scores_recomputed_from_raw_response": True,
-                    "generation_seed_by_benchmark": {
-                        "RULER": 42,
-                        "SCBench": 42,
-                        "LongBench-v2": 42,
-                        "LongMemEval": 42,
-                        "MRCR": 42,
-                    },
-                    "all_paired_quality_contrasts_verified": True,
+                "all_source_implementations_verified": True,
+                "all_record_revisions_verified": True,
+                "all_run_identities_verified": True,
+                "all_terminal_measurement_schema_verified": True,
+                "all_dataset_example_identities_verified": True,
+                "all_reported_scores_recomputed_from_raw_response": True,
+                "generation_seed_by_benchmark": {
+                    "RULER": 42,
+                    "SCBench": 42,
+                    "LongBench-v2": 42,
+                    "LongMemEval": 42,
+                    "MRCR": 42,
+                },
+                "all_paired_quality_contrasts_verified": True,
                 "dataset_license_revision_inventory_verified": True,
                 "upstream_code_license_revision_inventory_verified": True,
                 "ruler_license_revision_manifest_verified": True,
@@ -861,6 +831,7 @@ def test_p5_success_requires_full_system_coverage() -> None:
             "audit": {
                 "terminal_cells": package.P4_EXPECTED_CELLS,
                 "repetition_seed_schedule_verified": True,
+                "raw_latency_samples_and_derived_statistics_verified": True,
                 "input_seed_base": 9_071_400,
                 "complete_cells": package.P4_EXPECTED_CELLS,
                 "partial_cells": 0,
@@ -981,10 +952,7 @@ def test_p5_rejects_unverified_500k_timeout_contract() -> None:
 
 def test_p5_rejects_relabelled_500k_timeout_boundary(tmp_path: Path) -> None:
     root = Path(__file__).resolve().parents[1]
-    source = (
-        root
-        / "research/adaptive_v4_memory/manifests/p4-500k-context-preflight-v1.json"
-    )
+    source = root / "research/adaptive_v4_memory/manifests/p4-500k-context-preflight-v1.json"
     payload = json.loads(source.read_text())
     package._validate_boundary_manifest("p4_500k_context", source)
 
@@ -1606,9 +1574,7 @@ def test_p2_inference_resolution_table_separates_examples_from_seed_clusters() -
         "seed_p_values_used_as_success_gate": False,
     }
 
-    rows = package._p2_inference_resolution_rows(
-        {"audit": audit}, {"audit": audit}
-    )
+    rows = package._p2_inference_resolution_rows({"audit": audit}, {"audit": audit})
 
     assert [row["stage"] for row in rows] == ["p2-core", "p2-causal"]
     assert all(row["exact_sign_flip_assignments"] == 32 for row in rows)

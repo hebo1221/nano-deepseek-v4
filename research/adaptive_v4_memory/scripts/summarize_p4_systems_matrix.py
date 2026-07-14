@@ -13,30 +13,31 @@ import run_p4_systems_matrix as systems
 from summarize_p2_core_matrix import bootstrap_paired_mean
 
 METRICS = {
-    "ttft_p50_ms": lambda run: run["ttft_ms"]["p50_ms"],
-    "ttft_p95_ms": lambda run: run["ttft_ms"]["p95_ms"],
-    "ttft_p99_ms": lambda run: run["ttft_ms"]["p99_ms"],
-    "tpot_p50_ms": lambda run: run["decode_step_ms"]["p50_ms"],
-    "tpot_p95_ms": lambda run: run["decode_step_ms"]["p95_ms"],
-    "tpot_p99_ms": lambda run: run["decode_step_ms"]["p99_ms"],
-    "decode_step_p95_ms": lambda run: run["decode_step_ms"]["p95_ms"],
-    "decode_step_p99_ms": lambda run: run["decode_step_ms"]["p99_ms"],
-    "throughput_tokens_per_second": lambda run: run["generated_token_throughput_per_second"],
+    "ttft_p50_ms": lambda run: systems._percentile(run["request_ttft_latency_ms"], 0.50),
+    "ttft_p95_ms": lambda run: systems._percentile(run["request_ttft_latency_ms"], 0.95),
+    "ttft_p99_ms": lambda run: systems._percentile(run["request_ttft_latency_ms"], 0.99),
+    "tpot_p50_ms": lambda run: systems._percentile(run["decode_step_latency_ms"], 0.50),
+    "tpot_p95_ms": lambda run: systems._percentile(run["decode_step_latency_ms"], 0.95),
+    "tpot_p99_ms": lambda run: systems._percentile(run["decode_step_latency_ms"], 0.99),
+    "decode_step_p95_ms": lambda run: systems._percentile(run["decode_step_latency_ms"], 0.95),
+    "decode_step_p99_ms": lambda run: systems._percentile(run["decode_step_latency_ms"], 0.99),
+    "throughput_tokens_per_second": lambda run: (
+        run["requests"]
+        * run["batch"]
+        * run["generation_tokens"]
+        / (run["decode_elapsed_ms"] / 1_000.0)
+    ),
     "end_to_end_ms": lambda run: run["end_to_end_ms"],
-    "cache_allocated_delta_bytes": lambda run: run["cuda"][
-        "cache_allocated_delta_bytes"
-    ],
-    "allocated_after_prefill_bytes": lambda run: run["cuda"][
-        "allocated_after_prefill_bytes"
-    ],
+    "cache_allocated_delta_bytes": lambda run: run["cuda"]["cache_allocated_delta_bytes"],
+    "allocated_after_prefill_bytes": lambda run: run["cuda"]["allocated_after_prefill_bytes"],
     "reserved_after_prefill_bytes": lambda run: run["cuda"]["reserved_after_prefill_bytes"],
     "fragmentation_after_prefill_bytes": lambda run: run["cuda"][
         "fragmentation_after_prefill_bytes"
     ],
-    "fragmentation_after_prefill_ratio": lambda run: run["cuda"][
-        "fragmentation_after_prefill_bytes"
-    ]
-    / max(run["cuda"]["reserved_after_prefill_bytes"], 1),
+    "fragmentation_after_prefill_ratio": lambda run: (
+        run["cuda"]["fragmentation_after_prefill_bytes"]
+        / max(run["cuda"]["reserved_after_prefill_bytes"], 1)
+    ),
     "peak_allocated_bytes": lambda run: run["cuda"]["peak_allocated_bytes"],
     "peak_reserved_bytes": lambda run: run["cuda"]["peak_reserved_bytes"],
     "logical_cache_bytes": lambda run: run["cache"]["logical_cache_bytes"],
@@ -88,6 +89,20 @@ def summarize_terminal_cell(payload: dict[str, Any]) -> dict[str, Any]:
     paired_rows = [
         row for row in repetitions if set(row.get("policies", {})) == set(systems.POLICIES)
     ]
+    policy_runs = [
+        policy_run
+        for row in repetitions
+        for policy_run in row.get("policies", {}).values()
+    ]
+    raw_latency_sample_count = sum(
+        len(policy_run[name])
+        for policy_run in policy_runs
+        for name in (
+            "request_prefill_latency_ms",
+            "request_ttft_latency_ms",
+            "decode_step_latency_ms",
+        )
+    )
     result: dict[str, Any] = {
         "cell": payload["cell"],
         "status": payload["status"],
@@ -95,13 +110,13 @@ def summarize_terminal_cell(payload: dict[str, Any]) -> dict[str, Any]:
         "policy_status": payload["policy_status"],
         "warmup_accounting_available": payload["warmup_accounting_available"],
         "warmup_repetitions_attempted": payload["warmup_repetitions_attempted"],
-        "warmup_paired_repetitions_completed": payload[
-            "warmup_paired_repetitions_completed"
-        ],
+        "warmup_paired_repetitions_completed": payload["warmup_paired_repetitions_completed"],
         "warmup_policy_runs_completed": payload["warmup_policy_runs_completed"],
         "warmup_failures": payload["warmup_failures"],
         "measured_repetitions": len(repetitions),
         "paired_repetitions": len(paired_rows),
+        "successful_policy_runs": len(policy_runs),
+        "raw_latency_sample_count": raw_latency_sample_count,
         "all_available_paired_predictions_identical": all(
             row["greedy_predictions_identical"] for row in paired_rows
         ),
@@ -251,18 +266,12 @@ def main() -> None:
                     "completed_measured_repetitions": payload.get(
                         "completed_measured_repetitions", 0
                     ),
-                    "warmup_accounting_available": payload[
-                        "warmup_accounting_available"
-                    ],
-                    "warmup_repetitions_attempted": payload[
-                        "warmup_repetitions_attempted"
-                    ],
+                    "warmup_accounting_available": payload["warmup_accounting_available"],
+                    "warmup_repetitions_attempted": payload["warmup_repetitions_attempted"],
                     "warmup_paired_repetitions_completed": payload[
                         "warmup_paired_repetitions_completed"
                     ],
-                    "warmup_policy_runs_completed": payload[
-                        "warmup_policy_runs_completed"
-                    ],
+                    "warmup_policy_runs_completed": payload["warmup_policy_runs_completed"],
                     "warmup_failures": payload["warmup_failures"],
                     "policy_status": payload.get("policy_status"),
                 }
@@ -295,6 +304,10 @@ def main() -> None:
             "minimum_cell_timeout_seconds": min(cell_timeouts),
             "maximum_cell_timeout_seconds": max(cell_timeouts),
             "tail_latency_metrics_verified": True,
+            "raw_latency_samples_and_derived_statistics_verified": True,
+            "raw_latency_sample_count": sum(
+                cell["raw_latency_sample_count"] for cell in [*complete, *partial]
+            ),
             "terminal_cells": len(seen),
             "complete_cells": len(complete),
             "partial_cells": len(partial),

@@ -255,7 +255,8 @@
         "input_seed_base": 9071400,
         "warmup_failure_accounting_verified": true,
         "whole_cell_timeout_contract_verified": true,
-        "tail_latency_metrics_verified": true
+        "tail_latency_metrics_verified": true,
+        "raw_latency_samples_and_derived_statistics_verified": true
       }
     },
     "p4_production_systems": {

@@ -92,9 +92,7 @@ SCALE_AUDIT_SOURCE_MANIFESTS = {
         "research/adaptive_v4_memory/manifests/p4-production-systems-matrix-v1.json"
     ),
 }
-SCALE_AUDIT_CORE_DESIGN = Path(
-    "research/adaptive_v4_memory/scripts/evaluate_p2_core_shard.py"
-)
+SCALE_AUDIT_CORE_DESIGN = Path("research/adaptive_v4_memory/scripts/evaluate_p2_core_shard.py")
 
 
 def sha256(path: Path) -> str:
@@ -140,8 +138,7 @@ def _literal_assignment(path: Path, name: str) -> Any:
                     and value.args[0].func.id == "range"
                     and not value.args[0].keywords
                     and all(
-                        isinstance(argument, ast.Constant)
-                        and isinstance(argument.value, int)
+                        isinstance(argument, ast.Constant) and isinstance(argument.value, int)
                         for argument in value.args[0].args
                     )
                 ):
@@ -387,15 +384,11 @@ def _validate_experiment_scale_audit(payload: dict[str, Any]) -> None:
     reference_contexts = reference.get("contexts_tokens", [])
     production_contexts = production.get("contexts_tokens", [])
     registered_contexts = [*reference_contexts, preflight.get("context_tokens")]
-    reference_batches = sorted(
-        {row.get("batch") for row in reference.get("load_profiles", [])}
-    )
+    reference_batches = sorted({row.get("batch") for row in reference.get("load_profiles", [])})
     reference_loads = sorted(
         {row.get("active_requests") for row in reference.get("load_profiles", [])}
     )
-    production_batches = sorted(
-        {row.get("batch") for row in production.get("load_profiles", [])}
-    )
+    production_batches = sorted({row.get("batch") for row in production.get("load_profiles", [])})
     production_concurrency = sorted(
         {row.get("concurrency") for row in production.get("load_profiles", [])}
     )
@@ -415,9 +408,7 @@ def _validate_experiment_scale_audit(payload: dict[str, Any]) -> None:
         "independent_training_seed_clusters_per_scale": independent_seeds,
         "exact_two_sided_sign_flip_assignments": exact_assignments,
         "minimum_attainable_two_sided_p": 2.0 / exact_assignments,
-        "seed_cluster_bootstrap_resamples": study.get("statistics", {}).get(
-            "bootstrap_resamples"
-        ),
+        "seed_cluster_bootstrap_resamples": study.get("statistics", {}).get("bootstrap_resamples"),
         "example_level_role": "paired descriptive precision within a training seed; examples do not increase the number of independent trained-model clusters",
         "p_value_used_as_success_gate": False,
         "interpretation": "The study has high within-seed sample density but only five independent training seeds per scale. Exact and multiplicity-adjusted seed-level p-values are reported, while causal success requires effect direction, corrected seed-cluster intervals, memory matching, and five-of-five seed consistency rather than an unattainable p<0.05 threshold.",
@@ -526,8 +517,7 @@ def _validate_boundary_manifest(name: str, path: Path) -> dict[str, Any]:
             and type(resources.get("available_memory_plus_swap_bytes")) is int
             and type(resources.get("disk_free_bytes")) is int
             and resources["physical_memory_bytes"] < base_model["safetensors_bytes"]
-            and resources["available_memory_plus_swap_bytes"]
-            < base_model["safetensors_bytes"]
+            and resources["available_memory_plus_swap_bytes"] < base_model["safetensors_bytes"]
             and resources["disk_free_bytes"] > base_model["safetensors_bytes"]
             and resources.get("base_weights_fit_physical_memory") is False
             and resources.get("base_weights_fit_available_memory_plus_swap") is False
@@ -702,11 +692,7 @@ def _validate_reproduction_guide(path: Path) -> str:
     _require(path.is_file(), f"Missing reproduction guide: {path}")
     guide = path.read_text()
     normalized_guide = " ".join(guide.split())
-    missing = [
-        marker
-        for marker in REPRODUCTION_REQUIRED_MARKERS
-        if marker not in normalized_guide
-    ]
+    missing = [marker for marker in REPRODUCTION_REQUIRED_MARKERS if marker not in normalized_guide]
     _require(not missing, f"Reproduction guide is incomplete: {missing}")
     _require(
         "resume-safe" in normalized_guide
@@ -738,8 +724,7 @@ def _traceability_rows(
         and release.get("github_actions") == "required_before_goal_completion"
         and release.get("github_actions_current_status") == "disabled_manually"
         and release.get("github_actions_passed") is False
-        and release.get("runner")
-        == "research/adaptive_v4_memory/scripts/run_p5_release_gate.py"
+        and release.get("runner") == "research/adaptive_v4_memory/scripts/run_p5_release_gate.py"
         and release.get("output")
         == "artifacts/adaptive_v4_memory/paper_grade/p5/local-release-gate.summary.json"
         and release.get("timing") == "after-final-paper-package-generation",
@@ -927,8 +912,7 @@ def classify_evidence(
         and learned_audit.get("checkpoint_reuse_scale_seed_probes") == 10
         and learned_audit.get("exact_label_policy_test_coordinates_verified") is True
         and learned_audit.get("label_and_test_seed_schedules_verified") is True
-        and learned_audit.get("train_calibration_raw_membership_and_disjointness_verified")
-        is True
+        and learned_audit.get("train_calibration_raw_membership_and_disjointness_verified") is True
         and learned_audit.get("checkpoint_digest_consistency_verified") is True
         and learned_audit.get("raw_test_record_schema_verified") is True
         and learned_audit.get("raw_physical_metrics_and_aggregates_verified") is True
@@ -1042,6 +1026,7 @@ def classify_evidence(
     reference_accounted = (
         reference_audit.get("terminal_cells") == P4_EXPECTED_CELLS
         and reference_audit.get("repetition_seed_schedule_verified") is True
+        and reference_audit.get("raw_latency_samples_and_derived_statistics_verified") is True
         and reference_audit.get("input_seed_base") == 9_071_400
         and all(type(value) is int and value >= 0 for value in reference_counts)
         and sum(reference_counts) == P4_EXPECTED_CELLS
@@ -1392,15 +1377,9 @@ def _p2_inference_resolution_rows(
                 "stage": stage,
                 "independent_seed_clusters_per_cell": clusters,
                 "exact_sign_flip_assignments": 1 << clusters,
-                "minimum_attainable_two_sided_seed_p": audit[
-                    "minimum_attainable_two_sided_seed_p"
-                ],
-                "exact_seed_randomization_verified": audit[
-                    "exact_seed_randomization_verified"
-                ],
-                "p_value_used_as_success_gate": audit[
-                    "seed_p_values_used_as_success_gate"
-                ],
+                "minimum_attainable_two_sided_seed_p": audit["minimum_attainable_two_sided_seed_p"],
+                "exact_seed_randomization_verified": audit["exact_seed_randomization_verified"],
+                "p_value_used_as_success_gate": audit["seed_p_values_used_as_success_gate"],
                 "interpretation": (
                     "seed-level exact p-values are resolution-limited descriptive evidence; "
                     "within-seed examples do not add independent trained-model clusters"
@@ -1506,11 +1485,7 @@ def _causal_worst_slice_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
             "candidate": statistics["candidate"],
             "comparator": statistics["comparator"],
         }
-        rows.append(
-            _flatten_json_row(
-                {**identity, "scope": "global", **statistics["worst_slice"]}
-            )
-        )
+        rows.append(_flatten_json_row({**identity, "scope": "global", **statistics["worst_slice"]}))
         rows.extend(
             _flatten_json_row({**identity, "scope": "budget-scale", **row})
             for row in statistics["worst_slice_by_budget_scale"]
@@ -1760,12 +1735,8 @@ def _p4_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
                 "paired_repetitions": cell["paired_repetitions"],
                 "cell_timeout_seconds": cell["cell_timeout_seconds"],
                 "warmup_accounting_available": cell["warmup_accounting_available"],
-                "warmup_repetitions_attempted": cell[
-                    "warmup_repetitions_attempted"
-                ],
-                "warmup_paired_repetitions_completed": cell[
-                    "warmup_paired_repetitions_completed"
-                ],
+                "warmup_repetitions_attempted": cell["warmup_repetitions_attempted"],
+                "warmup_paired_repetitions_completed": cell["warmup_paired_repetitions_completed"],
                 "warmup_failures": json.dumps(
                     cell["warmup_failures"], sort_keys=True, separators=(",", ":")
                 ),
@@ -1782,9 +1753,7 @@ def _p4_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
                 "failure": (
                     ""
                     if cell["status"] == "complete"
-                    else json.dumps(
-                        cell["policy_status"], sort_keys=True, separators=(",", ":")
-                    )
+                    else json.dumps(cell["policy_status"], sort_keys=True, separators=(",", ":"))
                 ),
             }
         )
@@ -1800,12 +1769,8 @@ def _p4_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
                 "status": "failed",
                 "paired_repetitions": 0,
                 "cell_timeout_seconds": failure["cell_timeout_seconds"],
-                "warmup_accounting_available": failure[
-                    "warmup_accounting_available"
-                ],
-                "warmup_repetitions_attempted": failure[
-                    "warmup_repetitions_attempted"
-                ],
+                "warmup_accounting_available": failure["warmup_accounting_available"],
+                "warmup_repetitions_attempted": failure["warmup_repetitions_attempted"],
                 "warmup_paired_repetitions_completed": failure[
                     "warmup_paired_repetitions_completed"
                 ],
@@ -2197,9 +2162,7 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
             "scientific_classification",
         ],
     )
-    inference_resolution = _p2_inference_resolution_rows(
-        loaded["p2_core"], loaded["p2_causal"]
-    )
+    inference_resolution = _p2_inference_resolution_rows(loaded["p2_core"], loaded["p2_causal"])
     _write_csv(
         output_root / "table-p2-inference-resolution.csv",
         inference_resolution,
