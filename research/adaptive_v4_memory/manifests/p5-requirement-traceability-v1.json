@@ -19,6 +19,13 @@
       "github_actions_current_status": "disabled_by_user",
       "github_actions_passed": false,
       "github_actions_required_for_completion": false,
+      "source_remote_sync": {
+        "required": true,
+        "upstream_prefix": "origin/",
+        "ahead": 0,
+        "behind": 0,
+        "scope": "local origin tracking ref only; no fetch, PR, or CI claim"
+      },
       "interpretation": "The five digest-bound local release checks on the final clean source are mandatory. GitHub Actions remains disabled by user request, is outside the completion gate, and is never classified as passed."
     },
     "p1-controller-contract-tests": {
@@ -310,7 +317,7 @@
     {
       "id": "P5.4",
       "phase": "P5",
-      "requirement": "Pass Ruff, mypy, full pytest, build, and twine on the final clean source; keep GitHub Actions disabled by user request.",
+      "requirement": "Pass Ruff, mypy, full pytest, build, and twine on the final clean source, verify HEAD matches its origin tracking ref, and keep GitHub Actions disabled by user request.",
       "sources": [{"kind": "verification-contract", "name": "final-local-release-gate"}]
     },
     {
@@ -364,7 +371,7 @@
     {
       "id": "C.6",
       "phase": "completion",
-      "requirement": "Push an overclaim-safe paper package and reproducibility artifacts after final local release gates.",
+      "requirement": "Push an overclaim-safe paper package and reproducibility artifacts, verify HEAD matches its origin tracking ref, and pass final local release gates.",
       "sources": [
         {"kind": "generated-output", "name": "paper-report.md"},
         {"kind": "generated-output", "name": "artifact-index.json"},

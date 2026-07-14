@@ -1480,6 +1480,17 @@ def _traceability_rows(
         and release.get("timing") == "after-final-paper-package-generation",
         "Final local release-gate contract drifted.",
     )
+    _require(
+        release.get("source_remote_sync")
+        == {
+            "required": True,
+            "upstream_prefix": "origin/",
+            "ahead": 0,
+            "behind": 0,
+            "scope": "local origin tracking ref only; no fetch, PR, or CI claim",
+        },
+        "Final source remote-sync contract drifted.",
+    )
     raw_controller = contracts.get("p1-controller-contract-tests")
     _require(isinstance(raw_controller, dict), "Missing P1 controller-contract tests.")
     controller = cast(dict[str, Any], raw_controller)

@@ -947,7 +947,7 @@ def test_p5_traceability_covers_every_requirement_and_fails_closed() -> None:
         {
             "requirement_id": "P5.4",
             "phase": "P5",
-            "requirement": "Pass Ruff, mypy, full pytest, build, and twine on the final clean source; keep GitHub Actions disabled by user request.",
+                "requirement": "Pass Ruff, mypy, full pytest, build, and twine on the final clean source, verify HEAD matches its origin tracking ref, and keep GitHub Actions disabled by user request.",
             "source_kind": "verification-contract",
             "source_name": "final-local-release-gate",
             "binding_status": "scheduled-final-verification",
@@ -959,6 +959,13 @@ def test_p5_traceability_covers_every_requirement_and_fails_closed() -> None:
     assert (root / final_gate["runner"]).is_file()
     assert final_gate["github_actions_passed"] is False
     assert final_gate["github_actions_required_for_completion"] is False
+    assert final_gate["source_remote_sync"] == {
+        "required": True,
+        "upstream_prefix": "origin/",
+        "ahead": 0,
+        "behind": 0,
+        "scope": "local origin tracking ref only; no fetch, PR, or CI claim",
+    }
     controller_contract = traceability["verification_contracts"][
         "p1-controller-contract-tests"
     ]

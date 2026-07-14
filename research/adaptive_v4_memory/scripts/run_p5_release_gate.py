@@ -63,6 +63,39 @@ def _git(*args: str) -> str:
     ).stdout.strip()
 
 
+def remote_sync_state() -> dict[str, Any]:
+    try:
+        upstream = _git(
+            "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"
+        )
+        counts = _git("rev-list", "--left-right", "--count", f"HEAD...{upstream}")
+        ahead_text, behind_text = counts.split()
+        ahead = int(ahead_text)
+        behind = int(behind_text)
+        error = None
+    except Exception as caught:
+        upstream = None
+        ahead = None
+        behind = None
+        error = {"type": type(caught).__name__, "message": str(caught)}
+    return {
+        "upstream": upstream,
+        "ahead": ahead,
+        "behind": behind,
+        "verified": (
+            isinstance(upstream, str)
+            and upstream.startswith("origin/")
+            and ahead == 0
+            and behind == 0
+        ),
+        "verification_scope": (
+            "local origin tracking ref only; does not fetch, prove network freshness, "
+            "open a PR, or establish CI status"
+        ),
+        "error": error,
+    }
+
+
 def _resolve_argv(check: ReleaseCheck) -> tuple[str, ...]:
     if check.name != "twine":
         return check.argv
@@ -112,12 +145,14 @@ def build_payload(
     clean_before: bool,
     clean_after: bool,
     checks: list[dict[str, Any]],
+    remote_sync: dict[str, Any],
 ) -> dict[str, Any]:
     all_local_checks_passed = (
         clean_before
         and clean_after
         and len(checks) == len(RELEASE_CHECKS)
         and all(check.get("passed") is True for check in checks)
+        and remote_sync.get("verified") is True
     )
     return {
         "schema_version": 1,
@@ -129,6 +164,7 @@ def build_payload(
             "source_clean_before": clean_before,
             "source_clean_after": clean_after,
             "all_local_checks_passed": all_local_checks_passed,
+            "source_remote_sync": remote_sync,
             "failed_checks": [check["name"] for check in checks if not check.get("passed")],
             "github_actions": {
                 "status": "disabled_by_user",
@@ -139,9 +175,10 @@ def build_payload(
         "checks": checks,
         "environment": {"python": platform.python_version()},
         "claim_boundary": (
-            "This artifact proves only the five local release checks at one clean source "
-            "commit. GitHub Actions remains disabled by user request, is outside the "
-            "completion gate, and is not classified as passed."
+            "This artifact proves the five local release checks at one clean source commit "
+            "and equality with its local origin tracking ref. It does not fetch or prove "
+            "remote freshness, PR state, or CI status. GitHub Actions remains disabled by "
+            "user request, is outside the completion gate, and is not classified as passed."
         ),
     }
 
@@ -174,11 +211,13 @@ def main() -> None:
         if not result["passed"]:
             break
     clean_after = not bool(_git("status", "--porcelain"))
+    remote_sync = remote_sync_state()
     payload = build_payload(
         commit=commit,
         clean_before=clean_before,
         clean_after=clean_after,
         checks=checks,
+        remote_sync=remote_sync,
     )
     _write(args.output, payload)
     print(json.dumps(payload["audit"], sort_keys=True))

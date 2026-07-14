@@ -267,7 +267,10 @@ The final package is valid only from a clean source tree. Check
 `artifacts/adaptive_v4_memory/paper_grade/p5/artifact-index.json` for every input
 and generated SHA-256. GitHub Actions remains disabled by user request and must not be
 reported as passed. It is outside the completion gate; the five digest-bound local release
-checks above are the final source-verification contract.
+checks above are the final source-verification contract. The release-gate artifact also
+requires `HEAD` to have an `origin/*` upstream with zero locally tracked ahead/behind
+commits. This is a push-synchronization check against the local tracking ref; it does not
+fetch, establish network freshness, open a PR, or imply CI success.
 
 ## Official DeepSeek-V4 boundary
 
