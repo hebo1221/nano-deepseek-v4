@@ -53,6 +53,23 @@ def _fragmentation_bytes(run: dict[str, Any]) -> float:
     )
 
 
+def adapter_evidence_boundary(
+    manifest: dict[str, Any], adapter_path: Path
+) -> dict[str, bool]:
+    """Fail closed when translating adapter measurements into serving claims."""
+
+    checked_reference = Path(manifest["adapter_contract"]["checked_reference_executable"])
+    return {
+        "checked_static_full_request_batching_adapter": (
+            checked_reference.is_file()
+            and adapter_path.resolve() == checked_reference.resolve()
+        ),
+        # The current adapter interface validates timestamps and decode overlap, but it
+        # does not attest fused kernels, dynamic arrivals, or continuous admission.
+        "external_fused_dynamic_runtime_verified": False,
+    }
+
+
 METRICS: dict[str, Callable[[dict[str, Any]], float]] = {
     "ttft_p50_ms": lambda run: _quantile(
         _request_latency(run, "scheduler_received_ns", "first_token_ns"), 0.50
@@ -196,6 +213,8 @@ def summarize(matrix_path: Path) -> dict[str, Any]:
             dependency.get("sha256") == systems.sha256(dependency_path),
             f"Production {dependency_name} dependency drifted.",
         )
+    production_manifest = json.loads(Path(matrix["manifest"]["path"]).read_text())
+    evidence_boundary = adapter_evidence_boundary(production_manifest, adapter_path)
     manifest_digest = matrix["manifest"]["sha256"]
     p3_digest = matrix["p3_audit"]["sha256"]
     runs = matrix.get("runs", [])
@@ -297,6 +316,7 @@ def summarize(matrix_path: Path) -> dict[str, Any]:
             "all_paired_predictions_identical": all_complete
             and all_predictions_identical,
             "backend_provenance_consistent": backend_consistent,
+            **evidence_boundary,
             "raw_cell_digest_set_sha256": hashlib.sha256(
                 "\n".join(sorted(raw_digests)).encode()
             ).hexdigest(),
@@ -306,9 +326,10 @@ def summarize(matrix_path: Path) -> dict[str, Any]:
         "failure_table": failures,
         "environment": {"python": platform.python_version(), "numpy": np.__version__},
         "claim_boundary": (
-            "Actual request-concurrency measurements for the digest-pinned serving adapter. "
-            "This is not official DeepSeek-V4 or FlashMemory evidence unless those exact "
-            "separately frozen resources are used."
+            "Actual request-overlap measurements for the digest-pinned adapter. The checked "
+            "reference uses static full-request batching, not external fused kernels, dynamic "
+            "arrivals, or continuous admission. This is not official DeepSeek-V4 or "
+            "FlashMemory evidence unless those exact separately frozen resources are used."
         ),
     }
 

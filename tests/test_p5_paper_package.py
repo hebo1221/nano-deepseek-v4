@@ -256,6 +256,18 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
     }
     assert manifest["evidence"]["p4_production_systems"]["required_audit"]["terminal_cells"] == 216
     assert (
+        manifest["evidence"]["p4_production_systems"]["required_audit"][
+            "checked_static_full_request_batching_adapter"
+        ]
+        is True
+    )
+    assert (
+        manifest["evidence"]["p4_production_systems"]["required_audit"][
+            "external_fused_dynamic_runtime_verified"
+        ]
+        is False
+    )
+    assert (
         manifest["evidence"]["p4_reference_systems"]["required_audit"][
             "all_artifact_digests_verified"
         ]
@@ -573,6 +585,8 @@ def test_p5_classification_preserves_claim_boundaries() -> None:
                 "backend_provenance_consistent": True,
                 "tail_failure_accounting_complete": True,
                 "all_paired_predictions_identical": True,
+                "checked_static_full_request_batching_adapter": True,
+                "external_fused_dynamic_runtime_verified": False,
             }
         },
     )
@@ -646,6 +660,8 @@ def test_p5_success_requires_full_system_coverage() -> None:
                 "backend_provenance_consistent": True,
                 "tail_failure_accounting_complete": True,
                 "all_paired_predictions_identical": True,
+                "checked_static_full_request_batching_adapter": True,
+                "external_fused_dynamic_runtime_verified": False,
             }
         },
     )
@@ -656,7 +672,7 @@ def test_p5_success_requires_full_system_coverage() -> None:
     assert classifications["p3_natural"] == "bounded-result"
     assert classifications["p4_500k_context"] == "bounded-result"
     assert classifications["p4_reference_systems"] == "bounded-result"
-    assert classifications["p4_production_systems"] == "success"
+    assert classifications["p4_production_systems"] == "bounded-result"
 
 
 def test_p5_marks_all_failed_production_coverage_unverified() -> None:

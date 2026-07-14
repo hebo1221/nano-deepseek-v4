@@ -929,9 +929,12 @@ def classify_evidence(
         and production_audit.get("tail_failure_accounting_complete") is True
         and production_audit.get("all_paired_predictions_identical") is True
     )
+    production_external_runtime_verified = (
+        production_audit.get("external_fused_dynamic_runtime_verified") is True
+    )
     production_class = (
         "success"
-        if production_full
+        if production_full and production_external_runtime_verified
         else "bounded-result"
         if production_accounted and production_audit.get("complete_cells", 0) > 0
         else "unverified"

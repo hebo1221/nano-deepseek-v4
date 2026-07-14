@@ -8,9 +8,15 @@
       "timing": "before any P4 production cell was generated",
       "change": "expand the six marginal load profiles to the complete 4 batch x 3 actual-concurrency factorial",
       "reason": "measure batch-by-concurrency interactions rather than extrapolating them from b1 or c1"
+    },
+    {
+      "date": "2026-07-14",
+      "timing": "before any P4 production cell was generated",
+      "change": "make the checked reference adapter's static full-request batching boundary machine-auditable and reserve external fused/dynamic success for separately verified runtime evidence",
+      "reason": "request overlap and shared decode batches do not by themselves establish dynamic arrivals, continuous admission, or fused production-serving behavior"
     }
   ],
-  "evidence_tier": "external-serving-adapter-actual-request-concurrency",
+  "evidence_tier": "checked-static-full-request-batching-adapter",
   "prerequisite": "complete digest-bound five-benchmark P3 natural-suite audit",
   "scales": ["s55", "s151"],
   "checkpoint_training_seed": 6071401,
@@ -78,5 +84,5 @@
     "resume_unit": "one scale-context-generation-load-profile paired cell",
     "failure_is_terminal_and_reported": true
   },
-  "claim_boundary": "Actual request-concurrency evidence for the pinned adapter backend only. It is not official DeepSeek-V4 or FlashMemory evidence unless the separately frozen compatible runtime and weights are used."
+  "claim_boundary": "Actual request-overlap evidence for the pinned adapter backend only. The checked reference uses static full-request batching and cannot establish external fused kernels, dynamic arrivals, or continuous admission. It is not official DeepSeek-V4 or FlashMemory evidence unless the separately frozen compatible runtime and weights are used."
 }

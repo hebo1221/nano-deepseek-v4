@@ -161,6 +161,20 @@ def test_production_summary_reports_full_latency_memory_and_transfer_contract() 
     assert required.issubset(production_summary.METRICS)
 
 
+def test_checked_adapter_remains_bounded_static_batching_evidence() -> None:
+    root = Path(__file__).resolve().parents[1]
+    manifest = json.loads(
+        (root / "research/adaptive_v4_memory/manifests/p4-production-systems-matrix-v1.json")
+        .read_text()
+    )
+    adapter = root / manifest["adapter_contract"]["checked_reference_executable"]
+
+    assert production_summary.adapter_evidence_boundary(manifest, adapter) == {
+        "checked_static_full_request_batching_adapter": True,
+        "external_fused_dynamic_runtime_verified": False,
+    }
+
+
 def test_production_adapter_requires_timestamp_proven_concurrency() -> None:
     cell = next(cell for cell in production.frozen_cells() if cell[5] == 8)
     digest = "a" * 64

@@ -223,7 +223,9 @@
         "terminal_cells": 216,
         "all_terminal_cells_verified": true,
         "all_artifact_digests_verified": true,
-        "tail_failure_accounting_complete": true
+        "tail_failure_accounting_complete": true,
+        "checked_static_full_request_batching_adapter": true,
+        "external_fused_dynamic_runtime_verified": false
       }
     }
   },
