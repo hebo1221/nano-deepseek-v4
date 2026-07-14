@@ -283,6 +283,7 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
         "p4_500k_context",
         "p4_reference_systems",
         "p4_adaptive_systems",
+        "p4_adaptive_production_systems",
         "p4_production_systems",
     }
     assert set(manifest["execution_audits"]) == {
@@ -1134,6 +1135,7 @@ def test_p5_classification_preserves_claim_boundaries() -> None:
         "p4_500k_context": "bounded-result",
         "p4_reference_systems": "bounded-result",
         "p4_adaptive_systems": "bounded-result",
+        "p4_adaptive_production_systems": "unverified",
         "p4_production_systems": "bounded-result",
         "production_runtime_blocker": "unverified",
         "official_deepseek_v4": "unverified",

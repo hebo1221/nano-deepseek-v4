@@ -208,6 +208,7 @@
       "requirement": "Evaluate the registered context, batch, concurrency, and generation matrix including a 500K attempt.",
       "sources": [
         {"kind": "evidence", "name": "p4_reference_systems"},
+        {"kind": "evidence", "name": "p4_adaptive_production_systems"},
         {"kind": "evidence", "name": "p4_production_systems"},
         {"kind": "evidence", "name": "p4_500k_context"}
       ]
@@ -218,6 +219,7 @@
       "requirement": "Use warmups and at least 30 timed repetitions with TTFT, TPOT, p50/p95/p99, and throughput.",
       "sources": [
         {"kind": "evidence", "name": "p4_reference_systems"},
+        {"kind": "evidence", "name": "p4_adaptive_production_systems"},
         {"kind": "evidence", "name": "p4_production_systems"}
       ]
     },
@@ -227,6 +229,7 @@
       "requirement": "Measure HBM, host memory, fragmentation, transfers, misses, and controller/index time.",
       "sources": [
         {"kind": "evidence", "name": "p4_reference_systems"},
+        {"kind": "evidence", "name": "p4_adaptive_production_systems"},
         {"kind": "evidence", "name": "p4_production_systems"}
       ]
     },
@@ -236,6 +239,7 @@
       "requirement": "Separate reference PyTorch from production runtime evidence and verify kernel/runtime contracts.",
       "sources": [
         {"kind": "evidence", "name": "p4_reference_systems"},
+        {"kind": "evidence", "name": "p4_adaptive_production_systems"},
         {"kind": "evidence", "name": "p4_production_systems"},
         {"kind": "boundary-manifest", "name": "production_runtime_blocker"}
       ]

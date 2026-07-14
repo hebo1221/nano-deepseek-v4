@@ -67,6 +67,8 @@ REPRODUCTION_REQUIRED_MARKERS = [
     "run_p4_systems_matrix.py",
     "run_p4_adaptive_systems_matrix.py",
     "summarize_p4_adaptive_systems_matrix.py",
+    "run_p4_adaptive_production_systems_matrix.py",
+    "summarize_p4_adaptive_production_systems_matrix.py",
     "run_p4_production_systems_matrix.py",
     "run_p1_online_lookahead_parallel.py --workers 3",
     "build_p5_paper_package.py",
@@ -90,6 +92,7 @@ BOUNDARY_EXPERIMENT_IDS = {
     "p4_500k_context": "p4-500k-context-preflight-v1",
     "p4_reference_systems": "p4-reference-systems-matrix-v1",
     "p4_adaptive_systems": "p4-adaptive-systems-matrix-v1",
+    "p4_adaptive_production_systems": "p4-adaptive-production-systems-matrix-v1",
     "p4_production_systems": "p4-production-systems-matrix-v1",
     "official_deepseek_v4": "p3-official-flashmemory-deepseek-v4-v1",
     "production_runtime_blocker": "p4-production-resource-blocker-v1",
@@ -1198,6 +1201,7 @@ def classify_evidence(
     p4_reference_systems: dict[str, Any],
     p4_production_systems: dict[str, Any],
     p4_adaptive_systems: dict[str, Any] | None = None,
+    p4_adaptive_production_systems: dict[str, Any] | None = None,
     p3_cross_family: dict[str, Any] | None = None,
     p3_natural_adaptive_quota: dict[str, Any] | None = None,
 ) -> dict[str, str]:
@@ -1425,6 +1429,39 @@ def classify_evidence(
         if adaptive_accounted
         else "unverified"
     )
+    adaptive_production_audit = (
+        p4_adaptive_production_systems.get("audit", {})
+        if isinstance(p4_adaptive_production_systems, dict)
+        else {}
+    )
+    adaptive_production_counts = tuple(
+        adaptive_production_audit.get(field)
+        for field in ("complete_cells", "partial_cells", "failed_cells")
+    )
+    adaptive_production_accounted = (
+        adaptive_production_audit.get("terminal_cells") == 432
+        and adaptive_production_audit.get("all_terminal_cells_verified") is True
+        and adaptive_production_audit.get("adapter_spec_and_controller_schedule_verified")
+        is True
+        and adaptive_production_audit.get("fixed_calibrated_policy_pair_verified") is True
+        and adaptive_production_audit.get("physical_hot_budget_schema_verified") is True
+        and adaptive_production_audit.get("raw_latency_samples_and_derived_statistics_verified")
+        is True
+        and adaptive_production_audit.get("failure_accounting_complete") is True
+        and adaptive_production_audit.get("dynamic_arrivals_or_continuous_admission_verified")
+        is False
+        and adaptive_production_audit.get("external_fused_runtime_verified") is False
+        and all(type(value) is int and value >= 0 for value in adaptive_production_counts)
+        and sum(cast(int, value) for value in adaptive_production_counts) == 432
+    )
+    adaptive_production_class = (
+        "bounded-result"
+        if adaptive_production_accounted
+        and adaptive_production_audit.get("complete_cells", 0) > 0
+        else "negative-result"
+        if adaptive_production_accounted
+        else "unverified"
+    )
     production_audit = p4_production_systems["audit"]
     production_counts = tuple(
         production_audit.get(field) for field in ("complete_cells", "partial_cells", "failed_cells")
@@ -1492,6 +1529,7 @@ def classify_evidence(
         "p4_500k_context": preflight_class,
         "p4_reference_systems": "bounded-result" if reference_measured else "unverified",
         "p4_adaptive_systems": adaptive_class,
+        "p4_adaptive_production_systems": adaptive_production_class,
         "p4_production_systems": production_class,
         "production_runtime_blocker": "unverified",
         "official_deepseek_v4": "unverified",
@@ -2445,6 +2483,7 @@ def _report(
     p4_500k_context: dict[str, Any],
     p4_reference_systems: dict[str, Any],
     p4_adaptive_systems: dict[str, Any],
+    p4_adaptive_production_systems: dict[str, Any],
     p4_production_systems: dict[str, Any],
     inputs: list[dict[str, Any]],
 ) -> str:
@@ -2453,6 +2492,7 @@ def _report(
     p4_500k_correctness = p4_500k_context["correctness"]
     p4_reference = p4_reference_systems["audit"]
     p4_adaptive = p4_adaptive_systems["audit"]
+    p4_adaptive_production = p4_adaptive_production_systems["audit"]
     p4_production = p4_production_systems["audit"]
     evidence_lines = "\n".join(
         f"| {row['name']} | {classifications.get(row['name'], 'unverified')} | `{row['sha256']}` |"
@@ -2599,6 +2639,14 @@ user request, is outside the completion gate, and is never reported as passed.
   and {p4_adaptive["failed_cells"]} failed. The P2 gate outcome was recorded but did not
   select cells. Controller time, physical hot budgets, raw latency, HBM, and transfer
   metrics are independently audited; this table is not an actual-concurrency claim.
+- P4 adaptive production systems: {p4_adaptive_production["terminal_cells"]} terminal
+  simultaneous static-batch `fixed+pins` versus `calibrated+pins` cells;
+  {p4_adaptive_production["complete_cells"]} complete,
+  {p4_adaptive_production["partial_cells"]} partial, and
+  {p4_adaptive_production["failed_cells"]} failed. The audit verifies paired controller
+  schedules, physical hot-memory equality, raw request/decode timestamps, 10,000 paired
+  bootstrap resamples, and Holm correction. It does not claim dynamic arrivals,
+  continuous admission, fused kernels, or an external production runtime.
 - P4 production systems: {p4_production["terminal_cells"]} terminal actual-concurrency cells,
   {p4_production["complete_cells"]} complete, {p4_production["partial_cells"]} partial, and
   {p4_production["failed_cells"]} failed. Each adapter cell runs in a subprocess under a
@@ -2748,6 +2796,7 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         loaded["p4_reference_systems"],
         loaded["p4_production_systems"],
         loaded["p4_adaptive_systems"],
+        p4_adaptive_production_systems=loaded["p4_adaptive_production_systems"],
         p3_cross_family=loaded["p3_cross_family"],
         p3_natural_adaptive_quota=loaded["p3_natural_adaptive_quota"],
     )
@@ -3045,6 +3094,7 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         p4_500k_context=loaded["p4_500k_context"],
         p4_reference_systems=loaded["p4_reference_systems"],
         p4_adaptive_systems=loaded["p4_adaptive_systems"],
+        p4_adaptive_production_systems=loaded["p4_adaptive_production_systems"],
         p4_production_systems=loaded["p4_production_systems"],
         inputs=inputs,
     )

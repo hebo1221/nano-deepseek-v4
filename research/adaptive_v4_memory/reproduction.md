@@ -156,6 +156,9 @@ adapter matrix separately:
   --output artifacts/adaptive_v4_memory/paper_grade/p4/reference-systems.summary.json
 .venv/bin/python research/adaptive_v4_memory/scripts/run_p4_adaptive_systems_matrix.py
 .venv/bin/python research/adaptive_v4_memory/scripts/summarize_p4_adaptive_systems_matrix.py
+.venv/bin/python research/adaptive_v4_memory/scripts/validate_p4_adaptive_production_manifest.py
+.venv/bin/python research/adaptive_v4_memory/scripts/run_p4_adaptive_production_systems_matrix.py
+.venv/bin/python research/adaptive_v4_memory/scripts/summarize_p4_adaptive_production_systems_matrix.py
 .venv/bin/python research/adaptive_v4_memory/scripts/run_p4_production_systems_matrix.py \
   --adapter-executable research/adaptive_v4_memory/scripts/p4_continuous_batch_adapter.py
 .venv/bin/python research/adaptive_v4_memory/scripts/summarize_p4_production_systems_matrix.py

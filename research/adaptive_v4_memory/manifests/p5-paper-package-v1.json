@@ -481,6 +481,29 @@
         "input_seed_base": 9171400
       }
     },
+    "p4_adaptive_production_systems": {
+      "path": "artifacts/adaptive_v4_memory/paper_grade/p4/adaptive-production-systems.summary.json",
+      "experiment_id": "p4-adaptive-production-systems-matrix-audit-v1",
+      "required_audit": {
+        "terminal_cells": 432,
+        "all_terminal_cells_verified": true,
+        "all_artifact_digests_verified": true,
+        "adapter_spec_and_controller_schedule_verified": true,
+        "fixed_calibrated_policy_pair_verified": true,
+        "both_budgets_verified": true,
+        "both_scales_verified": true,
+        "physical_hot_budget_schema_verified": true,
+        "protected_pin_contract_verified": true,
+        "prediction_equality_not_required": true,
+        "raw_latency_samples_and_derived_statistics_verified": true,
+        "paired_bootstrap_resamples": 10000,
+        "paired_bootstrap_seed_base": 9271502,
+        "holm_metric_families_verified": true,
+        "failure_accounting_complete": true,
+        "dynamic_arrivals_or_continuous_admission_verified": false,
+        "external_fused_runtime_verified": false
+      }
+    },
     "p4_production_systems": {
       "path": "artifacts/adaptive_v4_memory/paper_grade/p4/production-systems.summary.json",
       "experiment_id": "p4-production-systems-matrix-audit-v1",
@@ -566,6 +589,7 @@
     "p4_500k_context": "research/adaptive_v4_memory/manifests/p4-500k-context-preflight-v1.json",
     "p4_reference_systems": "research/adaptive_v4_memory/manifests/p4-reference-systems-matrix-v1.json",
     "p4_adaptive_systems": "research/adaptive_v4_memory/manifests/p4-adaptive-systems-matrix-v1.json",
+    "p4_adaptive_production_systems": "research/adaptive_v4_memory/manifests/p4-adaptive-production-systems-matrix-v1.json",
     "p4_production_systems": "research/adaptive_v4_memory/manifests/p4-production-systems-matrix-v1.json",
     "official_deepseek_v4": "research/adaptive_v4_memory/manifests/p3-flashmemory-deepseek-v4-v1.json",
     "production_runtime_blocker": "research/adaptive_v4_memory/manifests/p4-production-resource-blocker-v1.json"
