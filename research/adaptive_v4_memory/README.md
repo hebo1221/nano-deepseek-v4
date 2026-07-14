@@ -149,6 +149,23 @@ pins the Qwen3-4B 262K transfer model, all five natural benchmark revisions,
 minimum, and the sequence-gated acquisition path. Oversized examples are
 reported as unsupported and are never head-tail truncated.
 
+The P4 reference systems matrix freezes 108 scale/context/generation/load cells,
+with five warmups and 30 measured repetitions for resident and tiered policies.
+Policy failures are isolated: if resident OOMs, the surviving tiered policy is
+still measured and the cell is reported as partial instead of being discarded.
+
+After all audits finish, the strict P5 package can be regenerated with:
+
+```bash
+.venv/bin/python research/adaptive_v4_memory/scripts/build_p5_paper_package.py
+```
+
+The command requires a clean tree and complete 4,500-shard P2 core,
+9,000-shard causal, 253,500-prediction RULER, and 108-cell systems audits. It
+writes digest-indexed CSV tables and a paper-style report under
+`artifacts/adaptive_v4_memory/paper_grade/p5/`; missing evidence is never
+imputed.
+
 ## P1 causal-controller pilot
 
 `nano_deepseek_v4/causal_memory_controller.py` now applies a layer-local action

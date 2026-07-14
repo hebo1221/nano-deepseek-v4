@@ -315,3 +315,13 @@ and exclusions. Raw private prompts and large checkpoints remain external.
 The study is complete only when the required Tier-S matrix, at least one full
 natural benchmark suite, quality-qualified system measurements, statistical
 analysis, tests, and reproduction instructions are committed and pushed.
+
+The executable final gate is `manifests/p5-paper-package-v1.json`, implemented
+by `scripts/build_p5_paper_package.py`. It requires the completed P2 core, P2
+causal, P3 RULER, and P4 systems audits at their frozen counts. It regenerates
+every primary table and the paper report, records all input/output SHA-256
+digests in one artifact index, and classifies conclusions only as `success`,
+`bounded-result`, `negative-result`, or `unverified`. A failed causal gate is
+bounded to the tested controller, a single compatible-model result is not
+promoted to official V4 evidence, and failed or partial system cells remain in
+the primary table.
