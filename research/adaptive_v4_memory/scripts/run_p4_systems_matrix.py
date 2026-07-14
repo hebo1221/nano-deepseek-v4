@@ -121,6 +121,7 @@ def require_p3_audit(path: Path) -> dict[str, Any]:
         or audit.get("all_run_identities_verified") is not True
         or audit.get("all_terminal_measurement_schema_verified") is not True
         or audit.get("all_dataset_example_identities_verified") is not True
+        or audit.get("all_reported_scores_recomputed_from_raw_response") is not True
         or audit.get("safety_stress_terminal") is not True
         or audit.get("natural_safety_terminal") is not True
         or audit.get("benchmarks_terminal") != len(P3_BENCHMARKS)

@@ -138,6 +138,7 @@ def build_label_rows(
                 failures.append(
                     {
                         "conversation_id": conversation_id,
+                        "input_sha256": sequence_digest,
                         "query_position": query_position,
                         "reason": "no_prior_token_csa_probe",
                     }

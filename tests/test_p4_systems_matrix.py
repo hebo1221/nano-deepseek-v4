@@ -133,6 +133,7 @@ def test_p4_requires_full_natural_suite_not_ruler_only(tmp_path: Path) -> None:
                     "all_run_identities_verified": True,
                     "all_terminal_measurement_schema_verified": True,
                     "all_dataset_example_identities_verified": True,
+                    "all_reported_scores_recomputed_from_raw_response": True,
                     "safety_stress_terminal": True,
                     "natural_safety_terminal": True,
                     "benchmarks_terminal": 5,

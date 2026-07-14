@@ -84,6 +84,12 @@ def _online_learned_lookahead_evidence(*, passed: bool = False) -> dict[str, obj
             "dependency_artifact_digests_verified": True,
             "checkpoint_reuse_equivalence_verified": True,
             "checkpoint_reuse_scale_seed_probes": 10,
+            "exact_label_policy_test_coordinates_verified": True,
+            "label_and_test_seed_schedules_verified": True,
+            "train_calibration_raw_membership_and_disjointness_verified": True,
+            "checkpoint_digest_consistency_verified": True,
+            "raw_test_record_schema_verified": True,
+            "raw_physical_metrics_and_aggregates_verified": True,
             "all_inputs_paired": True,
             "zero_budget_violations": True,
             "complete_failure_accounting": True,
@@ -425,6 +431,12 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
         is True
     )
     assert (
+        manifest["evidence"]["p3_natural"]["required_audit"][
+            "all_reported_scores_recomputed_from_raw_response"
+        ]
+        is True
+    )
+    assert (
         manifest["evidence"]["p3_natural_safety"]["required_audit"][
             "raw_artifact_digests_verified"
         ]
@@ -723,6 +735,7 @@ def test_p5_classification_preserves_claim_boundaries() -> None:
                         "all_run_identities_verified": True,
                         "all_terminal_measurement_schema_verified": True,
                         "all_dataset_example_identities_verified": True,
+                        "all_reported_scores_recomputed_from_raw_response": True,
                     "generation_seed_by_benchmark": {
                         "RULER": 42,
                         "SCBench": 42,
@@ -820,6 +833,7 @@ def test_p5_success_requires_full_system_coverage() -> None:
                         "all_run_identities_verified": True,
                         "all_terminal_measurement_schema_verified": True,
                         "all_dataset_example_identities_verified": True,
+                        "all_reported_scores_recomputed_from_raw_response": True,
                     "generation_seed_by_benchmark": {
                         "RULER": 42,
                         "SCBench": 42,
@@ -906,6 +920,7 @@ def test_p5_marks_all_failed_production_coverage_unverified() -> None:
                 "all_run_identities_verified": True,
                 "all_terminal_measurement_schema_verified": True,
                 "all_dataset_example_identities_verified": True,
+                "all_reported_scores_recomputed_from_raw_response": True,
                 "all_paired_quality_contrasts_verified": True,
                 "dataset_license_revision_inventory_verified": True,
                 "upstream_code_license_revision_inventory_verified": True,

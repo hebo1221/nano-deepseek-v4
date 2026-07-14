@@ -5,6 +5,7 @@ import hashlib
 import json
 import math
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, cast
 
@@ -22,6 +23,7 @@ RUNNER_PATHS = {
 }
 BOOTSTRAP_RESAMPLES = 10_000
 CONFIDENCE_LEVEL = 0.95
+ScoreVerifier = Callable[[dict[str, Any]], tuple[float, str | None]]
 
 
 def _require(condition: bool, message: str) -> None:
@@ -236,6 +238,189 @@ def expected_example_identifiers(
     raise ValueError(f"Unknown natural benchmark: {benchmark}")
 
 
+def _source_root(
+    *, benchmark: str, cell: dict[str, Any], manifest: dict[str, Any]
+) -> Path:
+    metadata = cell.get("evaluation_source_inventory")
+    dependency = _dependency(metadata, "evaluation source inventory")
+    inventory = json.loads(Path(dependency["path"]).read_text())
+    source = inventory.get("benchmarks", {}).get(benchmark)
+    contract = manifest["benchmarks"][benchmark]["upstream_code"]
+    _require(
+        isinstance(source, dict)
+        and source.get("revision") == contract["revision"]
+        and source.get("clean_tracked_tree") is True,
+        f"{benchmark} source inventory drifted.",
+    )
+    root = Path(source.get("path", ""))
+    observed = {row["path"]: row["sha256"] for row in source.get("files", [])}
+    _require(
+        observed == contract["files_sha256"],
+        f"{benchmark} source file inventory drifted.",
+    )
+    for relative, digest in observed.items():
+        path = root / relative
+        _require(
+            path.is_file() and sha256(path) == digest,
+            f"{benchmark} source artifact drifted: {relative}.",
+        )
+    return root
+
+
+def build_score_verifier(
+    *,
+    benchmark: str,
+    manifest: dict[str, Any],
+    manifest_path: Path,
+    cell: dict[str, Any],
+) -> ScoreVerifier:
+    if benchmark == "RULER":
+        from prepare_p3_natural_ruler_dataset import LENGTHS
+        from run_p3_natural_ruler import load_dataset_contracts
+        from run_p3_ruler_matrix import example_score, load_dataset
+
+        generator = Path(__file__).with_name("prepare_p3_natural_ruler_dataset.py")
+        dataset_root = Path(manifest["benchmarks"][benchmark]["execution"]["dataset_root"])
+        contracts, observed_set = load_dataset_contracts(
+            dataset_root,
+            natural_manifest_digest=sha256(manifest_path),
+            generator_digest=sha256(generator),
+        )
+        _require(
+            observed_set == cell.get("benchmark_dataset_digest_set_sha256"),
+            "RULER score-audit dataset set drifted.",
+        )
+        ruler_references: dict[str, tuple[str, list[str]]] = {}
+        for length in LENGTHS:
+            frame = load_dataset(contracts[length])
+            for row in frame.to_dict(orient="records"):
+                ruler_references[f"{length}:{row['row_id']}"] = (
+                    row["task"],
+                    row["answer"],
+                )
+
+        def verify_ruler(row: dict[str, Any]) -> tuple[float, str | None]:
+            task, answers = ruler_references[row["example_id"]]
+            return example_score(task, row["raw_response"], answers), row["raw_response"]
+
+        return verify_ruler
+
+    inventory = _dependency(cell.get("dataset_inventory"), "dataset inventory")
+    paths = _dataset_paths(
+        benchmark=benchmark,
+        manifest=manifest,
+        inventory_path=Path(inventory["path"]),
+    )
+    if benchmark == "LongBench-v2":
+        from p3_natural_metrics import extract_longbench_v2_choice, score_longbench_v2
+
+        longbench_payload = json.loads(paths[0].read_text())
+        answers = {str(row["_id"]): str(row["answer"]) for row in longbench_payload}
+
+        def verify_longbench(row: dict[str, Any]) -> tuple[float, str | None]:
+            response = row["raw_response"]
+            return score_longbench_v2(response, answers[row["example_id"]]), (
+                extract_longbench_v2_choice(response)
+            )
+
+        return verify_longbench
+
+    if benchmark == "MRCR":
+        import tiktoken
+        from p3_natural_metrics import score_mrcr
+        from run_p3_mrcr import load_rows
+
+        source_rows = load_rows(
+            paths,
+            contract=manifest["benchmarks"][benchmark],
+            official_encoder=tiktoken.get_encoding("o200k_base"),
+        )
+        mrcr_references = {
+            str(row["example_id"]): (
+                str(row["answer"]),
+                str(row["random_string_to_prepend"]),
+            )
+            for row in source_rows
+        }
+
+        def verify_mrcr(row: dict[str, Any]) -> tuple[float, str | None]:
+            answer, prefix = mrcr_references[row["example_id"]]
+            response = row["raw_response"]
+            return score_mrcr(response, answer, prefix), response
+
+        return verify_mrcr
+
+    if benchmark == "LongMemEval":
+        from run_p3_longmemeval import _load_official_judge_module
+
+        longmem_payload = json.loads(paths[0].read_text())
+        longmem_rows = {str(row["question_id"]): row for row in longmem_payload}
+        source_root = _source_root(benchmark=benchmark, cell=cell, manifest=manifest)
+        scorer_digest = manifest["benchmarks"][benchmark]["upstream_code"][
+            "files_sha256"
+        ]["src/evaluation/evaluate_qa.py"]
+        module_cache: dict[str, Any] = {}
+
+        def verify_longmem(row: dict[str, Any]) -> tuple[float, str | None]:
+            module = module_cache.get("official")
+            if module is None:
+                module = _load_official_judge_module(source_root, scorer_digest)
+                module_cache["official"] = module
+            source = longmem_rows[row["example_id"]]
+            judge = row["judge"]
+            expected_prompt = module.get_anscheck_prompt(
+                source["question_type"],
+                source["question"],
+                source["answer"],
+                row["raw_response"],
+                abstention="_abs" in source["question_id"],
+            )
+            _require(
+                judge["prompt"] == expected_prompt,
+                f"LongMemEval official judge prompt drifted: {row['example_id']}.",
+            )
+            return float("yes" in judge["raw_response"].lower()), row["raw_response"]
+
+        return verify_longmem
+
+    if benchmark == "SCBench":
+        import pyarrow.parquet as pq
+        from p3_scbench_official import (
+            OfficialSCBenchScorer,
+            load_repoqa_module,
+            load_rouge_lsum,
+        )
+
+        rows_by_task = {path.parent.name: pq.read_table(path).to_pylist() for path in paths}
+        source_root = _source_root(benchmark=benchmark, cell=cell, manifest=manifest)
+        source_digests = manifest["benchmarks"][benchmark]["upstream_code"]["files_sha256"]
+        scorer = OfficialSCBenchScorer(
+            rows_by_task=rows_by_task,
+            repo_module=load_repoqa_module(
+                source_root, source_digests["scbench/repo_qa_utils.py"]
+            ),
+            rouge_metric=load_rouge_lsum(),
+        )
+
+        def verify_scbench(row: dict[str, Any]) -> tuple[float, str | None]:
+            source = rows_by_task[row["task"]][row["row_index"]]
+            score, detail = scorer.score(
+                task=row["task"],
+                row=source,
+                turn=source["multi_turns"][row["turn_index"]],
+                prediction=row["raw_response"],
+                subtask=row["subtask"],
+            )
+            _require(
+                detail == row["scorer_detail"],
+                f"SCBench official scorer trace drifted: {row['example_id']}.",
+            )
+            return score, row["raw_response"]
+
+        return verify_scbench
+    raise ValueError(f"Unknown natural benchmark: {benchmark}")
+
+
 def _distribution(values: list[float | int]) -> dict[str, Any] | None:
     if not values:
         return None
@@ -419,6 +604,7 @@ def audit_arm(
     expected_revisions: dict[str, str] | None = None,
     expected_seed: int = 42,
     expected_identifiers: set[str] | None = None,
+    score_verifier: ScoreVerifier | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     artifact = json.loads(artifact_path.read_text())
     _require(
@@ -493,6 +679,7 @@ def audit_arm(
     identifiers: set[str] = set()
     failures: dict[str, int] = {}
     scored = 0
+    scores_recomputed = 0
     score_sum = 0.0
     measurement_values: dict[str, list[float | int]] = {
         "exact_input_tokens": [],
@@ -632,6 +819,7 @@ def audit_arm(
             score = row.get("score")
             if not _unit_interval_number(score):
                 raise ValueError(f"Invalid score: {identifier}")
+            score_value = cast(int | float, score)
             _require(row.get("failure_type") is None, f"Scored record has failure: {identifier}")
             _require(
                 bool(row["raw_response"].strip())
@@ -639,8 +827,25 @@ def audit_arm(
                 and row.get("stop_reason") in {"max-new-tokens", "eos-or-special-token"},
                 f"Incomplete scored generation evidence: {identifier}",
             )
+            if score_verifier is not None:
+                recomputed_score, recomputed_parsed = score_verifier(row)
+                _require(
+                    _unit_interval_number(recomputed_score)
+                    and math.isclose(
+                        float(score_value),
+                        float(recomputed_score),
+                        rel_tol=1e-12,
+                        abs_tol=1e-12,
+                    ),
+                    f"Reported natural score drifted from raw response: {identifier}",
+                )
+                _require(
+                    row.get("parsed_response") == recomputed_parsed,
+                    f"Parsed natural response drifted: {identifier}",
+                )
+                scores_recomputed += 1
             scored += 1
-            score_sum += float(cast(int | float, score))
+            score_sum += float(score_value)
             for metric in scored_measurement_values:
                 scored_measurement_values[metric].append(row[metric])
         else:
@@ -714,6 +919,9 @@ def audit_arm(
             "terminal_measurement_schema_verified": True,
             "dataset_example_identities_verified": expected_identifiers is not None,
             "expected_example_identity_set_sha256": _identifier_digest(identifiers),
+            "scores_recomputed_from_raw_response": score_verifier is not None
+            and scores_recomputed == scored,
+            "scores_recomputed": scores_recomputed,
         },
         dependencies,
     )
@@ -747,6 +955,12 @@ def summarize_benchmark(
         len(expected_identifiers) == expected,
         f"{benchmark} frozen dataset identity count drifted.",
     )
+    score_verifier = build_score_verifier(
+        benchmark=benchmark,
+        manifest=manifest,
+        manifest_path=manifest_path,
+        cell=first_cell,
+    )
     arms: dict[str, Any] = {}
     dependencies: list[dict[str, Any]] = []
     for arm in required:
@@ -760,6 +974,7 @@ def summarize_benchmark(
             expected_revisions=expected_revisions,
             expected_seed=expected_seed,
             expected_identifiers=expected_identifiers,
+            score_verifier=score_verifier,
         )
         dependencies.append(dependency)
     causal = {row["causal_gate"]["sha256"] for row in dependencies}
@@ -816,6 +1031,10 @@ def summarize_benchmark(
             "all_run_identities_verified": True,
             "all_terminal_measurement_schema_verified": True,
             "all_dataset_example_identities_verified": True,
+            "all_reported_scores_recomputed_from_raw_response": True,
+            "reported_scores_recomputed": sum(
+                row["scores_recomputed"] for row in arms.values()
+            ),
             "expected_example_identity_set_sha256": _identifier_digest(
                 expected_identifiers
             ),

@@ -925,6 +925,13 @@ def classify_evidence(
         and learned_audit.get("dependency_artifact_digests_verified") is True
         and learned_audit.get("checkpoint_reuse_equivalence_verified") is True
         and learned_audit.get("checkpoint_reuse_scale_seed_probes") == 10
+        and learned_audit.get("exact_label_policy_test_coordinates_verified") is True
+        and learned_audit.get("label_and_test_seed_schedules_verified") is True
+        and learned_audit.get("train_calibration_raw_membership_and_disjointness_verified")
+        is True
+        and learned_audit.get("checkpoint_digest_consistency_verified") is True
+        and learned_audit.get("raw_test_record_schema_verified") is True
+        and learned_audit.get("raw_physical_metrics_and_aggregates_verified") is True
         and learned_audit.get("all_inputs_paired") is True
         and learned_audit.get("zero_budget_violations") is True
         and learned_audit.get("complete_failure_accounting") is True
@@ -946,6 +953,7 @@ def classify_evidence(
         and natural_audit.get("all_run_identities_verified") is True
         and natural_audit.get("all_terminal_measurement_schema_verified") is True
         and natural_audit.get("all_dataset_example_identities_verified") is True
+        and natural_audit.get("all_reported_scores_recomputed_from_raw_response") is True
         and natural_audit.get("generation_seed_by_benchmark")
         == {
             "RULER": 42,

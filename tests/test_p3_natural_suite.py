@@ -353,6 +353,7 @@ def _natural_benchmark_summaries(tmp_path: Path, manifest_path: Path) -> dict[st
                 "all_run_identities_verified": True,
                 "all_terminal_measurement_schema_verified": True,
                 "all_dataset_example_identities_verified": True,
+                "all_reported_scores_recomputed_from_raw_response": True,
                 "expected_example_identity_set_sha256": "a" * 64,
                 "raw_record_digest_set_sha256": "0" * 64,
             },
@@ -370,6 +371,8 @@ def _natural_benchmark_summaries(tmp_path: Path, manifest_path: Path) -> dict[st
                     "terminal_measurement_schema_verified": True,
                     "dataset_example_identities_verified": True,
                     "expected_example_identity_set_sha256": "a" * 64,
+                    "scores_recomputed_from_raw_response": True,
+                    "scores_recomputed": expected[name] - 1,
                     "measurements": {
                         "all_terminal_attempts": {
                             metric: distribution(expected[name])
@@ -735,6 +738,7 @@ def test_natural_suite_audit_requires_all_examples_and_baselines(tmp_path: Path)
     assert payload["audit"]["all_run_identities_verified"] is True
     assert payload["audit"]["all_terminal_measurement_schema_verified"] is True
     assert payload["audit"]["all_dataset_example_identities_verified"] is True
+    assert payload["audit"]["all_reported_scores_recomputed_from_raw_response"] is True
     assert set(payload["audit"]["generation_seed_by_benchmark"].values()) == {42}
     assert payload["audit"]["dataset_license_revision_inventory_verified"] is True
     assert payload["audit"]["upstream_code_license_revision_inventory_verified"] is True
@@ -877,6 +881,7 @@ def test_natural_suite_audit_rejects_unaccounted_failure(tmp_path: Path) -> None
     [
         ("record-revision-audit-false", "record revision audit failed"),
         ("dataset-identity-audit-false", "frozen dataset identity audit failed"),
+        ("raw-score-audit-false", "raw-response score audit failed"),
         ("infinite-distribution", "all-terminal latency_ms mean drifted"),
         ("boolean-failure-count", "invalid failure count"),
         ("infinite-bootstrap-ci", "paired quality statistics drifted"),
@@ -896,6 +901,8 @@ def test_natural_suite_rejects_invalid_derived_statistics(
         payload["audit"]["all_record_revisions_verified"] = False
     elif mutation == "dataset-identity-audit-false":
         payload["audit"]["all_dataset_example_identities_verified"] = False
+    elif mutation == "raw-score-audit-false":
+        payload["audit"]["all_reported_scores_recomputed_from_raw_response"] = False
     elif mutation == "infinite-distribution":
         payload["arms"]["native-dense"]["measurements"]["all_terminal_attempts"][
             "latency_ms"
@@ -1061,7 +1068,14 @@ def test_natural_benchmark_summary_reports_paired_quality_and_physical_contrasts
     manifest = json.loads(source_manifest.read_text())
     manifest["suite_audit"]["per_arm_minimum_accounted_examples"]["LongBench-v2"] = 2
     dataset = tmp_path / "data.json"
-    dataset.write_text(json.dumps([{"_id": "example-0"}, {"_id": "example-1"}]))
+    dataset.write_text(
+        json.dumps(
+            [
+                {"_id": "example-0", "answer": "A"},
+                {"_id": "example-1", "answer": "A"},
+            ]
+        )
+    )
     manifest["benchmarks"]["LongBench-v2"]["dataset"]["files"] = [
         {
             "path": "data.json",
@@ -1120,7 +1134,9 @@ def test_natural_benchmark_summary_reports_paired_quality_and_physical_contrasts
     for row in fixed_records:
         row["arm"] = "strongest-memory-matched-fixed"
         row["arm_config"] = {"method": "fixed"}
-    fixed_records[0]["score"] = 0.5
+    fixed_records[0]["raw_response"] = "The correct answer is (B)"
+    fixed_records[0]["parsed_response"] = "B"
+    fixed_records[0]["score"] = 0.0
     fixed_raw.write_text("".join(json.dumps(row) + "\n" for row in fixed_records))
     fixed_cell = tmp_path / "fixed-cell.json"
     fixed_payload = deepcopy(native_payload)
@@ -1149,7 +1165,7 @@ def test_natural_benchmark_summary_reports_paired_quality_and_physical_contrasts
     assert contrast["paired_examples"] == 2
     assert contrast["paired_clusters"] == 2
     assert contrast["cluster_unit"] == "example"
-    assert contrast["mean_difference"] == -0.25
+    assert contrast["mean_difference"] == -0.5
     assert contrast["failure_as_zero"] is True
     assert contrast["bootstrap_resamples"] == 10_000
     assert result["paired_measurement_contrasts"]["hot_resident_bytes"][
@@ -1157,6 +1173,7 @@ def test_natural_benchmark_summary_reports_paired_quality_and_physical_contrasts
     ] == 2
     assert result["audit"]["all_record_revisions_verified"] is True
     assert result["audit"]["all_dataset_example_identities_verified"] is True
+    assert result["audit"]["all_reported_scores_recomputed_from_raw_response"] is True
 
     tampered_native = deepcopy(native_records)
     tampered_fixed = deepcopy(fixed_records)
@@ -1187,6 +1204,28 @@ def test_natural_benchmark_summary_reports_paired_quality_and_physical_contrasts
     native_payload["raw_records"]["sha256"] = _digest(native_raw)
     fixed_payload["raw_records"]["sha256"] = _digest(fixed_raw)
     native_cell.write_text(json.dumps(native_payload))
+    fixed_cell.write_text(json.dumps(fixed_payload))
+
+    fixed_records[0]["score"] = 1.0
+    fixed_raw.write_text("".join(json.dumps(row) + "\n" for row in fixed_records))
+    fixed_payload["raw_records"]["sha256"] = _digest(fixed_raw)
+    fixed_cell.write_text(json.dumps(fixed_payload))
+    with pytest.raises(ValueError, match="Reported natural score drifted from raw response"):
+        summarize_benchmark(
+            benchmark="LongBench-v2",
+            manifest_path=manifest_path,
+            arm_artifacts={
+                "native-dense": native_cell,
+                "strongest-memory-matched-fixed": fixed_cell,
+            },
+            conditional_arms={
+                "fixed+pins": "incompatible",
+                "synthetic-qualified-calibrated+pins": "withheld-by-causal-gate",
+            },
+        )
+    fixed_records[0]["score"] = 0.0
+    fixed_raw.write_text("".join(json.dumps(row) + "\n" for row in fixed_records))
+    fixed_payload["raw_records"]["sha256"] = _digest(fixed_raw)
     fixed_cell.write_text(json.dumps(fixed_payload))
 
     fixed_records[0]["revisions"]["model_revision"] = "wrong-revision"

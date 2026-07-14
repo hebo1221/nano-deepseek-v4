@@ -88,6 +88,11 @@ def generation_seed(*, training_seed: int, family: str, context: int, replicate:
     )
 
 
+def _input_digest(input_ids: torch.Tensor) -> str:
+    values = input_ids.detach().to(device="cpu", dtype=torch.int64).contiguous()
+    return hashlib.sha256(values.numpy().tobytes()).hexdigest()
+
+
 def _query_columns(workload: AdaptiveMemoryWorkloadBatch) -> dict[int, int]:
     return heldout._query_columns(workload)
 
@@ -368,6 +373,8 @@ def evaluate(args: argparse.Namespace, model: DeepSeekV4ForCausalLM) -> dict[str
                     {
                         "arm": arm,
                         "conversation_id": conversation_id,
+                        "batch_offset": offset,
+                        "input_sha256": _input_digest(workload.input_ids[row]),
                         "family": args.family,
                         "context": args.context,
                         "replicate": args.replicate,

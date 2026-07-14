@@ -146,6 +146,10 @@ def audit_benchmark(
         audit.get("all_dataset_example_identities_verified") is True,
         f"{name} frozen dataset identity audit failed.",
     )
+    _require(
+        audit.get("all_reported_scores_recomputed_from_raw_response") is True,
+        f"{name} raw-response score audit failed.",
+    )
     _sha256_value(
         audit.get("expected_example_identity_set_sha256"),
         f"{name} expected example identity set",
@@ -168,6 +172,8 @@ def audit_benchmark(
             row.get("run_identity_verified") is True
             and row.get("terminal_measurement_schema_verified") is True
             and row.get("dataset_example_identities_verified") is True
+            and row.get("scores_recomputed_from_raw_response") is True
+            and row.get("scores_recomputed") == row.get("scored_examples")
             and row.get("expected_example_identity_set_sha256")
             == audit["expected_example_identity_set_sha256"],
             f"{name}/{arm} execution evidence audit failed.",
@@ -249,6 +255,8 @@ def audit_benchmark(
             "expected_example_identity_set_sha256": row[
                 "expected_example_identity_set_sha256"
             ],
+            "scores_recomputed_from_raw_response": True,
+            "scores_recomputed": row["scores_recomputed"],
         }
     contrast = payload.get("paired_quality_contrast", {})
     expected_clusters = 1_844 if name == "SCBench" else expected_examples
@@ -904,6 +912,7 @@ def summarize(
             "all_run_identities_verified": True,
             "all_terminal_measurement_schema_verified": True,
             "all_dataset_example_identities_verified": True,
+            "all_reported_scores_recomputed_from_raw_response": True,
             "all_paired_quality_contrasts_verified": True,
             "dataset_license_revision_inventory_verified": True,
             "upstream_code_license_revision_inventory_verified": True,
