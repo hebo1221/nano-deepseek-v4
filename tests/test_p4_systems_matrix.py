@@ -226,11 +226,18 @@ def test_p4_reference_policy_order_restarts_after_warmups() -> None:
 
 
 def test_p4_adaptive_gate_is_complete_but_outcome_independent(tmp_path: Path) -> None:
+    raw_matrix = tmp_path / "nine-seed-matrix.json"
+    raw_matrix.write_text('{"completed_shards": 16200}')
     path = tmp_path / "nine-seed.json"
     path.write_text(
         json.dumps(
             {
                 "experiment_id": "p2-nine-seed-causal-ablation-audit-v1",
+                "source": {"dirty": False},
+                "raw_matrix": {
+                    "path": str(raw_matrix),
+                    "sha256": systems.sha256(raw_matrix),
+                },
                 "audit": {
                     "unique_shards": 16_200,
                     "independent_seed_clusters_per_cell": 9,
@@ -252,15 +259,34 @@ def test_p4_adaptive_gate_is_complete_but_outcome_independent(tmp_path: Path) ->
                 },
                 "pooling_audit": {
                     "identical_frozen_contracts": True,
+                    "identical_base_implementation": True,
                     "disjoint_training_seeds": True,
+                    "cohorts_independently_audited": True,
+                    "outcome_dependent_early_stopping": False,
+                },
+                "confirmatory_inference": {
+                    "independent_training_seeds_per_scale": 9,
+                    "exact_sign_assignments": 512,
+                    "outcome_dependent_early_stopping": False,
                 },
                 "primary_causal_gate": {
                     "candidate": "calibrated+pins",
                     "comparator": "fixed+pins",
+                    "scales": list(adaptive.SCALES),
+                    "budgets": list(adaptive.BUDGETS),
+                    "seeds_per_scale": 9,
                     "required_cells": 4,
                     "passed": False,
                     "cells": [
-                        {"scale": scale, "budget": budget, "passed": False}
+                        {
+                            "scale": scale,
+                            "budget": budget,
+                            "pooled_effect_positive": False,
+                            "four_cell_corrected_lower_bound_positive": False,
+                            "all_seed_effects_positive": False,
+                            "all_seed_memory_cells_within_one_percent": False,
+                            "passed": False,
+                        }
                         for scale in adaptive.SCALES
                         for budget in adaptive.BUDGETS
                     ],
@@ -272,6 +298,11 @@ def test_p4_adaptive_gate_is_complete_but_outcome_independent(tmp_path: Path) ->
     result = adaptive.require_nine_seed_causal_audit(path)
 
     assert result["primary_causal_gate"]["passed"] is False
+
+    raw_matrix.write_text('{"drifted": true}')
+    with pytest.raises(ValueError, match="complete nine-seed causal audit"):
+        adaptive.require_nine_seed_causal_audit(path)
+    raw_matrix.write_text('{"completed_shards": 16200}')
 
     payload = json.loads(path.read_text())
     payload["audit"]["primary_four_cell_bonferroni_verified"] = False

@@ -106,12 +106,43 @@ def require_nine_seed_causal_audit(path: Path) -> dict[str, Any]:
     payload = json.loads(path.read_text())
     audit = payload.get("audit", {})
     gate = payload.get("primary_causal_gate", {})
-    cells = gate.get("cells", [])
+    cells_payload = gate.get("cells", [])
+    cells = cells_payload if isinstance(cells_payload, list) else []
+    raw_matrix = payload.get("raw_matrix", {})
+    raw_matrix_path = Path(raw_matrix.get("path", ""))
+    pooling = payload.get("pooling_audit", {})
+    inference = payload.get("confirmatory_inference", {})
     identities = {
         (cell.get("scale"), cell.get("budget")) for cell in cells if isinstance(cell, dict)
     }
+    cell_contracts_are_consistent = all(
+        isinstance(cell, dict)
+        and all(
+            type(cell.get(name)) is bool
+            for name in (
+                "pooled_effect_positive",
+                "four_cell_corrected_lower_bound_positive",
+                "all_seed_effects_positive",
+                "all_seed_memory_cells_within_one_percent",
+            )
+        )
+        and cell.get("passed")
+        is all(
+            cell[name]
+            for name in (
+                "pooled_effect_positive",
+                "four_cell_corrected_lower_bound_positive",
+                "all_seed_effects_positive",
+                "all_seed_memory_cells_within_one_percent",
+            )
+        )
+        for cell in cells
+    )
     _require(
         payload.get("experiment_id") == "p2-nine-seed-causal-ablation-audit-v1"
+        and payload.get("source", {}).get("dirty") is False
+        and raw_matrix_path.is_file()
+        and raw_matrix.get("sha256") == reference.sha256(raw_matrix_path)
         and audit.get("unique_shards") == 16_200
         and audit.get("independent_seed_clusters_per_cell") == 9
         and audit.get("all_raw_shards_verified") is True
@@ -123,12 +154,25 @@ def require_nine_seed_causal_audit(path: Path) -> dict[str, Any]:
         and audit.get("outcome_dependent_early_stopping") is False
         and audit.get("seed_p_values_used_as_success_gate") is False
         and all(audit.get(name) is True for name in REQUIRED_CAUSAL_TRUE_AUDITS)
-        and payload.get("pooling_audit", {}).get("identical_frozen_contracts") is True
-        and payload.get("pooling_audit", {}).get("disjoint_training_seeds") is True
+        and pooling.get("identical_frozen_contracts") is True
+        and pooling.get("identical_base_implementation") is True
+        and pooling.get("disjoint_training_seeds") is True
+        and pooling.get("cohorts_independently_audited") is True
+        and pooling.get("outcome_dependent_early_stopping") is False
+        and inference.get("independent_training_seeds_per_scale") == 9
+        and inference.get("exact_sign_assignments") == 512
+        and inference.get("outcome_dependent_early_stopping") is False
         and gate.get("candidate") == "calibrated+pins"
         and gate.get("comparator") == "fixed+pins"
+        and tuple(gate.get("scales", ())) == SCALES
+        and tuple(gate.get("budgets", ())) == BUDGETS
+        and gate.get("seeds_per_scale") == 9
         and gate.get("required_cells") == 4
-        and identities == set(product(SCALES, BUDGETS)),
+        and isinstance(cells_payload, list)
+        and len(cells) == 4
+        and identities == set(product(SCALES, BUDGETS))
+        and cell_contracts_are_consistent
+        and gate.get("passed") is all(cell["passed"] for cell in cells),
         "Adaptive P4 requires the complete nine-seed causal audit.",
     )
     return payload
