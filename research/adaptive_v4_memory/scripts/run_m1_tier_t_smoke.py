@@ -13,6 +13,7 @@ from nano_deepseek_v4 import (
     DeepSeekV4Config,
     DeepSeekV4ForCausalLM,
     MemoryTraceConfig,
+    ReplayFeatureRow,
     ReplayPolicyConfig,
     analyze_budget_signals,
     build_replay_queries,
@@ -100,8 +101,8 @@ def run() -> dict:
     }
 
     oracle_runs = []
-    feature_rows = []
-    labels = []
+    feature_rows: list[ReplayFeatureRow] = []
+    labels: list[int] = []
     for trace in evaluation:
         queries = build_replay_queries(trace)
         populated = [query for query in queries if query.ranked_blocks]

@@ -231,7 +231,7 @@ def evaluate_actual_quality(
         m2 = run_training_free_controller(
             final_queries,
             TrainingFreeControllerConfig(
-                global_block_budget=M2_CONFIGS[scale]["global_block_budget"],
+                global_block_budget=int(M2_CONFIGS[scale]["global_block_budget"]),
                 dense_fallback_block_budget=maximum_dense_budget,
                 top_p=M2_CONFIGS[scale]["top_p"],
                 uncertainty_threshold=0.8,

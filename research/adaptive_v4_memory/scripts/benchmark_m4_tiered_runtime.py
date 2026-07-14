@@ -8,11 +8,13 @@ import math
 import platform
 import time
 from pathlib import Path
+from typing import Any
 
 import torch
 
 from nano_deepseek_v4 import (
     AssociativeRecallConfig,
+    DeepSeekV4Cache,
     DeepSeekV4Config,
     DeepSeekV4ForCausalLM,
     generate_associative_recall_batch,
@@ -73,7 +75,7 @@ def _prefill(
     model: DeepSeekV4ForCausalLM,
     prompt: torch.Tensor,
     tier_budget: int | None,
-) -> tuple[object, float]:
+) -> tuple[DeepSeekV4Cache, float]:
     torch.cuda.synchronize()
     started = time.perf_counter_ns()
     output = model(prompt, use_cache=True)
@@ -91,7 +93,7 @@ def _prefill(
 @torch.inference_mode()
 def _decode(
     model: DeepSeekV4ForCausalLM,
-    cache: object,
+    cache: DeepSeekV4Cache,
     tokens: torch.Tensor,
 ) -> tuple[list[torch.Tensor], list[float]]:
     logits: list[torch.Tensor] = []
@@ -110,7 +112,7 @@ def _decode(
     return logits, latencies
 
 
-def _cache_compressor_bytes(cache: object) -> int:
+def _cache_compressor_bytes(cache: DeepSeekV4Cache) -> int:
     total = 0
     for layer in cache.layers:
         values = layer.compressed_kv.get("compressor")
@@ -177,7 +179,7 @@ def benchmark_scenario(
     max_error = float((resident_tensor - tiered_tensor).abs().max())
     resident_delta = resident_allocated - baseline_allocated
     tiered_delta = tiered_allocated - tier_baseline_allocated
-    result = {
+    result: dict[str, Any] = {
         "name": name,
         "context_length": context_length,
         "batch_size": batch_size,
@@ -235,8 +237,7 @@ def benchmark_scenario(
     }
     result["comparison"] = {
         "cache_allocated_reduction_bytes": resident_delta - tiered_delta,
-        "cache_allocated_reduction_ratio": (resident_delta - tiered_delta)
-        / max(resident_delta, 1),
+        "cache_allocated_reduction_ratio": (resident_delta - tiered_delta) / max(resident_delta, 1),
         "ttft_ratio": tiered_ttft / resident_ttft,
         "decode_p95_ratio": result["tiered"]["decode"]["p95_ms"]
         / result["resident"]["decode"]["p95_ms"],
@@ -272,8 +273,8 @@ def benchmark_concurrent_requests(
         0, model.config.vocab_size, (requests, decode_tokens), generator=generator
     ).to(device)
 
-    def build(tiered: bool) -> tuple[list[object], float]:
-        caches = []
+    def build(tiered: bool) -> tuple[list[DeepSeekV4Cache], float]:
+        caches: list[DeepSeekV4Cache] = []
         started = time.perf_counter_ns()
         for request in range(requests):
             cache, _ = _prefill(
@@ -285,7 +286,7 @@ def benchmark_concurrent_requests(
         torch.cuda.synchronize()
         return caches, (time.perf_counter_ns() - started) / 1_000_000.0
 
-    def decode(caches: list[object]) -> tuple[list[torch.Tensor], list[float]]:
+    def decode(caches: list[DeepSeekV4Cache]) -> tuple[list[torch.Tensor], list[float]]:
         logits = []
         latencies = []
         for token_index in range(decode_tokens):
@@ -333,9 +334,7 @@ def benchmark_concurrent_requests(
             "greedy_tokens_equal": bool(
                 torch.equal(resident_tensor.argmax(-1), tiered_tensor.argmax(-1))
             ),
-            "max_absolute_logit_error": float(
-                (resident_tensor - tiered_tensor).abs().max()
-            ),
+            "max_absolute_logit_error": float((resident_tensor - tiered_tensor).abs().max()),
         },
         "resident": {
             "aggregate_ttft_ms": resident_ttft,
@@ -399,9 +398,7 @@ def quality_check(
             device=device,
         )
         resident, _ = _prefill(model, batch.input_ids[:, :-1], None)
-        resident_output = model(
-            batch.input_ids[:, -1:], past_key_values=resident, use_cache=True
-        )
+        resident_output = model(batch.input_ids[:, -1:], past_key_values=resident, use_cache=True)
         tiered, _ = _prefill(model, batch.input_ids[:, :-1], model.config.index_topk)
         tiered_output = model(batch.input_ids[:, -1:], past_key_values=tiered, use_cache=True)
         resident_logits = resident_output.logits[:, -1]
