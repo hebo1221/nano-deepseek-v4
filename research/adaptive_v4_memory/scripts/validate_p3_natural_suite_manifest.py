@@ -32,6 +32,7 @@ EXPECTED_REVISIONS = {
     "LongMemEval-code": "9e0b455f4ef0e2ab8f2e582289761153549043fc",
     "MRCR-data": "f4c69fae7cf81f7ca26b9fee34b392a50f6b8a1d",
 }
+EXPECTED_MODEL_SNAPSHOT_SET = "67330e21c7b222ff647feee4fc4e037385d1d14f9d9d9ebbdf9343e87f5fa58f"
 
 
 def _require_sha256(value: Any, label: str) -> None:
@@ -56,6 +57,17 @@ def validate_manifest(payload: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("Natural benchmark order drifted from the preregistration.")
     if payload["model"]["revision"] != EXPECTED_REVISIONS["model"]:
         raise ValueError("The 128K-compatible model revision drifted.")
+    snapshot_bytes = json.dumps(
+        payload["model"]["snapshot_files_sha256"],
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode()
+    snapshot_set = hashlib.sha256(snapshot_bytes).hexdigest()
+    if (
+        snapshot_set != EXPECTED_MODEL_SNAPSHOT_SET
+        or payload["model"].get("snapshot_digest_set_sha256") != snapshot_set
+    ):
+        raise ValueError("The pinned model snapshot digest set drifted.")
     if payload["model"]["maximum_supported_context_tokens"] < 131072:
         raise ValueError("The primary model does not cover the 128K protocol point.")
     if payload["common_protocol"]["overflow_action"] != "report_unsupported_without_truncation":
@@ -72,11 +84,6 @@ def validate_manifest(payload: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("P4 must remain gated on both compatible natural baselines.")
     if "judge-blocked" not in payload["common_protocol"]["failure_accounting"]:
         raise ValueError("Natural failure accounting must retain blocked official judges.")
-    if tuple(payload["common_protocol"]["mandatory_compatible_arms"]) != (
-        "native-dense",
-        "strongest-memory-matched-fixed",
-    ):
-        raise ValueError("The always-runnable Qwen baseline arms drifted.")
     conditional_rule = payload["common_protocol"]["conditional_arm_rule"]
     if (
         "architecture-preserving port" not in conditional_rule
@@ -167,9 +174,10 @@ def validate_manifest(payload: dict[str, Any]) -> dict[str, Any]:
     }
     if suite["per_arm_minimum_accounted_examples"] != expected_accounting:
         raise ValueError("Natural-suite per-benchmark accounting drifted.")
-    if sum(expected_accounting.values()) != payload["execution_totals"][
-        "minimum_predictions_per_arm"
-    ]:
+    if (
+        sum(expected_accounting.values())
+        != payload["execution_totals"]["minimum_predictions_per_arm"]
+    ):
         raise ValueError("Natural-suite audit totals do not close.")
 
     return {

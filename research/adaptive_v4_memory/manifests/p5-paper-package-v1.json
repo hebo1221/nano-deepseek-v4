@@ -29,7 +29,11 @@
     "p4_reference_systems": {
       "path": "artifacts/adaptive_v4_memory/paper_grade/p4/reference-systems.summary.json",
       "experiment_id": "p4-reference-systems-matrix-audit-v1",
-      "required_audit": {"terminal_cells": 108}
+      "required_audit": {
+        "terminal_cells": 108,
+        "all_terminal_cells_verified": true,
+        "all_artifact_digests_verified": true
+      }
     },
     "p4_production_systems": {
       "path": "artifacts/adaptive_v4_memory/paper_grade/p4/production-systems.summary.json",

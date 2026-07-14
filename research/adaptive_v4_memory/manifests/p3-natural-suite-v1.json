@@ -28,6 +28,7 @@
     "maximum_supported_context_tokens": 262144,
     "minimum_transformers_version": "4.51.0",
     "checkpoint_bytes": 8060917568,
+    "snapshot_digest_set_sha256": "67330e21c7b222ff647feee4fc4e037385d1d14f9d9d9ebbdf9343e87f5fa58f",
     "snapshot_files_sha256": {
       ".gitattributes": "34448b82c17d60fec9b65b1f093c115ddbaadc04beb1b0140b6bfed2e012a930",
       "LICENSE": "832dd9e00a68dd83b3c3fb9f5588dad7dcf337a0db50f7d9483f310cd292e92e",

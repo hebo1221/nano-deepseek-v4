@@ -153,8 +153,22 @@ def _natural_benchmark_summaries(tmp_path: Path, manifest_path: Path) -> dict[st
     manifest = json.loads(manifest_path.read_text())
     causal = tmp_path / "causal.json"
     inventory = tmp_path / "inventory.json"
-    causal.write_text("{}")
-    inventory.write_text("{}")
+    causal.write_text(
+        json.dumps(
+            {
+                "experiment_id": "p2-causal-ablation-audit-v1",
+                "source": {"dirty": False},
+            }
+        )
+    )
+    inventory.write_text(
+        json.dumps(
+            {
+                "experiment_id": "p3-natural-dataset-inventory-v1",
+                "source": {"dirty": False},
+            }
+        )
+    )
     expected = manifest["suite_audit"]["per_arm_minimum_accounted_examples"]
     paths: dict[str, Path] = {}
     for name, experiment_id in BENCHMARK_IDS.items():
@@ -180,16 +194,14 @@ def _natural_benchmark_summaries(tmp_path: Path, manifest_path: Path) -> dict[st
             },
             "conditional_arms": {
                 "fixed+pins": {"status": "incompatible"},
-                "synthetic-qualified-calibrated+pins": {
-                    "status": "withheld-by-causal-gate"
-                },
+                "synthetic-qualified-calibrated+pins": {"status": "withheld-by-causal-gate"},
             },
             "causal_gate": {"path": str(causal), "sha256": _digest(causal)},
             "dataset_inventory": {
                 "path": str(inventory),
                 "sha256": _digest(inventory),
             },
-            "model_snapshot_digest_set_sha256": "1" * 64,
+            "model_snapshot_digest_set_sha256": manifest["model"]["snapshot_digest_set_sha256"],
         }
         path = tmp_path / f"{name}.json"
         path.write_text(json.dumps(payload))
@@ -222,4 +234,16 @@ def test_natural_suite_audit_rejects_unaccounted_failure(tmp_path: Path) -> None
     paths["MRCR"].write_text(json.dumps(payload))
 
     with pytest.raises(ValueError, match="do not close"):
+        summarize(manifest, paths)
+
+
+def test_natural_suite_audit_rejects_wrong_model_snapshot(tmp_path: Path) -> None:
+    root = Path(__file__).resolve().parents[1]
+    manifest = root / "research/adaptive_v4_memory/manifests/p3-natural-suite-v1.json"
+    paths = _natural_benchmark_summaries(tmp_path, manifest)
+    payload = json.loads(paths["SCBench"].read_text())
+    payload["model_snapshot_digest_set_sha256"] = "1" * 64
+    paths["SCBench"].write_text(json.dumps(payload))
+
+    with pytest.raises(ValueError, match="does not match the frozen manifest"):
         summarize(manifest, paths)

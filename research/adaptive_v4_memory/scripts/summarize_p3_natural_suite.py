@@ -14,6 +14,10 @@ BENCHMARK_IDS = {
     "LongMemEval": "p3-natural-longmemeval-audit-v1",
     "MRCR": "p3-natural-mrcr-audit-v1",
 }
+DEPENDENCY_IDS = {
+    "causal_gate": "p2-causal-ablation-audit-v1",
+    "dataset_inventory": "p3-natural-dataset-inventory-v1",
+}
 
 
 def sha256(path: Path) -> str:
@@ -42,6 +46,7 @@ def audit_benchmark(
     required_arms: tuple[str, ...],
     allowed_failures: set[str],
     manifest_digest: str,
+    model_snapshot_digest: str,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     _require(path.is_file(), f"Missing natural benchmark summary: {path}")
     payload = json.loads(path.read_text())
@@ -112,11 +117,13 @@ def audit_benchmark(
     dependencies = {
         "causal_gate": payload.get("causal_gate"),
         "dataset_inventory": payload.get("dataset_inventory"),
-        "model_snapshot_digest_set_sha256": payload.get(
-            "model_snapshot_digest_set_sha256"
-        ),
+        "model_snapshot_digest_set_sha256": payload.get("model_snapshot_digest_set_sha256"),
     }
     _sha256_value(dependencies["model_snapshot_digest_set_sha256"], f"{name} model set")
+    _require(
+        dependencies["model_snapshot_digest_set_sha256"] == model_snapshot_digest,
+        f"{name} model snapshot does not match the frozen manifest.",
+    )
     for dependency_name in ("causal_gate", "dataset_inventory"):
         metadata = dependencies[dependency_name]
         _require(isinstance(metadata, dict), f"Missing {name} {dependency_name} dependency.")
@@ -126,12 +133,19 @@ def audit_benchmark(
             metadata.get("sha256") == sha256(dependency_path),
             f"{name} {dependency_name} digest drifted.",
         )
+        dependency = json.loads(dependency_path.read_text())
+        _require(
+            dependency.get("experiment_id") == DEPENDENCY_IDS[dependency_name],
+            f"{name} {dependency_name} has the wrong experiment id.",
+        )
+        _require(
+            dependency.get("source", {}).get("dirty") is False,
+            f"{name} {dependency_name} was produced from a dirty source tree.",
+        )
     return result, dependencies
 
 
-def summarize(
-    manifest_path: Path, summary_paths: dict[str, Path]
-) -> dict[str, Any]:
+def summarize(manifest_path: Path, summary_paths: dict[str, Path]) -> dict[str, Any]:
     manifest = json.loads(manifest_path.read_text())
     _require(
         manifest.get("experiment_id") == "p3-natural-language-suite-v1",
@@ -141,6 +155,8 @@ def summarize(
     required_arms = tuple(manifest["common_protocol"]["p4_gate_baseline_arms"])
     expected = manifest["suite_audit"]["per_arm_minimum_accounted_examples"]
     allowed_failures = set(manifest["common_protocol"]["failure_accounting"])
+    model_snapshot_digest = manifest["model"]["snapshot_digest_set_sha256"]
+    _sha256_value(model_snapshot_digest, "frozen model snapshot set")
     _require(set(summary_paths) == set(BENCHMARK_IDS), "Natural benchmark summary set drifted.")
     benchmarks: dict[str, Any] = {}
     dependency_sets: list[dict[str, Any]] = []
@@ -152,6 +168,7 @@ def summarize(
             required_arms=required_arms,
             allowed_failures=allowed_failures,
             manifest_digest=manifest_digest,
+            model_snapshot_digest=model_snapshot_digest,
         )
         benchmarks[name] = result
         dependency_sets.append(dependencies)
@@ -211,8 +228,7 @@ def main() -> None:
     args = parser.parse_args()
     manifest = json.loads(args.manifest.read_text())
     summary_paths = {
-        name: Path(path)
-        for name, path in manifest["suite_audit"]["benchmark_summaries"].items()
+        name: Path(path) for name, path in manifest["suite_audit"]["benchmark_summaries"].items()
     }
     payload = summarize(args.manifest, summary_paths)
     commit = subprocess.run(

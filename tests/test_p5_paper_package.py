@@ -29,6 +29,12 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
     assert manifest["evidence"]["p3_ruler"]["required_audit"]["total_predictions"] == 253500
     assert manifest["evidence"]["p4_reference_systems"]["required_audit"]["terminal_cells"] == 108
     assert (
+        manifest["evidence"]["p4_reference_systems"]["required_audit"][
+            "all_artifact_digests_verified"
+        ]
+        is True
+    )
+    assert (
         manifest["evidence"]["p4_production_systems"]["required_audit"][
             "actual_concurrency_verified"
         ]
