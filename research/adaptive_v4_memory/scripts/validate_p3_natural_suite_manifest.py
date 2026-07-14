@@ -126,6 +126,26 @@ def validate_manifest(payload: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("SCBench turn total must be 5,143 per mode.")
     if scbench["expected_predictions_per_arm"] != 10286:
         raise ValueError("SCBench prediction total must include both modes.")
+    rouge = scbench["rouge_metric"]
+    if (
+        rouge["revision"] != "ea7c4bf30945a2a8e31f2b1b3bdba6cd617eebe2"
+        or rouge["script_sha256"]
+        != "805b71b855be6dc270ce2366639a4e264c2a1fb93a2c8a50f9fb9ef5a2b9c21a"
+        or rouge["evaluate_version"] != "0.4.6"
+        or rouge["rouge_score_version"] != "0.1.2"
+    ):
+        raise ValueError("SCBench ROUGE-Lsum metric dependency drifted.")
+    scbench_execution = scbench["execution"]
+    if (
+        scbench_execution["runner"] != "research/adaptive_v4_memory/scripts/run_p3_scbench.py"
+        or scbench_execution["resume_unit"] != "one turn prediction within one shared-context row"
+        or "golden-answer follow-up" not in scbench_execution["multi_turn_cache"]
+        or "restore that exact cache" not in scbench_execution["multi_request_cache"]
+        or "without model execution" not in scbench_execution["upstream_deviation"]
+        or "10,286 turn records" not in scbench_execution["operational_failure_policy"]
+        or "exact bytes" not in scbench_execution["hot_memory_measurement"]
+    ):
+        raise ValueError("SCBench execution or shared-cache contract drifted.")
 
     longbench = _benchmark(payload, "LongBench-v2")
     if longbench["dataset"]["revision"] != EXPECTED_REVISIONS["LongBench-v2-data"]:

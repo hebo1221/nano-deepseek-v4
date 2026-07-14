@@ -94,13 +94,21 @@ def test_mrcr_arm_and_failure_records_are_audit_compatible() -> None:
     }
     record = failure_record(
         {"example_id": "2n:0:x"},
-        failure_type="unsupported-context",
-        latency_ms=0.0,
-        peak_hbm_bytes=0,
+        failure_type="runtime-error",
+        latency_ms=1.0,
+        peak_hbm_bytes=100,
+        hot_resident_bytes=50,
+        raw_response="generated before scorer failed",
+        parsed_response="generated before scorer failed",
+        stop_reason="eos-or-special-token",
+        generated_tokens_observed=7,
     )
     assert record["status"] == "failure"
     assert record["score"] is None
-    assert record["hot_resident_bytes"] == 0
+    assert record["hot_resident_bytes"] == 50
+    assert record["raw_response"] == "generated before scorer failed"
+    assert record["generated_tokens_observed"] == 7
+    assert record["stop_reason"] == "eos-or-special-token"
 
 
 def test_mrcr_split_is_a_slice_of_one_exact_chat_tokenization() -> None:

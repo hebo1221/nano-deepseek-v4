@@ -3,14 +3,11 @@ from __future__ import annotations
 import argparse
 import contextlib
 import hashlib
-import importlib.metadata
 import json
 import os
-import platform
 import random
-import subprocess
-import sys
 import time
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -18,18 +15,22 @@ import numpy as np
 import pyarrow.parquet as pq
 import torch
 from adaptive_v4_gpu_lock import acquire_gpu_lock
-from p3_natural_workloads import build_scbench_workload, sha256
-from p3_scbench_official import OfficialSCBenchScorer, load_official_components
+from p3_natural_workloads import build_scbench_workload
+from p3_scbench_official import (
+    ROUGE_REVISION,
+    ROUGE_SCRIPT_SHA256,
+    OfficialSCBenchScorer,
+    load_official_components,
+)
 from p3_sequence_gate import require_p3_sequence_gate
+from run_p3_longbench_v2 import cache_bytes
+from run_p3_mrcr import arm_config, atomic_json, failure_record, runtime_environment
 from run_p3_ruler_matrix import KVPRESS_REVISION, git_dirty, git_head, load_evaluator
 from transformers import DynamicCache
+from verify_p3_natural_model import sha256, verify_snapshot
 
 BENCHMARK = "SCBench"
 ARMS = ("native-dense", "strongest-memory-matched-fixed")
-MODES = ("multi-turn", "multi-request")
-EXPECTED_CONTEXTS = 922
-EXPECTED_TURNS_PER_MODE = 5143
-EXPECTED_PREDICTIONS = 10286
 MODEL_REVISION = "cdbee75f17c01a7cc42f958dc650907174af0554"
 DATASET_REVISION = "283310bb8c5ba6909dd9a6b1be087d2937f76f6d"
 CODE_REVISION = "a4eb395f949ea39e871f9bc586d683390692c6be"
@@ -40,105 +41,106 @@ def _require(condition: bool, message: str) -> None:
         raise ValueError(message)
 
 
-def atomic_json(path: Path, payload: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
-    temporary.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
-    temporary.replace(path)
+def encode_segment(tokenizer: Any, text: str) -> torch.Tensor:
+    ids = tokenizer.encode(text, return_tensors="pt", add_special_tokens=False)
+    _require(
+        isinstance(ids, torch.Tensor) and ids.ndim == 2 and ids.shape[0] == 1 and ids.shape[1] > 0,
+        "SCBench prompt segment tokenization is empty or malformed.",
+    )
+    return ids
 
 
-def arm_config(arm: str, selection: dict[str, Any], selection_digest: str) -> dict[str, Any]:
-    if arm == "native-dense":
-        return {"press_name": "no_press", "compression_ratio": 0.0}
-    _require(arm == "strongest-memory-matched-fixed", f"Unknown SCBench arm: {arm}.")
-    return {
-        "press_name": selection["selected_arm"],
-        "compression_ratio": selection["selected_compression_ratio"],
-        "selection_sha256": selection_digest,
-    }
+def token_sequence_digest(segments: list[torch.Tensor]) -> str:
+    digest = hashlib.sha256()
+    for segment in segments:
+        values = segment.detach().cpu().to(torch.int64).contiguous().numpy()
+        digest.update(int(values.shape[1]).to_bytes(8, "big"))
+        digest.update(values.tobytes())
+    return digest.hexdigest()
+
+
+def prompt_sequence_digest(segments: list[str]) -> str:
+    payload = json.dumps(segments, ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha256(payload.encode()).hexdigest()
 
 
 def cache_lengths(cache: Any) -> list[int]:
     return [cache.get_seq_length(index) for index in range(len(cache))]
 
 
-def cache_bytes(cache: Any) -> int:
-    total = 0
-    for layer in cache.layers:
-        for tensor in (layer.keys, layer.values):
-            if tensor is not None:
-                total += tensor.numel() * tensor.element_size()
-    return total
-
-
-def encode_exact(tokenizer: Any, text: str) -> torch.Tensor:
-    ids = tokenizer.encode(text, return_tensors="pt", add_special_tokens=False)
-    _require(
-        getattr(ids, "ndim", None) == 2 and ids.shape[0] == 1 and ids.shape[1] > 0,
-        "SCBench prompt segment did not produce one non-empty token sequence.",
-    )
-    return ids
-
-
 @torch.inference_mode()
-def prefill(
-    *, pipeline: Any, press: Any, input_ids: torch.Tensor, cache: Any
-) -> None:
+def prefill_cache(*, pipeline: Any, press: Any, input_ids: torch.Tensor) -> DynamicCache:
+    cache = DynamicCache()
+    values = input_ids.to(pipeline.model.device)
     with press(pipeline.model) if press is not None else contextlib.nullcontext():
-        pipeline.model.model(
-            input_ids=input_ids.to(pipeline.model.device),
-            past_key_values=cache,
-        )
+        pipeline.model.model(input_ids=values, past_key_values=cache)
+    return cache
 
 
 @torch.inference_mode()
-def generate_and_restore(
+def append_prompt(
+    *, pipeline: Any, cache: DynamicCache, input_ids: torch.Tensor, logical_position: int
+) -> int:
+    values = input_ids.to(pipeline.model.device)
+    positions = torch.arange(
+        logical_position,
+        logical_position + values.shape[1],
+        device=pipeline.model.device,
+    ).unsqueeze(0)
+    pipeline.model(
+        input_ids=values,
+        past_key_values=cache,
+        position_ids=positions,
+        num_logits_to_keep=1,
+    )
+    return cache_bytes(cache)
+
+
+@torch.inference_mode()
+def generate_turn(
     *,
     pipeline: Any,
+    cache: DynamicCache,
     input_ids: torch.Tensor,
-    cache: Any,
-    logical_position_start: int,
+    logical_position: int,
     max_new_tokens: int,
-    retain_input: bool,
-) -> tuple[str, int, str]:
-    """Greedily decode and retain either the input prefix or the prior cache only."""
-    _require(max_new_tokens > 0, "SCBench generation reserve must be positive.")
-    before = cache_lengths(cache)
-    device_ids = input_ids.to(pipeline.model.device)
-    position_ids = torch.arange(
-        logical_position_start,
-        logical_position_start + device_ids.shape[1],
+) -> tuple[str, int, int, str]:
+    values = input_ids.to(pipeline.model.device)
+    positions = torch.arange(
+        logical_position,
+        logical_position + values.shape[1],
         device=pipeline.model.device,
     ).unsqueeze(0)
     outputs = pipeline.model(
-        input_ids=device_ids,
+        input_ids=values,
         past_key_values=cache,
-        position_ids=position_ids,
+        position_ids=positions,
         num_logits_to_keep=1,
     )
-    after_input = cache_lengths(cache)
-    generated = [outputs.logits[0, -1].argmax()]
+    prompt_lengths = cache_lengths(cache)
+    resident_bytes = cache_bytes(cache)
+    generated_ids = [outputs.logits[0, -1].argmax()]
     stop_ids = pipeline.model.generation_config.eos_token_id
     if not isinstance(stop_ids, list):
         stop_ids = [stop_ids]
-    stopped = generated[-1].item() in stop_ids
-    next_position = position_ids[:, -1:] + 1
-    for offset in range(max_new_tokens - 1):
-        if stopped:
-            break
+    stopped = generated_ids[-1].item() in stop_ids
+    next_position = positions[:, -1:] + 1
+    while len(generated_ids) < max_new_tokens and not stopped:
         outputs = pipeline.model(
-            input_ids=generated[-1].reshape(1, 1),
+            input_ids=generated_ids[-1].view(1, 1),
             past_key_values=cache,
-            position_ids=next_position + offset,
+            position_ids=next_position + len(generated_ids) - 1,
         )
-        token = outputs.logits[0, -1].argmax()
-        generated.append(token)
-        stopped = token.item() in stop_ids
-    pipeline._remove_answer_from_cache(cache, after_input if retain_input else before)
-    response = str(
-        pipeline.tokenizer.decode(torch.stack(generated), skip_special_tokens=True)
+        generated_ids.append(outputs.logits[0, -1].argmax())
+        stopped = generated_ids[-1].item() in stop_ids
+    response = str(pipeline.tokenizer.decode(torch.stack(generated_ids), skip_special_tokens=True))
+    pipeline._remove_answer_from_cache(cache, prompt_lengths)
+    return (
+        response,
+        resident_bytes,
+        len(generated_ids),
+        "eos-or-special-token" if stopped else "max-new-tokens",
     )
-    return response, len(generated), "eos-or-special-token" if stopped else "max-new-tokens"
 
 
 def load_dependencies(
@@ -147,13 +149,15 @@ def load_dependencies(
     inventory_path: Path,
     source_inventory_path: Path,
     selection_path: Path,
-) -> tuple[dict[str, Any], dict[str, Any], dict[str, list[dict[str, Any]]], Path, dict[str, str]]:
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, list[dict[str, Any]]], Path]:
     manifest = json.loads(manifest_path.read_text())
-    _require(manifest["model"]["revision"] == MODEL_REVISION, "Model revision drifted.")
     contract = manifest["benchmarks"][BENCHMARK]
-    _require(contract["dataset"]["revision"] == DATASET_REVISION, "Dataset revision drifted.")
-    _require(contract["upstream_code"]["revision"] == CODE_REVISION, "Code revision drifted.")
-
+    _require(manifest["model"]["revision"] == MODEL_REVISION, "SCBench model drifted.")
+    _require(
+        contract["dataset"]["revision"] == DATASET_REVISION
+        and contract["upstream_code"]["revision"] == CODE_REVISION,
+        "SCBench frozen revisions drifted.",
+    )
     inventory = json.loads(inventory_path.read_text())
     _require(
         inventory.get("experiment_id") == "p3-natural-dataset-inventory-v1"
@@ -162,62 +166,44 @@ def load_dependencies(
     )
     observed = inventory["benchmarks"][BENCHMARK]
     _require(observed["revision"] == DATASET_REVISION, "SCBench inventory revision drifted.")
-    expected = {row["path"]: row for row in contract["dataset"]["files"]}
+    expected_files = {row["path"]: row for row in contract["dataset"]["files"]}
+    observed_files = {Path(row["path"]).parts[-2]: row for row in observed["files"]}
     rows_by_task: dict[str, list[dict[str, Any]]] = {}
-    _require(len(observed["files"]) == len(expected), "SCBench file count drifted.")
-    for metadata in observed["files"]:
+    for relative, expected in expected_files.items():
+        task = Path(relative).parts[0]
+        metadata = observed_files.get(task)
+        if not isinstance(metadata, dict):
+            raise ValueError(f"Missing SCBench dataset task: {task}.")
         path = Path(metadata["path"])
-        relative = "/".join(path.parts[-2:])
-        _require(relative in expected, f"Unexpected SCBench file: {relative}.")
         _require(
             path.is_file()
-            and sha256(path) == expected[relative]["sha256"]
-            and metadata["sha256"] == expected[relative]["sha256"],
-            f"SCBench dataset file drifted: {path}.",
+            and metadata["sha256"] == expected["sha256"]
+            and sha256(path) == expected["sha256"],
+            f"SCBench dataset artifact drifted: {task}.",
         )
-        task = Path(relative).parts[0]
-        records = pq.read_table(path).to_pylist()
-        _require(
-            len(records) == contract["tasks"][task]["rows"]
-            and all(isinstance(row, dict) for row in records),
-            f"SCBench task row contract drifted: {task}.",
-        )
-        rows_by_task[task] = records
-    _require(set(rows_by_task) == set(contract["tasks"]), "SCBench task set drifted.")
-    contexts = sum(len(records) for records in rows_by_task.values())
-    turns = sum(
-        len(row["multi_turns"])
-        for records in rows_by_task.values()
-        for row in records
-    )
-    _require(
-        contexts == EXPECTED_CONTEXTS and turns == EXPECTED_TURNS_PER_MODE,
-        "SCBench context or turn total drifted.",
-    )
+        rows = pq.read_table(path).to_pylist()
+        _require(len(rows) == expected["rows"], f"SCBench row count drifted: {task}.")
+        rows_by_task[task] = rows
 
-    sources = json.loads(source_inventory_path.read_text())
+    source_inventory = json.loads(source_inventory_path.read_text())
     _require(
-        sources.get("experiment_id") == "p3-natural-source-inventory-v1"
-        and sources.get("status") == "verified"
-        and sources.get("source", {}).get("dirty") is False,
+        source_inventory.get("experiment_id") == "p3-natural-source-inventory-v1"
+        and source_inventory.get("status") == "verified"
+        and source_inventory.get("source", {}).get("dirty") is False,
         "Natural source inventory is missing or dirty.",
     )
-    source = sources["benchmarks"][BENCHMARK]
+    source = source_inventory["benchmarks"][BENCHMARK]
     _require(
-        source.get("revision") == CODE_REVISION and source.get("clean_tracked_tree") is True,
+        source["revision"] == CODE_REVISION and source.get("clean_tracked_tree") is True,
         "SCBench source checkout drifted.",
     )
     source_root = Path(source["path"])
-    file_digests = {row["path"]: row["sha256"] for row in source["files"]}
-    _require(
-        file_digests == contract["upstream_code"]["files_sha256"],
-        "SCBench source digest set drifted.",
-    )
-    for relative, digest in file_digests.items():
-        _require(
-            (source_root / relative).is_file() and sha256(source_root / relative) == digest,
-            f"SCBench source file drifted: {relative}.",
-        )
+    expected_sources = contract["upstream_code"]["files_sha256"]
+    observed_sources = {row["path"]: row["sha256"] for row in source["files"]}
+    _require(observed_sources == expected_sources, "SCBench source inventory drifted.")
+    for relative, digest in expected_sources.items():
+        path = source_root / relative
+        _require(path.is_file() and sha256(path) == digest, f"SCBench source drifted: {relative}.")
 
     selection = json.loads(selection_path.read_text())
     _require(
@@ -229,64 +215,48 @@ def load_dependencies(
         selection.get("selected_arm")
         in {"streaming_llm", "snapkv", "expected_attention", "critical_expected_attention"}
         and selection.get("selected_compression_ratio") == 0.5,
-        "Fixed baseline selection is outside the preregistered set.",
+        "Fixed baseline selection is outside the preregistered candidate set.",
     )
-    return manifest, selection, rows_by_task, source_root, file_digests
+    return manifest, selection, rows_by_task, source_root
 
 
-def verify_model_snapshot(path: Path, manifest: dict[str, Any]) -> None:
-    expected = manifest["model"]["snapshot_files_sha256"]
-    actual = {item.name for item in path.iterdir() if item.is_file()}
-    _require(actual == set(expected), "Model snapshot file set drifted.")
-    for name, digest in expected.items():
-        _require(sha256(path / name) == digest, f"Model snapshot drifted: {name}.")
+def iter_workloads(
+    *,
+    manifest: dict[str, Any],
+    rows_by_task: dict[str, list[dict[str, Any]]],
+    tokenizer: Any,
+    prompt_module: Any,
+) -> Iterator[tuple[str, str, int, dict[str, Any], dict[str, Any]]]:
+    contract = manifest["benchmarks"][BENCHMARK]
+    for mode in contract["modes"]:
+        for task in contract["tasks"]:
+            for row_index, row in enumerate(rows_by_task[task]):
+                workload = build_scbench_workload(
+                    row=row,
+                    task=task,
+                    mode=mode,
+                    tokenizer=tokenizer,
+                    official_module=prompt_module,
+                )
+                yield mode, task, row_index, row, workload
 
 
-def conversation_id(task: str, row_index: int, row: dict[str, Any], mode: str) -> str:
-    digest = hashlib.sha256(
-        json.dumps(row, sort_keys=True, separators=(",", ":")).encode()
-    ).hexdigest()
-    return f"{mode}:{task}:{row_index}:{digest}"
-
-
-def conversation_plan(
-    rows_by_task: dict[str, list[dict[str, Any]]], modes: tuple[str, ...] = MODES
-) -> list[tuple[str, int, dict[str, Any], str]]:
-    return [
-        (task, index, row, mode)
-        for mode in modes
-        for task in sorted(rows_by_task)
-        for index, row in enumerate(rows_by_task[task])
-    ]
-
-
-def _existing_conversations(
-    progress: Path, partial: Path, identity: dict[str, Any]
+def _existing_records(
+    progress: Path, partial: Path, identity: dict[str, Any], expected: int
 ) -> list[dict[str, Any]]:
     if not progress.exists() and not partial.exists():
         atomic_json(progress, identity)
-        partial.mkdir(parents=True)
+        partial.touch()
         return []
     if progress.is_file() and not partial.exists():
-        partial.mkdir(parents=True)
-    _require(progress.is_file() and partial.is_dir(), "Partial SCBench state is incomplete.")
+        partial.touch()
+    if partial.is_file() and partial.stat().st_size == 0 and not progress.exists():
+        atomic_json(progress, identity)
+    _require(progress.is_file() and partial.is_file(), "Partial SCBench state is incomplete.")
     _require(json.loads(progress.read_text()) == identity, "Partial SCBench provenance drifted.")
-    parts = sorted(partial.glob("*.json"))
-    _require(
-        [part.name for part in parts] == [f"{index:06d}.json" for index in range(len(parts))],
-        "Partial SCBench conversation part sequence drifted.",
-    )
-    payloads = [json.loads(part.read_text()) for part in parts]
-    _require(len(payloads) <= EXPECTED_CONTEXTS * len(MODES), "Too many SCBench conversations.")
-    _require(
-        all(isinstance(payload.get("records"), list) for payload in payloads),
-        "Partial SCBench conversation is malformed.",
-    )
-    return payloads
-
-
-def flatten_conversations(payloads: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    return [record for payload in payloads for record in payload["records"]]
+    records = [json.loads(line) for line in partial.read_text().splitlines() if line]
+    _require(len(records) <= expected, "Partial SCBench has too many records.")
+    return records
 
 
 def _completed(cell_path: Path, arm: str, identity: dict[str, Any]) -> bool:
@@ -309,236 +279,37 @@ def _completed(cell_path: Path, arm: str, identity: dict[str, Any]) -> bool:
     return True
 
 
-def failure_record(base: dict[str, Any], failure_type: str, error: BaseException | None = None) -> dict[str, Any]:
-    return {
-        **base,
-        "status": "failure",
-        "raw_response": "",
-        "parsed_response": None,
-        "score": None,
-        "score_detail": None,
-        "failure_type": failure_type,
-        "stop_reason": failure_type,
-        "generated_tokens_observed": 0,
-        "latency_ms": 0.0,
-        "peak_hbm_bytes": 0,
-        "hot_resident_bytes": 0,
-        "error_type": type(error).__name__ if error is not None else None,
-        "error": str(error) if error is not None else None,
-    }
-
-
 def base_record(
     *,
-    identifier: str,
+    example_id: str,
+    arm: str,
+    mode: str,
     task: str,
     row_index: int,
-    mode: str,
     turn: dict[str, Any],
-    turn_index: int,
-    arm: str,
+    prompt_segments: list[str],
+    token_segments: list[torch.Tensor],
+    exact_tokens: int,
     config: dict[str, Any],
-    prompt_sha256: str,
-    exact_input_tokens: int,
-    cumulative_input_tokens: int,
     revisions: dict[str, str],
 ) -> dict[str, Any]:
     return {
-        "example_id": f"{identifier}:turn:{turn_index}",
-        "conversation_id": identifier,
+        "example_id": example_id,
         "benchmark": BENCHMARK,
-        "task": task,
-        "subtask": turn["subtask"],
-        "row_index": row_index,
-        "mode": mode,
-        "turn_index": turn_index,
-        "exact_input_tokens": exact_input_tokens,
-        "cumulative_input_tokens": cumulative_input_tokens,
-        "generation_reserve_tokens": turn["generation_reserve_tokens"],
-        "raw_prompt_sha256": prompt_sha256,
         "arm": arm,
+        "mode": mode,
+        "task": task,
+        "row_index": row_index,
+        "turn_index": turn["turn_index"],
+        "subtask": turn["subtask"],
+        "exact_input_tokens": exact_tokens,
+        "generation_reserve_tokens": turn["generation_reserve_tokens"],
+        "raw_prompt_sha256": prompt_sequence_digest(prompt_segments),
+        "input_token_ids_sha256": token_sequence_digest(token_segments),
+        "token_boundary_retreat": 0,
         "arm_config": config,
         "revisions": revisions,
     }
-
-
-def runtime_environment() -> dict[str, Any]:
-    freeze = subprocess.run(
-        [sys.executable, "-m", "pip", "freeze", "--all"],
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout
-    return {
-        "python": platform.python_version(),
-        "torch": torch.__version__,
-        "cuda": torch.version.cuda,
-        "device": torch.cuda.get_device_name(0),
-        "transformers": importlib.metadata.version("transformers"),
-        "kvpress": importlib.metadata.version("kvpress"),
-        "evaluate": importlib.metadata.version("evaluate"),
-        "pip_freeze_sha256": hashlib.sha256(freeze.encode()).hexdigest(),
-    }
-
-
-def run_conversation(
-    *,
-    pipeline: Any,
-    press: Any,
-    scorer: OfficialSCBenchScorer,
-    official_module: Any,
-    tokenizer: Any,
-    task: str,
-    row_index: int,
-    row: dict[str, Any],
-    mode: str,
-    arm: str,
-    config: dict[str, Any],
-    maximum_context: int,
-    revisions: dict[str, str],
-) -> dict[str, Any]:
-    workload = build_scbench_workload(
-        row=row,
-        task=task,
-        mode=mode,
-        tokenizer=tokenizer,
-        official_module=official_module,
-    )
-    identifier = conversation_id(task, row_index, row, mode)
-    turns = workload["turns"]
-    cache = DynamicCache()
-    records: list[dict[str, Any]] = []
-    cumulative = 0
-    hot_bytes = 0
-    shared = workload["shared_context"]
-    logical_prompt = hashlib.sha256()
-    try:
-        if mode == "multi-request":
-            _require(isinstance(shared, str), "SCBench multi-request context is missing.")
-            shared_ids = encode_exact(tokenizer, shared)
-            cumulative = int(shared_ids.shape[1])
-            logical_prompt.update(shared.encode())
-            prefill(pipeline=pipeline, press=press, input_ids=shared_ids, cache=cache)
-            hot_bytes = cache_bytes(cache)
-        for turn_index, turn in enumerate(turns):
-            segment = turn["prompt_segment"]
-            segment_ids = encode_exact(tokenizer, segment)
-            segment_tokens = int(segment_ids.shape[1])
-            if mode == "multi-turn" and turn_index == 0:
-                if segment_tokens < 2:
-                    raise ValueError("First SCBench multi-turn prompt is too short.")
-                prefill(
-                    pipeline=pipeline,
-                    press=press,
-                    input_ids=segment_ids[:, :-1],
-                    cache=cache,
-                )
-                hot_bytes = cache_bytes(cache)
-                generation_ids = segment_ids[:, -1:]
-                logical_start = segment_tokens - 1
-            else:
-                generation_ids = segment_ids
-                logical_start = cumulative
-            next_cumulative = cumulative + segment_tokens
-            turn_prompt = logical_prompt.copy()
-            turn_prompt.update(segment.encode())
-            prompt_digest = turn_prompt.hexdigest()
-            base = base_record(
-                identifier=identifier,
-                task=task,
-                row_index=row_index,
-                mode=mode,
-                turn=turn,
-                turn_index=turn_index,
-                arm=arm,
-                config=config,
-                prompt_sha256=prompt_digest,
-                exact_input_tokens=(cumulative + segment_tokens if mode == "multi-request" else segment_tokens),
-                cumulative_input_tokens=next_cumulative,
-                revisions=revisions,
-            )
-            if next_cumulative + turn["generation_reserve_tokens"] > maximum_context:
-                records.append(failure_record(base, "unsupported-context"))
-                if mode == "multi-turn":
-                    logical_prompt.update(segment.encode())
-                    cumulative = next_cumulative
-                continue
-            torch.cuda.reset_peak_memory_stats()
-            torch.cuda.synchronize()
-            started = time.perf_counter_ns()
-            try:
-                response, generated, stop_reason = generate_and_restore(
-                    pipeline=pipeline,
-                    input_ids=generation_ids,
-                    cache=cache,
-                    logical_position_start=logical_start,
-                    max_new_tokens=turn["generation_reserve_tokens"],
-                    retain_input=mode == "multi-turn",
-                )
-                torch.cuda.synchronize()
-                latency_ms = (time.perf_counter_ns() - started) / 1_000_000.0
-                if not response.strip():
-                    record = failure_record(base, "empty-generation")
-                    record["latency_ms"] = latency_ms
-                    record["peak_hbm_bytes"] = torch.cuda.max_memory_allocated()
-                    record["hot_resident_bytes"] = hot_bytes
-                else:
-                    score, detail = scorer.score(
-                        task=task,
-                        row=row,
-                        turn=row["multi_turns"][turn_index],
-                        prediction=response,
-                        subtask=turn["subtask"],
-                    )
-                    record = {
-                        **base,
-                        "status": "scored",
-                        "raw_response": response,
-                        "parsed_response": None,
-                        "score": score,
-                        "score_detail": detail,
-                        "failure_type": None,
-                        "stop_reason": stop_reason,
-                        "generated_tokens_observed": generated,
-                        "latency_ms": latency_ms,
-                        "peak_hbm_bytes": torch.cuda.max_memory_allocated(),
-                        "hot_resident_bytes": hot_bytes,
-                        "error_type": None,
-                        "error": None,
-                    }
-            except torch.cuda.OutOfMemoryError as error:
-                record = failure_record(base, "oom", error)
-                record["latency_ms"] = (time.perf_counter_ns() - started) / 1_000_000.0
-                record["peak_hbm_bytes"] = torch.cuda.max_memory_allocated()
-                torch.cuda.empty_cache()
-            except Exception as error:
-                record = failure_record(base, "runtime-error", error)
-                record["latency_ms"] = (time.perf_counter_ns() - started) / 1_000_000.0
-                record["peak_hbm_bytes"] = torch.cuda.max_memory_allocated()
-            records.append(record)
-            if mode == "multi-turn":
-                logical_prompt.update(segment.encode())
-                cumulative = next_cumulative
-    except Exception as error:
-        for turn_index in range(len(records), len(turns)):
-            turn = turns[turn_index]
-            base = base_record(
-                identifier=identifier,
-                task=task,
-                row_index=row_index,
-                mode=mode,
-                turn=turn,
-                turn_index=turn_index,
-                arm=arm,
-                config=config,
-                prompt_sha256=hashlib.sha256(turn["prompt_segment"].encode()).hexdigest(),
-                exact_input_tokens=0,
-                cumulative_input_tokens=cumulative,
-                revisions=revisions,
-            )
-            records.append(failure_record(base, "runtime-error", error))
-    _require(len(records) == len(turns), "SCBench conversation did not retain every turn.")
-    return {"conversation_id": identifier, "records": records}
 
 
 def main() -> None:
@@ -553,12 +324,16 @@ def main() -> None:
     parser.add_argument(
         "--dataset-inventory",
         type=Path,
-        default=Path("artifacts/adaptive_v4_memory/paper_grade/p3/natural-data/dataset-inventory.json"),
+        default=Path(
+            "artifacts/adaptive_v4_memory/paper_grade/p3/natural-data/dataset-inventory.json"
+        ),
     )
     parser.add_argument(
         "--source-inventory",
         type=Path,
-        default=Path("artifacts/adaptive_v4_memory/paper_grade/p3/natural-sources/source-inventory.json"),
+        default=Path(
+            "artifacts/adaptive_v4_memory/paper_grade/p3/natural-sources/source-inventory.json"
+        ),
     )
     parser.add_argument(
         "--fixed-selection",
@@ -581,43 +356,56 @@ def main() -> None:
         default=Path("artifacts/adaptive_v4_memory/paper_grade/p3/natural/scbench"),
     )
     parser.add_argument("--arm", action="append", choices=ARMS)
-    parser.add_argument("--max-new-conversations", type=int)
+    parser.add_argument("--max-new-examples", type=int)
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
     _require(
-        args.max_new_conversations is None or args.max_new_conversations > 0,
-        "max-new-conversations must be positive.",
+        args.max_new_examples is None or args.max_new_examples > 0,
+        "max-new-examples must be positive.",
     )
-    decision = require_p3_sequence_gate(args.p2_matrix, args.causal_gate)
+    sequence_decision = require_p3_sequence_gate(args.p2_matrix, args.causal_gate)
     source_commit = git_head(Path.cwd())
-    _require(not git_dirty(Path.cwd()), "SCBench evaluation requires a clean source tree.")
+    if git_dirty(Path.cwd()):
+        raise RuntimeError("SCBench requires a clean source tree.")
     kvpress_root = args.kvpress_root.resolve()
     _require(
         git_head(kvpress_root) == KVPRESS_REVISION and not git_dirty(kvpress_root),
         "KVPress checkout does not match its clean frozen revision.",
     )
-    manifest, selection, rows_by_task, source_root, source_digests = load_dependencies(
+    manifest, selection, rows_by_task, source_root = load_dependencies(
         manifest_path=args.manifest,
         inventory_path=args.dataset_inventory,
         source_inventory_path=args.source_inventory,
         selection_path=args.fixed_selection,
     )
     model_snapshot = args.model_snapshot.resolve()
-    verify_model_snapshot(model_snapshot, manifest)
-    plan = conversation_plan(rows_by_task)
-    _require(len(plan) == EXPECTED_CONTEXTS * len(MODES), "SCBench conversation total drifted.")
-    selection_digest = sha256(args.fixed_selection)
-    runner_digest = sha256(Path(__file__).resolve())
+    verify_snapshot(model_snapshot, manifest["model"])
+    expected = manifest["benchmarks"][BENCHMARK]["expected_predictions_per_arm"]
+    runner_digest = sha256(Path(__file__))
     manifest_digest = sha256(args.manifest)
     inventory_digest = sha256(args.dataset_inventory)
     source_inventory_digest = sha256(args.source_inventory)
+    selection_digest = sha256(args.fixed_selection)
     causal_digest = sha256(args.causal_gate)
-    scorer_digest = sha256(Path(__file__).with_name("p3_scbench_official.py"))
+    scorer_bundle = hashlib.sha256(
+        "\n".join(
+            sorted(
+                [
+                    sha256(Path(__file__).with_name("p3_scbench_metrics.py")),
+                    sha256(Path(__file__).with_name("p3_scbench_official.py")),
+                    ROUGE_SCRIPT_SHA256,
+                    *manifest["benchmarks"][BENCHMARK]["upstream_code"]["files_sha256"].values(),
+                ]
+            )
+        ).encode()
+    ).hexdigest()
     revisions = {
         "model_revision": MODEL_REVISION,
         "dataset_revision": DATASET_REVISION,
         "code_revision": CODE_REVISION,
-        "scorer_sha256": scorer_digest,
+        "scorer_sha256": scorer_bundle,
+        "rouge_revision": ROUGE_REVISION,
+        "rouge_script_sha256": ROUGE_SCRIPT_SHA256,
     }
     selected_arms = tuple(args.arm or ARMS)
     identities = {
@@ -630,6 +418,7 @@ def main() -> None:
             "causal_gate_sha256": causal_digest,
             "fixed_selection_sha256": selection_digest,
             "model_snapshot_digest_set_sha256": manifest["model"]["snapshot_digest_set_sha256"],
+            "scorer_bundle_sha256": scorer_bundle,
             "arm_config": arm_config(arm, selection, selection_digest),
             "seed": args.seed,
         }
@@ -643,12 +432,13 @@ def main() -> None:
     if not pending:
         print(json.dumps({"status": "complete", "arms": list(selected_arms)}))
         return
-    _require(torch.cuda.is_available(), "SCBench evaluation requires CUDA.")
-    gpu_lock = acquire_gpu_lock("p3-scbench")
+    _require(torch.cuda.is_available(), "SCBench requires CUDA.")
+
+    lock = acquire_gpu_lock("p3-scbench")
     try:
-        EvaluationConfig, EvaluationRunner, _ = load_evaluator(kvpress_root)
-        base = EvaluationConfig(
-            dataset="scbench",
+        EvaluationConfig, EvaluationRunner, _unused = load_evaluator(kvpress_root)
+        config = EvaluationConfig(
+            dataset="longbench-v2",
             model=str(model_snapshot),
             device="cuda:0",
             press_name="no_press",
@@ -658,80 +448,295 @@ def main() -> None:
             max_context_length=manifest["model"]["maximum_supported_context_tokens"],
             model_kwargs={"torch_dtype": torch.bfloat16},
         )
-        runner = EvaluationRunner(base)
+        runner = EvaluationRunner(config)
         runner._setup_press()
         runner._setup_model_pipeline()
         tokenizer = runner.pipeline.tokenizer
-        official, repo_module, rouge = load_official_components(source_root, source_digests)
+        files = manifest["benchmarks"][BENCHMARK]["upstream_code"]["files_sha256"]
+        prompt_module, repo_module, rouge_metric = load_official_components(source_root, files)
         scorer = OfficialSCBenchScorer(
             rows_by_task=rows_by_task,
             repo_module=repo_module,
-            rouge_metric=rouge,
+            rouge_metric=rouge_metric,
         )
         environment = runtime_environment()
         random.seed(args.seed)
         np.random.seed(args.seed)
         torch.manual_seed(args.seed)
         torch.cuda.manual_seed_all(args.seed)
+        maximum_context = manifest["model"]["maximum_supported_context_tokens"]
+
         for arm in pending:
-            config = identities[arm]["arm_config"]
-            runner.config.press_name = config["press_name"]
-            runner.config.compression_ratio = config["compression_ratio"]
+            settings = identities[arm]["arm_config"]
+            runner.config.press_name = settings["press_name"]
+            runner.config.compression_ratio = settings["compression_ratio"]
             runner._setup_press()
             root = args.output_root / arm
             progress = root / "progress.json"
-            partial = root / "conversations"
-            existing = _existing_conversations(progress, partial, identities[arm])
-            _require(
-                all(
-                    payload["conversation_id"]
-                    == conversation_id(task, index, row, mode)
-                    for payload, (task, index, row, mode) in zip(existing, plan, strict=False)
-                ),
-                "Partial SCBench conversation order drifted.",
-            )
-            limit = len(plan)
-            if args.max_new_conversations is not None:
-                limit = min(limit, len(existing) + args.max_new_conversations)
+            partial = root / "records.partial.jsonl"
+            existing = _existing_records(progress, partial, identities[arm], expected)
+            limit = expected
+            if args.max_new_examples is not None:
+                limit = min(limit, len(existing) + args.max_new_examples)
+            global_index = 0
             root.mkdir(parents=True, exist_ok=True)
-            for plan_index in range(len(existing), limit):
-                task, row_index, row, mode = plan[plan_index]
-                torch.cuda.empty_cache()
-                payload = run_conversation(
-                    pipeline=runner.pipeline,
-                    press=runner.press,
-                    scorer=scorer,
-                    official_module=official,
+            with partial.open("a") as handle:
+                for mode, task, row_index, row, workload in iter_workloads(
+                    manifest=manifest,
+                    rows_by_task=rows_by_task,
                     tokenizer=tokenizer,
-                    task=task,
-                    row_index=row_index,
-                    row=row,
-                    mode=mode,
-                    arm=arm,
-                    config=config,
-                    maximum_context=manifest["model"]["maximum_supported_context_tokens"],
-                    revisions=revisions,
-                )
-                atomic_json(partial / f"{plan_index:06d}.json", payload)
-                print(
-                    json.dumps(
-                        {
-                            "arm": arm,
-                            "completed_conversations": plan_index + 1,
-                            "total_conversations": len(plan),
+                    prompt_module=prompt_module,
+                ):
+                    turns = workload["turns"]
+                    ids = [f"{mode}:{task}:{row_index}:{turn['turn_index']}" for turn in turns]
+                    for offset, identifier in enumerate(ids):
+                        position = global_index + offset
+                        if position < len(existing):
+                            _require(
+                                existing[position]["example_id"] == identifier,
+                                "Partial SCBench example order drifted.",
+                            )
+                    row_end = global_index + len(turns)
+                    if row_end <= len(existing):
+                        global_index = row_end
+                        continue
+                    if global_index >= limit:
+                        break
+                    start_turn = max(0, len(existing) - global_index)
+                    stop_turn = min(len(turns), limit - global_index)
+                    prompt_strings: list[str] = []
+                    token_segments: list[torch.Tensor] = []
+                    if mode == "multi-request":
+                        shared = workload["shared_context"]
+                        _require(
+                            isinstance(shared, str) and bool(shared),
+                            "SCBench shared context missing.",
+                        )
+                        prompt_strings.append(shared)
+                        token_segments.append(encode_segment(tokenizer, shared))
+                    else:
+                        prompt_strings.append(turns[0]["prompt_segment"])
+                        token_segments.append(encode_segment(tokenizer, turns[0]["prompt_segment"]))
+                        for turn in turns[1:]:
+                            prompt_strings.append(turn["prompt_segment"])
+                            token_segments.append(encode_segment(tokenizer, turn["prompt_segment"]))
+
+                    cache: DynamicCache | None = None
+                    logical_position = 0
+                    shared_metrics: dict[str, Any] = {
+                        "initial_prefill_latency_ms": 0.0,
+                        "initial_prefill_peak_hbm_bytes": 0,
+                        "initial_prefill_hot_resident_bytes": 0,
+                    }
+                    row_error: BaseException | None = None
+                    initial_tokens = int(token_segments[0].shape[1])
+                    try:
+                        if initial_tokens > maximum_context:
+                            raise OverflowError("initial SCBench prompt exceeds model context")
+                        torch.cuda.empty_cache()
+                        torch.cuda.reset_peak_memory_stats()
+                        torch.cuda.synchronize()
+                        prefill_started = time.perf_counter_ns()
+                        if mode == "multi-request":
+                            cache = prefill_cache(
+                                pipeline=runner.pipeline,
+                                press=runner.press,
+                                input_ids=token_segments[0],
+                            )
+                            logical_position = int(token_segments[0].shape[1])
+                        else:
+                            first = token_segments[0]
+                            _require(first.shape[1] >= 2, "SCBench first prompt is too short.")
+                            cache = prefill_cache(
+                                pipeline=runner.pipeline,
+                                press=runner.press,
+                                input_ids=first[:, :-1],
+                            )
+                            logical_position = int(first.shape[1]) - 1
+                        torch.cuda.synchronize()
+                        shared_metrics = {
+                            "initial_prefill_latency_ms": (time.perf_counter_ns() - prefill_started)
+                            / 1_000_000.0,
+                            "initial_prefill_peak_hbm_bytes": torch.cuda.max_memory_allocated(),
+                            "initial_prefill_hot_resident_bytes": cache_bytes(cache),
                         }
-                    ),
-                    flush=True,
-                )
-            if limit < len(plan):
+                        if mode == "multi-turn" and start_turn > 0:
+                            append_prompt(
+                                pipeline=runner.pipeline,
+                                cache=cache,
+                                input_ids=token_segments[0][:, -1:],
+                                logical_position=logical_position,
+                            )
+                            logical_position += 1
+                            for prior in range(1, start_turn):
+                                append_prompt(
+                                    pipeline=runner.pipeline,
+                                    cache=cache,
+                                    input_ids=token_segments[prior],
+                                    logical_position=logical_position,
+                                )
+                                logical_position += int(token_segments[prior].shape[1])
+                    except OverflowError:
+                        pass
+                    except BaseException as error:
+                        row_error = error
+                        torch.cuda.empty_cache()
+
+                    for turn_index in range(start_turn, stop_turn):
+                        turn = turns[turn_index]
+                        if mode == "multi-request":
+                            query = encode_segment(tokenizer, turn["prompt_segment"])
+                            record_segments = [token_segments[0], query]
+                            record_prompts = [prompt_strings[0], turn["prompt_segment"]]
+                            exact_tokens = int(token_segments[0].shape[1] + query.shape[1])
+                            turn_ids = query
+                            turn_position = int(token_segments[0].shape[1])
+                        else:
+                            record_segments = token_segments[: turn_index + 1]
+                            record_prompts = prompt_strings[: turn_index + 1]
+                            exact_tokens = sum(int(item.shape[1]) for item in record_segments)
+                            turn_ids = (
+                                token_segments[0][:, -1:]
+                                if turn_index == 0
+                                else token_segments[turn_index]
+                            )
+                            turn_position = logical_position
+                        identifier = ids[turn_index]
+                        base = base_record(
+                            example_id=identifier,
+                            arm=arm,
+                            mode=mode,
+                            task=task,
+                            row_index=row_index,
+                            turn=turn,
+                            prompt_segments=record_prompts,
+                            token_segments=record_segments,
+                            exact_tokens=exact_tokens,
+                            config=settings,
+                            revisions=revisions,
+                        )
+                        base.update(shared_metrics)
+                        reserve = turn["generation_reserve_tokens"]
+                        if exact_tokens + reserve > maximum_context:
+                            record = failure_record(
+                                base,
+                                failure_type="unsupported-context",
+                                latency_ms=0.0,
+                                peak_hbm_bytes=0,
+                            )
+                        elif row_error is not None or cache is None:
+                            record = failure_record(
+                                base,
+                                failure_type=(
+                                    "oom"
+                                    if isinstance(row_error, torch.cuda.OutOfMemoryError)
+                                    else "runtime-error"
+                                ),
+                                latency_ms=0.0,
+                                peak_hbm_bytes=torch.cuda.max_memory_allocated(),
+                                error=row_error,
+                            )
+                        else:
+                            torch.cuda.reset_peak_memory_stats()
+                            torch.cuda.synchronize()
+                            started = time.perf_counter_ns()
+                            base_lengths = cache_lengths(cache)
+                            response: str | None = None
+                            resident = 0
+                            generated: int | None = None
+                            stop_reason: str | None = None
+                            try:
+                                response, resident, generated, stop_reason = generate_turn(
+                                    pipeline=runner.pipeline,
+                                    cache=cache,
+                                    input_ids=turn_ids,
+                                    logical_position=turn_position,
+                                    max_new_tokens=reserve,
+                                )
+                                if mode == "multi-request":
+                                    runner.pipeline._remove_answer_from_cache(cache, base_lengths)
+                                else:
+                                    logical_position += int(turn_ids.shape[1])
+                                torch.cuda.synchronize()
+                                latency_ms = (time.perf_counter_ns() - started) / 1_000_000.0
+                                peak = torch.cuda.max_memory_allocated()
+                                if not response.strip():
+                                    record = failure_record(
+                                        base,
+                                        failure_type="empty-generation",
+                                        latency_ms=latency_ms,
+                                        peak_hbm_bytes=peak,
+                                        hot_resident_bytes=resident,
+                                    )
+                                else:
+                                    score, detail = scorer.score(
+                                        task=task,
+                                        row=row,
+                                        turn=row["multi_turns"][turn_index],
+                                        prediction=response,
+                                        subtask=turn["subtask"],
+                                    )
+                                    record = {
+                                        **base,
+                                        "status": "scored",
+                                        "raw_response": response,
+                                        "parsed_response": response,
+                                        "score": score,
+                                        "failure_type": None,
+                                        "stop_reason": stop_reason,
+                                        "generated_tokens_observed": generated,
+                                        "latency_ms": latency_ms,
+                                        "peak_hbm_bytes": peak,
+                                        "hot_resident_bytes": resident,
+                                        "scorer_detail": detail,
+                                    }
+                            except torch.cuda.OutOfMemoryError as error:
+                                row_error = error
+                                record = failure_record(
+                                    base,
+                                    failure_type="oom",
+                                    latency_ms=(time.perf_counter_ns() - started) / 1_000_000.0,
+                                    peak_hbm_bytes=torch.cuda.max_memory_allocated(),
+                                    error=error,
+                                )
+                                torch.cuda.empty_cache()
+                            except Exception as error:
+                                if response is None:
+                                    row_error = error
+                                record = failure_record(
+                                    base,
+                                    failure_type="runtime-error",
+                                    latency_ms=(time.perf_counter_ns() - started) / 1_000_000.0,
+                                    peak_hbm_bytes=torch.cuda.max_memory_allocated(),
+                                    hot_resident_bytes=resident,
+                                    raw_response=response or "",
+                                    parsed_response=response,
+                                    stop_reason=stop_reason,
+                                    generated_tokens_observed=generated,
+                                    error=error,
+                                )
+                        handle.write(json.dumps(record, sort_keys=True) + "\n")
+                        handle.flush()
+                        os.fsync(handle.fileno())
+                        print(
+                            json.dumps(
+                                {
+                                    "arm": arm,
+                                    "completed_examples": global_index + turn_index + 1,
+                                    "total": expected,
+                                }
+                            ),
+                            flush=True,
+                        )
+                    global_index = row_end
+                    if global_index >= limit:
+                        break
+            if limit < expected:
                 continue
-            payloads = _existing_conversations(progress, partial, identities[arm])
-            records = flatten_conversations(payloads)
-            _require(len(records) == EXPECTED_PREDICTIONS, "SCBench prediction total drifted.")
-            records_path = root / "records.jsonl"
-            records_path.write_text(
-                "".join(json.dumps(record, sort_keys=True) + "\n" for record in records)
-            )
+            _require(global_index == expected, "SCBench prediction grid did not close.")
+            records = root / "records.jsonl"
+            partial.replace(records)
+            progress.unlink()
             cell = {
                 "schema_version": 1,
                 "experiment_id": "p3-natural-benchmark-arm-cell-v1",
@@ -746,7 +751,10 @@ def main() -> None:
                 "run_identity": identities[arm],
                 "experiment_manifest": {"path": str(args.manifest), "sha256": manifest_digest},
                 "causal_gate": {"path": str(args.causal_gate), "sha256": causal_digest},
-                "dataset_inventory": {"path": str(args.dataset_inventory), "sha256": inventory_digest},
+                "dataset_inventory": {
+                    "path": str(args.dataset_inventory),
+                    "sha256": inventory_digest,
+                },
                 "evaluation_source_inventory": {
                     "path": str(args.source_inventory),
                     "sha256": source_inventory_digest,
@@ -756,14 +764,13 @@ def main() -> None:
                     "sha256": selection_digest,
                 },
                 "model_snapshot_digest_set_sha256": manifest["model"]["snapshot_digest_set_sha256"],
-                "p3_sequence_decision": decision,
+                "p3_sequence_decision": sequence_decision,
                 "environment": environment,
-                "raw_records": {"path": str(records_path), "sha256": sha256(records_path)},
+                "raw_records": {"path": str(records), "sha256": sha256(records)},
             }
             atomic_json(root / "cell.json", cell)
-            progress.unlink()
     finally:
-        gpu_lock.close()
+        lock.close()
 
 
 if __name__ == "__main__":

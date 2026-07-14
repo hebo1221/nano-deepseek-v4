@@ -10,7 +10,12 @@ import pytest
 SCRIPTS = Path(__file__).resolve().parents[1] / "research/adaptive_v4_memory/scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-from p3_scbench_official import OfficialSCBenchScorer, build_repo_needles  # noqa: E402
+from p3_scbench_official import (  # noqa: E402
+    ROUGE_REVISION,
+    OfficialSCBenchScorer,
+    build_repo_needles,
+    load_rouge_lsum,
+)
 
 
 class Result(Enum):
@@ -39,7 +44,34 @@ def test_repo_needles_are_built_across_every_repository_turn() -> None:
 
     needles = build_repo_needles(rows)
 
-    assert [needle["name"] for needle in needles["owner/repo"]] == ["first", "second"]
+    assert [needle["name"] for needle in needles["scbench_repoqa"]["owner/repo"]] == [
+        "first",
+        "second",
+    ]
+
+
+def test_repo_needles_do_not_mix_the_two_official_repoqa_datasets() -> None:
+    rows = {
+        "scbench_repoqa": [
+            {
+                "repo": "owner/repo",
+                "multi_turns": [{"name": "same", "answer": "first code"}],
+            }
+        ],
+        "scbench_repoqa_and_kv": [
+            {
+                "repo": "owner/repo",
+                "multi_turns": [
+                    {"task": "scbench_repoqa", "name": "same", "answer": "second code"}
+                ],
+            }
+        ],
+    }
+
+    needles = build_repo_needles(rows)
+
+    assert needles["scbench_repoqa"]["owner/repo"][0]["needle"] == "first code"
+    assert needles["scbench_repoqa_and_kv"]["owner/repo"][0]["needle"] == "second code"
 
 
 def test_repository_scorer_applies_best_target_and_point_eight_threshold() -> None:
@@ -108,3 +140,40 @@ def test_repo_needles_reject_duplicate_or_missing_repository_metadata() -> None:
     }
     with pytest.raises(ValueError, match="duplicate needles"):
         build_repo_needles(duplicate)
+
+
+def test_rouge_metric_load_is_revision_and_digest_pinned(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from p3_scbench_official import ROUGE_SCRIPT_SHA256
+
+    script = tmp_path / "rouge.py"
+    script.write_text("frozen metric")
+    monkeypatch.setattr(
+        "p3_scbench_official.ROUGE_SCRIPT_SHA256",
+        __import__("hashlib").sha256(script.read_bytes()).hexdigest(),
+    )
+    calls: list[str] = []
+    monkeypatch.setitem(
+        sys.modules,
+        "evaluate",
+        SimpleNamespace(load=lambda path: calls.append(path) or RougeMetric()),
+    )
+    downloads: list[dict[str, object]] = []
+    monkeypatch.setitem(
+        sys.modules,
+        "huggingface_hub",
+        SimpleNamespace(hf_hub_download=lambda **kwargs: downloads.append(kwargs) or str(script)),
+    )
+
+    assert isinstance(load_rouge_lsum(), RougeMetric)
+    assert downloads == [
+        {
+            "repo_id": "evaluate-metric/rouge",
+            "filename": "rouge.py",
+            "repo_type": "space",
+            "revision": ROUGE_REVISION,
+        }
+    ]
+    assert calls == [str(script)]
+    assert len(ROUGE_SCRIPT_SHA256) == 64

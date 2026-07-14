@@ -442,6 +442,7 @@ def main() -> None:
                                         failure_type="empty-generation",
                                         latency_ms=latency_ms,
                                         peak_hbm_bytes=peak_hbm,
+                                        hot_resident_bytes=resident_bytes,
                                     )
                                 else:
                                     generated = len(

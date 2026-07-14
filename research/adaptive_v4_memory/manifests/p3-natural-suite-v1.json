@@ -126,6 +126,13 @@
       }
     },
     "SCBench": {
+      "rouge_metric": {
+        "repo_id": "evaluate-metric/rouge",
+        "revision": "ea7c4bf30945a2a8e31f2b1b3bdba6cd617eebe2",
+        "script_sha256": "805b71b855be6dc270ce2366639a4e264c2a1fb93a2c8a50f9fb9ef5a2b9c21a",
+        "evaluate_version": "0.4.6",
+        "rouge_score_version": "0.1.2"
+      },
       "dataset": {
         "repo_id": "microsoft/SCBench",
         "revision": "283310bb8c5ba6909dd9a6b1be087d2937f76f6d",
@@ -177,7 +184,20 @@
       "expected_shared_contexts_per_mode": 922,
       "expected_turn_predictions_per_mode": 5143,
       "expected_predictions_per_arm": 10286,
-      "scoring": "Use the pinned task-specific official scorers; report every task and turn before any macro average."
+      "scoring": "Use the pinned task-specific official scorers; report every task and turn before any macro average.",
+      "execution": {
+        "runner": "research/adaptive_v4_memory/scripts/run_p3_scbench.py",
+        "raw_output_root": "artifacts/adaptive_v4_memory/paper_grade/p3/natural/scbench",
+        "native_arm_artifact": "artifacts/adaptive_v4_memory/paper_grade/p3/natural/scbench/native-dense/cell.json",
+        "fixed_arm_artifact": "artifacts/adaptive_v4_memory/paper_grade/p3/natural/scbench/strongest-memory-matched-fixed/cell.json",
+        "resume_unit": "one turn prediction within one shared-context row",
+        "multi_turn_cache": "compress the first rendered prompt once; retain every official golden-answer follow-up prompt while removing generated answer tokens",
+        "multi_request_cache": "compress one shared context once; restore that exact cache after every independent query",
+        "upstream_deviation": "do not apply upstream 128K truncation; classify every oversized turn as unsupported-context without model execution",
+        "tokenization_boundary": "preserve the pinned official rendered segment boundaries and bind both rendered-string and exact token-id sequence digests",
+        "operational_failure_policy": "retain every one of 10,286 turn records per arm and include each failure as zero in the conservative all-expected quality mean",
+        "hot_memory_measurement": "exact bytes in DynamicCache key/value tensors after each turn prompt is ingested and before answer-token decoding"
+      }
     },
     "LongBench-v2": {
       "dataset": {

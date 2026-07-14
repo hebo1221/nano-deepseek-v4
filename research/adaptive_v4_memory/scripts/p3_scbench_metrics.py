@@ -9,7 +9,9 @@ from typing import Any
 
 def normalize_answer(value: str) -> str:
     lowered = value.lower()
-    without_punctuation = "".join(character for character in lowered if character not in string.punctuation)
+    without_punctuation = "".join(
+        character for character in lowered if character not in string.punctuation
+    )
     without_articles = re.sub(r"\b(a|an|the)\b", " ", without_punctuation)
     return " ".join(without_articles.split())
 
@@ -96,7 +98,10 @@ def score_substring_all(prediction: str, references: Iterable[str]) -> float:
     values = list(references)
     if not values:
         raise ValueError("SCBench substring-all scorer requires references.")
-    return sum(float(reference.lower() in prediction.lower()) for reference in values) / len(values)
+    score = sum(float(reference.lower() in prediction.lower()) for reference in values) / len(
+        values
+    )
+    return round(score, 2)
 
 
 def official_ground_truth(task: str, turn: dict[str, Any]) -> Any:

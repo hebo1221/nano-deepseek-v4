@@ -45,6 +45,10 @@ def test_natural_suite_freezes_full_scale_and_sample_contract() -> None:
     ]
     assert result["scbench_contexts"] == 922
     assert result["scbench_turns_per_mode"] == 5143
+    scbench_execution = manifest["benchmarks"]["SCBench"]["execution"]
+    assert scbench_execution["runner"].endswith("run_p3_scbench.py")
+    assert "golden-answer follow-up" in scbench_execution["multi_turn_cache"]
+    assert "restore that exact cache" in scbench_execution["multi_request_cache"]
     assert result["longbench_v2_examples"] == 503
     assert result["longmemeval_examples"] == 500
     assert result["mrcr_examples_through_128k"] == 1500
@@ -484,6 +488,54 @@ def test_longmem_arm_audit_requires_official_or_blocked_judge_provenance(
             expected_examples=2,
             manifest_digest="4" * 64,
             allowed_failures={"judge-blocked"},
+        )
+
+
+def test_scbench_arm_audit_requires_turn_coordinates_tokens_and_scorer(
+    tmp_path: Path,
+) -> None:
+    cell, raw, _causal = _raw_arm_cell(tmp_path)
+    records = [json.loads(line) for line in raw.read_text().splitlines()]
+    for turn_index, row in enumerate(records):
+        row.update(
+            {
+                "benchmark": "SCBench",
+                "mode": "multi-turn",
+                "task": "scbench_kv",
+                "row_index": 0,
+                "turn_index": turn_index,
+                "input_token_ids_sha256": "7" * 64,
+            }
+        )
+    records[0]["scorer_detail"] = {"metric": "scbench_kv"}
+    raw.write_text("".join(json.dumps(row) + "\n" for row in records))
+    payload = json.loads(cell.read_text())
+    payload["benchmark"] = "SCBench"
+    payload["raw_records"]["sha256"] = _digest(raw)
+    cell.write_text(json.dumps(payload))
+
+    result, _dependencies = audit_arm(
+        benchmark="SCBench",
+        arm="native-dense",
+        artifact_path=cell,
+        expected_examples=2,
+        manifest_digest="4" * 64,
+        allowed_failures={"unsupported-context"},
+    )
+
+    assert result["accounted_examples"] == 2
+    records[0].pop("scorer_detail")
+    raw.write_text("".join(json.dumps(row) + "\n" for row in records))
+    payload["raw_records"]["sha256"] = _digest(raw)
+    cell.write_text(json.dumps(payload))
+    with pytest.raises(ValueError, match="SCBench official scorer detail"):
+        audit_arm(
+            benchmark="SCBench",
+            arm="native-dense",
+            artifact_path=cell,
+            expected_examples=2,
+            manifest_digest="4" * 64,
+            allowed_failures={"unsupported-context"},
         )
 
 

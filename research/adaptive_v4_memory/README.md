@@ -171,6 +171,12 @@ Without an explicitly enabled `gpt-4o-2024-08-06` judge, generations and
 physical measurements are retained as `judge-blocked` terminal records and no
 auxiliary score is substituted for the official metric.
 
+SCBench executes all 12 tasks in both official multi-turn and multi-request
+modes (10,286 turn predictions per arm). Multi-turn retains the official
+golden-answer follow-up prompts while removing generated answer tokens;
+multi-request restores one compressed shared-context cache after every query.
+Task scorers, RepoQA thresholding, and the ROUGE metric script are digest-bound.
+
 The P4 reference systems matrix freezes 108 scale/context/generation/load cells,
 with five warmups and 30 measured repetitions for resident and tiered policies.
 Policy failures are isolated: if resident OOMs, the surviving tiered policy is

@@ -139,7 +139,7 @@ def audit_arm(
         )
         assert isinstance(revisions, dict)
         _require(isinstance(row.get("arm_config"), dict), f"Missing arm config: {identifier}")
-        if benchmark in {"RULER", "LongBench-v2", "LongMemEval", "MRCR"}:
+        if benchmark in {"RULER", "SCBench", "LongBench-v2", "LongMemEval", "MRCR"}:
             _require(
                 isinstance(row.get("token_boundary_retreat"), int)
                 and row["token_boundary_retreat"] >= 0,
@@ -151,6 +151,25 @@ def audit_arm(
                 revisions.get("official_scorer_sha256"),
                 f"{identifier} official scorer",
             )
+        if benchmark == "SCBench":
+            _sha256_value(row.get("input_token_ids_sha256"), f"{identifier} token ids")
+            _require(
+                row.get("mode") in {"multi-turn", "multi-request"}
+                and isinstance(row.get("task"), str)
+                and row["task"].startswith("scbench_")
+                and isinstance(row.get("row_index"), int)
+                and row["row_index"] >= 0
+                and isinstance(row.get("turn_index"), int)
+                and row["turn_index"] >= 0,
+                f"Invalid SCBench turn coordinates: {identifier}",
+            )
+            if row["status"] == "scored":
+                _require(
+                    isinstance(row.get("scorer_detail"), dict)
+                    and isinstance(row["scorer_detail"].get("metric"), str)
+                    and bool(row["scorer_detail"]["metric"]),
+                    f"Missing SCBench official scorer detail: {identifier}",
+                )
         if benchmark == "LongMemEval":
             judge = row.get("judge")
             if row["status"] == "scored":

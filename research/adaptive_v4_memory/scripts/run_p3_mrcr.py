@@ -160,22 +160,30 @@ def failure_record(
     failure_type: str,
     latency_ms: float,
     peak_hbm_bytes: int,
+    hot_resident_bytes: int = 0,
+    raw_response: str = "",
+    parsed_response: str | None = None,
+    stop_reason: str | None = None,
+    generated_tokens_observed: int | None = None,
     error: BaseException | None = None,
 ) -> dict[str, Any]:
-    return {
+    record = {
         **base,
         "status": "failure",
-        "raw_response": "",
-        "parsed_response": None,
+        "raw_response": raw_response,
+        "parsed_response": parsed_response,
         "score": None,
         "failure_type": failure_type,
-        "stop_reason": failure_type,
+        "stop_reason": stop_reason or failure_type,
         "latency_ms": latency_ms,
         "peak_hbm_bytes": peak_hbm_bytes,
-        "hot_resident_bytes": 0,
+        "hot_resident_bytes": hot_resident_bytes,
         "error_type": type(error).__name__ if error is not None else None,
         "error": str(error) if error is not None else None,
     }
+    if generated_tokens_observed is not None:
+        record["generated_tokens_observed"] = generated_tokens_observed
+    return record
 
 
 def _dependency_file(metadata: dict[str, Any], expected_digest: str) -> Path:
@@ -481,6 +489,7 @@ def main() -> None:
                                     failure_type="empty-generation",
                                     latency_ms=latency_ms,
                                     peak_hbm_bytes=peak_hbm,
+                                    hot_resident_bytes=resident_bytes,
                                 )
                             else:
                                 generated = len(

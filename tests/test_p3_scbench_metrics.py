@@ -39,6 +39,14 @@ def test_scbench_language_f1_and_retrieval_metrics() -> None:
         == 1.0
     )
     assert score_turn(task="scbench_mf", prediction="It is 42.", ground_truth=42) == 1.0
+    assert (
+        score_turn(
+            task="scbench_vt",
+            prediction="first and second",
+            ground_truth=["first", "second", "missing"],
+        )
+        == 0.67
+    )
 
 
 def test_scbench_mixed_subtasks_and_summary_require_exact_scorer() -> None:

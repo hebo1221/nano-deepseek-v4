@@ -10,6 +10,8 @@ from p3_scbench_metrics import official_ground_truth, score_turn
 
 REPO_TASKS = frozenset({"scbench_repoqa", "scbench_repoqa_and_kv"})
 REPO_THRESHOLD = 0.8
+ROUGE_REVISION = "ea7c4bf30945a2a8e31f2b1b3bdba6cd617eebe2"
+ROUGE_SCRIPT_SHA256 = "805b71b855be6dc270ce2366639a4e264c2a1fb93a2c8a50f9fb9ef5a2b9c21a"
 
 
 def load_repoqa_module(source_root: Path, expected_sha256: str) -> Any:
@@ -27,13 +29,27 @@ def load_repoqa_module(source_root: Path, expected_sha256: str) -> Any:
 
 def load_rouge_lsum() -> Any:
     import evaluate
+    from huggingface_hub import hf_hub_download
 
-    return evaluate.load("rouge")
+    script = Path(
+        hf_hub_download(
+            repo_id="evaluate-metric/rouge",
+            filename="rouge.py",
+            repo_type="space",
+            revision=ROUGE_REVISION,
+        )
+    )
+    if sha256(script) != ROUGE_SCRIPT_SHA256:
+        raise ValueError("Pinned ROUGE metric script SHA-256 drifted.")
+    return evaluate.load(str(script))
 
 
-def build_repo_needles(rows_by_task: dict[str, list[dict[str, Any]]]) -> dict[str, list[dict[str, str]]]:
-    needles: dict[str, list[dict[str, str]]] = {}
+def build_repo_needles(
+    rows_by_task: dict[str, list[dict[str, Any]]],
+) -> dict[str, dict[str, list[dict[str, str]]]]:
+    needles: dict[str, dict[str, list[dict[str, str]]]] = {}
     for task in REPO_TASKS:
+        task_needles: dict[str, list[dict[str, str]]] = {}
         for row in rows_by_task.get(task, []):
             repo = row.get("repo")
             if not isinstance(repo, str) or not repo:
@@ -44,11 +60,12 @@ def build_repo_needles(rows_by_task: dict[str, list[dict[str, Any]]]) -> dict[st
                 name, answer = turn.get("name"), turn.get("answer")
                 if not isinstance(name, str) or not name or not isinstance(answer, str):
                     raise ValueError(f"{task} RepoQA turn is missing a function needle.")
-                needles.setdefault(repo, []).append({"name": name, "needle": answer})
-    for repo, values in needles.items():
-        unique = {(value["name"], value["needle"]) for value in values}
-        if len(unique) != len(values):
-            raise ValueError(f"RepoQA contains duplicate needles for {repo}.")
+                task_needles.setdefault(repo, []).append({"name": name, "needle": answer})
+        for repo, values in task_needles.items():
+            unique = {(value["name"], value["needle"]) for value in values}
+            if len(unique) != len(values):
+                raise ValueError(f"{task} contains duplicate needles for {repo}.")
+        needles[task] = task_needles
     return needles
 
 
@@ -90,7 +107,8 @@ class OfficialSCBenchScorer:
             name, answer = turn.get("name"), turn.get("answer")
             if (
                 not isinstance(repo, str)
-                or repo not in self.repo_needles
+                or task not in self.repo_needles
+                or repo not in self.repo_needles[task]
                 or not isinstance(language, str)
                 or not isinstance(name, str)
                 or not isinstance(answer, str)
@@ -99,7 +117,7 @@ class OfficialSCBenchScorer:
             verdict, best_target, similarity = self.repo_module.needle_evaluator(
                 prediction,
                 {"func_name": name, "ground_truth": answer},
-                self.repo_needles[repo],
+                self.repo_needles[task][repo],
                 language,
                 False,
             )
@@ -125,12 +143,10 @@ class OfficialSCBenchScorer:
         return score, {"metric": effective}
 
 
-def load_official_components(source_root: Path, file_digests: dict[str, str]) -> tuple[Any, Any, Any]:
-    prompt_module = load_official_scbench_module(
-        source_root, file_digests["scbench/eval_utils.py"]
-    )
-    repo_module = load_repoqa_module(
-        source_root, file_digests["scbench/repo_qa_utils.py"]
-    )
+def load_official_components(
+    source_root: Path, file_digests: dict[str, str]
+) -> tuple[Any, Any, Any]:
+    prompt_module = load_official_scbench_module(source_root, file_digests["scbench/eval_utils.py"])
+    repo_module = load_repoqa_module(source_root, file_digests["scbench/repo_qa_utils.py"])
     rouge_metric = load_rouge_lsum()
     return prompt_module, repo_module, rouge_metric
