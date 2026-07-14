@@ -45,7 +45,6 @@ CUDA_KEYS = (
     "reserved_after_prefill_bytes",
     "peak_allocated_bytes",
     "peak_reserved_bytes",
-    "process_total_hbm_bytes",
     "device_total_hbm_bytes",
 )
 CACHE_KEYS = (
@@ -333,7 +332,21 @@ def validate_policy_run(
         "Generated-token throughput must be measured and positive.",
     )
     _sha256_value(payload.get("prediction_digest"), "prediction")
-    _nonnegative_metrics(payload.get("cuda"), CUDA_KEYS, "cuda")
+    cuda = payload.get("cuda")
+    if not isinstance(cuda, dict):
+        raise ValueError("Missing cuda measurements.")
+    _nonnegative_metrics(cuda, CUDA_KEYS, "cuda")
+    process_total = cuda.get("process_total_hbm_bytes")
+    process_total_availability = cuda.get("process_total_hbm_availability")
+    _require(
+        (
+            process_total_availability == "measured-nvidia-smi"
+            and isinstance(process_total, (int, float))
+            and process_total > 0
+        )
+        or (process_total_availability == "unavailable-nvidia-smi" and process_total is None),
+        "Process-total HBM availability contract drifted.",
+    )
     _nonnegative_metrics(payload.get("cache"), CACHE_KEYS, "cache")
     _nonnegative_metrics(payload.get("transfer"), TRANSFER_KEYS, "transfer")
     _nonnegative_metrics(payload.get("timing"), TIMING_KEYS, "timing")

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 import sys
 from copy import deepcopy
 from pathlib import Path
@@ -10,6 +12,7 @@ import pytest
 SCRIPTS = Path(__file__).resolve().parents[1] / "research/adaptive_v4_memory/scripts"
 sys.path.insert(0, str(SCRIPTS))
 
+import p4_continuous_batch_adapter as production_adapter  # noqa: E402
 import run_p4_production_systems_matrix as production  # noqa: E402
 import summarize_p4_production_systems_matrix as production_summary  # noqa: E402
 
@@ -59,7 +62,11 @@ def _policy_run(cell: tuple[str, int, int, str, int, int], policy: str) -> dict[
         "decode_step_latency_ms": [1.0] * (concurrency * generation),
         "generated_token_throughput_per_second": 100.0,
         "prediction_digest": "3" * 64,
-        "cuda": {key: 1 for key in production.CUDA_KEYS},
+        "cuda": {
+            **{key: 1 for key in production.CUDA_KEYS},
+            "process_total_hbm_bytes": 1,
+            "process_total_hbm_availability": "measured-nvidia-smi",
+        },
         "cache": {key: 1 for key in production.CACHE_KEYS},
         "transfer": {key: 1 for key in production.TRANSFER_KEYS},
         "timing": {key: 1 for key in production.TIMING_KEYS},
@@ -188,6 +195,73 @@ def test_production_adapter_requires_timestamp_proven_concurrency() -> None:
     ] = False
     with pytest.raises(ValueError, match="not actual concurrent serving"):
         production.validate_adapter_payload(serial, cell=cell, executable_digest=digest)
+
+
+def test_production_adapter_accepts_explicitly_unavailable_process_hbm() -> None:
+    cell = next(cell for cell in production.frozen_cells() if cell[5] == 8)
+    digest = "a" * 64
+    payload = _adapter_payload(cell, digest)
+    for repetition in payload["repetitions"]:
+        for run in repetition["policies"].values():
+            run["cuda"]["process_total_hbm_bytes"] = None
+            run["cuda"]["process_total_hbm_availability"] = "unavailable-nvidia-smi"
+
+    production.validate_adapter_payload(payload, cell=cell, executable_digest=digest)
+    summary = production_summary.summarize_cell(
+        {
+            "cell": production.cell_dict(cell),
+            "adapter_payload": payload,
+        }
+    )
+
+    process_total = summary["metrics"]["process_total_hbm_bytes"]
+    assert process_total["resident"] is None
+    assert process_total["tiered"] is None
+    assert process_total["paired_observations"] == 0
+
+    mislabeled = deepcopy(payload)
+    mislabeled["repetitions"][0]["policies"]["resident-native"]["cuda"][
+        "process_total_hbm_bytes"
+    ] = 0
+    with pytest.raises(ValueError, match="availability contract drifted"):
+        production.validate_adapter_payload(mislabeled, cell=cell, executable_digest=digest)
+
+
+def test_production_manifest_records_process_hbm_amendment_before_execution() -> None:
+    root = Path(__file__).resolve().parents[1]
+    manifest = json.loads(
+        (root / "research/adaptive_v4_memory/manifests/p4-production-systems-matrix-v1.json")
+        .read_text()
+    )
+
+    amendment = manifest["protocol_amendments"][-1]
+    assert amendment["timing"] == "before any P4 production cell was generated"
+    assert "process-total HBM" in amendment["change"]
+    assert any(
+        "otherwise null with explicit availability status" in measurement
+        for measurement in manifest["required_measurements"]
+    )
+
+
+@pytest.mark.parametrize(
+    ("stdout", "expected"),
+    [
+        (f"{os.getpid()}, N/A\n", (None, "unavailable-nvidia-smi")),
+        (f"{os.getpid()}, 42\n", (42 * 1024 * 1024, "measured-nvidia-smi")),
+    ],
+)
+def test_process_hbm_preserves_nvidia_smi_availability(
+    monkeypatch: pytest.MonkeyPatch,
+    stdout: str,
+    expected: tuple[int | None, str],
+) -> None:
+    monkeypatch.setattr(
+        production_adapter.subprocess,
+        "run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(args[0], 0, stdout, ""),
+    )
+
+    assert production_adapter._process_hbm_bytes() == expected
 
 
 def test_production_adapter_rejects_nonoverlapping_request_records() -> None:

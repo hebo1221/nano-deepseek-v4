@@ -925,6 +925,8 @@ def classify_evidence(
         and production_audit.get("failed_cells") == 0
         and production_audit.get("actual_concurrency_verified") is True
         and production_audit.get("all_required_metrics_verified") is True
+        and production_audit.get("allocator_hbm_metrics_verified") is True
+        and production_audit.get("process_total_hbm_availability_accounted") is True
         and production_audit.get("backend_provenance_consistent") is True
         and production_audit.get("tail_failure_accounting_complete") is True
         and production_audit.get("all_paired_predictions_identical") is True
@@ -1818,6 +1820,10 @@ manually, remains mandatory before goal completion, and is never reported as pas
 - P4 production systems: {p4_production["terminal_cells"]} terminal actual-concurrency cells,
   {p4_production["complete_cells"]} complete, {p4_production["partial_cells"]} partial, and
   {p4_production["failed_cells"]} failed.
+  Allocator/device HBM remains mandatory for successful runs; process-total HBM was available
+  for {p4_production["process_total_hbm_measured_runs"]:,} measured policy runs and explicitly
+  unavailable for {p4_production["process_total_hbm_unavailable_runs"]:,}, with no zero or proxy
+  imputation.
   The long-form P4 metric tables retain run-level distributions (mean, standard deviation,
   p50/p95/p99, minimum, and maximum) plus paired bootstrap effects for every registered
   latency, throughput, HBM, fragmentation, cache, transfer, miss, and controller metric.

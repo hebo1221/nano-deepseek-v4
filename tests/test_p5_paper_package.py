@@ -268,6 +268,18 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
         is False
     )
     assert (
+        manifest["evidence"]["p4_production_systems"]["required_audit"][
+            "process_total_hbm_availability_accounted"
+        ]
+        is True
+    )
+    assert (
+        manifest["evidence"]["p4_production_systems"]["required_audit"][
+            "allocator_hbm_metrics_verified"
+        ]
+        is True
+    )
+    assert (
         manifest["evidence"]["p4_reference_systems"]["required_audit"][
             "all_artifact_digests_verified"
         ]

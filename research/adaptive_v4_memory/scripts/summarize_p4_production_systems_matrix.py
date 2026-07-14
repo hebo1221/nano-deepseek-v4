@@ -70,7 +70,7 @@ def adapter_evidence_boundary(
     }
 
 
-METRICS: dict[str, Callable[[dict[str, Any]], float]] = {
+METRICS: dict[str, Callable[[dict[str, Any]], float | None]] = {
     "ttft_p50_ms": lambda run: _quantile(
         _request_latency(run, "scheduler_received_ns", "first_token_ns"), 0.50
     ),
@@ -111,7 +111,11 @@ METRICS: dict[str, Callable[[dict[str, Any]], float]] = {
     / max(float(run["cuda"]["reserved_after_prefill_bytes"]), 1.0),
     "peak_allocated_bytes": lambda run: float(run["cuda"]["peak_allocated_bytes"]),
     "peak_reserved_bytes": lambda run: float(run["cuda"]["peak_reserved_bytes"]),
-    "process_total_hbm_bytes": lambda run: float(run["cuda"]["process_total_hbm_bytes"]),
+    "process_total_hbm_bytes": lambda run: (
+        float(run["cuda"]["process_total_hbm_bytes"])
+        if run["cuda"]["process_total_hbm_bytes"] is not None
+        else None
+    ),
     "device_total_hbm_bytes": lambda run: float(run["cuda"]["device_total_hbm_bytes"]),
     "logical_cache_bytes": lambda run: float(run["cache"]["logical_cache_bytes"]),
     "hot_resident_bytes": lambda run: float(run["cache"]["hot_resident_bytes"]),
@@ -150,14 +154,27 @@ def summarize_cell(payload: dict[str, Any]) -> dict[str, Any]:
     for name, getter in METRICS.items():
         policy_values = {
             policy: [
-                getter(row["policies"][policy])
+                value
                 for row in repetitions
                 if policy in row.get("policies", {})
+                for value in [getter(row["policies"][policy])]
+                if value is not None
             ]
             for policy in systems.POLICIES
         }
-        resident = [getter(row["policies"]["resident-native"]) for row in paired]
-        tiered = [getter(row["policies"]["tiered-native"]) for row in paired]
+        paired_values = [
+            (resident, tiered)
+            for row in paired
+            for resident, tiered in [
+                (
+                    getter(row["policies"]["resident-native"]),
+                    getter(row["policies"]["tiered-native"]),
+                )
+            ]
+            if resident is not None and tiered is not None
+        ]
+        resident = [values[0] for values in paired_values]
+        tiered = [values[1] for values in paired_values]
         differences = [
             candidate - baseline for candidate, baseline in zip(tiered, resident, strict=True)
         ]
@@ -229,6 +246,10 @@ def summarize(matrix_path: Path) -> dict[str, Any]:
     all_metrics = True
     all_tail_accounted = True
     all_predictions_identical = True
+    all_process_total_hbm_available = True
+    process_total_hbm_measured_runs = 0
+    process_total_hbm_unavailable_runs = 0
+    successful_policy_runs = 0
     backend_provenance: set[str] = set()
     for run in runs:
         cell = tuple(
@@ -289,7 +310,14 @@ def summarize(matrix_path: Path) -> dict[str, Any]:
             all_metrics = False
         for repetition in adapter["repetitions"]:
             for policy_run in repetition.get("policies", {}).values():
+                successful_policy_runs += 1
                 all_tail_accounted &= policy_run.get("tail_failure_accounting_complete") is True
+                availability = policy_run["cuda"]["process_total_hbm_availability"]
+                if availability == "measured-nvidia-smi":
+                    process_total_hbm_measured_runs += 1
+                else:
+                    process_total_hbm_unavailable_runs += 1
+                    all_process_total_hbm_available = False
             if set(repetition.get("policies", {})) == set(systems.POLICIES):
                 all_predictions_identical &= repetition.get(
                     "greedy_predictions_identical"
@@ -312,6 +340,16 @@ def summarize(matrix_path: Path) -> dict[str, Any]:
             "failed_cells": len(failures),
             "actual_concurrency_verified": all_complete and all_concurrency,
             "all_required_metrics_verified": all_complete and all_metrics,
+            "allocator_hbm_metrics_verified": successful_policy_runs > 0,
+            "successful_policy_runs_with_allocator_hbm": successful_policy_runs,
+            "process_total_hbm_availability_accounted": True,
+            "process_total_hbm_available_all_measured_runs": (
+                process_total_hbm_measured_runs > 0
+                and process_total_hbm_unavailable_runs == 0
+                and all_process_total_hbm_available
+            ),
+            "process_total_hbm_measured_runs": process_total_hbm_measured_runs,
+            "process_total_hbm_unavailable_runs": process_total_hbm_unavailable_runs,
             "tail_failure_accounting_complete": all_tail_accounted,
             "all_paired_predictions_identical": all_complete
             and all_predictions_identical,

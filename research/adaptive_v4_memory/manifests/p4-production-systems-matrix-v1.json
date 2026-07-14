@@ -14,6 +14,12 @@
       "timing": "before any P4 production cell was generated",
       "change": "make the checked reference adapter's static full-request batching boundary machine-auditable and reserve external fused/dynamic success for separately verified runtime evidence",
       "reason": "request overlap and shared decode batches do not by themselves establish dynamic arrivals, continuous admission, or fused production-serving behavior"
+    },
+    {
+      "date": "2026-07-14",
+      "timing": "before any P4 production cell was generated",
+      "change": "make process-total HBM conditional on nvidia-smi availability while keeping allocator allocated, reserved, peak, and device-total HBM mandatory",
+      "reason": "the GB10 driver reports process memory as N/A; null plus an explicit availability status preserves the observation without inventing zero or a proxy measurement"
     }
   ],
   "evidence_tier": "checked-static-full-request-batching-adapter",
@@ -69,7 +75,7 @@
     "per-request per-token decode dispatch/completion timestamps and execution-batch identity",
     "TTFT, TPOT, end-to-end p50/p95/p99 and maximum",
     "generated-token throughput and terminal request failures",
-    "allocated, reserved, peak, process-total, and device-total HBM",
+    "allocated, reserved, peak, and device-total HBM; process-total HBM when nvidia-smi exposes it, otherwise null with explicit availability status",
     "pinned host, logical, hot, and cold cache bytes",
     "H2D, D2H, useful-transfer bytes and counts",
     "misses, late misses, prefetches, and evictions",

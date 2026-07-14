@@ -160,24 +160,32 @@ def _cache_totals(cache: Any) -> dict[str, int]:
     }
 
 
-def _process_hbm_bytes() -> int:
-    completed = subprocess.run(
-        [
-            "nvidia-smi",
-            "--query-compute-apps=pid,used_memory",
-            "--format=csv,noheader,nounits",
-        ],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    used_mib = 0
+def _process_hbm_bytes() -> tuple[int | None, str]:
+    try:
+        completed = subprocess.run(
+            [
+                "nvidia-smi",
+                "--query-compute-apps=pid,used_memory",
+                "--format=csv,noheader,nounits",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except OSError:
+        return None, "unavailable-nvidia-smi"
+    if completed.returncode != 0:
+        return None, "unavailable-nvidia-smi"
     for line in completed.stdout.splitlines():
         pid, separator, memory = line.partition(",")
         if separator and pid.strip() == str(os.getpid()):
-            used_mib += int(memory.strip())
-    _require(used_mib > 0, "nvidia-smi did not expose process-total HBM.")
-    return used_mib * 1024 * 1024
+            try:
+                used_mib = int(memory.strip())
+            except ValueError:
+                return None, "unavailable-nvidia-smi"
+            if used_mib > 0:
+                return used_mib * 1024 * 1024, "measured-nvidia-smi"
+    return None, "unavailable-nvidia-smi"
 
 
 def _driver_version() -> str:
@@ -294,7 +302,7 @@ def run_policy(
         row["admitted_ns"] for row in request_records
     )
     totals = _cache_totals(cache)
-    process_hbm = _process_hbm_bytes()
+    process_hbm, process_hbm_availability = _process_hbm_bytes()
     trace = IndexerTimingTrace()
     cache.memory_trace = trace
     probe = torch.zeros((prompt_cpu.shape[0], 1), dtype=torch.long, device=device)
@@ -326,6 +334,7 @@ def run_policy(
             "peak_allocated_bytes": torch.cuda.max_memory_allocated(device),
             "peak_reserved_bytes": torch.cuda.max_memory_reserved(device),
             "process_total_hbm_bytes": process_hbm,
+            "process_total_hbm_availability": process_hbm_availability,
             "device_total_hbm_bytes": torch.cuda.get_device_properties(device).total_memory,
         },
         "cache": {
