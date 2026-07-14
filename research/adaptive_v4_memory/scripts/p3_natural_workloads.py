@@ -64,7 +64,11 @@ def render_chat_split_last_user(
 
 
 def render_chat_split_user_content(
-    tokenizer: ChatTokenizer, context: str, query: str
+    tokenizer: Any,
+    context: str,
+    query: str,
+    *,
+    enable_thinking: bool | None = None,
 ) -> tuple[str, str]:
     if not context or not query:
         raise ValueError("Chat context and query segments must both be non-empty.")
@@ -72,10 +76,18 @@ def render_chat_split_user_content(
     separator = f"<adaptive-v4-memory-segment-{digest}>"
     if separator in context or separator in query:
         raise ValueError("Chat content separator collides with prompt text.")
-    rendered = render_chat(
-        tokenizer,
+    template_kwargs: dict[str, Any] = {
+        "add_generation_prompt": True,
+        "tokenize": False,
+    }
+    if enable_thinking is not None:
+        template_kwargs["enable_thinking"] = enable_thinking
+    rendered = tokenizer.apply_chat_template(
         [{"role": "user", "content": context + separator + query}],
+        **template_kwargs,
     )
+    if not isinstance(rendered, str) or not rendered:
+        raise ValueError("Tokenizer returned an empty or non-text chat prompt.")
     parts = rendered.split(separator)
     if len(parts) != 2 or not parts[0] or not parts[1]:
         raise ValueError("Chat template did not preserve the content separator exactly once.")

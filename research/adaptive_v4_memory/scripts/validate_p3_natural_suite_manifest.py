@@ -103,7 +103,9 @@ def validate_manifest(payload: dict[str, Any]) -> dict[str, Any]:
         or ruler_execution["runner"]
         != "research/adaptive_v4_memory/scripts/run_p3_natural_ruler.py"
         or ruler_execution["resume_unit"] != "one example within one arm"
-        or "exact rendered context and question token-id" not in ruler_execution["tokenization_boundary"]
+        or "full rendered prompt once" not in ruler_execution["tokenization_boundary"]
+        or "all five" not in ruler_execution["dataset_binding"]
+        or "pinned KVPress RULER scorer" not in ruler_execution["scorer_binding"]
         or "exact bytes" not in ruler_execution["hot_memory_measurement"]
     ):
         raise ValueError("Natural RULER execution or exact-token contract drifted.")

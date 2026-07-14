@@ -50,13 +50,11 @@ def test_natural_suite_freezes_full_scale_and_sample_contract() -> None:
     assert result["mrcr_examples_through_128k"] == 1500
     assert manifest["execution_totals"]["minimum_predictions_per_arm"] == 45289
     ruler_execution = manifest["benchmarks"]["RULER"]["execution"]
-    assert ruler_execution["dataset_generator"].endswith(
-        "prepare_p3_natural_ruler_dataset.py"
-    )
+    assert ruler_execution["dataset_generator"].endswith("prepare_p3_natural_ruler_dataset.py")
     assert ruler_execution["runner"].endswith("run_p3_natural_ruler.py")
-    assert "exact rendered context and question token-id" in ruler_execution[
-        "tokenization_boundary"
-    ]
+    assert "full rendered prompt once" in ruler_execution["tokenization_boundary"]
+    assert "all five" in ruler_execution["dataset_binding"]
+    assert "pinned KVPress RULER scorer" in ruler_execution["scorer_binding"]
 
 
 def test_natural_suite_rejects_task_subselection_and_silent_truncation() -> None:
@@ -229,6 +227,8 @@ def _natural_benchmark_summaries(tmp_path: Path, manifest_path: Path) -> dict[st
             },
             "model_snapshot_digest_set_sha256": manifest["model"]["snapshot_digest_set_sha256"],
         }
+        if name == "RULER":
+            payload["benchmark_dataset_digest_set_sha256"] = "9" * 64
         path = tmp_path / f"{name}.json"
         path.write_text(json.dumps(payload))
         paths[name] = path
@@ -369,6 +369,46 @@ def test_natural_arm_audit_closes_scored_and_failed_records(tmp_path: Path) -> N
     assert result["failures_by_type"] == {"unsupported-context": 1}
     assert result["mean_score_over_scored"] == 1.0
     assert result["mean_score_over_all_expected_failures_zero"] == 0.5
+
+
+def test_ruler_arm_audit_requires_exact_tokens_scorer_and_dataset_set(tmp_path: Path) -> None:
+    cell, raw, _causal = _raw_arm_cell(tmp_path)
+    records = [json.loads(line) for line in raw.read_text().splitlines()]
+    for row in records:
+        row["benchmark"] = "RULER"
+        row["input_token_ids_sha256"] = "7" * 64
+        row["token_boundary_retreat"] = 1
+        row["revisions"]["official_scorer_sha256"] = "8" * 64
+    raw.write_text("".join(json.dumps(row) + "\n" for row in records))
+    payload = json.loads(cell.read_text())
+    payload["benchmark"] = "RULER"
+    payload["raw_records"]["sha256"] = _digest(raw)
+    payload["benchmark_dataset_digest_set_sha256"] = "9" * 64
+    cell.write_text(json.dumps(payload))
+
+    result, dependencies = audit_arm(
+        benchmark="RULER",
+        arm="native-dense",
+        artifact_path=cell,
+        expected_examples=2,
+        manifest_digest="4" * 64,
+        allowed_failures={"unsupported-context"},
+    )
+
+    assert result["accounted_examples"] == 2
+    assert dependencies["benchmark_dataset_digest_set_sha256"] == "9" * 64
+
+    payload.pop("benchmark_dataset_digest_set_sha256")
+    cell.write_text(json.dumps(payload))
+    with pytest.raises(ValueError, match="dataset manifest set"):
+        audit_arm(
+            benchmark="RULER",
+            arm="native-dense",
+            artifact_path=cell,
+            expected_examples=2,
+            manifest_digest="4" * 64,
+            allowed_failures={"unsupported-context"},
+        )
 
 
 def test_natural_arm_audit_rejects_duplicate_examples(tmp_path: Path) -> None:

@@ -12,7 +12,13 @@ import torch
 SCRIPTS = Path(__file__).resolve().parents[1] / "research/adaptive_v4_memory/scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-from run_p3_mrcr import arm_config, failure_record, load_rows, rendered_input  # noqa: E402
+from run_p3_mrcr import (  # noqa: E402
+    _existing_records,
+    arm_config,
+    failure_record,
+    load_rows,
+    rendered_input,
+)
 
 
 class WordEncoder:
@@ -112,3 +118,15 @@ def test_mrcr_split_is_a_slice_of_one_exact_chat_tokenization() -> None:
         torch.cat((rendered["context_ids"], rendered["question_ids"]), dim=1), full_ids
     )
     assert rendered["exact_input_tokens"] == full_ids.shape[1]
+
+
+def test_mrcr_progress_recovers_empty_crash_window(tmp_path: Path) -> None:
+    progress = tmp_path / "progress.json"
+    partial = tmp_path / "records.partial.jsonl"
+    identity = {"digest": "a" * 64}
+
+    assert _existing_records(progress, partial, identity) == []
+    partial.unlink()
+    assert _existing_records(progress, partial, identity) == []
+    progress.unlink()
+    assert _existing_records(progress, partial, identity) == []

@@ -229,7 +229,12 @@ def _existing_records(
 ) -> list[dict[str, Any]]:
     if not progress.exists() and not partial.exists():
         atomic_json(progress, identity)
+        partial.touch()
         return []
+    if progress.is_file() and not partial.exists():
+        partial.touch()
+    if partial.is_file() and partial.stat().st_size == 0 and not progress.exists():
+        atomic_json(progress, identity)
     _require(progress.is_file() and partial.is_file(), "Partial MRCR arm state is incomplete.")
     _require(json.loads(progress.read_text()) == identity, "Partial MRCR provenance drifted.")
     records = [json.loads(line) for line in partial.read_text().splitlines() if line]

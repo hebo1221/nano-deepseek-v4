@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import hashlib
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -11,6 +13,7 @@ sys.path.insert(0, str(SCRIPTS))
 
 from run_p3_natural_ruler import (  # noqa: E402
     EXPECTED_EXAMPLES,
+    _existing_records,
     expected_example_ids,
     load_dataset_contracts,
     rendered_input,
@@ -18,14 +21,20 @@ from run_p3_natural_ruler import (  # noqa: E402
 )
 
 
-class FakePipeline:
-    def preprocess(self, **kwargs):
+class FakeTokenizer:
+    def apply_chat_template(self, messages: list[dict[str, str]], **kwargs: object) -> str:
         assert kwargs["enable_thinking"] is False
-        assert kwargs["max_context_length"] == 262144
-        return {
-            "context_ids": torch.tensor([[1, 2, 3]]),
-            "questions_ids": [torch.tensor([[4, 5]])],
-        }
+        return f"<user>{messages[0]['content']}</user><assistant>"
+
+    def encode(self, text: str, **_kwargs: object) -> torch.Tensor:
+        values = [
+            sum(ord(char) for char in text[index : index + 2]) for index in range(0, len(text), 2)
+        ]
+        return torch.tensor(values, dtype=torch.long).unsqueeze(0)
+
+
+class FakePipeline:
+    tokenizer = FakeTokenizer()
 
 
 def test_natural_ruler_identity_grid_closes_all_lengths_tasks_and_rows() -> None:
@@ -46,13 +55,14 @@ def test_natural_ruler_rendering_records_exact_token_identity() -> None:
         maximum_context=262144,
     )
 
-    assert result["exact_input_tokens"] == 5
-    assert result["raw_prompt_sha256"] == token_digest(
-        torch.tensor([[1, 2, 3]]), torch.tensor([[4, 5]])
+    full = "<user>contextquestion</user><assistant>answer"
+    full_ids = FakePipeline.tokenizer.encode(full, add_special_tokens=False)
+    assert result["exact_input_tokens"] == full_ids.shape[1]
+    assert torch.equal(torch.cat((result["context_ids"], result["question_ids"]), dim=1), full_ids)
+    assert result["input_token_ids_sha256"] == token_digest(
+        result["context_ids"], result["question_ids"]
     )
-    assert result["raw_prompt_sha256"] == hashlib_digest(
-        {"context_ids": [1, 2, 3], "question_ids": [4, 5]}
-    )
+    assert result["raw_prompt_sha256"] == hashlib.sha256(full.encode()).hexdigest()
 
 
 def test_natural_ruler_dataset_contracts_bind_every_length(tmp_path: Path) -> None:
@@ -67,10 +77,11 @@ def test_natural_ruler_dataset_contracts_bind_every_length(tmp_path: Path) -> No
                     "experiment_id": "p3-natural-ruler-qwen3-4b-dataset-v1",
                     "source": {"dirty": False, "implementation_sha256": generator_digest},
                     "natural_suite_manifest": {"sha256": manifest_digest},
-                    "ruler": {"revision": "38da79d79519ef87aa46ae804f838e1eab7f86d7"},
-                    "tokenizer": {
-                        "model_revision": "cdbee75f17c01a7cc42f958dc650907174af0554"
+                    "ruler": {
+                        "revision": "38da79d79519ef87aa46ae804f838e1eab7f86d7",
+                        "clean_tracked_tree": True,
                     },
+                    "tokenizer": {"model_revision": "cdbee75f17c01a7cc42f958dc650907174af0554"},
                     "generation": {
                         "length_tokens": length,
                         "samples_per_task": 500,
@@ -105,9 +116,46 @@ def test_natural_ruler_dataset_contracts_bind_every_length(tmp_path: Path) -> No
     assert len(digest_set) == 64
 
 
-def hashlib_digest(payload: dict) -> str:
-    import hashlib
+def test_natural_ruler_progress_recovers_empty_crash_window(tmp_path: Path) -> None:
+    progress = tmp_path / "progress.json"
+    partial = tmp_path / "records.partial.jsonl"
+    identity = {"digest": "a" * 64}
 
-    return hashlib.sha256(
-        json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()
-    ).hexdigest()
+    assert _existing_records(progress, partial, identity) == []
+    assert progress.is_file() and partial.is_file()
+    partial.unlink()
+    assert _existing_records(progress, partial, identity) == []
+    progress.unlink()
+    assert _existing_records(progress, partial, identity) == []
+
+
+def test_natural_ruler_is_sequence_gated_before_model_or_dataset_io(tmp_path: Path) -> None:
+    root = Path(__file__).resolve().parents[1]
+    p2 = tmp_path / "p2.json"
+    p2.write_text(
+        json.dumps({"completed_shards": 12, "frozen_design": {"total_expected_shards": 4500}})
+    )
+    output = tmp_path / "output"
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(root / "research/adaptive_v4_memory/scripts/run_p3_natural_ruler.py"),
+            "--kvpress-root",
+            str(tmp_path / "missing-kvpress"),
+            "--model-snapshot",
+            str(tmp_path / "missing-model"),
+            "--p2-matrix",
+            str(p2),
+            "--causal-gate",
+            str(tmp_path / "missing-causal.json"),
+            "--output-root",
+            str(output),
+        ],
+        cwd=root,
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode != 0
+    assert "12/4500 shards" in completed.stderr
+    assert not output.exists()

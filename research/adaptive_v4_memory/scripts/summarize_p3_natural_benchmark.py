@@ -137,7 +137,19 @@ def audit_arm(
             ),
             f"Incomplete revision provenance: {identifier}",
         )
+        assert isinstance(revisions, dict)
         _require(isinstance(row.get("arm_config"), dict), f"Missing arm config: {identifier}")
+        if benchmark == "RULER":
+            _sha256_value(row.get("input_token_ids_sha256"), f"{identifier} token ids")
+            _sha256_value(
+                revisions.get("official_scorer_sha256"),
+                f"{identifier} official scorer",
+            )
+            _require(
+                isinstance(row.get("token_boundary_retreat"), int)
+                and row["token_boundary_retreat"] >= 0,
+                f"Invalid exact-token boundary accounting: {identifier}",
+            )
         if row["status"] == "scored":
             score = row.get("score")
             if not isinstance(score, (int, float)) or not 0.0 <= score <= 1.0:
@@ -154,6 +166,9 @@ def audit_arm(
         canonical = json.dumps(row, sort_keys=True, separators=(",", ":"))
         record_digests.append(hashlib.sha256(canonical.encode()).hexdigest())
     _require(scored + sum(failures.values()) == expected_examples, "Arm accounting does not close.")
+    benchmark_dataset_digest = artifact.get("benchmark_dataset_digest_set_sha256")
+    if benchmark == "RULER" or benchmark_dataset_digest is not None:
+        _sha256_value(benchmark_dataset_digest, f"{benchmark} dataset manifest set")
     dependencies = {
         "causal_gate": _dependency(artifact.get("causal_gate"), "causal gate"),
         "dataset_inventory": _dependency(artifact.get("dataset_inventory"), "dataset inventory"),
@@ -161,6 +176,7 @@ def audit_arm(
             artifact.get("fixed_baseline_selection"), "fixed baseline selection"
         ),
         "model_snapshot_digest_set_sha256": artifact.get("model_snapshot_digest_set_sha256"),
+        "benchmark_dataset_digest_set_sha256": benchmark_dataset_digest,
     }
     _sha256_value(dependencies["model_snapshot_digest_set_sha256"], "model snapshot set")
     return (
@@ -214,8 +230,14 @@ def summarize_benchmark(
     inventories = {row["dataset_inventory"]["sha256"] for row in dependencies}
     fixed_selections = {row["fixed_baseline_selection"]["sha256"] for row in dependencies}
     models = {row["model_snapshot_digest_set_sha256"] for row in dependencies}
+    benchmark_datasets = {row["benchmark_dataset_digest_set_sha256"] for row in dependencies}
     _require(
-        len(causal) == len(inventories) == len(fixed_selections) == len(models) == 1,
+        len(causal)
+        == len(inventories)
+        == len(fixed_selections)
+        == len(models)
+        == len(benchmark_datasets)
+        == 1,
         "Arm dependencies drifted.",
     )
     paired_inputs = {row["paired_example_prompt_digest_set_sha256"] for row in arms.values()}
@@ -247,6 +269,7 @@ def summarize_benchmark(
         "dataset_inventory": dependencies[0]["dataset_inventory"],
         "fixed_baseline_selection": dependencies[0]["fixed_baseline_selection"],
         "model_snapshot_digest_set_sha256": next(iter(models)),
+        "benchmark_dataset_digest_set_sha256": next(iter(benchmark_datasets)),
     }
 
 

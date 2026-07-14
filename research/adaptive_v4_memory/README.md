@@ -160,6 +160,12 @@ answer formats as zero instead of excluding them, records every operational
 failure, and measures exact post-prefill key/value cache bytes before question
 decoding. Both arms must use identical example and prompt digests.
 
+RULER and MRCR now share the same exact-token rule: each complete rendered chat
+prompt is tokenized once and only then sliced into prefill and final-query
+tensors, so a BPE merge at the boundary cannot change the evaluated input.
+RULER additionally binds all five generated dataset manifests and the pinned
+official scorer digest into each terminal arm artifact.
+
 The P4 reference systems matrix freezes 108 scale/context/generation/load cells,
 with five warmups and 30 measured repetitions for resident and tiered policies.
 Policy failures are isolated: if resident OOMs, the surviving tiered policy is

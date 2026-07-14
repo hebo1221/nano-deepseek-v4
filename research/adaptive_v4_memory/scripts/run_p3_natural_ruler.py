@@ -12,6 +12,10 @@ from typing import Any
 import numpy as np
 import torch
 from adaptive_v4_gpu_lock import acquire_gpu_lock
+from p3_natural_workloads import (
+    encode_rendered_segments_exact,
+    render_chat_split_user_content,
+)
 from p3_sequence_gate import require_p3_sequence_gate
 from prepare_p3_natural_ruler_dataset import (
     EXPECTED_ROWS_PER_LENGTH,
@@ -65,35 +69,27 @@ def rendered_input(
     answer_prefix: str,
     maximum_context: int,
 ) -> dict[str, Any]:
-    tensors = pipeline.preprocess(
-        context=context,
-        questions=[question],
-        answer_prefix=answer_prefix,
-        max_context_length=maximum_context,
+    _require(maximum_context > 0, "RULER maximum context must be positive.")
+    rendered_context, rendered_question = render_chat_split_user_content(
+        pipeline.tokenizer,
+        context,
+        question,
         enable_thinking=False,
     )
-    context_ids = tensors["context_ids"]
-    questions = tensors["questions_ids"]
-    _require(
-        isinstance(context_ids, torch.Tensor)
-        and context_ids.ndim == 2
-        and context_ids.shape[0] == 1,
-        "RULER context tokenization returned an invalid tensor.",
+    rendered_question += answer_prefix
+    context_ids, question_ids, boundary_retreat = encode_rendered_segments_exact(
+        pipeline.tokenizer,
+        rendered_context,
+        rendered_question,
     )
-    _require(
-        isinstance(questions, list)
-        and len(questions) == 1
-        and isinstance(questions[0], torch.Tensor)
-        and questions[0].ndim == 2
-        and questions[0].shape[0] == 1,
-        "RULER question tokenization returned an invalid tensor.",
-    )
-    question_ids = questions[0]
+    rendered_prompt = rendered_context + rendered_question
     return {
         "context_ids": context_ids,
         "question_ids": question_ids,
         "exact_input_tokens": int(context_ids.shape[1] + question_ids.shape[1]),
-        "raw_prompt_sha256": token_digest(context_ids, question_ids),
+        "raw_prompt_sha256": hashlib.sha256(rendered_prompt.encode()).hexdigest(),
+        "input_token_ids_sha256": token_digest(context_ids, question_ids),
+        "token_boundary_retreat": boundary_retreat,
     }
 
 
@@ -125,12 +121,12 @@ def load_dataset_contracts(
             f"Natural RULER generator provenance drifted at {length}.",
         )
         _require(
-            payload.get("natural_suite_manifest", {}).get("sha256")
-            == natural_manifest_digest,
+            payload.get("natural_suite_manifest", {}).get("sha256") == natural_manifest_digest,
             f"Natural RULER suite manifest drifted at {length}.",
         )
         _require(
             payload.get("ruler", {}).get("revision") == RULER_REVISION
+            and payload.get("ruler", {}).get("clean_tracked_tree") is True
             and payload.get("tokenizer", {}).get("model_revision") == MODEL_REVISION,
             f"Natural RULER upstream revision drifted at {length}.",
         )
@@ -182,10 +178,17 @@ def load_dependencies(
     return manifest, selection
 
 
-def _existing_records(progress: Path, partial: Path, identity: dict[str, Any]) -> list[dict[str, Any]]:
+def _existing_records(
+    progress: Path, partial: Path, identity: dict[str, Any]
+) -> list[dict[str, Any]]:
     if not progress.exists() and not partial.exists():
         atomic_json(progress, identity)
+        partial.touch()
         return []
+    if progress.is_file() and not partial.exists():
+        partial.touch()
+    if partial.is_file() and partial.stat().st_size == 0 and not progress.exists():
+        atomic_json(progress, identity)
     _require(progress.is_file() and partial.is_file(), "Partial natural RULER state is incomplete.")
     _require(json.loads(progress.read_text()) == identity, "Partial RULER provenance drifted.")
     records = [json.loads(line) for line in partial.read_text().splitlines() if line]
@@ -288,6 +291,12 @@ def main() -> None:
     causal_digest = sha256(args.causal_gate)
     runner_digest = sha256(Path(__file__))
     scorer_digest = sha256(Path(__file__).with_name("run_p3_ruler_matrix.py"))
+    official_scorer = kvpress_root / manifest["benchmarks"][BENCHMARK]["scorer"]["path"]
+    official_scorer_digest = manifest["benchmarks"][BENCHMARK]["scorer"]["sha256"]
+    _require(
+        official_scorer.is_file() and sha256(official_scorer) == official_scorer_digest,
+        "Pinned official RULER scorer drifted.",
+    )
     selected_arms = tuple(args.arm or ARMS)
     identities = {
         arm: {
@@ -298,9 +307,7 @@ def main() -> None:
             "inventory_sha256": inventory_digest,
             "causal_gate_sha256": causal_digest,
             "fixed_selection_sha256": selection_digest,
-            "model_snapshot_digest_set_sha256": manifest["model"][
-                "snapshot_digest_set_sha256"
-            ],
+            "model_snapshot_digest_set_sha256": manifest["model"]["snapshot_digest_set_sha256"],
             "arm_config": arm_config(arm, selection, selection_digest),
             "seed": args.seed,
         }
@@ -394,12 +401,15 @@ def main() -> None:
                             "exact_input_tokens": rendered["exact_input_tokens"],
                             "generation_reserve_tokens": reserve,
                             "raw_prompt_sha256": rendered["raw_prompt_sha256"],
+                            "input_token_ids_sha256": rendered["input_token_ids_sha256"],
+                            "token_boundary_retreat": rendered["token_boundary_retreat"],
                             "arm_config": settings,
                             "revisions": {
                                 "model_revision": MODEL_REVISION,
                                 "dataset_revision": RULER_REVISION,
                                 "code_revision": RULER_REVISION,
                                 "scorer_sha256": scorer_digest,
+                                "official_scorer_sha256": official_scorer_digest,
                             },
                             "length_tokens": length,
                             "task": row["task"],
@@ -519,9 +529,8 @@ def main() -> None:
                     "path": str(args.fixed_selection),
                     "sha256": selection_digest,
                 },
-                "model_snapshot_digest_set_sha256": manifest["model"][
-                    "snapshot_digest_set_sha256"
-                ],
+                "model_snapshot_digest_set_sha256": manifest["model"]["snapshot_digest_set_sha256"],
+                "benchmark_dataset_digest_set_sha256": dataset_digest_set,
                 "p3_sequence_decision": sequence_decision,
                 "environment": environment,
                 "raw_records": {"path": str(records), "sha256": sha256(records)},

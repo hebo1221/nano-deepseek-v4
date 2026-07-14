@@ -131,12 +131,18 @@ def audit_benchmark(
         "dataset_inventory": payload.get("dataset_inventory"),
         "fixed_baseline_selection": payload.get("fixed_baseline_selection"),
         "model_snapshot_digest_set_sha256": payload.get("model_snapshot_digest_set_sha256"),
+        "benchmark_dataset_digest_set_sha256": payload.get("benchmark_dataset_digest_set_sha256"),
     }
     _sha256_value(dependencies["model_snapshot_digest_set_sha256"], f"{name} model set")
     _require(
         dependencies["model_snapshot_digest_set_sha256"] == model_snapshot_digest,
         f"{name} model snapshot does not match the frozen manifest.",
     )
+    if name == "RULER":
+        _sha256_value(
+            dependencies["benchmark_dataset_digest_set_sha256"],
+            "RULER dataset manifest set",
+        )
     for dependency_name in (
         "causal_gate",
         "dataset_inventory",
@@ -193,6 +199,11 @@ def summarize(manifest_path: Path, summary_paths: dict[str, Path]) -> dict[str, 
     inventory_digests = {row["dataset_inventory"]["sha256"] for row in dependency_sets}
     fixed_selection_digests = {row["fixed_baseline_selection"]["sha256"] for row in dependency_sets}
     model_digests = {row["model_snapshot_digest_set_sha256"] for row in dependency_sets}
+    ruler_dataset_digests = {
+        row["benchmark_dataset_digest_set_sha256"]
+        for row in dependency_sets
+        if row["benchmark_dataset_digest_set_sha256"] is not None
+    }
     _require(len(causal_digests) == 1, "Natural benchmarks used different causal gates.")
     _require(len(inventory_digests) == 1, "Natural benchmarks used different datasets.")
     _require(
@@ -200,6 +211,7 @@ def summarize(manifest_path: Path, summary_paths: dict[str, Path]) -> dict[str, 
         "Natural benchmarks used different fixed baseline selections.",
     )
     _require(len(model_digests) == 1, "Natural benchmarks used different model snapshots.")
+    _require(len(ruler_dataset_digests) == 1, "RULER dataset manifest set is missing.")
     totals = {
         arm: sum(
             benchmarks[name]["required_arms"][arm]["expected_examples"]
@@ -237,6 +249,7 @@ def summarize(manifest_path: Path, summary_paths: dict[str, Path]) -> dict[str, 
             "dataset_inventory_sha256": next(iter(inventory_digests)),
             "fixed_baseline_selection_sha256": next(iter(fixed_selection_digests)),
             "model_snapshot_digest_set_sha256": next(iter(model_digests)),
+            "ruler_dataset_manifest_digest_set_sha256": next(iter(ruler_dataset_digests)),
         },
         "benchmarks": benchmarks,
         "claim_boundary": (

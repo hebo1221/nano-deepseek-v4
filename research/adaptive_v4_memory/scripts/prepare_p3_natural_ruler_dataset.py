@@ -17,7 +17,7 @@ from prepare_p3_ruler_dataset import (
     run_upstream_task,
     sha256,
 )
-from run_p3_ruler_matrix import split_prompt
+from run_p3_ruler_matrix import git_dirty, split_prompt
 from transformers import AutoTokenizer
 from validate_p3_natural_suite_manifest import validate_manifest
 from verify_p3_natural_model import verify_snapshot
@@ -110,9 +110,7 @@ def prepare_length(
             )
         task_artifacts[task] = artifact
         print(
-            json.dumps(
-                {"length": length, "task": task, "max_tokens": artifact["token_count_max"]}
-            ),
+            json.dumps({"length": length, "task": task, "max_tokens": artifact["token_count_max"]}),
             flush=True,
         )
 
@@ -127,13 +125,15 @@ def prepare_length(
             "path": str(natural_manifest_path.resolve()),
             "sha256": sha256(natural_manifest_path),
         },
-        "ruler": {"revision": RULER_REVISION, "path": str(ruler_root)},
+        "ruler": {
+            "revision": RULER_REVISION,
+            "path": str(ruler_root),
+            "clean_tracked_tree": True,
+        },
         "tokenizer": {
             "model_revision": MODEL_REVISION,
             "path": str(tokenizer_path),
-            "snapshot_digest_set_sha256": natural_manifest["model"][
-                "snapshot_digest_set_sha256"
-            ],
+            "snapshot_digest_set_sha256": natural_manifest["model"]["snapshot_digest_set_sha256"],
             "tokenizer_config_sha256": sha256(tokenizer_path / "tokenizer_config.json"),
         },
         "generation": {
@@ -196,8 +196,8 @@ def main() -> None:
 
     ruler_root = args.ruler_root.resolve()
     tokenizer_path = args.tokenizer_snapshot.resolve()
-    if git_head(ruler_root) != RULER_REVISION:
-        raise ValueError("RULER checkout revision does not match the frozen suite.")
+    if git_head(ruler_root) != RULER_REVISION or git_dirty(ruler_root):
+        raise ValueError("RULER checkout is not at its clean frozen revision.")
     manifest = json.loads(args.manifest.read_text())
     validate_manifest(manifest)
     if manifest["model"]["revision"] != MODEL_REVISION:

@@ -118,7 +118,9 @@
         "native_arm_artifact": "artifacts/adaptive_v4_memory/paper_grade/p3/natural/ruler-qwen3-4b/native-dense/cell.json",
         "fixed_arm_artifact": "artifacts/adaptive_v4_memory/paper_grade/p3/natural/ruler-qwen3-4b/strongest-memory-matched-fixed/cell.json",
         "resume_unit": "one example within one arm",
-        "tokenization_boundary": "hash the exact rendered context and question token-id sequences; never reuse 1.7B length labels",
+        "tokenization_boundary": "tokenize the full rendered prompt once, slice only at its stable context-token prefix, and hash both the raw prompt and exact token-id sequence; never reuse 1.7B length labels",
+        "dataset_binding": "bind all five Qwen3-4B length-specific dataset manifests as one SHA-256 digest set in every arm cell",
+        "scorer_binding": "verify the pinned KVPress RULER scorer SHA-256 and record both official and local scoring implementation digests",
         "operational_failure_policy": "retain explicit failure and include as zero in the conservative all-expected quality mean",
         "hot_memory_measurement": "exact bytes in DynamicCache key/value tensors immediately after prefill compression and before question decoding"
       }
