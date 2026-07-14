@@ -1,8 +1,8 @@
 # Paper-grade expansion protocol
 
-Protocol version: 2.0
+Protocol version: 2.1
 Frozen: 2026-07-14  
-Amended: 2026-07-15, before the added adaptive natural-language cohorts
+Amended: 2026-07-15, before any causal-factorial held-out shard
 Status: active; P2 synthetic core runs first, followed by causal ablations,
 natural-language evaluation, and systems evaluation
 
@@ -78,6 +78,18 @@ LongMemEval cohort retains raw responses and physical audits while its official
 GPT-4o judge is blocked; it cannot enter the scored suite. Phi-4-mini adds 7,800
 adaptive RULER and 1,006 adaptive LongBench-v2 predictions, completing a bounded
 Qwen/Phi × RULER/LongBench-v2 transfer grid without Phi-specific tuning.
+
+Version 2.1 disables the earlier outcome-dependent controller early-stop rule
+before any primary or extension causal-factorial held-out shard or causal result
+exists. The primary causal cohort must complete all five seeds on S55 and S151
+(9,000 shards), and the confirmatory extension must complete all four additional
+seeds on both scales (7,200 shards). Only process-level retries or fail-closed
+integrity/provenance failures may terminate execution; a low-quality arm remains
+in the completed matrix and is reported. This amendment increases required
+computation, resolves the conflict between the old first-scale shortcut and the
+central two-scale criterion, and does not change arms, examples, thresholds, or
+success criteria. At amendment time, P2 core execution was still in progress and
+only liveness, shard-count, and provenance metadata had been inspected.
 
 ## 1. Primary questions
 
@@ -438,14 +450,19 @@ HBM equivalence.
 
 ## 10. Early stopping
 
-An individual controller arm may stop after the first scale only when all five
-seeds show more than 10 percentage points of quality regression in every
-primary family. The failure remains a reported result. This rule saves compute
-but does not permit replacing the arm or changing thresholds.
+Outcome-dependent early stopping is disabled for the P2 primary core, primary
+causal factorial, four-seed extension, and combined nine-seed analysis. Every
+registered arm must remain in the complete frozen scale × seed × budget ×
+family × context matrix even when interim quality is poor. In particular, the
+primary causal matrix requires 9,000 verified shards across five seeds and both
+S55/S151 scales; the extension requires 7,200 verified shards across four new
+seeds and both scales.
 
-Natural-language and systems evaluation may skip a failed controller, but must
-still run native and the strongest fixed/tiered baseline. Thus a controller
-failure cannot terminate the broader cache-systems study.
+Infrastructure failures follow the registered retry policy. Retry exhaustion or
+an integrity/provenance violation fails closed and is reported as incomplete;
+neither permits an outcome-dependent subset to pass a gate. Natural-language and
+systems controller arms follow their own frozen, outcome-independent execution
+contracts, while native and the strongest fixed/tiered baseline remain mandatory.
 
 ## 11. Claim boundary
 

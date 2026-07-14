@@ -1197,6 +1197,8 @@ def main() -> None:
             "exact_execution_rotation_verified": True,
             "exact_quality_schedule_coordinates_verified": True,
             "exact_statistical_cell_coverage_verified": True,
+            "outcome_dependent_early_stopping": False,
+            "required_scale_seed_completion_verified": True,
             "paired_units_per_seed_scale_budget_family_context": expected_conversations,
             "statistical_cells_per_contrast": len(expected_difference_keys),
             "physical_cells": len(expected_physical_keys),

@@ -17,9 +17,30 @@
       "change": "enumerate all 32 sign assignments for five-seed paired randomization and correct the multiplicity contract from 12 to all 15 implemented preregistered contrasts",
       "reason": "exact enumeration exposes the minimum attainable two-sided p=0.0625 and prevents Monte Carlo noise or a stale contrast count from overstating inferential resolution",
       "reporting": "treat exact and Holm-adjusted p-values as resolution-limited descriptive evidence; do not use p<0.05 as a success gate with five independent seeds"
+    },
+    {
+      "date": "2026-07-15",
+      "timing": "before any primary or extension causal-factorial held-out shard or causal outcome existed; P2 core execution was still in progress",
+      "change": "disable outcome-dependent early stopping and require every registered arm across all five primary seeds and both S55/S151 scales, followed by all four extension seeds on both scales",
+      "reason": "the central calibrated+pins versus fixed+pins claim requires complete two-scale evidence; removing the old first-scale shortcut expands computation and prevents outcome-selected arm or scale coverage",
+      "reporting": "report low-quality arms in the complete matrix; report retry exhaustion or integrity/provenance failure as incomplete rather than as a passing subset"
     }
   ],
   "execution_prerequisite": "strict chain: P2 core has 4500 validated shards -> calibration-only physical hot-memory matching for every seed/scale -> exact equivalence for every seed/scale -> held-out causal factorial",
+  "completion_contract": {
+    "outcome_dependent_early_stopping": false,
+    "required_scales": ["s55", "s151"],
+    "required_primary_training_seeds_per_scale": 5,
+    "required_primary_shards": 9000,
+    "required_extension_training_seeds_per_scale": 4,
+    "required_extension_shards": 7200,
+    "all_registered_arms_complete_every_cell": true,
+    "failed_arms_remain_reportable": true,
+    "permitted_non_outcome_termination": [
+      "documented infrastructure retry exhaustion",
+      "fail-closed integrity or provenance violation"
+    ]
+  },
   "scales": ["s55", "s151"],
   "training_seeds": [6071401, 6071402, 6071403, 6071404, 6071405],
   "evaluation_seeds": [8071401, 8071402, 8071403, 8071404, 8071405],

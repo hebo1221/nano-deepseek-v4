@@ -37,7 +37,10 @@
         "independent_seed_clusters_per_cell": 5,
         "minimum_attainable_two_sided_seed_p": 0.0625,
         "seed_p_values_used_as_success_gate": false,
-        "family_holm_p_values_used_as_success_gate": false
+        "family_holm_p_values_used_as_success_gate": false,
+        "family_holm_bonferroni_verified": true,
+        "families_per_holm_group": 9,
+        "family_holm_groups_per_comparison": 9
       }
     },
     "p2_core_confirmatory": {
@@ -64,7 +67,10 @@
         "independent_seed_clusters_per_cell": 9,
         "minimum_attainable_two_sided_seed_p": 0.00390625,
         "seed_p_values_used_as_success_gate": false,
-        "family_holm_p_values_used_as_success_gate": false
+        "family_holm_p_values_used_as_success_gate": false,
+        "family_holm_bonferroni_verified": true,
+        "families_per_holm_group": 9,
+        "family_holm_groups_per_comparison": 9
       },
       "required_sections": {
         "pooling_audit": {
@@ -167,6 +173,8 @@
         "exact_execution_rotation_verified": true,
         "exact_quality_schedule_coordinates_verified": true,
         "exact_statistical_cell_coverage_verified": true,
+        "outcome_dependent_early_stopping": false,
+        "required_scale_seed_completion_verified": true,
         "paired_units_per_seed_scale_budget_family_context": 200,
         "statistical_cells_per_contrast": 900,
         "physical_cells": 80,
@@ -217,6 +225,8 @@
         "exact_execution_rotation_verified": true,
         "exact_quality_schedule_coordinates_verified": true,
         "exact_statistical_cell_coverage_verified": true,
+        "outcome_dependent_early_stopping": false,
+        "required_scale_seed_completion_verified": true,
         "paired_units_per_seed_scale_budget_family_context": 200,
         "statistical_cells_per_contrast": 1620,
         "physical_cells": 144,

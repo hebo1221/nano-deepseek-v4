@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "experiment_id": "adaptive-v4-memory-paper-grade-v1",
-  "protocol_version": "1.2",
+  "protocol_version": "2.1",
   "frozen_date": "2026-07-14",
   "amendments": [
     {
@@ -21,6 +21,12 @@
       "timing": "before any P4 systems cell was generated",
       "change": "align the local optional systems preflight at exactly 500000 tokens with its executable P4 manifest while retaining the separate official FlashMemory contract at 512000 tokens",
       "reason": "the paper-grade umbrella manifest used 512000 while the local P4 runner, P5 gate, and report consistently preregistered 500000; separating the two evidence contracts prevents a silent context-length substitution"
+    },
+    {
+      "date": "2026-07-15",
+      "timing": "before any primary or extension causal-factorial held-out shard or causal outcome existed; P2 core execution was in progress and only liveness, shard-count, and provenance metadata had been inspected",
+      "change": "disable outcome-dependent controller early stopping and require complete five-seed primary plus four-seed extension execution on both S55 and S151",
+      "reason": "the old first-scale shortcut contradicted the preregistered central requirement that calibrated+pins versus fixed+pins reproduce across five seeds and two scales; full completion increases computation and prevents outcome-selected scale or arm coverage"
     }
   ],
   "protocol": "research/adaptive_v4_memory/paper_grade_protocol.md",
@@ -234,10 +240,24 @@
     "logical-budget-to-measured-physical-hbm"
   ],
   "controller_early_stop": {
-    "minimum_completed_seeds": 5,
-    "minimum_regression_percentage_points": 10.0,
-    "scope": "every primary family on first scale",
-    "does_not_stop": ["native", "strongest-fixed-tiered", "natural-baseline-study"]
+    "enabled": false,
+    "outcome_dependent": false,
+    "applies_to": [
+      "p2-core-primary",
+      "p2-core-extension",
+      "p2-causal-primary",
+      "p2-causal-extension"
+    ],
+    "required_scales": ["s55", "s151"],
+    "required_primary_seeds_per_scale": 5,
+    "required_extension_seeds_per_scale": 4,
+    "required_primary_causal_shards": 9000,
+    "required_extension_causal_shards": 7200,
+    "failed_arms_remain_reportable": true,
+    "permitted_non_outcome_termination": [
+      "documented infrastructure retry exhaustion",
+      "fail-closed integrity or provenance violation"
+    ]
   },
   "claim_boundary": "M5 is evidence only against the tested one-token cross-layer global M2 interface on the pilot Tier-S workloads.",
   "privacy": "raw private prompts and large checkpoints remain external; aggregate results are digest-bound"

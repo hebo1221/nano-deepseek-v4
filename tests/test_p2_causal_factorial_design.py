@@ -72,6 +72,15 @@ def test_manifest_matches_implemented_arms_and_strict_budget_scale_gate() -> Non
     assert manifest["statistics"]["paired_randomization_assignments"] == 32
     assert manifest["statistics"]["minimum_attainable_two_sided_p"] == 0.0625
     assert manifest["statistics"]["p_value_used_as_success_gate"] is False
+    completion = manifest["completion_contract"]
+    assert completion["outcome_dependent_early_stopping"] is False
+    assert completion["required_scales"] == ["s55", "s151"]
+    assert completion["required_primary_training_seeds_per_scale"] == 5
+    assert completion["required_primary_shards"] == 9_000
+    assert completion["required_extension_training_seeds_per_scale"] == 4
+    assert completion["required_extension_shards"] == 7_200
+    assert completion["all_registered_arms_complete_every_cell"] is True
+    assert completion["failed_arms_remain_reportable"] is True
 
 
 def test_arm_builder_holds_pins_and_total_quota_constant_for_central_contrast() -> None:

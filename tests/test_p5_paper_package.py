@@ -39,6 +39,9 @@ def _p2_core_evidence(*, passed: bool = False) -> dict[str, object]:
             "minimum_attainable_two_sided_seed_p": 0.0625,
             "seed_p_values_used_as_success_gate": False,
             "family_holm_p_values_used_as_success_gate": False,
+            "family_holm_bonferroni_verified": True,
+            "families_per_holm_group": 9,
+            "family_holm_groups_per_comparison": 9,
         },
         "quality_gate": [{"passes_fixed_baseline_component": passed}],
     }
@@ -80,6 +83,8 @@ def _p2_causal_confirmatory_evidence(*, passed: bool = False) -> dict[str, objec
             "minimum_attainable_two_sided_seed_p": 0.00390625,
             "statistical_cells_per_contrast": 1_620,
             "physical_cells": 144,
+            "outcome_dependent_early_stopping": False,
+            "required_scale_seed_completion_verified": True,
         },
         "pooling_audit": {
             "identical_frozen_contracts": True,
@@ -381,6 +386,12 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
     assert manifest["execution_audits"]["p2_causal_parallel_equivalence"]["required_probes"] == 3
     assert manifest["execution_audits"]["p1_online_checkpoint_reuse"]["required_probes"] == 10
     assert manifest["evidence"]["p2_core"]["required_audit"]["unique_shards"] == 4500
+    assert manifest["evidence"]["p2_core"]["required_audit"][
+        "family_holm_bonferroni_verified"
+    ] is True
+    assert manifest["evidence"]["p2_core"]["required_audit"][
+        "family_holm_groups_per_comparison"
+    ] == 9
     assert manifest["evidence"]["p2_core"]["path"].endswith("strict.summary.json")
     assert manifest["evidence"]["p2_core"]["required_audit"][
         "minimum_attainable_two_sided_seed_p"
@@ -449,6 +460,15 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
     )
     assert manifest["evidence"]["p2_causal"]["required_audit"]["unique_shards"] == 9000
     assert (
+        manifest["evidence"]["p2_causal"]["required_audit"][
+            "outcome_dependent_early_stopping"
+        ]
+        is False
+    )
+    assert manifest["evidence"]["p2_causal"]["required_audit"][
+        "required_scale_seed_completion_verified"
+    ] is True
+    assert (
         manifest["evidence"]["p2_causal"]["required_audit"]["exact_config_reuse_verified"] is True
     )
     assert all(
@@ -478,6 +498,10 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
     assert manifest["evidence"]["p2_causal"]["required_audit"]["physical_batches_per_cell"] == 2_250
     causal_confirmatory = manifest["evidence"]["p2_causal_confirmatory"]
     assert causal_confirmatory["required_audit"]["unique_shards"] == 16_200
+    assert causal_confirmatory["required_audit"]["outcome_dependent_early_stopping"] is False
+    assert causal_confirmatory["required_audit"][
+        "required_scale_seed_completion_verified"
+    ] is True
     assert causal_confirmatory["required_audit"]["independent_seed_clusters_per_cell"] == 9
     assert causal_confirmatory["required_audit"]["statistical_cells_per_contrast"] == 1_620
     assert causal_confirmatory["required_audit"]["physical_cells"] == 144
@@ -857,6 +881,8 @@ def test_confirmatory_causal_requires_pooling_and_exact_inference(
             "independent_seed_clusters_per_cell": 9,
             "statistical_cells_per_contrast": 1_620,
             "physical_cells": 144,
+            "outcome_dependent_early_stopping": False,
+            "required_scale_seed_completion_verified": True,
         },
         "required_sections": {
             "pooling_audit": {
