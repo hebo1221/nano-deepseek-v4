@@ -94,6 +94,8 @@ def _adapter_payload(
                 ),
                 "greedy_predictions_identical": True,
                 "policies": {policy: _policy_run(cell, policy) for policy in production.POLICIES},
+                "policy_failures": {},
+                "rejected_policy_run": None,
             }
         )
     return {
@@ -121,6 +123,7 @@ def _adapter_payload(
         "repetitions": repetitions,
         "policy_status": {
             policy: {
+                "status": "complete",
                 "measured_repetitions": production.MEASURED_REPETITIONS,
                 "failure": None,
             }
@@ -236,6 +239,75 @@ def test_production_adapter_binds_backend_revision_to_parent_commit() -> None:
             executable_digest=digest,
             source_commit="4" * 40,
         )
+
+
+def test_production_adapter_cross_checks_measured_failure_provenance() -> None:
+    cell = next(cell for cell in production.frozen_cells() if cell[5] == 1)
+    digest = "a" * 64
+    payload = _adapter_payload(cell, digest)
+    failure = {
+        "failure_type": "runtime-error",
+        "error_type": "RuntimeError",
+        "error": "terminal failure",
+        "phase": "measured",
+        "policy": "tiered-native",
+        "repetition": 0,
+    }
+    for index, repetition in enumerate(payload["repetitions"]):
+        repetition["policies"].pop("tiered-native")
+        repetition["greedy_predictions_identical"] = None
+        repetition["policy_failures"] = {"tiered-native": failure} if index == 0 else {}
+    payload["status"] = "partial"
+    payload["policy_status"]["tiered-native"] = {
+        "status": "failed",
+        "measured_repetitions": 0,
+        "failure": failure,
+    }
+
+    production.validate_adapter_payload(payload, cell=cell, executable_digest=digest)
+
+    payload["repetitions"][0]["policy_failures"]["tiered-native"]["repetition"] = 1
+    with pytest.raises(ValueError, match="failure provenance drifted"):
+        production.validate_adapter_payload(payload, cell=cell, executable_digest=digest)
+
+
+def test_production_adapter_validates_rejected_prediction_evidence() -> None:
+    cell = next(cell for cell in production.frozen_cells() if cell[5] == 1)
+    digest = "a" * 64
+    payload = _adapter_payload(cell, digest)
+    rejected = None
+    failure = {
+        "failure_type": "prediction-divergence",
+        "error_type": "PredictionDivergence",
+        "error": "prediction digests differed",
+        "phase": "measured",
+        "policy": "tiered-native",
+        "repetition": 0,
+        "resident_prediction_digest": "3" * 64,
+        "tiered_prediction_digest": "4" * 64,
+    }
+    for index, repetition in enumerate(payload["repetitions"]):
+        removed = repetition["policies"].pop("tiered-native")
+        repetition["greedy_predictions_identical"] = None
+        repetition["policy_failures"] = {}
+        if index == 0:
+            removed["prediction_digest"] = "4" * 64
+            rejected = removed
+            repetition["greedy_predictions_identical"] = False
+            repetition["policy_failures"] = {"tiered-native": failure}
+            repetition["rejected_policy_run"] = rejected
+    payload["status"] = "partial"
+    payload["policy_status"]["tiered-native"] = {
+        "status": "failed",
+        "measured_repetitions": 0,
+        "failure": failure,
+    }
+
+    production.validate_adapter_payload(payload, cell=cell, executable_digest=digest)
+
+    failure["tiered_prediction_digest"] = "3" * 64
+    with pytest.raises(ValueError, match="identical digests"):
+        production.validate_adapter_payload(payload, cell=cell, executable_digest=digest)
 
 
 def test_production_adapter_accepts_explicitly_unavailable_process_hbm() -> None:
@@ -389,6 +461,37 @@ def test_production_adapter_rejects_inconsistent_memory_and_transfer_accounting(
     run["cache"]["cold_resident_bytes"] = 0
     run["transfer"]["useful_h2d_bytes"] = 2
     with pytest.raises(ValueError, match="Transfer accounting"):
+        production.validate_adapter_payload(payload, cell=cell, executable_digest=digest)
+
+
+def test_production_adapter_binds_measured_failure_to_its_repetition() -> None:
+    cell = next(cell for cell in production.frozen_cells() if cell[5] == 1)
+    digest = "a" * 64
+    payload = _adapter_payload(cell, digest)
+    final_index = production.MEASURED_REPETITIONS - 1
+    final = payload["repetitions"][final_index]
+    final["policies"].pop("tiered-native")
+    failure = {
+        "failure_type": "oom",
+        "error_type": "OutOfMemoryError",
+        "error": "terminal measured failure",
+        "phase": "measured",
+        "policy": "tiered-native",
+        "repetition": final_index,
+    }
+    final["policy_failures"]["tiered-native"] = failure
+    final["greedy_predictions_identical"] = None
+    payload["policy_status"]["tiered-native"] = {
+        "status": "failed",
+        "measured_repetitions": final_index,
+        "failure": failure,
+    }
+    payload["status"] = "partial"
+
+    production.validate_adapter_payload(payload, cell=cell, executable_digest=digest)
+
+    failure["repetition"] -= 1
+    with pytest.raises(ValueError, match="failure provenance drifted"):
         production.validate_adapter_payload(payload, cell=cell, executable_digest=digest)
 
 

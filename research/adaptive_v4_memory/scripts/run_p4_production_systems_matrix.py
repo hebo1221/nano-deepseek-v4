@@ -434,6 +434,35 @@ def validate_backend(payload: Any, *, executable_digest: str) -> None:
     )
 
 
+def validate_failure_record(
+    payload: Any,
+    *,
+    phase: str,
+    policy: str,
+    repetition: int,
+) -> None:
+    _require(isinstance(payload, dict), "Production failure record is missing.")
+    _require(
+        payload.get("failure_type") in {"oom", "runtime-error", "prediction-divergence"}
+        and isinstance(payload.get("error_type"), str)
+        and bool(payload["error_type"])
+        and isinstance(payload.get("error"), str)
+        and bool(payload["error"])
+        and payload.get("phase") == phase
+        and payload.get("policy") == policy
+        and payload.get("repetition") == repetition,
+        "Production failure provenance drifted.",
+    )
+    if payload["failure_type"] == "prediction-divergence":
+        _require(phase == "measured", "Prediction divergence cannot be a warmup failure.")
+        _sha256_value(payload.get("resident_prediction_digest"), "resident prediction")
+        _sha256_value(payload.get("tiered_prediction_digest"), "tiered prediction")
+        _require(
+            payload["resident_prediction_digest"] != payload["tiered_prediction_digest"],
+            "Prediction-divergence record contains identical digests.",
+        )
+
+
 def validate_adapter_payload(
     payload: dict[str, Any],
     *,
@@ -484,6 +513,26 @@ def validate_adapter_payload(
     repetitions = payload.get("repetitions")
     if not isinstance(repetitions, list) or len(repetitions) > MEASURED_REPETITIONS:
         raise ValueError("Invalid production repetition coverage.")
+    observed_failures: dict[str, dict[str, Any]] = {}
+    for failure in warmup_failures:
+        policy = failure.get("policy") if isinstance(failure, dict) else None
+        repetition = failure.get("repetition") if isinstance(failure, dict) else None
+        if (
+            not isinstance(policy, str)
+            or policy not in POLICIES
+            or not isinstance(repetition, int)
+            or isinstance(repetition, bool)
+            or not 0 <= repetition < WARMUPS
+            or policy in observed_failures
+        ):
+            raise ValueError("Production warmup failure provenance drifted.")
+        validate_failure_record(
+            failure,
+            phase="warmup",
+            policy=policy,
+            repetition=repetition,
+        )
+        observed_failures[policy] = failure
     for index, row in enumerate(repetitions):
         _require(row.get("repetition") == index, "Production repetition ordering drifted.")
         expected_order = POLICIES if index % 2 == 0 else tuple(reversed(POLICIES))
@@ -493,7 +542,28 @@ def validate_adapter_payload(
         )
         _sha256_value(row.get("input_digest"), "paired input")
         policy_runs = row.get("policies", {})
-        _require(set(policy_runs).issubset(POLICIES), "Unknown production policy result.")
+        policy_failures = row.get("policy_failures")
+        _require(
+            isinstance(policy_runs, dict)
+            and isinstance(policy_failures, dict)
+            and set(policy_runs).issubset(POLICIES)
+            and set(policy_failures).issubset(POLICIES)
+            and not (set(policy_runs) & set(policy_failures)),
+            "Unknown or contradictory production policy result.",
+        )
+        for policy, failure in policy_failures.items():
+            _require(policy not in observed_failures, "Production policy failed more than once.")
+            validate_failure_record(
+                failure,
+                phase="measured",
+                policy=policy,
+                repetition=index,
+            )
+            observed_failures[policy] = failure
+        _require(
+            not (set(policy_runs) & set(observed_failures)),
+            "A terminally failed production policy resumed execution.",
+        )
         for policy, run in policy_runs.items():
             _require(run.get("policy") == policy, "Production policy label drifted.")
             _require(
@@ -501,6 +571,7 @@ def validate_adapter_payload(
                 "Paired production input digest drifted.",
             )
             validate_policy_run(run, cell=cell)
+        rejected_run = row.get("rejected_policy_run")
         if set(policy_runs) == set(POLICIES):
             identical = (
                 policy_runs[POLICIES[0]]["prediction_digest"]
@@ -511,6 +582,38 @@ def validate_adapter_payload(
                 "Production paired prediction equality record drifted.",
             )
             _require(identical, "Production policies produced different greedy predictions.")
+            _require(
+                not policy_failures and rejected_run is None,
+                "Complete paired production run contains a failure.",
+            )
+        elif rejected_run is not None:
+            failure = policy_failures.get("tiered-native")
+            _require(
+                set(policy_runs) == {"resident-native"}
+                and isinstance(failure, dict)
+                and failure.get("failure_type") == "prediction-divergence"
+                and row.get("greedy_predictions_identical") is False,
+                "Rejected production run lacks prediction-divergence provenance.",
+            )
+            validate_policy_run(rejected_run, cell=cell)
+            _require(
+                rejected_run.get("policy") == "tiered-native"
+                and rejected_run.get("input_digest") == row.get("input_digest")
+                and failure.get("resident_prediction_digest")
+                == policy_runs["resident-native"]["prediction_digest"]
+                and failure.get("tiered_prediction_digest")
+                == rejected_run.get("prediction_digest"),
+                "Rejected production prediction evidence drifted.",
+            )
+        else:
+            _require(
+                row.get("greedy_predictions_identical") is None,
+                "Unpaired production repetition claims prediction equality.",
+            )
+        _require(
+            set(POLICIES) - set(policy_runs) <= set(observed_failures),
+            "Missing production policy run lacks terminal failure provenance.",
+        )
     policy_status = payload.get("policy_status", {})
     _require(set(policy_status) == set(POLICIES), "Production policy status set drifted.")
     counts = {
@@ -522,11 +625,20 @@ def validate_adapter_payload(
             "Production policy repetition accounting drifted.",
         )
         _require(
+            policy_status[policy].get("status")
+            == ("complete" if counts[policy] == MEASURED_REPETITIONS else "failed"),
+            "Production policy terminal status drifted.",
+        )
+        _require(
             counts[policy] == MEASURED_REPETITIONS
             or isinstance(policy_status[policy].get("failure"), dict),
             "Incomplete production policy lacks a terminal failure.",
         )
         failure = policy_status[policy].get("failure")
+        _require(
+            failure == observed_failures.get(policy),
+            "Production policy failure does not match repetition provenance.",
+        )
         if warmup_policy_runs[policy] < WARMUPS:
             _require(
                 isinstance(failure, dict)

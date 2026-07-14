@@ -451,6 +451,7 @@ def execute(spec: dict[str, Any], *, executable: Path) -> dict[str, Any]:
         )
         order = POLICIES if repetition % 2 == 0 else tuple(reversed(POLICIES))
         policy_runs: dict[str, Any] = {}
+        policy_failures: dict[str, dict[str, Any]] = {}
         for policy in order:
             if failures[policy] is not None:
                 continue
@@ -466,25 +467,33 @@ def execute(spec: dict[str, Any], *, executable: Path) -> dict[str, Any]:
                     device=device,
                 )
             except Exception as error:
-                failures[policy] = failure_record(
+                failure = failure_record(
                     error, phase="measured", policy=policy, repetition=repetition
                 )
-        identical = (
-            set(policy_runs) == set(POLICIES)
-            and policy_runs[POLICIES[0]]["prediction_digest"]
+                failures[policy] = failure
+                policy_failures[policy] = failure
+        paired = set(policy_runs) == set(POLICIES)
+        identical: bool | None = (
+            policy_runs[POLICIES[0]]["prediction_digest"]
             == policy_runs[POLICIES[1]]["prediction_digest"]
+            if paired
+            else None
         )
         rejected_run = None
-        if set(policy_runs) == set(POLICIES) and not identical:
+        if paired and identical is False:
             rejected_run = policy_runs.pop("tiered-native")
-            failures["tiered-native"] = {
+            divergence = {
                 "failure_type": "prediction-divergence",
+                "error_type": "PredictionDivergence",
+                "error": "Tiered and resident greedy prediction digests differed.",
                 "phase": "measured",
                 "policy": "tiered-native",
                 "repetition": repetition,
                 "resident_prediction_digest": policy_runs["resident-native"]["prediction_digest"],
                 "tiered_prediction_digest": rejected_run["prediction_digest"],
             }
+            failures["tiered-native"] = divergence
+            policy_failures["tiered-native"] = divergence
         repetitions.append(
             {
                 "repetition": repetition,
@@ -492,6 +501,7 @@ def execute(spec: dict[str, Any], *, executable: Path) -> dict[str, Any]:
                 "execution_order": list(order),
                 "greedy_predictions_identical": identical,
                 "policies": policy_runs,
+                "policy_failures": policy_failures,
                 "rejected_policy_run": rejected_run,
             }
         )
@@ -517,6 +527,11 @@ def execute(spec: dict[str, Any], *, executable: Path) -> dict[str, Any]:
         "repetitions": repetitions,
         "policy_status": {
             policy: {
+                "status": (
+                    "complete"
+                    if counts[policy] == spec["measured_repetitions"]
+                    else "failed"
+                ),
                 "measured_repetitions": counts[policy],
                 "failure": failures[policy],
             }
