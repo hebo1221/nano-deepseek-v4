@@ -682,6 +682,7 @@ def summarize_benchmark(
         "schema_version": 1,
         "experiment_id": BENCHMARK_IDS[benchmark],
         "benchmark": benchmark,
+        "generation_seed": expected_seed,
         "experiment_manifest": {"path": str(manifest_path), "sha256": manifest_digest},
         "audit": {
             "all_raw_artifacts_verified": True,

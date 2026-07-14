@@ -945,6 +945,14 @@ def classify_evidence(
         and natural_audit.get("all_record_revisions_verified") is True
         and natural_audit.get("all_run_identities_verified") is True
         and natural_audit.get("all_terminal_measurement_schema_verified") is True
+        and natural_audit.get("generation_seed_by_benchmark")
+        == {
+            "RULER": 42,
+            "SCBench": 42,
+            "LongBench-v2": 42,
+            "LongMemEval": 42,
+            "MRCR": 42,
+        }
         and natural_audit.get("all_paired_quality_contrasts_verified") is True
         and natural_audit.get("dataset_license_revision_inventory_verified") is True
         and natural_audit.get("upstream_code_license_revision_inventory_verified") is True

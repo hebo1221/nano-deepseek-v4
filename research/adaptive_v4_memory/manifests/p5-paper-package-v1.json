@@ -132,6 +132,13 @@
         "all_record_revisions_verified": true,
         "all_run_identities_verified": true,
         "all_terminal_measurement_schema_verified": true,
+        "generation_seed_by_benchmark": {
+          "RULER": 42,
+          "SCBench": 42,
+          "LongBench-v2": 42,
+          "LongMemEval": 42,
+          "MRCR": 42
+        },
         "all_paired_quality_contrasts_verified": true,
         "dataset_license_revision_inventory_verified": true,
         "upstream_code_license_revision_inventory_verified": true,

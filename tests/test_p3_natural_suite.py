@@ -326,6 +326,7 @@ def _natural_benchmark_summaries(tmp_path: Path, manifest_path: Path) -> dict[st
         payload = {
             "experiment_id": experiment_id,
             "benchmark": name,
+            "generation_seed": manifest["benchmarks"][name]["generation_seed"],
             "source": {"dirty": False},
             "experiment_manifest": {"sha256": _digest(manifest_path)},
             "audit": {
@@ -714,6 +715,7 @@ def test_natural_suite_audit_requires_all_examples_and_baselines(tmp_path: Path)
     assert payload["audit"]["all_record_revisions_verified"] is True
     assert payload["audit"]["all_run_identities_verified"] is True
     assert payload["audit"]["all_terminal_measurement_schema_verified"] is True
+    assert set(payload["audit"]["generation_seed_by_benchmark"].values()) == {42}
     assert payload["audit"]["dataset_license_revision_inventory_verified"] is True
     assert payload["audit"]["upstream_code_license_revision_inventory_verified"] is True
     assert payload["audit"]["ruler_license_revision_manifest_verified"] is True

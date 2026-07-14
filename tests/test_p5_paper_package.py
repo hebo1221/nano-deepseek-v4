@@ -382,6 +382,11 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
         ]
         is True
     )
+    assert set(
+        manifest["evidence"]["p3_natural"]["required_audit"][
+            "generation_seed_by_benchmark"
+        ].values()
+    ) == {42}
     assert (
         manifest["evidence"]["p3_natural"]["required_audit"][
             "all_run_identities_verified"
@@ -692,6 +697,13 @@ def test_p5_classification_preserves_claim_boundaries() -> None:
                     "all_record_revisions_verified": True,
                     "all_run_identities_verified": True,
                     "all_terminal_measurement_schema_verified": True,
+                    "generation_seed_by_benchmark": {
+                        "RULER": 42,
+                        "SCBench": 42,
+                        "LongBench-v2": 42,
+                        "LongMemEval": 42,
+                        "MRCR": 42,
+                    },
                     "all_paired_quality_contrasts_verified": True,
                 "dataset_license_revision_inventory_verified": True,
                 "upstream_code_license_revision_inventory_verified": True,
@@ -776,6 +788,13 @@ def test_p5_success_requires_full_system_coverage() -> None:
                     "all_record_revisions_verified": True,
                     "all_run_identities_verified": True,
                     "all_terminal_measurement_schema_verified": True,
+                    "generation_seed_by_benchmark": {
+                        "RULER": 42,
+                        "SCBench": 42,
+                        "LongBench-v2": 42,
+                        "LongMemEval": 42,
+                        "MRCR": 42,
+                    },
                     "all_paired_quality_contrasts_verified": True,
                 "dataset_license_revision_inventory_verified": True,
                 "upstream_code_license_revision_inventory_verified": True,

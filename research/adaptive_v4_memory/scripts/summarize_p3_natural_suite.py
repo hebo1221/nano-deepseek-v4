@@ -109,11 +109,16 @@ def audit_benchmark(
     allowed_failures: set[str],
     manifest_digest: str,
     model_snapshot_digest: str,
+    expected_seed: int,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     _require(path.is_file(), f"Missing natural benchmark summary: {path}")
     payload = json.loads(path.read_text())
     _require(payload.get("experiment_id") == BENCHMARK_IDS[name], f"Wrong {name} audit id.")
     _require(payload.get("benchmark") == name, f"Wrong benchmark label for {name}.")
+    _require(
+        payload.get("generation_seed") == expected_seed,
+        f"{name} generation seed drifted.",
+    )
     _require(payload.get("source", {}).get("dirty") is False, f"Dirty {name} evidence.")
     _require(
         payload.get("experiment_manifest", {}).get("sha256") == manifest_digest,
@@ -808,6 +813,7 @@ def summarize(
             allowed_failures=allowed_failures,
             manifest_digest=manifest_digest,
             model_snapshot_digest=model_snapshot_digest,
+            expected_seed=manifest["benchmarks"][name]["generation_seed"],
         )
         benchmarks[name] = result
         dependency_sets.append(dependencies)
@@ -898,6 +904,10 @@ def summarize(
             "fixed_baseline_selection_sha256": next(iter(fixed_selection_digests)),
             "model_snapshot_digest_set_sha256": next(iter(model_digests)),
             "ruler_dataset_manifest_digest_set_sha256": next(iter(ruler_dataset_digests)),
+            "generation_seed_by_benchmark": {
+                name: manifest["benchmarks"][name]["generation_seed"]
+                for name in manifest["execution_order"]
+            },
         },
         "benchmarks": benchmarks,
         "provenance": provenance,
