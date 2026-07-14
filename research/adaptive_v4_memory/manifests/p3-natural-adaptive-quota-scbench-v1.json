@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "experiment_id": "p3-natural-adaptive-quota-scbench-v1",
+  "status": "frozen_before_any_adaptive_scbench_prediction",
+  "frozen_date": "2026-07-15",
+  "role": "non-RULER shared-context replication of the natural adaptive layer-quota contrast",
+  "prerequisites": [
+    "terminal digest-bound nine-seed P2 causal audit",
+    "terminal Qwen3-4B adaptive-quota RULER audit regardless of outcome",
+    "terminal baseline Qwen3-4B SCBench audit regardless of outcome",
+    "verified frozen SCBench dataset, source, scorer, model, and fixed-baseline selection"
+  ],
+  "execution_policy": "run every frozen turn under both arms; prerequisite outcomes change interpretation and never select tasks, modes, rows, or turns",
+  "model": {
+    "repo_id": "Qwen/Qwen3-4B-Instruct-2507",
+    "revision": "cdbee75f17c01a7cc42f958dc650907174af0554",
+    "dtype": "bfloat16",
+    "num_hidden_layers": 36,
+    "maximum_supported_context_tokens": 262144
+  },
+  "benchmark": {
+    "name": "SCBench",
+    "base_manifest": "research/adaptive_v4_memory/manifests/p3-natural-suite-v1.json",
+    "dataset_revision": "283310bb8c5ba6909dd9a6b1be087d2937f76f6d",
+    "code_revision": "a4eb395f949ea39e871f9bc586d683390692c6be",
+    "modes": ["multi-turn", "multi-request"],
+    "tasks": [
+      "scbench_choice_eng", "scbench_kv", "scbench_many_shot", "scbench_mf",
+      "scbench_prefix_suffix", "scbench_qa_chn", "scbench_qa_eng",
+      "scbench_repoqa", "scbench_repoqa_and_kv", "scbench_summary",
+      "scbench_summary_with_needles", "scbench_vt"
+    ],
+    "shared_context_rows_per_mode": 922,
+    "turn_predictions_per_mode": 5143,
+    "predictions_per_arm": 10286,
+    "paired_predictions_total": 20572,
+    "generation_seed": 42,
+    "paired_unit": "the same frozen mode/task/row/turn with identical rendered segments and exact token ids"
+  },
+  "arms": {
+    "fixed+pins": {
+      "compression_ratio": 0.5,
+      "initial_prefill_quota": "floor(initial_shared_context_tokens * 0.5) at every layer",
+      "protected_prefix_token_span": {"start": 0, "end": 4}
+    },
+    "natural-adaptive-quota+pins": {
+      "compression_ratio": 0.5,
+      "initial_prefill_global_quota": "36 * floor(initial_shared_context_tokens * 0.5), exactly equal to fixed+pins",
+      "layer_signal": "normalized entropy concentration of z-scored current-layer scorer values",
+      "causal_prior": "running mean of earlier-layer concentrations only",
+      "maximum_layer_adjustment_fraction": 0.25,
+      "protected_prefix_token_span": {"start": 0, "end": 4}
+    }
+  },
+  "scorer_selection": {
+    "source": "artifacts/adaptive_v4_memory/paper_grade/p3/fixed-baseline-selection.json",
+    "eligible_arms": ["streaming_llm", "snapkv", "critical_expected_attention"],
+    "rule": "reuse the frozen score-compatible Qwen selection without SCBench outcome inspection",
+    "scbench_outcome_inspection_allowed": false
+  },
+  "cache_lifecycle_contract": {
+    "adaptive_allocation_scope": "initial shared-context prefill only",
+    "same_initial_global_kept_tokens": true,
+    "same_scorer": true,
+    "same_protected_prefix": true,
+    "post_prefill_turn_tokens": "append identically to both arms without adaptive reallocation",
+    "multi_turn_answer_tokens": "remove generated answers identically while retaining official golden follow-up prompts",
+    "multi_request_restore": "restore the same arm-specific post-prefill cache after every independent query",
+    "continuous_refresh_claim_available": false,
+    "per_successful_shared_context_audit": [
+      "all 36 initial layer allocations in causal order",
+      "configured and observed initial total kept tokens",
+      "score concentration and controller time per layer",
+      "initial hot-resident bytes, peak HBM, and prefill latency"
+    ]
+  },
+  "statistics": {
+    "primary_unit": "paired turn with shared-context-cluster bootstrap",
+    "paired_cluster_bootstrap_resamples": 10000,
+    "paired_cluster_bootstrap_seed": 9371504,
+    "confidence": 0.95,
+    "report_by_mode_task": true,
+    "holm_family_size": 24,
+    "failure_policy": "intention-to-evaluate; every operational or unsupported-context failure scores zero and is never dropped or silently retried"
+  },
+  "confirmation_gate": {
+    "all_required": true,
+    "overall_score_difference_minimum": 0.0,
+    "paired_cluster_bootstrap_lower_bound_minimum": -0.01,
+    "nonnegative_mode_count_minimum": 1,
+    "worst_mode_task_regression_minimum": -0.05,
+    "maximum_failure_rate_increase": 0.01,
+    "maximum_initial_global_kept_token_relative_error": 0.0,
+    "maximum_initial_hot_resident_byte_relative_difference": 0.01
+  },
+  "outputs": {
+    "result_root": "artifacts/adaptive_v4_memory/paper_grade/p3/natural-adaptive-quota/scbench-qwen3-4b",
+    "summary": "artifacts/adaptive_v4_memory/paper_grade/p3/natural-adaptive-quota/scbench-qwen3-4b.summary.json"
+  },
+  "claim_boundary": "A passing result supports bounded transfer of the initial causal layer-quota heuristic from RULER to one Qwen3-4B SCBench shared-context cohort. It does not establish continuous adaptive reallocation after prefill, long-generation refresh, dynamic serving, cross-model transfer, the full natural suite, or official DeepSeek-V4 behavior."
+}
