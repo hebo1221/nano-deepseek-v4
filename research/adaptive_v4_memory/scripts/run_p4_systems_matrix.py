@@ -275,6 +275,9 @@ def _cache_totals(caches: list[Any]) -> dict[str, int]:
         "h2d_count": sum(item.h2d_count for item in stores),
         "d2h_count": sum(item.d2h_count for item in stores),
         "useful_h2d_bytes": sum(item.useful_h2d_bytes for item in stores),
+        # Match the production adapter contract: every H2D cache fill is one
+        # reference-store miss, while late_misses is the subset discovered by resolve().
+        "misses": sum(item.h2d_count for item in stores),
         "late_misses": sum(item.late_misses for item in stores),
         "prefetches": sum(item.prefetches for item in stores),
         "evictions": sum(item.evictions for item in stores),
@@ -643,6 +646,7 @@ def _valid_policy_run(
         "h2d_count",
         "d2h_count",
         "useful_h2d_bytes",
+        "misses",
         "late_misses",
         "prefetches",
         "evictions",
@@ -691,6 +695,8 @@ def _valid_policy_run(
         == cuda["reserved_after_prefill_bytes"] - cuda["allocated_after_prefill_bytes"]
         and isinstance(cache, dict)
         and all(type(cache.get(name)) is int and cache[name] >= 0 for name in cache_keys)
+        and cache["misses"] == cache["h2d_count"]
+        and cache["late_misses"] <= cache["misses"]
         and isinstance(transfer, dict)
         and _finite_nonnegative(transfer.get("useful_h2d_ratio"))
         and transfer["useful_h2d_ratio"] <= 1.0

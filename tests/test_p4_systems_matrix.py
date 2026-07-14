@@ -81,6 +81,7 @@ def _reference_policy_run(
             "h2d_count": 1,
             "d2h_count": 1,
             "useful_h2d_bytes": 1,
+            "misses": 1,
             "late_misses": 0,
             "prefetches": 1,
             "evictions": 1,
@@ -158,6 +159,32 @@ def test_p4_frozen_matrix_has_full_batch_load_factorial() -> None:
     )
     assert manifest["execution"]["maximum_cell_timeout_seconds"] == systems.CELL_TIMEOUT_SECONDS
     assert any("raw per-request" in metric for metric in manifest["measurements"])
+
+
+def test_reference_policy_audit_requires_total_and_late_miss_accounting() -> None:
+    cell = systems.frozen_cells()[0]
+    run = _reference_policy_run(cell, "tiered-native", "a" * 64)
+    assert systems._valid_policy_run(
+        run, policy="tiered-native", input_digest="a" * 64, cell=cell
+    )
+
+    missing = json.loads(json.dumps(run))
+    missing["cache"].pop("misses")
+    assert not systems._valid_policy_run(
+        missing, policy="tiered-native", input_digest="a" * 64, cell=cell
+    )
+
+    inconsistent = json.loads(json.dumps(run))
+    inconsistent["cache"]["misses"] = inconsistent["cache"]["h2d_count"] + 1
+    assert not systems._valid_policy_run(
+        inconsistent, policy="tiered-native", input_digest="a" * 64, cell=cell
+    )
+
+    late_exceeds_total = json.loads(json.dumps(run))
+    late_exceeds_total["cache"]["late_misses"] = late_exceeds_total["cache"]["misses"] + 1
+    assert not systems._valid_policy_run(
+        late_exceeds_total, policy="tiered-native", input_digest="a" * 64, cell=cell
+    )
 
 
 def test_p4_adaptive_matrix_freezes_full_causal_systems_factorial() -> None:
@@ -589,6 +616,7 @@ def test_reference_summary_reports_full_latency_memory_and_transfer_contract() -
         "useful_h2d_bytes",
         "h2d_count",
         "d2h_count",
+        "misses",
         "late_misses",
         "prefetches",
         "evictions",

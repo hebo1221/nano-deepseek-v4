@@ -68,7 +68,7 @@
     "allocated, reserved, peak, and fragmented HBM",
     "logical, hot, cold, tier-hot, and pinned-host cache bytes",
     "H2D, D2H, useful-transfer bytes and counts",
-    "late misses, prefetches, and evictions",
+    "misses (H2D cache fills), late misses, prefetches, and evictions",
     "measured same-token controller time and independently probed indexer time",
     "configured and observed per-layer hot budgets",
     "prediction digests without requiring equality between causal policies",

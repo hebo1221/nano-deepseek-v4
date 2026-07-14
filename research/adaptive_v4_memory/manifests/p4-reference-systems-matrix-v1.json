@@ -81,7 +81,7 @@
     "CUDA allocated/reserved/peak bytes and allocator fragmentation",
     "logical/hot/cold cache bytes and pinned host bytes",
     "H2D/D2H/useful bytes and counts",
-    "prefetches, evictions, late misses, useful-transfer ratio",
+    "prefetches, evictions, misses (H2D cache fills), late misses, useful-transfer ratio",
     "native indexer time from a separate untimed one-token trace",
     "greedy prediction digest equality under identical teacher-forced tokens",
     "OOM, timeout, numerical failure, and unexpected exception records"

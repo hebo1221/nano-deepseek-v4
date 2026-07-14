@@ -51,6 +51,7 @@ METRICS = {
     "h2d_count": lambda run: run["cache"]["h2d_count"],
     "d2h_count": lambda run: run["cache"]["d2h_count"],
     "useful_h2d_ratio": lambda run: run["transfer"]["useful_h2d_ratio"],
+    "misses": lambda run: run["cache"]["misses"],
     "late_misses": lambda run: run["cache"]["late_misses"],
     "prefetches": lambda run: run["cache"]["prefetches"],
     "evictions": lambda run: run["cache"]["evictions"],
