@@ -294,7 +294,7 @@ def test_p5_reproduction_guide_binds_every_stage_and_failure_boundary(tmp_path: 
     assert "resume-safe" in normalized
     assert "do not report CI as passed" in normalized
     assert "does not waive it" in normalized
-    assert all(marker in rendered for marker in package.REPRODUCTION_REQUIRED_MARKERS)
+    assert all(marker in normalized for marker in package.REPRODUCTION_REQUIRED_MARKERS)
 
     incomplete = tmp_path / "reproduction.md"
     incomplete.write_text("# incomplete\n")

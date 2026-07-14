@@ -268,7 +268,11 @@ def _validate_reproduction_guide(path: Path) -> str:
     _require(path.is_file(), f"Missing reproduction guide: {path}")
     guide = path.read_text()
     normalized_guide = " ".join(guide.split())
-    missing = [marker for marker in REPRODUCTION_REQUIRED_MARKERS if marker not in guide]
+    missing = [
+        marker
+        for marker in REPRODUCTION_REQUIRED_MARKERS
+        if marker not in normalized_guide
+    ]
     _require(not missing, f"Reproduction guide is incomplete: {missing}")
     _require(
         "resume-safe" in normalized_guide
