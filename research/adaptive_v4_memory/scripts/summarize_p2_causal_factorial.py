@@ -32,6 +32,14 @@ EXPECTED_PHYSICAL_BATCHES_PER_SEED_CELL = (
     * len(shard.REPLICATES)
     * shard.BATCHES_PER_SHARD
 )
+STRICT_RAW_AUDIT = {
+    "held_out_seed_contract_verified": True,
+    "leakage_guard_verified": True,
+    "execution_schedule_coverage_verified": True,
+    "paired_conversation_coverage_verified": True,
+    "physical_arm_contract_verified": True,
+    "physical_controller_budget_verified": True,
+}
 CONTRASTS = {
     "adaptive_quota_with_pins": ("calibrated+pins", "fixed+pins"),
     "adaptive_quota_without_pins": ("calibrated-no-pins", "fixed"),
@@ -732,7 +740,22 @@ def main() -> None:
             len(conversation_ids) == shard.EXAMPLES_PER_SHARD,
             "Causal conversation coverage drifted.",
         )
+        reference_conversation_ids = set(conversation_ids)
+        _require(
+            all(
+                {
+                    record["conversation_id"]
+                    for record in records
+                    if record["arm"] == arm_name
+                }
+                == reference_conversation_ids
+                for arm_name in shard.ALL_ARM_NAMES
+            ),
+            "Paired causal arm-conversation coverage drifted.",
+        )
         for record in records:
+            for field in ("budget", "family", "context", "replicate"):
+                _require(record.get(field) == raw[field], f"Causal record {field} drifted.")
             metric = quality_by_schedule_arm[(record["schedule_batch_index"], record["arm"])]
             _require(
                 record.get("execution_mode") == metric.get("execution_mode")
@@ -805,6 +828,13 @@ def main() -> None:
             _require(
                 measurement.get("predictions_identical_to_chunked") is True,
                 "Physical/chunked prediction mismatch.",
+            )
+            controller_rows = measurement.get("controller_rows")
+            _require(
+                isinstance(controller_rows, list)
+                and len(controller_rows) == shard.BATCH_SIZE
+                and all(row.get("budget_violations") == 0 for row in controller_rows),
+                "Physical controller budget accounting drifted.",
             )
             arm = measurement["arm"]
             _require(arm in shard.PHYSICAL_ARM_NAMES, "Unexpected physical arm.")
@@ -920,6 +950,7 @@ def main() -> None:
             "no_budget_violations": True,
             "all_physical_predictions_identical": True,
             "exact_config_reuse_verified": True,
+            **STRICT_RAW_AUDIT,
             "registered_causal_arms": len(shard.ALL_ARM_NAMES),
             "registered_paired_contrasts": len(CONTRASTS),
             "preregistered_component_contrasts_verified": True,

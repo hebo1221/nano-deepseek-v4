@@ -87,6 +87,12 @@
       "required_audit": {
         "unique_shards": 9000,
         "exact_config_reuse_verified": true,
+        "held_out_seed_contract_verified": true,
+        "leakage_guard_verified": true,
+        "execution_schedule_coverage_verified": true,
+        "paired_conversation_coverage_verified": true,
+        "physical_arm_contract_verified": true,
+        "physical_controller_budget_verified": true,
         "registered_causal_arms": 16,
         "registered_paired_contrasts": 15,
         "preregistered_component_contrasts_verified": true,

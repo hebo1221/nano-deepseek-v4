@@ -208,6 +208,17 @@ def test_p5_manifest_requires_every_digest_bound_stage() -> None:
     assert (
         manifest["evidence"]["p2_causal"]["required_audit"]["exact_config_reuse_verified"] is True
     )
+    assert all(
+        manifest["evidence"]["p2_causal"]["required_audit"][field] is True
+        for field in (
+            "held_out_seed_contract_verified",
+            "leakage_guard_verified",
+            "execution_schedule_coverage_verified",
+            "paired_conversation_coverage_verified",
+            "physical_arm_contract_verified",
+            "physical_controller_budget_verified",
+        )
+    )
     assert manifest["evidence"]["p3_ruler"]["required_audit"]["total_predictions"] == 253500
     assert manifest["evidence"]["p3_safety"]["required_audit"]["examples_accounted_per_arm"] == 1200
     assert manifest["evidence"]["p4_reference_systems"]["required_audit"]["terminal_cells"] == 216

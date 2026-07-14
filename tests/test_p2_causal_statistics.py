@@ -72,6 +72,17 @@ def test_causal_raw_metadata_binds_seeds_arms_and_leakage_guard() -> None:
         causal.verify_raw_metadata(raw, run, "implementation")
 
 
+def test_p5_strict_causal_audit_matches_the_raw_verifier_contract() -> None:
+    assert causal.STRICT_RAW_AUDIT == {
+        "held_out_seed_contract_verified": True,
+        "leakage_guard_verified": True,
+        "execution_schedule_coverage_verified": True,
+        "paired_conversation_coverage_verified": True,
+        "physical_arm_contract_verified": True,
+        "physical_controller_budget_verified": True,
+    }
+
+
 def test_causal_execution_accounting_binds_schedule_and_order() -> None:
     arms = ("arm-a", "arm-b", "arm-c")
     rows = [
