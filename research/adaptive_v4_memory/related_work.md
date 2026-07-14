@@ -37,6 +37,7 @@ heterogeneous demand, but their action space does not transfer directly.
 | [NestedKV](https://arxiv.org/abs/2605.26678) | evict | token across global/block/local time scales | none | A single importance signal is brittle; multi-timescale novelty and adaptive budgets are useful controller features |
 | [KVzip](https://arxiv.org/abs/2505.23416) | evict | query-agnostic token importance via context reconstruction | none | A reusable cache should not depend on one known question; reconstruction provides an offline oracle candidate |
 | [KVzap](https://arxiv.org/abs/2601.07891) | evict | fast input-adaptive approximation of KVzip | none | An expensive oracle can supervise a practical controller, but approximation error must be stress-tested |
+| [KV Admission / WG-KV](https://arxiv.org/abs/2512.17452) | learned write | token/head utility before cache entry | joint adaptation | Separates admission from selection and eviction and supplies kernel-aware global/local storage; discarded entries are still irreversible, unlike cold-tier residency |
 | [Self-Pruned KV Attention](https://arxiv.org/abs/2605.14037) | learned write | token/layer/KV-head utility threshold | continued pretraining | Learned utility exposes true non-uniform memory demand; irreversible write suppression remains risky under query shift |
 | [IndexMem](https://arxiv.org/abs/2605.25475) | learned index + latent residual memory | token, periodic decode refresh | learned indexer and memory | Future-importance prediction can work, but lossy latent recovery and exact cold-tier recovery are different evidence tiers |
 | [KVReviver](https://arxiv.org/abs/2512.17917) | evict + reconstruct | compressed sketches | none | Approximate reversibility is a useful baseline; reconstruction error must be separated from residency misses |
@@ -140,7 +141,7 @@ limited form.
 | ReFreeKV | No | No | Input-adaptive | Partial | No | Risk threshold | No | No |
 | LAVa | No | No | Query-adaptive | Yes | No | No | No | No |
 | IndexCache | Sparse-index model | N/A | No | Indexer on/off | Static/calibrated | No | No | No |
-| SP-KV | No | No | Per-token write gate | Yes | N/A | Threshold only | No | Kernel-aware |
+| [SP-KV](https://arxiv.org/abs/2605.14037) | No | No | Per-token write gate | Yes | N/A | Threshold only | No | Kernel-aware |
 | FlashMemory-V4 | Yes | Yes | Fixed threshold/interval | Three fixed predictors | Periodic fixed | No | Limited | Yes |
 | Adaptive V4 Memory (planned) | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
 
@@ -180,6 +181,10 @@ The final row is a research specification, not an achieved feature list.
     workload-conditioned quality and realized memory alongside TTFT, TPOT, and
     throughput; a method may compress more yet lose on either quality or the
     serving frontier.
+13. **Separate admission, selection, eviction, and residency.** A write gate
+    can avoid storing a token, a sparse reader can skip it for one query, and a
+    residency controller can move it to a recoverable tier. These actions have
+    different query-shift risks and cannot share one accuracy or memory claim.
 
 ## 10. Reading queue
 
