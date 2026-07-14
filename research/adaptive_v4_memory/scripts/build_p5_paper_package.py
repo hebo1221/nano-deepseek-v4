@@ -953,6 +953,8 @@ def classify_evidence(
         and production_audit.get("failed_cells") == 0
         and production_audit.get("actual_concurrency_verified") is True
         and production_audit.get("all_required_metrics_verified") is True
+        and production_audit.get("warmup_accounting_status_recorded") is True
+        and production_audit.get("warmup_accounting_available_all_adapter_cells") is True
         and production_audit.get("allocator_hbm_metrics_verified") is True
         and production_audit.get("process_total_hbm_availability_accounted") is True
         and production_audit.get("backend_provenance_consistent") is True
@@ -1631,6 +1633,7 @@ def _p4_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
         row.update(
             {
                 "paired_repetitions": cell["paired_repetitions"],
+                "warmup_accounting_available": cell["warmup_accounting_available"],
                 "warmup_repetitions_attempted": cell[
                     "warmup_repetitions_attempted"
                 ],
@@ -1664,6 +1667,9 @@ def _p4_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
                 "concurrency": failure["cell"].get("concurrency", ""),
                 "status": "failed",
                 "paired_repetitions": 0,
+                "warmup_accounting_available": failure[
+                    "warmup_accounting_available"
+                ],
                 "warmup_repetitions_attempted": failure[
                     "warmup_repetitions_attempted"
                 ],
@@ -1872,6 +1878,9 @@ manually, remains mandatory before goal completion, and is never reported as pas
 - P4 production systems: {p4_production["terminal_cells"]} terminal actual-concurrency cells,
   {p4_production["complete_cells"]} complete, {p4_production["partial_cells"]} partial, and
   {p4_production["failed_cells"]} failed.
+  Warmup accounting availability was recorded for every terminal cell; accounting was
+  available for every adapter-executed cell: **{p4_production["warmup_accounting_available_all_adapter_cells"]}**.
+  Orchestrator failures, if any, retain explicit unavailable/null warmup fields.
   Allocator/device HBM remains mandatory for successful runs; process-total HBM was available
   for {p4_production["process_total_hbm_measured_runs"]:,} measured policy runs and explicitly
   unavailable for {p4_production["process_total_hbm_unavailable_runs"]:,}, with no zero or proxy
@@ -2121,6 +2130,7 @@ def build_package(manifest_path: Path, output_root: Path) -> dict[str, Any]:
         "concurrency",
         "status",
         "paired_repetitions",
+        "warmup_accounting_available",
         "warmup_repetitions_attempted",
         "warmup_paired_repetitions_completed",
         "warmup_failures",

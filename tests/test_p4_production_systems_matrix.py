@@ -96,6 +96,7 @@ def _adapter_payload(
         "cell": production.cell_dict(cell),
         "status": "complete",
         "warmups": production.WARMUPS,
+        "warmup_accounting_available": True,
         "warmup_repetitions_attempted": production.WARMUPS,
         "warmup_paired_repetitions_completed": production.WARMUPS,
         "warmup_policy_runs_completed": {
@@ -350,6 +351,9 @@ def test_orchestrator_failure_is_terminal_and_resumable(tmp_path: Path) -> None:
     adapter = tmp_path / "adapter"
     adapter.write_text("adapter")
     adapter_digest = production.sha256(adapter)
+    terminal = production._terminal_failure(cell=cell, error="failed")
+    assert terminal["warmup_accounting_available"] is False
+    assert terminal["warmup_repetitions_attempted"] is None
     payload = {
         "experiment_id": "p4-production-systems-cell-v1",
         "cell": production.cell_dict(cell),
@@ -357,7 +361,7 @@ def test_orchestrator_failure_is_terminal_and_resumable(tmp_path: Path) -> None:
         "manifest": {"sha256": "manifest"},
         "p3_audit": {"sha256": "p3"},
         "adapter": {"sha256": adapter_digest},
-        "adapter_payload": production._terminal_failure(cell=cell, error="failed"),
+        "adapter_payload": terminal,
     }
     artifact = tmp_path / "cell.json"
     artifact.write_text(json.dumps(payload))

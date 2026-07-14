@@ -170,6 +170,7 @@ def test_p4_partial_artifact_preserves_surviving_policy(tmp_path: Path) -> None:
         "manifest": {"sha256": "manifest"},
         "p3_audit": {"sha256": "p3"},
         "warmups": systems.WARMUPS,
+        "warmup_accounting_available": True,
         "warmup_repetitions_attempted": systems.WARMUPS,
         "warmup_paired_repetitions_completed": systems.WARMUPS,
         "warmup_policy_runs_completed": {

@@ -147,6 +147,7 @@ def summarize_cell(payload: dict[str, Any]) -> dict[str, Any]:
         "status": adapter["status"],
         "backend": adapter.get("backend"),
         "policy_status": adapter["policy_status"],
+        "warmup_accounting_available": adapter["warmup_accounting_available"],
         "warmup_repetitions_attempted": adapter["warmup_repetitions_attempted"],
         "warmup_paired_repetitions_completed": adapter[
             "warmup_paired_repetitions_completed"
@@ -256,6 +257,7 @@ def summarize(matrix_path: Path) -> dict[str, Any]:
     process_total_hbm_measured_runs = 0
     process_total_hbm_unavailable_runs = 0
     successful_policy_runs = 0
+    all_warmup_accounting_available = True
     backend_provenance: set[str] = set()
     for run in runs:
         cell = tuple(
@@ -283,6 +285,9 @@ def summarize(matrix_path: Path) -> dict[str, Any]:
             f"Invalid production artifact: {artifact}",
         )
         adapter = payload["adapter_payload"]
+        all_warmup_accounting_available &= (
+            adapter["warmup_accounting_available"] is True
+        )
         _require(adapter["status"] == run["status"], "Production status drifted.")
         _require(
             payload.get("source", {}).get("dirty") is False
@@ -297,6 +302,9 @@ def summarize(matrix_path: Path) -> dict[str, Any]:
                     "cell": payload["cell"],
                     "policy_status": adapter["policy_status"],
                     "orchestrator_failure": adapter.get("orchestrator_failure", False),
+                    "warmup_accounting_available": adapter[
+                        "warmup_accounting_available"
+                    ],
                     "warmup_repetitions_attempted": adapter[
                         "warmup_repetitions_attempted"
                     ],
@@ -356,7 +364,10 @@ def summarize(matrix_path: Path) -> dict[str, Any]:
             "failed_cells": len(failures),
             "actual_concurrency_verified": all_complete and all_concurrency,
             "all_required_metrics_verified": all_complete and all_metrics,
-            "warmup_failure_accounting_verified": True,
+            "warmup_accounting_status_recorded": True,
+            "warmup_accounting_available_all_adapter_cells": (
+                all_warmup_accounting_available
+            ),
             "allocator_hbm_metrics_verified": successful_policy_runs > 0,
             "successful_policy_runs_with_allocator_hbm": successful_policy_runs,
             "process_total_hbm_availability_accounted": True,

@@ -394,6 +394,10 @@ def validate_adapter_payload(
     )
     _require(payload.get("cell") == cell_dict(cell), "Production adapter cell drifted.")
     _require(payload.get("warmups") == WARMUPS, "Production warmup count drifted.")
+    _require(
+        payload.get("warmup_accounting_available") is True,
+        "Production adapter warmup accounting is unavailable.",
+    )
     warmup_attempted = payload.get("warmup_repetitions_attempted")
     warmup_paired = payload.get("warmup_paired_repetitions_completed")
     warmup_policy_runs = payload.get("warmup_policy_runs_completed")
@@ -525,6 +529,11 @@ def _artifact_valid(
             if (
                 adapter_payload.get("status") != "failed"
                 or adapter_payload.get("repetitions") != []
+                or adapter_payload.get("warmup_accounting_available") is not False
+                or adapter_payload.get("warmup_repetitions_attempted") is not None
+                or adapter_payload.get("warmup_paired_repetitions_completed") is not None
+                or adapter_payload.get("warmup_policy_runs_completed")
+                != {policy: None for policy in POLICIES}
             ):
                 return False
         else:
@@ -549,10 +558,11 @@ def _terminal_failure(
         "cell": cell_dict(cell),
         "status": "failed",
         "warmups": WARMUPS,
-        "warmup_repetitions_attempted": 0,
-        "warmup_paired_repetitions_completed": 0,
-        "warmup_policy_runs_completed": {policy: 0 for policy in POLICIES},
-        "warmup_failures": [failure],
+        "warmup_accounting_available": False,
+        "warmup_repetitions_attempted": None,
+        "warmup_paired_repetitions_completed": None,
+        "warmup_policy_runs_completed": {policy: None for policy in POLICIES},
+        "warmup_failures": [],
         "measured_repetitions": MEASURED_REPETITIONS,
         "repetitions": [],
         "policy_status": {

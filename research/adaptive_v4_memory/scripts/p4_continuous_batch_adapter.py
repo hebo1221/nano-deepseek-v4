@@ -501,6 +501,7 @@ def execute(spec: dict[str, Any], *, executable: Path) -> dict[str, Any]:
         "cell": cell,
         "status": status,
         "warmups": spec["warmups"],
+        "warmup_accounting_available": True,
         "warmup_repetitions_attempted": warmup_repetitions_attempted,
         "warmup_paired_repetitions_completed": warmup_paired_repetitions_completed,
         "warmup_policy_runs_completed": warmup_policy_runs_completed,

@@ -88,6 +88,7 @@ def summarize_terminal_cell(payload: dict[str, Any]) -> dict[str, Any]:
         "cell": payload["cell"],
         "status": payload["status"],
         "policy_status": payload["policy_status"],
+        "warmup_accounting_available": payload["warmup_accounting_available"],
         "warmup_repetitions_attempted": payload["warmup_repetitions_attempted"],
         "warmup_paired_repetitions_completed": payload[
             "warmup_paired_repetitions_completed"
@@ -242,6 +243,9 @@ def main() -> None:
                     "completed_measured_repetitions": payload.get(
                         "completed_measured_repetitions", 0
                     ),
+                    "warmup_accounting_available": payload[
+                        "warmup_accounting_available"
+                    ],
                     "warmup_repetitions_attempted": payload[
                         "warmup_repetitions_attempted"
                     ],

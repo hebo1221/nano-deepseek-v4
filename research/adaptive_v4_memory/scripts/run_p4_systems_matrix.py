@@ -379,6 +379,7 @@ def _artifact_valid(
     warmup_failures = payload.get("warmup_failures")
     if not (
         payload.get("warmups") == WARMUPS
+        and payload.get("warmup_accounting_available") is True
         and isinstance(warmup_attempted, int)
         and 0 <= warmup_attempted <= WARMUPS
         and isinstance(warmup_paired, int)
@@ -739,6 +740,7 @@ def main() -> None:
                         "active_requests": active_requests,
                     },
                     "warmups": WARMUPS,
+                    "warmup_accounting_available": True,
                     "warmup_repetitions_attempted": warmup_repetitions_attempted,
                     "warmup_paired_repetitions_completed": (
                         warmup_paired_repetitions_completed
@@ -800,6 +802,7 @@ def main() -> None:
                         "active_requests": active_requests,
                     },
                     "warmups": WARMUPS,
+                    "warmup_accounting_available": True,
                     "warmup_repetitions_attempted": warmup_repetitions_attempted,
                     "warmup_paired_repetitions_completed": (
                         warmup_paired_repetitions_completed
