@@ -39,6 +39,18 @@
       "timing": "before any adaptive P4 systems cell and before primary P2 completion",
       "change": "add a separate 432-cell fixed+pins versus calibrated+pins reference systems matrix across both scales, both budgets, and the complete context-generation-load factorial",
       "reason": "the resident-versus-tiered matrices measure physical tiering but cannot quantify the system cost of the central adaptive-quota causal contrast"
+    },
+    {
+      "date": "2026-07-15",
+      "timing": "before any P3 model prediction or cross-family RULER dataset generation",
+      "change": "add a separately reported 7800-prediction Phi-4-mini held-out RULER transfer cohort without Phi-specific tuning",
+      "reason": "address the preregistered model-family breadth gap without pooling models or selecting a method on Phi outcomes"
+    },
+    {
+      "date": "2026-07-15",
+      "timing": "after immutable public model prefetch but before any P3 model prediction, generated RULER dataset, fixed-baseline selection, or natural benchmark outcome existed",
+      "change": "add a separately reported Phi-4-mini cross-family RULER transfer cohort with 7800 paired predictions and no Phi-specific method selection",
+      "reason": "model-family breadth remained the largest empirical gap after the nine-seed and full natural-suite expansions"
     }
   ],
   "date": "2026-07-14",
@@ -60,20 +72,6 @@
       "factorial_arms": 16,
       "fixed_top_p_thresholds": [0.5, 0.8],
       "offline_registered_arm_oracle": true
-    },
-    "p2_independent_seed_extension": {
-      "training_runs": 8,
-      "core_shards": 3600,
-      "core_policy_example_evaluations": 504000,
-      "causal_shards": 7200,
-      "causal_policy_example_evaluations": 2304000
-    },
-    "combined_p2_confirmatory": {
-      "independent_training_seeds_per_scale": 9,
-      "core_shards": 8100,
-      "core_policy_example_evaluations": 1134000,
-      "causal_shards": 16200,
-      "causal_policy_example_evaluations": 5184000
     },
     "p2_independent_seed_extension": {
       "training_runs": 8,
@@ -113,6 +111,26 @@
       "required_arms": 2,
       "model_families": 1,
       "maximum_primary_context_tokens": 131072
+    },
+    "p3_cross_family_phi4_mini_ruler": {
+      "predictions": 7800,
+      "predictions_per_arm": 3900,
+      "paired_arms": 2,
+      "model_families_added": 1,
+      "tasks": 13,
+      "context_lengths": 3,
+      "samples_per_task_length": 100,
+      "pooled_with_primary": false,
+      "phi_specific_tuning_allowed": false
+    },
+    "p3_cross_family_phi4_mini": {
+      "predictions": 7800,
+      "paired_arms": 2,
+      "model_families_added": 1,
+      "tasks": 13,
+      "context_lengths": [8192, 32768, 131072],
+      "examples_per_task_context_arm": 100,
+      "phi_specific_tuning_allowed": false
     },
     "p3_safety_qwen3_4b": {
       "predictions": 3600,
@@ -185,15 +203,6 @@
     "pooling_requires_identical_frozen_contracts": true,
     "outcome_dependent_early_stopping": false
   },
-  "confirmatory_extension_resolution": {
-    "independent_training_seed_clusters_per_scale": 9,
-    "exact_two_sided_sign_flip_assignments": 512,
-    "minimum_attainable_two_sided_p": 0.00390625,
-    "minimum_attainable_holm_adjusted_family_p": 0.03515625,
-    "primary_cohort_remains_independently_reportable": true,
-    "pooling_requires_identical_frozen_contracts": true,
-    "outcome_dependent_early_stopping": false
-  },
   "primary_paper_comparators": [
     {
       "work": "RULER",
@@ -246,11 +255,11 @@
   ],
   "adequacy_decision": {
     "sample_density": "paper-grade if every preregistered artifact reaches terminal audit",
-    "model_breadth": "bounded single-family transfer evidence; not a population-level claim",
+    "model_breadth": "two-family RULER transfer evidence with a full natural suite on Qwen3 only; not a population-level model claim",
     "target_architecture": "unverified until official DeepSeek-V4 weights and compatible serving runtime are provisioned",
     "systems_breadth": "reference and checked static continuous batching are reportable separately; external dynamic fused and multi-GPU serving remain unverified",
-    "next_extension": "after the frozen primary run, replicate the chosen operating point on a second instruction-tuned model family only if the primary causal gate is positive or scientifically ambiguous"
+    "next_extension": "execute the already frozen Phi-4-mini RULER transfer cohort regardless of Qwen or Phi outcome; further full-suite model families remain future work"
   },
   "non_aggregation_rule": "Do not add synthetic policy-example evaluations, language-model predictions, and systems repetitions into one headline sample count; report each experimental unit separately.",
-  "claim_boundary": "The planned volume is competitive in sample density and failure accounting but intentionally narrower than multi-model benchmark papers. Completion supports a deep single-compatible-model study, not broad model-family or official DeepSeek-V4 generalization."
+  "claim_boundary": "The planned volume is competitive in sample density and failure accounting. Completion supports a deep Qwen3 natural-suite study plus bounded Phi-4 RULER transfer evidence, not broad model-population or official DeepSeek-V4 generalization."
 }

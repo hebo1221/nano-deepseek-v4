@@ -1,0 +1,146 @@
+{
+  "schema_version": 1,
+  "experiment_id": "p3-cross-family-ruler-transfer-v1",
+  "status": "frozen_before_any_p3_model_prediction",
+  "date": "2026-07-15",
+  "amendments": [
+    {
+      "timing": "after immutable public model prefetch but before any P3 model prediction, generated RULER dataset, fixed-baseline selection, or natural benchmark outcome existed",
+      "change": "add a preregistered second-family RULER transfer cohort on Phi-4-mini-instruct",
+      "reason": "the paper-scale audit identified model-family breadth, rather than within-model sample density, as the largest remaining empirical weakness"
+    }
+  ],
+  "relationship_to_primary": {
+    "primary_model_family": "Qwen3",
+    "transfer_model_family": "Phi-4",
+    "cohort_role": "held-out cross-family transfer replication",
+    "pooled_with_primary": false,
+    "outcome_dependent_execution": false,
+    "phi_specific_tuning_allowed": false
+  },
+  "sequence_gate": {
+    "required_primary_core_summary": "artifacts/adaptive_v4_memory/paper_grade/p2-core-quality-matrix.strict.summary.json",
+    "required_primary_causal_summary": "artifacts/adaptive_v4_memory/paper_grade/p2-causal-ablation.summary.json",
+    "required_nine_seed_causal_summary": "artifacts/adaptive_v4_memory/paper_grade/p2-nine-seed-causal.summary.json",
+    "required_fixed_selection": "artifacts/adaptive_v4_memory/paper_grade/p3/fixed-baseline-selection.json",
+    "policy": "immutable model and public code prefetch is allowed; dataset generation and every model prediction require terminal nine-seed P2 evidence and the frozen Qwen3-1.7B baseline selection"
+  },
+  "model": {
+    "repo_id": "microsoft/Phi-4-mini-instruct",
+    "revision": "cfbefacb99257ffa30c83adab238a50856ac3083",
+    "license": "mit",
+    "architecture": "Phi3ForCausalLM",
+    "parameter_count": 3836021760,
+    "dtype": "bfloat16",
+    "attn_implementation": "transformers_default_sdpa_without_flash_attn",
+    "trust_remote_code": false,
+    "maximum_supported_context_tokens": 131072,
+    "snapshot_bytes": 7694054130,
+    "weight_shard_file_bytes": 7672066216,
+    "indexed_tensor_bytes": 7672043520,
+    "snapshot_digest_set_sha256": "102f70c901015c02c6157e947ffbe2e1aa5667c8b28a0b3df17f4bc269e9889c",
+    "snapshot_files_sha256": {
+      ".gitattributes": "34448b82c17d60fec9b65b1f093c115ddbaadc04beb1b0140b6bfed2e012a930",
+      "CODE_OF_CONDUCT.md": "539b1bfc810aa62738af95866bfe584d568b0dca71aebed0bd81db0bdaebade3",
+      "LICENSE": "fa8235e5b48faca34e3ca98cf4f694ef08bd216d28b58071a1f85b1d50cb814d",
+      "NOTICE.md": "a3386cc7125ec75ed34d4f0a340c47782982095e251d322e01d8ecab22d87ba4",
+      "README.md": "c4f34916182a3ee87d95d00c92847cfa687ab21dc338a577275f0c34cf0e1dfd",
+      "SECURITY.md": "7b6976eec43edfa68b79a459dd089c56b7a395916dbf1a01bd11e6d86e12128f",
+      "added_tokens.json": "d4f2aceb0f20b71dd1f4bcc7e052e4412946bf281840b8f83d39f259571af486",
+      "config.json": "ac65d86061d3d0d704ee2511fd0eb8713ef19eb6eedba17c3080a4165d5b933b",
+      "configuration_phi3.py": "ec2044b77d0b8111640ac134daa3af1f40dc552a739f8959626e7e58ea3352df",
+      "data_summary_card.md": "470514f8d8408e1254c9487401dc4d7d2edb4e08f0453f7bbfb5e01dbb976456",
+      "generation_config.json": "3e3f48753753f92d2b958679151861d4fd7bf26e4dfc41fd47056116c4914dcd",
+      "merges.txt": "856ce61180bb689282eed6b3a6838bb1f438399be23aefe9d20eb379791fb4ad",
+      "model-00001-of-00002.safetensors": "bc703090b63eda16f639fa4de7ac54635c23105ab1da2f6ec4d3403151d38ee6",
+      "model-00002-of-00002.safetensors": "7ff79b9d2d31076bac2663393451f6530f4fc8ca49b09002116c92c373dba983",
+      "model.safetensors.index.json": "613a98d5e5716ca96fa75931abedc9c5a5d95f488ce4d62df71e639fe3ac6c59",
+      "modeling_phi3.py": "d5fd551a7fe759b1d25e5b16b5012aa98b9b8bd400d26c7ee69c0090a245d6cd",
+      "sample_finetune.py": "ec9ead444318c31095e5be48ec4b17ec031134836dd7906a73186265c323348a",
+      "special_tokens_map.json": "aff38493227d813e29fcf8406e8e90062f1f031aa47d589325e9c31d89ac7cc3",
+      "tokenizer.json": "382cc235b56c725945e149cc25f191da667c836655efd0857b004320e90e91ea",
+      "tokenizer_config.json": "9c9b6bc0c94d95f69f826c41069a3e8b387ac3ced89601d201886e99240ac9db",
+      "vocab.json": "6cb65a857824fa6615bb1782d95d882617a8bbce1da0317118586b36f39e98bd"
+    }
+  },
+  "upstreams": {
+    "ruler": {
+      "repository": "https://github.com/hsiehjackson/RULER",
+      "revision": "38da79d79519ef87aa46ae804f838e1eab7f86d7",
+      "license": "apache-2.0"
+    },
+    "kvpress": {
+      "repository": "https://github.com/NVIDIA/kvpress",
+      "revision": "6d965557a5b9f0201a2301b23c454473dd681d0d",
+      "license": "apache-2.0"
+    }
+  },
+  "benchmark": {
+    "name": "RULER",
+    "tasks": [
+      "niah_single_1",
+      "niah_single_2",
+      "niah_single_3",
+      "niah_multikey_1",
+      "niah_multikey_2",
+      "niah_multikey_3",
+      "niah_multivalue",
+      "niah_multiquery",
+      "vt",
+      "cwe",
+      "fwe",
+      "qa_1",
+      "qa_2"
+    ],
+    "lengths_tokens": [8192, 32768, 131072],
+    "samples_per_task_length": 100,
+    "generation_seed": 42,
+    "tasks_per_length": 13,
+    "predictions_per_arm": 3900,
+    "paired_predictions_total": 7800,
+    "exact_token_rule": "regenerate every task with the frozen Phi tokenizer and reject rather than silently truncate any rendered prompt outside the target-length contract"
+  },
+  "arms": {
+    "native-dense": {
+      "press_name": "no_press",
+      "compression_ratio": 0.0
+    },
+    "qwen-selected-memory-matched": {
+      "selection_artifact": "artifacts/adaptive_v4_memory/paper_grade/p3/fixed-baseline-selection.json",
+      "selection_rule": "use the single 50%-compression winner selected on the full Qwen3-1.7B screen without Phi-specific reselection",
+      "compression_ratio": 0.5
+    }
+  },
+  "statistics": {
+    "paired_unit": "same generated RULER example under both arms",
+    "paired_bootstrap_resamples": 10000,
+    "paired_bootstrap_confidence": 0.95,
+    "task_cluster_unit": "mean paired difference within one of 13 tasks at a fixed length",
+    "exact_task_sign_flip_assignments_per_length": 8192,
+    "length_holm_family_size": 3,
+    "report": [
+      "overall paired accuracy difference and confidence interval",
+      "per-length paired difference and exact task-cluster p-value",
+      "per-task and task-by-length effects",
+      "worst task-by-length regression",
+      "operational failure rate by arm",
+      "realized KV bytes and compression ratio by arm"
+    ]
+  },
+  "transfer_gate": {
+    "all_required": true,
+    "overall_mean_accuracy_difference_minimum": -0.01,
+    "overall_paired_bootstrap_lower_bound_minimum": -0.02,
+    "worst_task_length_regression_minimum": -0.05,
+    "maximum_failure_rate_increase": 0.01,
+    "maximum_realized_kv_fraction": 0.51,
+    "interpretation": "passing supports bounded cross-family transfer of the selected compression operating point; failure is retained as a negative transfer result and cannot trigger Phi-specific method selection"
+  },
+  "outputs": {
+    "model_verification": "artifacts/adaptive_v4_memory/paper_grade/p3/cross-family/phi4-mini-model-verification.json",
+    "dataset_root": "artifacts/adaptive_v4_memory/paper_grade/p3/cross-family/phi4-mini-ruler/data",
+    "result_root": "artifacts/adaptive_v4_memory/paper_grade/p3/cross-family/phi4-mini-ruler/results",
+    "summary": "artifacts/adaptive_v4_memory/paper_grade/p3/cross-family/phi4-mini-ruler.summary.json"
+  },
+  "claim_boundary": "This is a preregistered second-model-family RULER transfer replication, not a second full natural-language suite, a Phi-optimized method search, or evidence about official DeepSeek-V4."
+}

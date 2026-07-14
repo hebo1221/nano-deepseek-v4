@@ -148,6 +148,10 @@ def main() -> None:
             "natural-model-snapshot-verification.json"
         ),
     )
+    parser.add_argument(
+        "--experiment-id",
+        default="p3-natural-model-snapshot-verification-v1",
+    )
     args = parser.parse_args()
 
     manifest_bytes = args.manifest.read_bytes()
@@ -155,7 +159,7 @@ def main() -> None:
     result = verify_snapshot(args.snapshot, manifest["model"])
     payload = {
         "schema_version": 1,
-        "experiment_id": "p3-natural-model-snapshot-verification-v1",
+        "experiment_id": args.experiment_id,
         "status": "verified",
         "manifest": {
             "path": str(args.manifest.resolve()),

@@ -1,6 +1,6 @@
 # Paper-grade expansion protocol
 
-Protocol version: 1.8
+Protocol version: 1.9
 Frozen: 2026-07-14  
 Amended: 2026-07-14, before causal-factorial held-out execution
 Status: active; P2 synthetic core runs first, followed by causal ablations,
@@ -61,6 +61,14 @@ both 2x/4x budgets, all context/generation/load axes, and the exact
 `fixed+pins`/`calibrated+pins` configurations. Every cell runs regardless of
 the eventual P2 gate outcome, so system-cell selection cannot depend on quality
 results. No adaptive P4 cell existed when this contract was frozen.
+
+Version 1.9 adds a preregistered second-model-family transfer cohort before any
+P3 prediction, generated RULER dataset, or baseline-selection outcome existed.
+The frozen Phi-4-mini-instruct revision runs native and the single 50%-KV method
+selected by the complete Qwen3-1.7B screen on 13 RULER tasks at 8K, 32K, and
+128K with 100 paired examples per task-length (7,800 predictions). Phi-specific
+reselection or tuning is prohibited. This cohort is reported separately from
+the full Qwen3 natural suite and cannot be pooled into a larger apparent sample.
 
 ## 1. Primary questions
 
@@ -319,6 +327,15 @@ all 500 LongMemEval_S-cleaned questions, and 1,500 MRCR items through 128K. The
 dataset inventory contains 20 digest-bound files totaling 2,391,718,372 bytes.
 Dataset acquisition is sequence-gated after P2 and the causal audit, so this
 freeze does not modify or compete with the running synthetic core.
+
+The cross-family transfer contract is frozen separately in
+`manifests/p3-cross-family-ruler-transfer-v1.json`. It uses the ungated MIT
+`microsoft/Phi-4-mini-instruct` snapshot at revision
+`cfbefacb99257ffa30c83adab238a50856ac3083`, whose config declares 131,072
+tokens and whose 21 top-level files are hash-bound. It adds 3 lengths × 13
+tasks × 100 examples × 2 paired arms = 7,800 predictions. The selected 50%-KV
+method is inherited unchanged from the Qwen3-1.7B screen; a failed transfer is
+reported as negative evidence rather than triggering a Phi-specific search.
 
 Official DeepSeek-V4 Flash evaluation is a separate evidence tier. If the
 pinned checkpoint and supported runtime cannot be provisioned, the report must
