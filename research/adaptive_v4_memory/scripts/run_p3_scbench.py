@@ -265,14 +265,18 @@ def _existing_conversations(
 ) -> list[dict[str, Any]]:
     if not progress.exists() and not partial.exists():
         atomic_json(progress, identity)
-        partial.parent.mkdir(parents=True, exist_ok=True)
-        partial.touch()
+        partial.mkdir(parents=True)
         return []
     if progress.is_file() and not partial.exists():
-        partial.touch()
-    _require(progress.is_file() and partial.is_file(), "Partial SCBench state is incomplete.")
+        partial.mkdir(parents=True)
+    _require(progress.is_file() and partial.is_dir(), "Partial SCBench state is incomplete.")
     _require(json.loads(progress.read_text()) == identity, "Partial SCBench provenance drifted.")
-    payloads = [json.loads(line) for line in partial.read_text().splitlines() if line]
+    parts = sorted(partial.glob("*.json"))
+    _require(
+        [part.name for part in parts] == [f"{index:06d}.json" for index in range(len(parts))],
+        "Partial SCBench conversation part sequence drifted.",
+    )
+    payloads = [json.loads(part.read_text()) for part in parts]
     _require(len(payloads) <= EXPECTED_CONTEXTS * len(MODES), "Too many SCBench conversations.")
     _require(
         all(isinstance(payload.get("records"), list) for payload in payloads),
@@ -532,7 +536,7 @@ def run_conversation(
                 cumulative_input_tokens=cumulative,
                 revisions=revisions,
             )
-            records.append(failure_record(base, "conversation-runtime-error", error))
+            records.append(failure_record(base, "runtime-error", error))
     _require(len(records) == len(turns), "SCBench conversation did not retain every turn.")
     return {"conversation_id": identifier, "records": records}
 
@@ -676,7 +680,7 @@ def main() -> None:
             runner._setup_press()
             root = args.output_root / arm
             progress = root / "progress.json"
-            partial = root / "conversations.jsonl"
+            partial = root / "conversations"
             existing = _existing_conversations(progress, partial, identities[arm])
             _require(
                 all(
@@ -690,38 +694,35 @@ def main() -> None:
             if args.max_new_conversations is not None:
                 limit = min(limit, len(existing) + args.max_new_conversations)
             root.mkdir(parents=True, exist_ok=True)
-            with partial.open("a") as handle:
-                for plan_index in range(len(existing), limit):
-                    task, row_index, row, mode = plan[plan_index]
-                    torch.cuda.empty_cache()
-                    payload = run_conversation(
-                        pipeline=runner.pipeline,
-                        press=runner.press,
-                        scorer=scorer,
-                        official_module=official,
-                        tokenizer=tokenizer,
-                        task=task,
-                        row_index=row_index,
-                        row=row,
-                        mode=mode,
-                        arm=arm,
-                        config=config,
-                        maximum_context=manifest["model"]["maximum_supported_context_tokens"],
-                        revisions=revisions,
-                    )
-                    handle.write(json.dumps(payload, sort_keys=True) + "\n")
-                    handle.flush()
-                    os.fsync(handle.fileno())
-                    print(
-                        json.dumps(
-                            {
-                                "arm": arm,
-                                "completed_conversations": plan_index + 1,
-                                "total_conversations": len(plan),
-                            }
-                        ),
-                        flush=True,
-                    )
+            for plan_index in range(len(existing), limit):
+                task, row_index, row, mode = plan[plan_index]
+                torch.cuda.empty_cache()
+                payload = run_conversation(
+                    pipeline=runner.pipeline,
+                    press=runner.press,
+                    scorer=scorer,
+                    official_module=official,
+                    tokenizer=tokenizer,
+                    task=task,
+                    row_index=row_index,
+                    row=row,
+                    mode=mode,
+                    arm=arm,
+                    config=config,
+                    maximum_context=manifest["model"]["maximum_supported_context_tokens"],
+                    revisions=revisions,
+                )
+                atomic_json(partial / f"{plan_index:06d}.json", payload)
+                print(
+                    json.dumps(
+                        {
+                            "arm": arm,
+                            "completed_conversations": plan_index + 1,
+                            "total_conversations": len(plan),
+                        }
+                    ),
+                    flush=True,
+                )
             if limit < len(plan):
                 continue
             payloads = _existing_conversations(progress, partial, identities[arm])

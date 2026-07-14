@@ -120,11 +120,11 @@ def test_conversation_plan_and_resume_are_conversation_atomic(tmp_path: Path) ->
         ("task_b", "multi-request"),
     ]
 
-    progress, partial = tmp_path / "progress.json", tmp_path / "conversations.jsonl"
+    progress, partial = tmp_path / "progress.json", tmp_path / "conversations"
     identity = {"runner": "digest"}
     assert _existing_conversations(progress, partial, identity) == []
     payload = {"conversation_id": "one", "records": [{"score": 1}, {"score": 0}]}
-    partial.write_text(json.dumps(payload) + "\n")
+    (partial / "000000.json").write_text(json.dumps(payload) + "\n")
 
     resumed = _existing_conversations(progress, partial, identity)
     assert resumed == [payload]
