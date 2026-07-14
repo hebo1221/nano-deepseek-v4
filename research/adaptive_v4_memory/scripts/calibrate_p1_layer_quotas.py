@@ -81,14 +81,22 @@ def _collect_queries(
                 device="cuda",
             )
             trace_id = f"calibration:{family}:{context}:{batch_index}"
+            score_positions = tuple(
+                sorted(
+                    {
+                        int(position)
+                        for position in workload.query_positions.detach().cpu().flatten().tolist()
+                    }
+                )
+            )
             collector = AdaptiveMemoryTraceCollector(
-                MemoryTraceConfig(trace_id=trace_id, request_id="p1-calibration")
+                MemoryTraceConfig(
+                    trace_id=trace_id,
+                    request_id="p1-calibration",
+                    capture_query_positions=score_positions,
+                )
             )
             model(workload.input_ids, use_cache=True, memory_trace=collector)
-            score_positions = {
-                int(position)
-                for position in workload.query_positions.detach().cpu().flatten().tolist()
-            }
             selected = tuple(
                 query
                 for query in build_replay_queries(collector.result())

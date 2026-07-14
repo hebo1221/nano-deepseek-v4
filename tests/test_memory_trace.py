@@ -123,6 +123,29 @@ def test_trace_preserves_greedy_generation():
     assert advances[-1].seen_tokens_after == ids.shape[1] + actual.shape[1] - ids.shape[1] - 1
 
 
+def test_trace_can_capture_only_preregistered_query_positions():
+    model = _tiny_model()
+    ids = torch.tensor([[17, 9, 4, 31, 62, 7, 12, 5]])
+    collector = AdaptiveMemoryTraceCollector(
+        MemoryTraceConfig(
+            trace_id="position-filter",
+            capture_query_positions=(3, 7),
+        )
+    )
+    expected = model(ids, use_cache=True).logits
+    actual = model(ids, use_cache=True, memory_trace=collector).logits
+
+    assert torch.equal(actual, expected)
+    selections = [
+        selection
+        for event in collector.events
+        if isinstance(event, CSASelectionEvent)
+        for selection in event.selections
+    ]
+    assert selections
+    assert {selection.query_position for selection in selections} == {3, 7}
+
+
 def test_trace_jsonl_digest_privacy_and_replay(tmp_path: Path):
     model = _tiny_model()
     ids = torch.tensor([[12, 44, 7, 98, 6, 3, 77, 19]])
@@ -144,8 +167,7 @@ def test_trace_jsonl_digest_privacy_and_replay(tmp_path: Path):
     event_lines = [json.loads(line) for line in jsonl.splitlines()]
     event_lines[0]["phase"] = "training"
     invalid_payload = "".join(
-        json.dumps(event, sort_keys=True, separators=(",", ":")) + "\n"
-        for event in event_lines
+        json.dumps(event, sort_keys=True, separators=(",", ":")) + "\n" for event in event_lines
     )
     (tmp_path / "trace" / "events.jsonl").write_text(invalid_payload, encoding="utf-8")
     manifest_path = tmp_path / "trace" / "manifest.json"

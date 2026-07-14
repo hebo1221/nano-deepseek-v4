@@ -37,11 +37,20 @@ class MemoryTraceConfig:
 
     trace_id: str
     request_id: str = "request-0"
+    capture_query_positions: tuple[int, ...] = ()
 
     def __post_init__(self) -> None:
         for name, value in (("trace_id", self.trace_id), ("request_id", self.request_id)):
             if not isinstance(value, str) or not value or len(value) > 256:
                 raise ValueError(f"{name} must be a non-empty string of at most 256 characters.")
+        positions = self.capture_query_positions
+        if not isinstance(positions, tuple) or any(
+            isinstance(position, bool) or not isinstance(position, int) or position < 0
+            for position in positions
+        ):
+            raise ValueError("capture_query_positions must contain non-negative integers.")
+        if tuple(sorted(set(positions))) != positions:
+            raise ValueError("capture_query_positions must be sorted and unique.")
 
 
 @dataclass(frozen=True)
@@ -356,15 +365,49 @@ class AdaptiveMemoryTraceCollector:
         indexer_wall_time_ns: int,
     ) -> None:
         started = perf_counter_ns()
-        query_rows = query_positions.detach().to(device="cpu", dtype=torch.long).tolist()
+        capture = self.config.capture_query_positions
+        query_indices: list[torch.Tensor] = []
+        for batch_index in range(query_positions.shape[0]):
+            if capture:
+                keep = torch.zeros_like(query_positions[batch_index], dtype=torch.bool)
+                for position in capture:
+                    keep |= query_positions[batch_index].eq(position)
+                indices = keep.nonzero(as_tuple=False).flatten()
+            else:
+                indices = torch.arange(query_positions.shape[1], device=query_positions.device)
+            query_indices.append(indices)
+        if not any(indices.numel() for indices in query_indices):
+            return
+        query_rows = [
+            query_positions[batch_index]
+            .index_select(0, indices)
+            .detach()
+            .to(device="cpu", dtype=torch.long)
+            .tolist()
+            for batch_index, indices in enumerate(query_indices)
+        ]
         block_rows = block_end_positions.detach().to(device="cpu", dtype=torch.long).tolist()
         mask_rows = (
-            sparse_mask.detach().to(device="cpu", dtype=torch.bool).tolist()
+            [
+                sparse_mask[batch_index]
+                .index_select(0, indices)
+                .detach()
+                .to(device="cpu", dtype=torch.bool)
+                .tolist()
+                for batch_index, indices in enumerate(query_indices)
+            ]
             if sparse_mask is not None
             else None
         )
         score_rows = (
-            scores.detach().to(device="cpu", dtype=torch.float32).tolist()
+            [
+                scores[batch_index]
+                .index_select(0, indices)
+                .detach()
+                .to(device="cpu", dtype=torch.float32)
+                .tolist()
+                for batch_index, indices in enumerate(query_indices)
+            ]
             if scores is not None
             else None
         )
@@ -440,12 +483,8 @@ class AdaptiveMemoryTraceCollector:
                 stats = tiered.stats()
                 host_to_device_total += stats.h2d_bytes
                 device_to_host_total += stats.d2h_bytes
-        host_to_device_bytes = max(
-            host_to_device_total - self._last_host_to_device_bytes, 0
-        )
-        device_to_host_bytes = max(
-            device_to_host_total - self._last_device_to_host_bytes, 0
-        )
+        host_to_device_bytes = max(host_to_device_total - self._last_host_to_device_bytes, 0)
+        device_to_host_bytes = max(device_to_host_total - self._last_device_to_host_bytes, 0)
         self._last_host_to_device_bytes = host_to_device_total
         self._last_device_to_host_bytes = device_to_host_total
         observer_wall_time_ns = perf_counter_ns() - started
