@@ -4,9 +4,12 @@ import argparse
 import hashlib
 import json
 import os
+import shutil
+import stat
 import subprocess
 import urllib.request
-from pathlib import Path
+import zipfile
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from huggingface_hub import hf_hub_download
@@ -29,6 +32,22 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def tree_sha256(root: Path) -> dict[str, Any]:
+    _require(root.is_dir(), f"Frozen asset tree is missing: {root}.")
+    digest = hashlib.sha256()
+    files = sorted(path for path in root.rglob("*") if path.is_file())
+    for path in files:
+        _require(not path.is_symlink(), f"Frozen asset tree contains a symlink: {path}.")
+        relative = path.relative_to(root).as_posix().encode()
+        size = path.stat().st_size
+        digest.update(relative)
+        digest.update(b"\0")
+        digest.update(str(size).encode())
+        digest.update(b"\0")
+        digest.update(bytes.fromhex(sha256(path)))
+    return {"files": len(files), "sha256": digest.hexdigest()}
+
+
 def verify_file(path: Path, entry: dict[str, Any]) -> dict[str, Any]:
     _require(path.is_file(), f"Frozen asset is missing: {path}.")
     _require(path.stat().st_size == entry["bytes"], f"Frozen asset byte size drifted: {path}.")
@@ -49,7 +68,9 @@ def validate_longsafety_rows(
     safety_types: set[str] = set()
     task_types: set[str] = set()
     for row in rows:
-        _require(isinstance(row, dict) and set(row) == set(required_fields), "LongSafety schema drifted.")
+        _require(
+            isinstance(row, dict) and set(row) == set(required_fields), "LongSafety schema drifted."
+        )
         identifier = row.get("id")
         _require(
             isinstance(identifier, int) and identifier not in identifiers,
@@ -88,7 +109,9 @@ def validate_ifeval_rows(
     keys: set[int] = set()
     instruction_ids: set[str] = set()
     for row in rows:
-        _require(isinstance(row, dict) and set(row) == set(required_fields), "IFEval schema drifted.")
+        _require(
+            isinstance(row, dict) and set(row) == set(required_fields), "IFEval schema drifted."
+        )
         key = row.get("key")
         ids, kwargs = row.get("instruction_id_list"), row.get("kwargs")
         _require(
@@ -113,9 +136,7 @@ def validate_ifeval_rows(
     }
 
 
-def _dataset_file(
-    *, contract: dict[str, Any], entry: dict[str, Any], output_root: Path
-) -> Path:
+def _dataset_file(*, contract: dict[str, Any], entry: dict[str, Any], output_root: Path) -> Path:
     local_dir = output_root / "datasets" / contract["repo_id"].replace("/", "--")
     path = Path(
         hf_hub_download(
@@ -130,10 +151,7 @@ def _dataset_file(
     return path
 
 
-def _source_file(
-    *, benchmark: str, contract: dict[str, Any], entry: dict[str, Any], output_root: Path
-) -> Path:
-    destination = output_root / "sources" / benchmark.lower() / entry["path"]
+def _remote_file(*, contract: dict[str, Any], entry: dict[str, Any], destination: Path) -> Path:
     if destination.exists():
         verify_file(destination, entry)
         return destination
@@ -151,6 +169,87 @@ def _source_file(
     return destination
 
 
+def _source_file(
+    *, benchmark: str, contract: dict[str, Any], entry: dict[str, Any], output_root: Path
+) -> Path:
+    return _remote_file(
+        contract=contract,
+        entry=entry,
+        destination=output_root / "sources" / benchmark.lower() / entry["path"],
+    )
+
+
+def _extract_zip(archive_path: Path, destination: Path) -> None:
+    destination.mkdir(parents=True, exist_ok=True)
+    destination_root = destination.resolve()
+    with zipfile.ZipFile(archive_path) as archive:
+        for info in archive.infolist():
+            relative = PurePosixPath(info.filename)
+            mode = info.external_attr >> 16
+            _require(
+                not relative.is_absolute()
+                and ".." not in relative.parts
+                and not stat.S_ISLNK(mode),
+                f"Unsafe frozen archive member: {info.filename}.",
+            )
+            target = destination.joinpath(*relative.parts)
+            _require(
+                target.resolve().is_relative_to(destination_root),
+                f"Frozen archive member escapes extraction root: {info.filename}.",
+            )
+            if info.is_dir():
+                target.mkdir(parents=True, exist_ok=True)
+                continue
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with archive.open(info) as source, target.open("wb") as output:
+                shutil.copyfileobj(source, output)
+
+
+def prepare_nltk_data(*, contract: dict[str, Any], output_root: Path) -> dict[str, Any]:
+    runtime_root = output_root / "runtime" / "nltk"
+    archives: list[dict[str, Any]] = []
+    archive_paths: list[tuple[Path, dict[str, Any]]] = []
+    for entry in contract["files"]:
+        path = _remote_file(
+            contract=contract,
+            entry=entry,
+            destination=runtime_root / "archives" / entry["path"],
+        )
+        archives.append(verify_file(path, entry))
+        archive_paths.append((path, entry))
+
+    data_root = runtime_root / "data"
+    if data_root.exists():
+        observed = tree_sha256(data_root)
+    else:
+        temporary = runtime_root / f".data.{os.getpid()}.tmp"
+        shutil.rmtree(temporary, ignore_errors=True)
+        for archive_path, entry in archive_paths:
+            _extract_zip(archive_path, temporary / entry["extract_to"])
+        observed = tree_sha256(temporary)
+        _require(
+            observed["files"] == contract["extracted_file_count"]
+            and observed["sha256"] == contract["extracted_tree_sha256"],
+            "Frozen NLTK extracted tree drifted.",
+        )
+        temporary.replace(data_root)
+    _require(
+        observed["files"] == contract["extracted_file_count"]
+        and observed["sha256"] == contract["extracted_tree_sha256"],
+        "Frozen NLTK extracted tree drifted.",
+    )
+    return {
+        "repository": contract["repository"],
+        "revision": contract["revision"],
+        "archives": archives,
+        "data_root": {
+            "path": str(data_root.resolve()),
+            "files": observed["files"],
+            "sha256": observed["sha256"],
+        },
+    }
+
+
 def _jsonl(path: Path) -> list[Any]:
     return [json.loads(line) for line in path.read_text().splitlines() if line]
 
@@ -164,9 +263,7 @@ def prepare_assets(
         dataset_files: list[dict[str, Any]] = []
         data_path: Path | None = None
         for entry in contract["dataset"]["files"]:
-            path = _dataset_file(
-                contract=contract["dataset"], entry=entry, output_root=output_root
-            )
+            path = _dataset_file(contract=contract["dataset"], entry=entry, output_root=output_root)
             dataset_files.append(verify_file(path, entry))
             if "rows" in entry:
                 data_path = path
@@ -196,7 +293,7 @@ def prepare_assets(
             )
             for entry in contract["upstream_code"]["files"]
         ]
-        inventory[benchmark] = {
+        benchmark_inventory: dict[str, Any] = {
             "dataset": {
                 "repo_id": contract["dataset"]["repo_id"],
                 "revision": contract["dataset"]["revision"],
@@ -211,6 +308,15 @@ def prepare_assets(
                 "files": source_files,
             },
         }
+        if benchmark == "IFEval":
+            runtime = contract["runtime_requirements"]
+            benchmark_inventory["runtime_requirements"] = {
+                "packages": runtime["packages"],
+                "nltk_data": prepare_nltk_data(
+                    contract=runtime["nltk_data"], output_root=output_root
+                ),
+            }
+        inventory[benchmark] = benchmark_inventory
     return inventory
 
 

@@ -39,8 +39,8 @@ replication is completed.
 3. Keep the 3-arm safety contrast same-budget and verify physical KV bytes,
    paired inputs, bootstrap uncertainty, and the exact paired test.
 4. Execute the two-arm natural-safety suite, score IFEval with pinned official
-   code, and report LongSafety only as digest-bound generation evidence while
-   its paid judge is blocked.
+   code plus revision-bound `punkt`/`punkt_tab` data, and report LongSafety only
+   as digest-bound generation evidence while its paid judge is blocked.
 5. Keep reference PyTorch, checked static continuous batching, and unavailable
    external production runtime as separate evidence tiers.
 6. After primary completion, add a second instruction-tuned model family only

@@ -36,7 +36,7 @@ official = [
     "huggingface_hub>=0.20",
     "immutabledict>=4.2",
     "langdetect>=1.0.9",
-    "nltk>=3.9",
+    "nltk==3.10.0",
     "tokenizers>=0.20",
 ]
 dev = [

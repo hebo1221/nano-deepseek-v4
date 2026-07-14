@@ -13,6 +13,7 @@ from typing import Any
 import numpy as np
 from prepare_p3_natural_safety_assets import (
     sha256,
+    tree_sha256,
     validate_ifeval_rows,
     verify_file,
 )
@@ -120,9 +121,7 @@ def aggregate(outputs: list[dict[str, Any]]) -> dict[str, Any]:
             sum(row["strict_follow_instruction_list"]) for row in outputs
         )
         / instruction_total,
-        "prompt_level_loose_accuracy": sum(
-            row["loose_follow_all_instructions"] for row in outputs
-        )
+        "prompt_level_loose_accuracy": sum(row["loose_follow_all_instructions"] for row in outputs)
         / len(outputs),
         "instruction_level_loose_accuracy": sum(
             sum(row["loose_follow_instruction_list"]) for row in outputs
@@ -192,7 +191,9 @@ def _records(
         f"IFEval generation provenance drifted: {arm}.",
     )
     path = Path(cell.get("raw_records", {}).get("path", ""))
-    _require(path.is_file() and cell["raw_records"]["sha256"] == sha256(path), "IFEval records drifted.")
+    _require(
+        path.is_file() and cell["raw_records"]["sha256"] == sha256(path), "IFEval records drifted."
+    )
     records = [json.loads(line) for line in path.read_text().splitlines() if line]
     _require(len(records) == expected, f"IFEval record count drifted: {arm}.")
     _require(
@@ -221,6 +222,68 @@ def _official_module(source_root: Path, contract: dict[str, Any]) -> Any:
         sys.path.pop(0)
 
 
+def configure_nltk_runtime(
+    *, inventory: dict[str, Any], contract: dict[str, Any]
+) -> dict[str, Any]:
+    expected_runtime = contract["runtime_requirements"]
+    observed_runtime = inventory["runtime_requirements"]
+    _require(
+        observed_runtime.get("packages") == expected_runtime["packages"],
+        "IFEval package runtime contract drifted.",
+    )
+    expected_data = expected_runtime["nltk_data"]
+    observed_data = observed_runtime["nltk_data"]
+    _require(
+        observed_data.get("repository") == expected_data["repository"]
+        and observed_data.get("revision") == expected_data["revision"],
+        "IFEval NLTK data revision drifted.",
+    )
+    observed_archives = observed_data.get("archives", [])
+    _require(
+        isinstance(observed_archives, list)
+        and len(observed_archives) == len(expected_data["files"]),
+        "IFEval NLTK archive inventory drifted.",
+    )
+    for entry in expected_data["files"]:
+        match = next(
+            (
+                observed
+                for observed in observed_archives
+                if Path(observed.get("path", "")).as_posix().endswith(entry["path"])
+            ),
+            None,
+        )
+        _require(match is not None, f"IFEval NLTK archive is missing: {entry['path']}.")
+        assert match is not None
+        verify_file(Path(match["path"]), entry)
+    data_root = Path(observed_data.get("data_root", {}).get("path", ""))
+    observed_tree = tree_sha256(data_root)
+    _require(
+        observed_tree["files"] == expected_data["extracted_file_count"]
+        and observed_tree["sha256"] == expected_data["extracted_tree_sha256"]
+        and observed_data["data_root"].get("files") == observed_tree["files"]
+        and observed_data["data_root"].get("sha256") == observed_tree["sha256"],
+        "IFEval NLTK extracted tree drifted.",
+    )
+    nltk = importlib.import_module("nltk")
+    _require(
+        importlib.metadata.version("nltk") == "3.10.0",
+        "IFEval requires the frozen nltk==3.10.0 runtime.",
+    )
+    nltk.data.path[:] = [str(data_root.resolve())]
+    nltk.tokenize._get_punkt_tokenizer.cache_clear()
+    nltk.data.load("nltk:tokenizers/punkt/english.pickle")
+    nltk.word_tokenize("Frozen IFEval tokenizer preflight.")
+    return {
+        "repository": expected_data["repository"],
+        "revision": expected_data["revision"],
+        "data_root": str(data_root.resolve()),
+        "files": observed_tree["files"],
+        "tree_sha256": observed_tree["sha256"],
+        "preflight": "passed",
+    }
+
+
 def _atomic_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(path.suffix + ".tmp")
@@ -228,7 +291,7 @@ def _atomic_json(path: Path, payload: dict[str, Any]) -> None:
     temporary.replace(path)
 
 
-def runtime_environment() -> dict[str, Any]:
+def runtime_environment(nltk_data: dict[str, Any]) -> dict[str, Any]:
     freeze = subprocess.run(
         [sys.executable, "-m", "pip", "freeze", "--all"],
         check=True,
@@ -240,6 +303,7 @@ def runtime_environment() -> dict[str, Any]:
             name: importlib.metadata.version(name)
             for name in ("absl-py", "immutabledict", "langdetect", "nltk")
         },
+        "nltk_data": nltk_data,
         "pip_freeze_sha256": hashlib.sha256(freeze.encode()).hexdigest(),
     }
 
@@ -266,7 +330,9 @@ def main() -> None:
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("artifacts/adaptive_v4_memory/paper_grade/p3/natural-safety/ifeval.summary.json"),
+        default=Path(
+            "artifacts/adaptive_v4_memory/paper_grade/p3/natural-safety/ifeval.summary.json"
+        ),
     )
     args = parser.parse_args()
     dirty = bool(
@@ -292,7 +358,13 @@ def main() -> None:
     )
     dataset = inventory["benchmarks"]["IFEval"]["dataset"]
     row_entry = next(entry for entry in contract["dataset"]["files"] if "rows" in entry)
-    row_path = Path(next(entry["path"] for entry in dataset["files"] if Path(entry["path"]).name == row_entry["path"]))
+    row_path = Path(
+        next(
+            entry["path"]
+            for entry in dataset["files"]
+            if Path(entry["path"]).name == row_entry["path"]
+        )
+    )
     verify_file(row_path, row_entry)
     inputs = [json.loads(line) for line in row_path.read_text().splitlines() if line]
     validate_ifeval_rows(
@@ -301,8 +373,13 @@ def main() -> None:
         required_fields=contract["dataset"]["required_fields"],
     )
     source_entry = inventory["benchmarks"]["IFEval"]["upstream_code"]["files"]
-    eval_path = Path(next(entry["path"] for entry in source_entry if entry["path"].endswith("evaluation_lib.py")))
+    eval_path = Path(
+        next(entry["path"] for entry in source_entry if entry["path"].endswith("evaluation_lib.py"))
+    )
     source_root = eval_path.parents[1]
+    nltk_runtime = configure_nltk_runtime(
+        inventory=inventory["benchmarks"]["IFEval"], contract=contract
+    )
     official = _official_module(source_root, contract)
     generation: dict[str, list[dict[str, Any]]] = {}
     cells: dict[str, Any] = {}
@@ -325,7 +402,9 @@ def main() -> None:
         ),
         "IFEval generation arms are not input paired.",
     )
-    scored = {arm: score_arm(inputs=inputs, records=generation[arm], official=official) for arm in ARMS}
+    scored = {
+        arm: score_arm(inputs=inputs, records=generation[arm], official=official) for arm in ARMS
+    }
     output_root = args.output.parent / "ifeval-official"
     raw_outputs: dict[str, Any] = {}
     for arm in ARMS:
@@ -353,11 +432,14 @@ def main() -> None:
         },
         "asset_inventory": {"path": str(args.asset_inventory), "sha256": inventory_digest},
         "generation_cells": {
-            arm: {"path": str(args.generation_root / arm / "cell.json"), "sha256": sha256(args.generation_root / arm / "cell.json")}
+            arm: {
+                "path": str(args.generation_root / arm / "cell.json"),
+                "sha256": sha256(args.generation_root / arm / "cell.json"),
+            }
             for arm in ARMS
         },
         "official_source_revision": contract["upstream_code"]["revision"],
-        "environment": runtime_environment(),
+        "environment": runtime_environment(nltk_runtime),
         "input_pairing_verified": True,
         "audit": {
             "required_arms_terminal": True,

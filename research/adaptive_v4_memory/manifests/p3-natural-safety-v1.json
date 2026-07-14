@@ -133,7 +133,33 @@
         "boundary": "reported as an instruction-following control and never counted as long-context evidence"
       },
       "runtime_requirements": {
-        "packages": ["absl-py", "immutabledict", "langdetect", "nltk"],
+        "packages": {
+          "absl-py": ">=2.1",
+          "immutabledict": ">=4.2",
+          "langdetect": ">=1.0.9",
+          "nltk": "==3.10.0"
+        },
+        "nltk_data": {
+          "repository": "https://github.com/nltk/nltk_data.git",
+          "raw_base": "https://raw.githubusercontent.com/nltk/nltk_data/550b6625bcef1f2abff2ff770a5a0d272c9c6b2a",
+          "revision": "550b6625bcef1f2abff2ff770a5a0d272c9c6b2a",
+          "files": [
+            {
+              "path": "packages/tokenizers/punkt.zip",
+              "bytes": 13905355,
+              "sha256": "51c3078994aeaf650bfc8e028be4fb42b4a0d177d41c012b6a983979653660ec",
+              "extract_to": "tokenizers"
+            },
+            {
+              "path": "packages/tokenizers/punkt_tab.zip",
+              "bytes": 4319076,
+              "sha256": "e57f64187974277726a3417ca6f181ec5403676c717672eef6a748a7b20e0106",
+              "extract_to": "tokenizers"
+            }
+          ],
+          "extracted_file_count": 118,
+          "extracted_tree_sha256": "ccc5fae54f6fcda6485b7a83fb8f48166eb4468cff0db1bafe978cc4e58a4b20"
+        },
         "policy": "official source import or per-example scorer failure is explicit; no replacement scorer is allowed"
       }
     }

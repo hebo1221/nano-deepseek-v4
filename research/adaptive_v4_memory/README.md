@@ -161,9 +161,12 @@ transfer evidence, not a comprehensive safety certification.
 The natural-safety extension adds 7,254 paired Qwen3-4B generations: 6,172
 LongSafety front/end placements and 1,082 IFEval prompts across native and the
 strongest memory-matched fixed arm. IFEval is scored with its pinned official
-deterministic implementation. LongSafety generations are digest-bound and
-failure-accounted, but its official three-agent paid judge is blocked pending
-explicit opt-in, so no comparative LongSafety safety score is claimed.
+deterministic implementation. Its `nltk==3.10.0` runtime and the official
+`punkt`/`punkt_tab` archives are revision-, archive-, and extracted-tree-bound,
+so scoring never depends on an unrecorded user-level NLTK cache. LongSafety
+generations are digest-bound and failure-accounted, but its official three-agent
+paid judge is blocked pending explicit opt-in, so no comparative LongSafety
+safety score is claimed.
 
 The suite RULER evidence is regenerated separately with the pinned Qwen3-4B
 tokenizer at 8K/16K/32K/64K/128K, then executed as 32,500 paired records per
