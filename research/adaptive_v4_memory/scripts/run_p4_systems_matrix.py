@@ -116,12 +116,72 @@ def _head() -> str:
     ).stdout.strip()
 
 
-def _require_bound_artifact(metadata: Any, label: str) -> None:
+def _require_bound_artifact(metadata: Any, label: str) -> Path:
     if not isinstance(metadata, dict):
         raise RuntimeError(f"Missing digest-bound P3 {label} metadata.")
     path = Path(metadata.get("path", ""))
     if not path.is_file() or metadata.get("sha256") != sha256(path):
         raise RuntimeError(f"Digest-bound P3 {label} drifted: {path}")
+    return path
+
+
+def _rehash_nested_artifacts(
+    value: Any,
+    *,
+    label: str,
+    json_depth: int = 0,
+    seen_json: set[Path] | None = None,
+) -> None:
+    seen = seen_json if seen_json is not None else set()
+    if isinstance(value, dict):
+        if "path" in value and "sha256" in value:
+            artifact = _require_bound_artifact(value, f"{label} nested artifact")
+            resolved = artifact.resolve()
+            if artifact.suffix == ".json" and json_depth < 1 and resolved not in seen:
+                seen.add(resolved)
+                try:
+                    nested = json.loads(artifact.read_text())
+                except json.JSONDecodeError as error:
+                    raise RuntimeError(
+                        f"Digest-bound P3 {label} nested JSON is invalid: {artifact}"
+                    ) from error
+                if not isinstance(nested, (dict, list)):
+                    raise RuntimeError(
+                        f"Digest-bound P3 {label} nested JSON has no artifact graph: {artifact}"
+                    )
+                _rehash_nested_artifacts(
+                    nested,
+                    label=f"{label} -> {artifact}",
+                    json_depth=json_depth + 1,
+                    seen_json=seen,
+                )
+        for key, child in value.items():
+            if key not in {"path", "sha256"}:
+                _rehash_nested_artifacts(
+                    child,
+                    label=f"{label}.{key}",
+                    json_depth=json_depth,
+                    seen_json=seen,
+                )
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            _rehash_nested_artifacts(
+                child,
+                label=f"{label}[{index}]",
+                json_depth=json_depth,
+                seen_json=seen,
+            )
+
+
+def _require_summary_artifact_graph(metadata: Any, label: str) -> None:
+    summary = _require_bound_artifact(metadata, label)
+    try:
+        payload = json.loads(summary.read_text())
+    except json.JSONDecodeError as error:
+        raise RuntimeError(f"Digest-bound P3 {label} is invalid JSON: {summary}") from error
+    if not isinstance(payload, dict):
+        raise RuntimeError(f"Digest-bound P3 {label} is not a JSON object: {summary}")
+    _rehash_nested_artifacts(payload, label=label, seen_json={summary.resolve()})
 
 
 def require_p3_audit(path: Path) -> dict[str, Any]:
@@ -164,11 +224,11 @@ def require_p3_audit(path: Path) -> dict[str, Any]:
             "P4 is deferred until the complete digest-bound five-benchmark and safety P3 audit."
         )
     for name in P3_BENCHMARKS:
-        _require_bound_artifact(benchmarks[name].get("summary"), f"{name} summary")
-    _require_bound_artifact(
+        _require_summary_artifact_graph(benchmarks[name].get("summary"), f"{name} summary")
+    _require_summary_artifact_graph(
         payload["supplemental_safety"].get("summary"), "synthetic-safety summary"
     )
-    _require_bound_artifact(
+    _require_summary_artifact_graph(
         payload["supplemental_natural_safety"].get("summary"),
         "natural-safety summary",
     )

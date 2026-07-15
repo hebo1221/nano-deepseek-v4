@@ -526,10 +526,33 @@ def test_p4_requires_full_natural_suite_not_ruler_only(tmp_path: Path) -> None:
     with pytest.raises(RuntimeError, match="five-benchmark and safety"):
         systems.require_p3_audit(ruler_only)
 
+    nested_raw = tmp_path / "nested-raw.jsonl"
+    nested_raw.write_text('{"prediction": "ok"}\n')
+    nested_cell = tmp_path / "nested-cell.json"
+    nested_cell.write_text(
+        json.dumps(
+            {
+                "raw_records": {
+                    "path": str(nested_raw),
+                    "sha256": systems.sha256(nested_raw),
+                }
+            }
+        )
+    )
     child_summaries = {}
     for name in (*systems.P3_BENCHMARKS, "safety", "natural-safety"):
         child = tmp_path / f"{name}.summary.json"
-        child.write_text(json.dumps({"name": name}))
+        child_payload = {"name": name}
+        if name == systems.P3_BENCHMARKS[0]:
+            child_payload["arms"] = {
+                "native": {
+                    "raw_cell": {
+                        "path": str(nested_cell),
+                        "sha256": systems.sha256(nested_cell),
+                    }
+                }
+            }
+        child.write_text(json.dumps(child_payload))
         child_summaries[name] = {
             "path": str(child),
             "sha256": systems.sha256(child),
@@ -577,6 +600,11 @@ def test_p4_requires_full_natural_suite_not_ruler_only(tmp_path: Path) -> None:
         )
     )
     assert systems.require_p3_audit(natural)["audit"]["benchmarks_terminal"] == 5
+
+    nested_raw.write_text('{"prediction": "drifted"}\n')
+    with pytest.raises(RuntimeError, match="nested artifact drifted"):
+        systems.require_p3_audit(natural)
+    nested_raw.write_text('{"prediction": "ok"}\n')
 
     first_child = Path(child_summaries[systems.P3_BENCHMARKS[0]]["path"])
     first_child.write_text('{"drifted": true}')
