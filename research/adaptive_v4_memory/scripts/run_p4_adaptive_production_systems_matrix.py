@@ -109,6 +109,55 @@ def _dependency(path: Path) -> dict[str, str]:
     return {"path": str(path), "sha256": production.sha256(path)}
 
 
+def _require_bound_artifact(metadata: Any, label: str) -> Path:
+    _require(isinstance(metadata, dict), f"Missing adaptive production {label} binding.")
+    path = Path(metadata.get("path", ""))
+    _require(
+        path.is_file() and metadata.get("sha256") == production.sha256(path),
+        f"Adaptive production P3 {label} drifted: {path}.",
+    )
+    return path
+
+
+def _require_p3_arm_cell(metadata: Any, arm: str) -> None:
+    cell_path = _require_bound_artifact(metadata, f"{arm} arm cell")
+    cell = json.loads(cell_path.read_text())
+    _require(
+        isinstance(cell, dict)
+        and cell.get("experiment_id") == "p3-natural-benchmark-arm-cell-v1"
+        and cell.get("benchmark") == "RULER"
+        and cell.get("arm") == arm
+        and cell.get("cohort") == "adaptive-quota"
+        and cell.get("status") == "terminal"
+        and cell.get("source", {}).get("dirty") is False,
+        f"Adaptive production P3 arm cell identity drifted: {arm}.",
+    )
+    for label, key in (
+        ("experiment manifest", "experiment_manifest"),
+        ("adaptive quota manifest", "adaptive_quota_manifest"),
+        ("causal gate", "causal_gate"),
+        ("dataset inventory", "dataset_inventory"),
+        ("fixed baseline selection", "fixed_baseline_selection"),
+        ("raw records", "raw_records"),
+    ):
+        _require_bound_artifact(cell.get(key), f"{arm} {label}")
+    dependencies = cell.get("p3_sequence_decision", {}).get("dependencies", {})
+    _require(
+        isinstance(dependencies, dict)
+        and set(dependencies)
+        == {
+            "primary_core",
+            "nine_seed_core",
+            "primary_causal",
+            "nine_seed_causal",
+            "fixed_selection",
+        },
+        f"Adaptive production P3 sequence dependencies drifted: {arm}.",
+    )
+    for label, dependency in dependencies.items():
+        _require_bound_artifact(dependency, f"{arm} {label} dependency")
+
+
 def require_p3_adaptive_audit(path: Path) -> dict[str, Any]:
     payload = json.loads(path.read_text())
     audit = payload.get("audit", {})
@@ -131,13 +180,7 @@ def require_p3_adaptive_audit(path: Path) -> dict[str, Any]:
         "Adaptive production requires both natural adaptive-quota arm cells.",
     )
     for arm, metadata in arm_cells.items():
-        _require(
-            isinstance(metadata, dict)
-            and Path(metadata.get("path", "")).is_file()
-            and metadata.get("sha256")
-            == production.sha256(Path(metadata.get("path", ""))),
-            f"Adaptive production P3 arm cell drifted: {arm}.",
-        )
+        _require_p3_arm_cell(metadata, arm)
     return payload
 
 

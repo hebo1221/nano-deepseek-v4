@@ -32,9 +32,45 @@ def _arms() -> dict[str, object]:
 
 def test_adaptive_production_rehashes_both_p3_arm_cells(tmp_path: Path) -> None:
     arm_cells = {}
+    raw_records = {}
+
+    def bound(arm: str, name: str) -> dict[str, str]:
+        artifact = tmp_path / f"{arm}-{name}.json"
+        artifact.write_text(json.dumps({"arm": arm, "artifact": name}))
+        return {"path": str(artifact), "sha256": runner.production.sha256(artifact)}
+
     for arm in ("fixed+pins", "natural-adaptive-quota+pins"):
+        dependencies = {
+            name: bound(arm, name)
+            for name in (
+                "primary_core",
+                "nine_seed_core",
+                "primary_causal",
+                "nine_seed_causal",
+                "fixed_selection",
+            )
+        }
+        raw_records[arm] = bound(arm, "raw-records")
         cell = tmp_path / f"{arm}.json"
-        cell.write_text(json.dumps({"arm": arm}))
+        cell.write_text(
+            json.dumps(
+                {
+                    "experiment_id": "p3-natural-benchmark-arm-cell-v1",
+                    "benchmark": "RULER",
+                    "arm": arm,
+                    "cohort": "adaptive-quota",
+                    "status": "terminal",
+                    "source": {"dirty": False},
+                    "experiment_manifest": bound(arm, "experiment-manifest"),
+                    "adaptive_quota_manifest": bound(arm, "adaptive-quota-manifest"),
+                    "causal_gate": dependencies["primary_causal"],
+                    "dataset_inventory": bound(arm, "dataset-inventory"),
+                    "fixed_baseline_selection": dependencies["fixed_selection"],
+                    "raw_records": raw_records[arm],
+                    "p3_sequence_decision": {"dependencies": dependencies},
+                }
+            )
+        )
         arm_cells[arm] = {"path": str(cell), "sha256": runner.production.sha256(cell)}
     payload = {
         "experiment_id": "p3-natural-adaptive-quota-ruler-audit-v1",
@@ -55,11 +91,21 @@ def test_adaptive_production_rehashes_both_p3_arm_cells(tmp_path: Path) -> None:
     audit.write_text(json.dumps(payload))
 
     assert runner.require_p3_adaptive_audit(audit) == payload
+    Path(raw_records["fixed+pins"]["path"]).write_text('{"drifted": true}')
+    try:
+        runner.require_p3_adaptive_audit(audit)
+    except ValueError as error:
+        assert "raw records drifted" in str(error)
+    else:
+        raise AssertionError("P3 raw-record digest drift was accepted")
+    Path(raw_records["fixed+pins"]["path"]).write_text(
+        json.dumps({"arm": "fixed+pins", "artifact": "raw-records"})
+    )
     Path(arm_cells["fixed+pins"]["path"]).write_text('{"drifted": true}')
     try:
         runner.require_p3_adaptive_audit(audit)
     except ValueError as error:
-        assert "P3 arm cell drifted" in str(error)
+        assert "arm cell drifted" in str(error)
     else:
         raise AssertionError("P3 arm-cell digest drift was accepted")
 
