@@ -22,6 +22,12 @@ art. The remaining candidate contribution is their **joint V4-native causal and
 systems evaluation**, not any one mechanism in isolation. The running P2 arms
 remain frozen; new comparators enter only P3/P4 compatibility gates.
 
+The follow-up
+[`research_landscape_and_bets_2026.md`](research_landscape_and_bets_2026.md)
+evaluates these paths rather than merely cataloguing them. It identifies
+HCA-guided same-token CSA recovery as the primary new hypothesis, with calibrated
+risk sets and future recovery option value as supporting research tracks.
+
 ## 1. Native architecture
 
 | Work | Main mechanism | Adaptation | Key result or limitation | Implication for this project |

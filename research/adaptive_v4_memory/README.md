@@ -17,6 +17,9 @@ resident on the accelerator.
 - [`paper_map_2026.md`](paper_map_2026.md) organizes the ICML 2026 and recent
   arXiv frontier by memory action, adaptation time, claim threat, and reading
   priority.
+- [`research_landscape_and_bets_2026.md`](research_landscape_and_bets_2026.md)
+  evaluates the field's active technical paths and defines falsifiable new bets,
+  led by HCA-guided same-token CSA recovery and calibrated risk sets.
 - [`experimental_protocol.md`](experimental_protocol.md) fixes the baselines,
   workloads, metrics, statistical analysis, artifacts, and phase gates before
   implementation begins.
