@@ -4,6 +4,14 @@ Snapshot: 2026-07-17 (Asia/Seoul)
 
 Status: strategy and hypothesis document; no claim or protocol amendment
 
+> **Superseded primary ranking (2026-07-17):** the later
+> [`deep_research_swarm_2026-07-17.md`](deep_research_swarm_2026-07-17.md)
+> red-team audit demotes HCA-guided physical prefetch to a trace-only hypothesis.
+> Its current primary question is HCA--CSA conditional sufficiency and selective
+> statistical-order acquisition against ECHO, prior-CSA reuse, COBS, and the
+> exact native index path. Sections 1 and 4 below are retained as the hypothesis
+> that motivated that audit, not the current recommendation.
+
 This document goes beyond the bibliographic
 [`paper_map_2026.md`](paper_map_2026.md). It asks which technical paths the
 field is pursuing, which constraints each path actually removes, where each

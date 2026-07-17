@@ -18,8 +18,12 @@ resident on the accelerator.
   arXiv frontier by memory action, adaptation time, claim threat, and reading
   priority.
 - [`research_landscape_and_bets_2026.md`](research_landscape_and_bets_2026.md)
-  evaluates the field's active technical paths and defines falsifiable new bets,
-  led by HCA-guided same-token CSA recovery and calibrated risk sets.
+  evaluates the field's active technical paths and records the hypotheses that
+  motivated the first HCA-guided recovery proposal.
+- [`deep_research_swarm_2026-07-17.md`](deep_research_swarm_2026-07-17.md)
+  supersedes that proposal's priority after a frontier, novelty, and systems
+  red-team: it defines HCA--CSA conditional-sufficiency, adaptive-order, timing,
+  and exact-baseline kill gates before any new runtime build.
 - [`experimental_protocol.md`](experimental_protocol.md) fixes the baselines,
   workloads, metrics, statistical analysis, artifacts, and phase gates before
   implementation begins.
