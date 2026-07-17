@@ -2,8 +2,8 @@
 
 | Field | Value |
 | --- | --- |
-| Status | Draft v0.1 |
-| Date | 2026-07-14 |
+| Status | Draft v0.2 |
+| Date | 2026-07-17 |
 
 ## Abstract
 
@@ -87,6 +87,15 @@ The useful adaptive axes are therefore layer, time, compressed block, indexer
 execution, and memory tier—not ordinary KV-head eviction.
 
 ## 3. Closest prior work and candidate novelty
+
+The ICML 2026 and recent-arXiv audit in
+[`paper_map_2026.md`](paper_map_2026.md) narrows this section. EntroKV and
+RaBitQCache cover online non-uniform budgets, MISA covers query-routed indexer
+execution, EpiCache covers bounded multi-turn memory, IndexMem and SeKV cover
+approximate recoverable memory, and FlashMemory already provides V4-native cold
+residency. Therefore, none of the axes below is claimed as novel by itself. The
+candidate contribution is their joint control under V4's CSA/HCA layout plus a
+matched-physical-resource causal and systems study.
 
 The closest direct predecessor is
 [FlashMemory-DeepSeek-V4](https://arxiv.org/abs/2606.09079), which keeps a CPU

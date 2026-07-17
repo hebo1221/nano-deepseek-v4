@@ -14,6 +14,9 @@ resident on the accelerator.
   novelty, hypotheses, objective, and falsification criteria.
 - [`related_work.md`](related_work.md) maps the relevant KV-cache, sparse
   attention, index reuse, tiered-memory, and evaluation literature.
+- [`paper_map_2026.md`](paper_map_2026.md) organizes the ICML 2026 and recent
+  arXiv frontier by memory action, adaptation time, claim threat, and reading
+  priority.
 - [`experimental_protocol.md`](experimental_protocol.md) fixes the baselines,
   workloads, metrics, statistical analysis, artifacts, and phase gates before
   implementation begins.

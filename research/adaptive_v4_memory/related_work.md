@@ -1,6 +1,6 @@
 # Related work and novelty boundary
 
-Last reviewed: 2026-07-15
+Last reviewed: 2026-07-17
 
 This document tracks the literature that can invalidate, constrain, or inspire
 Adaptive V4 Memory. It is deliberately broader than KV eviction because V4
@@ -13,6 +13,14 @@ Legend used below:
 - **residency**: moves recoverable entries between memory tiers;
 - **reuse**: shares KV or sparse indices across layers/queries;
 - **precision**: changes bytes per entry rather than entry count.
+
+The dated [`paper_map_2026.md`](paper_map_2026.md) adds the official ICML 2026
+frontier and recent arXiv work. Its main amendment is substantive: adaptive
+budgets, future-utility prediction, recoverable hierarchical memory, query-routed
+index execution, and reasoning-aware failure handling all now have close prior
+art. The remaining candidate contribution is their **joint V4-native causal and
+systems evaluation**, not any one mechanism in isolation. The running P2 arms
+remain frozen; new comparators enter only P3/P4 compatibility gates.
 
 ## 1. Native architecture
 
