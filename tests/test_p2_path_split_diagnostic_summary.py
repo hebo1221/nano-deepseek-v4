@@ -96,10 +96,79 @@ def test_summary_publish_is_atomic_and_no_replace(tmp_path: Path) -> None:
     assert json.loads(output.read_text()) == {"status": "first"}
 
 
+def test_first_divergence_helpers_use_token_time_before_batch_order() -> None:
+    left = {
+        "conversation_ids": ["c0", "c1"],
+        "controller": {
+            "path_neutral_actions": [
+                {
+                    "batch_index": 0,
+                    "query_position": 8,
+                    "layer_index": 2,
+                    "selected_end_positions": [1],
+                },
+                {
+                    "batch_index": 1,
+                    "query_position": 5,
+                    "layer_index": 4,
+                    "selected_end_positions": [2],
+                },
+            ]
+        },
+        "post_prefix_trace": {
+            "first_input_position": 10,
+            "last_input_position": 11,
+            "predicted_token_position_offset": 1,
+            "top1_token_ids": [[1, 2], [3, 4]],
+        },
+    }
+    right = {
+        **left,
+        "controller": {
+            "path_neutral_actions": [
+                {
+                    "batch_index": 0,
+                    "query_position": 8,
+                    "layer_index": 2,
+                    "selected_end_positions": [9],
+                },
+                {
+                    "batch_index": 1,
+                    "query_position": 5,
+                    "layer_index": 4,
+                    "selected_end_positions": [7],
+                },
+            ]
+        },
+        "post_prefix_trace": {
+            "first_input_position": 10,
+            "last_input_position": 11,
+            "predicted_token_position_offset": 1,
+            "top1_token_ids": [[1, 8], [9, 4]],
+        },
+    }
+
+    assert (
+        summary._first_action_field_divergence(left, right, "selected_end_positions")[
+            "query_position"
+        ]
+        == 5
+    )
+    assert summary._first_trace_top1_divergence(left, right) == {
+        "batch_index": 1,
+        "conversation_id": "c1",
+        "input_position": 10,
+        "predicted_token_position": 11,
+        "left_top1": 3,
+        "right_top1": 9,
+    }
+
+
 def test_claim_boundary_keeps_localization_narrow() -> None:
     source = Path(summary.__file__).read_text()
 
     assert "Known failure cells are outcome-selected and localization-only" in source
     assert "does not prove rounding is the sole mechanism" in source
     assert "prospective_sequential_tiered_integrity" in source
+    assert "actions_with_nonempty_pinned_end_positions" in source
     assert "Do not relax" in source

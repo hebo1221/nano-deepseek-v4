@@ -72,6 +72,76 @@ def _comparison_rows(cells: list[dict[str, Any]], name: str) -> list[dict[str, A
     ]
 
 
+def _first_action_field_divergence(
+    left: dict[str, Any], right: dict[str, Any], field: str
+) -> dict[str, Any] | None:
+    def index(run: dict[str, Any]) -> dict[tuple[int, int, int], dict[str, Any]]:
+        return {
+            (
+                int(action["batch_index"]),
+                int(action["query_position"]),
+                int(action["layer_index"]),
+            ): action
+            for action in run["controller"]["path_neutral_actions"]
+        }
+
+    left_actions = index(left)
+    right_actions = index(right)
+    _require(
+        left_actions.keys() == right_actions.keys(),
+        "Compared path actions do not have identical causal identities.",
+    )
+    for identity in sorted(left_actions, key=lambda item: (item[1], item[0], item[2])):
+        left_value = left_actions[identity].get(field)
+        right_value = right_actions[identity].get(field)
+        if left_value == right_value:
+            continue
+        batch, query, layer = identity
+        return {
+            "batch_index": batch,
+            "conversation_id": left["conversation_ids"][batch],
+            "query_position": query,
+            "layer_index": layer,
+            "field": field,
+            "left": left_value,
+            "right": right_value,
+        }
+    return None
+
+
+def _first_trace_top1_divergence(
+    left: dict[str, Any], right: dict[str, Any]
+) -> dict[str, Any] | None:
+    left_trace = left["post_prefix_trace"]
+    right_trace = right["post_prefix_trace"]
+    _require(
+        left["conversation_ids"] == right["conversation_ids"]
+        and left_trace["first_input_position"] == right_trace["first_input_position"]
+        and left_trace["last_input_position"] == right_trace["last_input_position"],
+        "Compared top1 traces are not aligned.",
+    )
+    left_values = left_trace["top1_token_ids"]
+    right_values = right_trace["top1_token_ids"]
+    token_count = len(left_values[0]) if left_values else 0
+    for token_index in range(token_count):
+        for batch_index, conversation_id in enumerate(left["conversation_ids"]):
+            left_value = left_values[batch_index][token_index]
+            right_value = right_values[batch_index][token_index]
+            if left_value == right_value:
+                continue
+            input_position = int(left_trace["first_input_position"]) + token_index
+            return {
+                "batch_index": batch_index,
+                "conversation_id": conversation_id,
+                "input_position": input_position,
+                "predicted_token_position": input_position
+                + int(left_trace["predicted_token_position_offset"]),
+                "left_top1": left_value,
+                "right_top1": right_value,
+            }
+    return None
+
+
 def _validate_bound_input(
     raw_metadata: dict[str, Any], manifest_metadata: dict[str, Any], label: str
 ) -> None:
@@ -265,6 +335,39 @@ def summarize(raw_path: Path) -> dict[str, Any]:
         "The first chunking trace/action divergence signature drifted.",
     )
 
+    divergence_details: list[dict[str, Any]] = []
+    for cell in cells:
+        repeat_details: list[dict[str, Any]] = []
+        for repeat in range(diagnostic.FROZEN_REPEATS):
+            resident_tokenwise = cell["runs"]["resident-tokenwise"][repeat]
+            tiered_tokenwise = cell["runs"]["tiered-tokenwise"][repeat]
+            resident_chunk2 = cell["runs"]["resident-chunk2"][repeat]
+            repeat_details.append(
+                {
+                    "tiering_first_top1": _first_trace_top1_divergence(
+                        resident_tokenwise, tiered_tokenwise
+                    ),
+                    "tiering_first_selected_set": _first_action_field_divergence(
+                        resident_tokenwise,
+                        tiered_tokenwise,
+                        "selected_end_positions",
+                    ),
+                    "chunking_first_top1": _first_trace_top1_divergence(
+                        resident_tokenwise, resident_chunk2
+                    ),
+                    "chunking_first_selected_set": _first_action_field_divergence(
+                        resident_tokenwise,
+                        resident_chunk2,
+                        "selected_end_positions",
+                    ),
+                }
+            )
+        _require(
+            all(detail == repeat_details[0] for detail in repeat_details[1:]),
+            f"First divergence metadata is not repeat-stable for {cell['cell_id']}.",
+        )
+        divergence_details.append({"cell_id": cell["cell_id"], **repeat_details[0]})
+
     error_runs = [
         (cell, run)
         for cell in cells
@@ -283,6 +386,29 @@ def summarize(raw_path: Path) -> dict[str, Any]:
             }
         ),
         "Tiered-chunk2 structural error coverage drifted.",
+    )
+
+    successful_actions = [
+        action
+        for cell in cells
+        for observations in cell["runs"].values()
+        for run in observations
+        if run["status"] == "success"
+        for action in run["controller"]["path_neutral_actions"]
+    ]
+    nonempty_pin_actions = sum(
+        bool(action["pinned_end_positions"]) for action in successful_actions
+    )
+    protected_positions = sorted(
+        {
+            int(position)
+            for cell in cells
+            for position in cell["workload"]["protected_end_positions"]
+        }
+    )
+    _require(
+        nonempty_pin_actions == 0 and not protected_positions,
+        "The localization pin-exposure signature drifted.",
     )
 
     maximum_margin = max(
@@ -355,6 +481,9 @@ def summarize(raw_path: Path) -> dict[str, Any]:
                 "maximum_abs_query_logit_difference": max(
                     float(row["max_abs_logit_difference"]) for row in chunking
                 ),
+                "repeat_stable_first_top1_and_selected_set_divergence_by_cell": (
+                    divergence_details
+                ),
                 "interpretation": (
                     "The deterministic one-query flips occur only at zero-to-0.03125 "
                     "top1/top2 margins and are consistent with bfloat16 chunk-shape numerical "
@@ -383,6 +512,16 @@ def summarize(raw_path: Path) -> dict[str, Any]:
                 "error_message_counts": dict(sorted(error_messages.items())),
                 "full_2x2_interaction_observed": False,
             },
+            "pin_exposure": {
+                "successful_controller_actions": len(successful_actions),
+                "actions_with_nonempty_pinned_end_positions": nonempty_pin_actions,
+                "distinct_workload_protected_end_positions": protected_positions,
+                "interpretation": (
+                    "Pin digests are repeat-stable but exposure is zero in these selected "
+                    "long-generation cells. This is trivial integrity, not evidence about the "
+                    "pin mechanism or pin-effect identification."
+                ),
+            },
         },
         "sequential_tiered_repeat_integrity": repeat_integrity,
         "decision": {
@@ -395,6 +534,10 @@ def summarize(raw_path: Path) -> dict[str, Any]:
             "cross_corner_interchangeability": "not established",
             "sequential_tiered_stage_a_localization_component": "pass",
             "prospective_sequential_tiered_integrity": "still required before Stage A quality",
+            "prospective_pin_exposure": (
+                "must be reported and nonzero wherever a frozen workload defines protected "
+                "positions; localization alone cannot validate exercised pin behavior"
+            ),
             "code_repair_before_stage_a": (
                 "No sequential-tiered repair is indicated by this localization. Do not relax "
                 "the failed historical exact-equivalence gate or use chunk2 for the targeted "
