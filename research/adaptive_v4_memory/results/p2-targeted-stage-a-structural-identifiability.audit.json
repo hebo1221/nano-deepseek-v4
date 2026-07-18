@@ -1,0 +1,1390 @@
+{
+  "decision": {
+    "allowed_next_action": "Freeze a new outcome-independent, contrast-identified arm design before any prospective path or 807-series quality execution.",
+    "current_clean_layer_identity_panel": "NO_GO",
+    "launch_current_36000_arm_conversation_quality_matrix": false,
+    "launch_current_3600_run_prospective_integrity_phase": false,
+    "reason": "At least one frozen checkpoint seed has a structurally uniform quota mapping in every scale-budget cell, so calibrated and shuffled arms are identical and the all-five-seed identification gate cannot be met."
+  },
+  "experiment_id": "p2-targeted-stage-a-structural-identifiability-audit-v1",
+  "frozen_manifest": {
+    "experiment_id": "p2-post-core-path-split-targeted-contrast-v1",
+    "frozen_at": "2026-07-18T23:45:01+09:00",
+    "path": "research/adaptive_v4_memory/manifests/p2-post-core-path-split-targeted-contrast-v1.json",
+    "sha256": "6292beb6ef8d1d2a658458efaca33266559dcff6d778f13ce2fccc74b07936f5"
+  },
+  "nonclaims": [
+    "no 807-series quality or accuracy result",
+    "no adaptive-quota effect estimate",
+    "no protected-pin effect estimate",
+    "no confirmatory inference",
+    "no replacement of the paused 16-arm factorial"
+  ],
+  "observation_boundary": {
+    "inputs_not_read": [
+      "807-series generated inputs",
+      "807-series targets",
+      "807-series predictions",
+      "any Stage-A quality outcome"
+    ],
+    "inputs_read": "Frozen 707-series quota-calibration artifacts, their bound checkpoints, and controller configurations only.",
+    "outcome_independent": true
+  },
+  "payload_sha256": "fcfff5377df0a1eec51c0ab50418774214715cb47133053802e7d9bc7f02b44f",
+  "preflight": {
+    "all_four_scale_budget_cells_identified": false,
+    "cells": [
+      {
+        "all_seeds_have_at_least_200_identified_conversations": false,
+        "budget": "2x",
+        "identified_seed_count": 3,
+        "identified_training_seeds": [
+          6071401,
+          6071402,
+          6071405
+        ],
+        "passed": false,
+        "required_seed_count": 5,
+        "scale": "s55",
+        "unidentified_training_seeds": [
+          6071403,
+          6071404
+        ]
+      },
+      {
+        "all_seeds_have_at_least_200_identified_conversations": false,
+        "budget": "4x",
+        "identified_seed_count": 4,
+        "identified_training_seeds": [
+          6071401,
+          6071402,
+          6071403,
+          6071405
+        ],
+        "passed": false,
+        "required_seed_count": 5,
+        "scale": "s55",
+        "unidentified_training_seeds": [
+          6071404
+        ]
+      },
+      {
+        "all_seeds_have_at_least_200_identified_conversations": false,
+        "budget": "2x",
+        "identified_seed_count": 1,
+        "identified_training_seeds": [
+          6071405
+        ],
+        "passed": false,
+        "required_seed_count": 5,
+        "scale": "s151",
+        "unidentified_training_seeds": [
+          6071401,
+          6071402,
+          6071403,
+          6071404
+        ]
+      },
+      {
+        "all_seeds_have_at_least_200_identified_conversations": false,
+        "budget": "4x",
+        "identified_seed_count": 2,
+        "identified_training_seeds": [
+          6071403,
+          6071405
+        ],
+        "passed": false,
+        "required_seed_count": 5,
+        "scale": "s151",
+        "unidentified_training_seeds": [
+          6071401,
+          6071402,
+          6071404
+        ]
+      }
+    ],
+    "current_arm_prospective_integrity_spend_recommended": false,
+    "current_stage_a_quality_execution_permitted": false,
+    "expected_seed_scale_budget_records": 20,
+    "identified_records": 10,
+    "observed_seed_scale_budget_records": 20,
+    "outcomes_or_807_inputs_inspected": false,
+    "records": [
+      {
+        "budget": "2x",
+        "calibrated_layer_budgets": [
+          [
+            2,
+            2
+          ],
+          [
+            4,
+            2
+          ],
+          [
+            6,
+            2
+          ],
+          [
+            8,
+            2
+          ],
+          [
+            10,
+            2
+          ]
+        ],
+        "calibration_artifact": {
+          "path": "artifacts/adaptive_v4_memory/paper_grade/calibration_matrix/s151/seed-6071401/p1-layer-quotas.json",
+          "sha256": "39fa896339e6b83ddccdddfc4f243b48093427b470ea3d10bf60843560a93eaa"
+        },
+        "calibration_seed": 7071401,
+        "checkpoint": {
+          "bytes": 606450713,
+          "path": "artifacts/adaptive_v4_memory/paper_grade/training/s151/seed-6071401/s151-step-1000.pt",
+          "sha256": "3eca7b855c477718e4af0b37fc6ad4b6a546c5a65abd201f1b1e77edbc19dfec"
+        },
+        "configured_block_total": 10,
+        "eligible_conversations_before_outcome_access": 0,
+        "mapping_identified": false,
+        "minimum_required": 200,
+        "scale": "s151",
+        "shuffle_offset": 0,
+        "shuffle_reported_structurally_identical": true,
+        "shuffled_layer_budgets": [
+          [
+            2,
+            2
+          ],
+          [
+            4,
+            2
+          ],
+          [
+            6,
+            2
+          ],
+          [
+            8,
+            2
+          ],
+          [
+            10,
+            2
+          ]
+        ],
+        "sorted_quota_multiset": [
+          2,
+          2,
+          2,
+          2,
+          2
+        ],
+        "training_seed": 6071401
+      },
+      {
+        "budget": "2x",
+        "calibrated_layer_budgets": [
+          [
+            2,
+            2
+          ],
+          [
+            4,
+            2
+          ],
+          [
+            6,
+            2
+          ],
+          [
+            8,
+            2
+          ],
+          [
+            10,
+            2
+          ]
+        ],
+        "calibration_artifact": {
+          "path": "artifacts/adaptive_v4_memory/paper_grade/calibration_matrix/s151/seed-6071402/p1-layer-quotas.json",
+          "sha256": "b5f8b09dff6a117cb90fb0322c8f2476ac19179f80cc1d50cb2d1541b9d395ed"
+        },
+        "calibration_seed": 7071402,
+        "checkpoint": {
+          "bytes": 606450713,
+          "path": "artifacts/adaptive_v4_memory/paper_grade/training/s151/seed-6071402/s151-step-1000.pt",
+          "sha256": "1095b9b757ff5b939388e7af585190d195077b67baf48a861794596ab019c73d"
+        },
+        "configured_block_total": 10,
+        "eligible_conversations_before_outcome_access": 0,
+        "mapping_identified": false,
+        "minimum_required": 200,
+        "scale": "s151",
+        "shuffle_offset": 0,
+        "shuffle_reported_structurally_identical": true,
+        "shuffled_layer_budgets": [
+          [
+            2,
+            2
+          ],
+          [
+            4,
+            2
+          ],
+          [
+            6,
+            2
+          ],
+          [
+            8,
+            2
+          ],
+          [
+            10,
+            2
+          ]
+        ],
+        "sorted_quota_multiset": [
+          2,
+          2,
+          2,
+          2,
+          2
+        ],
+        "training_seed": 6071402
+      },
+      {
+        "budget": "2x",
+        "calibrated_layer_budgets": [
+          [
+            2,
+            2
+          ],
+          [
+            4,
+            2
+          ],
+          [
+            6,
+            2
+          ],
+          [
+            8,
+            2
+          ],
+          [
+            10,
+            2
+          ]
+        ],
+        "calibration_artifact": {
+          "path": "artifacts/adaptive_v4_memory/paper_grade/calibration_matrix/s151/seed-6071403/p1-layer-quotas.json",
+          "sha256": "4a26cc187438e0d1a45f5870b1fd51a01263eb7cc0ffd95570ca2df1964a49c1"
+        },
+        "calibration_seed": 7071403,
+        "checkpoint": {
+          "bytes": 606450713,
+          "path": "artifacts/adaptive_v4_memory/paper_grade/training/s151/seed-6071403/s151-step-1000.pt",
+          "sha256": "015649bb949a5574e3c2fe355a5600ecb1f673f4a13441cd0fa2f9e542e9b7ed"
+        },
+        "configured_block_total": 10,
+        "eligible_conversations_before_outcome_access": 0,
+        "mapping_identified": false,
+        "minimum_required": 200,
+        "scale": "s151",
+        "shuffle_offset": 0,
+        "shuffle_reported_structurally_identical": true,
+        "shuffled_layer_budgets": [
+          [
+            2,
+            2
+          ],
+          [
+            4,
+            2
+          ],
+          [
+            6,
+            2
+          ],
+          [
+            8,
+            2
+          ],
+          [
+            10,
+            2
+          ]
+        ],
+        "sorted_quota_multiset": [
+          2,
+          2,
+          2,
+          2,
+          2
+        ],
+        "training_seed": 6071403
+      },
+      {
+        "budget": "2x",
+        "calibrated_layer_budgets": [
+          [
+            2,
+            2
+          ],
+          [
+            4,
+            2
+          ],
+          [
+            6,
+            2
+          ],
+          [
+            8,
+            2
+          ],
+          [
+            10,
+            2
+          ]
+        ],
+        "calibration_artifact": {
+          "path": "artifacts/adaptive_v4_memory/paper_grade/calibration_matrix/s151/seed-6071404/p1-layer-quotas.json",
+          "sha256": "712f3fea0cf33803a95ce0501b580941fa46f34d85dfe7d309eb9214d4f721d0"
+        },
+        "calibration_seed": 7071404,
+        "checkpoint": {
+          "bytes": 606450713,
+          "path": "artifacts/adaptive_v4_memory/paper_grade/training/s151/seed-6071404/s151-step-1000.pt",
+          "sha256": "df52806703d965d5d268cc789461a2de1a64c1cb5b0523eb566e1e77b0248fa1"
+        },
+        "configured_block_total": 10,
+        "eligible_conversations_before_outcome_access": 0,
+        "mapping_identified": false,
+        "minimum_required": 200,
+        "scale": "s151",
+        "shuffle_offset": 0,
+        "shuffle_reported_structurally_identical": true,
+        "shuffled_layer_budgets": [
+          [
+            2,
+            2
+          ],
+          [
+            4,
+            2
+          ],
+          [
+            6,
+            2
+          ],
+          [
+            8,
+            2
+          ],
+          [
+            10,
+            2
+          ]
+        ],
+        "sorted_quota_multiset": [
+          2,
+          2,
+          2,
+          2,
+          2
+        ],
+        "training_seed": 6071404
+      },
+      {
+        "budget": "2x",
+        "calibrated_layer_budgets": [
+          [
+            2,
+            1
+          ],
+          [
+            4,
+            2
+          ],
+          [
+            6,
+            2
+          ],
+          [
+            8,
+            3
+          ],
+          [
+            10,
+            2
+          ]
+        ],
+        "calibration_artifact": {
+          "path": "artifacts/adaptive_v4_memory/paper_grade/calibration_matrix/s151/seed-6071405/p1-layer-quotas.json",
+          "sha256": "2630dc5f34539999f83d139d16a4595445209f61ee8f8ce4b6d9c046a49e0230"
+        },
+        "calibration_seed": 7071405,
+        "checkpoint": {
+          "bytes": 606450713,
+          "path": "artifacts/adaptive_v4_memory/paper_grade/training/s151/seed-6071405/s151-step-1000.pt",
+          "sha256": "6e07f069f3b55ddbde1952a926d6c26f17c8e6482a0efb9d3a2aad361eed0a25"
+        },
+        "configured_block_total": 10,
+        "eligible_conversations_before_outcome_access": 900,
+        "mapping_identified": true,
+        "minimum_required": 200,
+        "scale": "s151",
+        "shuffle_offset": 3,
+        "shuffle_reported_structurally_identical": false,
+        "shuffled_layer_budgets": [
+          [
+            2,
+            3
+          ],
+          [
+            4,
+            2
+          ],
+          [
+            6,
+            1
+          ],
+          [
+            8,
+            2
+          ],
+          [
+            10,
+            2
+          ]
+        ],
+        "sorted_quota_multiset": [
+          1,
+          2,
+          2,
+          2,
+          3
+        ],
+        "training_seed": 6071405
+      },
+      {
+        "budget": "4x",
+        "calibrated_layer_budgets": [
+          [
+            2,
+            4
+          ],
+          [
+            4,
+            4
+          ],
+          [
+            6,
+            4
+          ],
+          [
+            8,
+            4
+          ],
+          [
+            10,
+            4
+          ]
+        ],
+        "calibration_artifact": {
+          "path": "artifacts/adaptive_v4_memory/paper_grade/calibration_matrix/s151/seed-6071401/p1-layer-quotas.json",
+          "sha256": "39fa896339e6b83ddccdddfc4f243b48093427b470ea3d10bf60843560a93eaa"
+        },
+        "calibration_seed": 7071401,
+        "checkpoint": {
+          "bytes": 606450713,
+          "path": "artifacts/adaptive_v4_memory/paper_grade/training/s151/seed-6071401/s151-step-1000.pt",
+          "sha256": "3eca7b855c477718e4af0b37fc6ad4b6a546c5a65abd201f1b1e77edbc19dfec"
+        },
+        "configured_block_total": 20,
+        "eligible_conversations_before_outcome_access": 0,
+        "mapping_identified": false,
+        "minimum_required": 200,
+        "scale": "s151",
+        "shuffle_offset": 0,
+        "shuffle_reported_structurally_identical": true,
+        "shuffled_layer_budgets": [
+          [
+            2,
+            4
+          ],
+          [
+            4,
+            4
+          ],
+          [
+            6,
+            4
+          ],
+          [
+            8,
+            4
+          ],
+          [
+            10,
+            4
+          ]
+        ],
+        "sorted_quota_multiset": [
+          4,
+          4,
+          4,
+          4,
+          4
+        ],
+        "training_seed": 6071401
+      },
+      {
+        "budget": "4x",
+        "calibrated_layer_budgets": [
+          [
+            2,
+            4
+          ],
+          [
+            4,
+            4
+          ],
+          [
+            6,
+            4
+          ],
+          [
+            8,
+            4
+          ],
+          [
+            10,
+            4
+          ]
+        ],
+        "calibration_artifact": {
+          "path": "artifacts/adaptive_v4_memory/paper_grade/calibration_matrix/s151/seed-6071402/p1-layer-quotas.json",
+          "sha256": "b5f8b09dff6a117cb90fb0322c8f2476ac19179f80cc1d50cb2d1541b9d395ed"
+        },
+        "calibration_seed": 7071402,
+        "checkpoint": {
+          "bytes": 606450713,
+          "path": "artifacts/adaptive_v4_memory/paper_grade/training/s151/seed-6071402/s151-step-1000.pt",
+          "sha256": "1095b9b757ff5b939388e7af585190d195077b67baf48a861794596ab019c73d"
+        },
+        "configured_block_total": 20,
+        "eligible_conversations_before_outcome_access": 0,
+        "mapping_identified": false,
+        "minimum_required": 200,
+        "scale": "s151",
+        "shuffle_offset": 0,
+        "shuffle_reported_structurally_identical": true,
+        "shuffled_layer_budgets": [
+          [
+            2,
+            4
+          ],
+          [
+            4,
+            4
+          ],
+          [
+            6,
+            4
+          ],
+          [
+            8,
+            4
+          ],
+          [
+            10,
+            4
+          ]
+        ],
+        "sorted_quota_multiset": [
+          4,
+          4,
+          4,
+          4,
+          4
+        ],
+        "training_seed": 6071402
+      },
+      {
+        "budget": "4x",
+        "calibrated_layer_budgets": [
+          [
+            2,
+            4
+          ],
+          [
+            4,
+            4
+          ],
+          [
+            6,
+            5
+          ],
+          [
+            8,
+            3
+          ],
+          [
+            10,
+            4
+          ]
+        ],
+        "calibration_artifact": {
+          "path": "artifacts/adaptive_v4_memory/paper_grade/calibration_matrix/s151/seed-6071403/p1-layer-quotas.json",
+          "sha256": "4a26cc187438e0d1a45f5870b1fd51a01263eb7cc0ffd95570ca2df1964a49c1"
+        },
+        "calibration_seed": 7071403,
+        "checkpoint": {
+          "bytes": 606450713,
+          "path": "artifacts/adaptive_v4_memory/paper_grade/training/s151/seed-6071403/s151-step-1000.pt",
+          "sha256": "015649bb949a5574e3c2fe355a5600ecb1f673f4a13441cd0fa2f9e542e9b7ed"
+        },
+        "configured_block_total": 20,
+        "eligible_conversations_before_outcome_access": 900,
+        "mapping_identified": true,
+        "minimum_required": 200,
+        "scale": "s151",
+        "shuffle_offset": 2,
+        "shuffle_reported_structurally_identical": false,
+        "shuffled_layer_budgets": [
+          [
+            2,
+            5
+          ],
+          [
+            4,
+            3
+          ],
+          [
+            6,
+            4
+          ],
+          [
+            8,
+            4
+          ],
+          [
+            10,
+            4
+          ]
+        ],
+        "sorted_quota_multiset": [
+          3,
+          4,
+          4,
+          4,
+          5
+        ],
+        "training_seed": 6071403
+      },
+      {
+        "budget": "4x",
+        "calibrated_layer_budgets": [
+          [
+            2,
+            4
+          ],
+          [
+            4,
+            4
+          ],
+          [
+            6,
+            4
+          ],
+          [
+            8,
+            4
+          ],
+          [
+            10,
+            4
+          ]
+        ],
+        "calibration_artifact": {
+          "path": "artifacts/adaptive_v4_memory/paper_grade/calibration_matrix/s151/seed-6071404/p1-layer-quotas.json",
+          "sha256": "712f3fea0cf33803a95ce0501b580941fa46f34d85dfe7d309eb9214d4f721d0"
+        },
+        "calibration_seed": 7071404,
+        "checkpoint": {
+          "bytes": 606450713,
+          "path": "artifacts/adaptive_v4_memory/paper_grade/training/s151/seed-6071404/s151-step-1000.pt",
+          "sha256": "df52806703d965d5d268cc789461a2de1a64c1cb5b0523eb566e1e77b0248fa1"
+        },
+        "configured_block_total": 20,
+        "eligible_conversations_before_outcome_access": 0,
+        "mapping_identified": false,
+        "minimum_required": 200,
+        "scale": "s151",
+        "shuffle_offset": 0,
+        "shuffle_reported_structurally_identical": true,
+        "shuffled_layer_budgets": [
+          [
+            2,
+            4
+          ],
+          [
+            4,
+            4
+          ],
+          [
+            6,
+            4
+          ],
+          [
+            8,
+            4
+          ],
+          [
+            10,
+            4
+          ]
+        ],
+        "sorted_quota_multiset": [
+          4,
+          4,
+          4,
+          4,
+          4
+        ],
+        "training_seed": 6071404
+      },
+      {
+        "budget": "4x",
+        "calibrated_layer_budgets": [
+          [
+            2,
+            3
+          ],
+          [
+            4,
+            4
+          ],
+          [
+            6,
+            3
+          ],
+          [
+            8,
+            7
+          ],
+          [
+            10,
+            3
+          ]
+        ],
+        "calibration_artifact": {
+          "path": "artifacts/adaptive_v4_memory/paper_grade/calibration_matrix/s151/seed-6071405/p1-layer-quotas.json",
+          "sha256": "2630dc5f34539999f83d139d16a4595445209f61ee8f8ce4b6d9c046a49e0230"
+        },
+        "calibration_seed": 7071405,
+        "checkpoint": {
+          "bytes": 606450713,
+          "path": "artifacts/adaptive_v4_memory/paper_grade/training/s151/seed-6071405/s151-step-1000.pt",
+          "sha256": "6e07f069f3b55ddbde1952a926d6c26f17c8e6482a0efb9d3a2aad361eed0a25"
+        },
+        "configured_block_total": 20,
+        "eligible_conversations_before_outcome_access": 900,
+        "mapping_identified": true,
+        "minimum_required": 200,
+        "scale": "s151",
+        "shuffle_offset": 2,
+        "shuffle_reported_structurally_identical": false,
+        "shuffled_layer_budgets": [
+          [
+            2,
+            3
+          ],
+          [
+            4,
+            7
+          ],
+          [
+            6,
+            3
+          ],
+          [
+            8,
+            3
+          ],
+          [
+            10,
+            4
+          ]
+        ],
+        "sorted_quota_multiset": [
+          3,
+          3,
+          3,
+          4,
+          7
+        ],
+        "training_seed": 6071405
+      },
+      {
+        "budget": "2x",
+        "calibrated_layer_budgets": [
+          [
+            2,
+            3
+          ],
+          [
+            4,
+            5
+          ],
+          [
+            6,
+            4
+          ]
+        ],
+        "calibration_artifact": {
+          "path": "artifacts/adaptive_v4_memory/paper_grade/calibration_matrix/s55/seed-6071401/p1-layer-quotas.json",
+          "sha256": "202fc912cbf625701c2ec47d92d221da2a826c0a1a6b7527a3a86c473e09a716"
+        },
+        "calibration_seed": 7071401,
+        "checkpoint": {
+          "bytes": 222269497,
+          "path": "artifacts/adaptive_v4_memory/paper_grade/training/s55/seed-6071401/s55-step-1000.pt",
+          "sha256": "0a8330ed5c2bec8372eb32b575414e9b65509d9a597f8911b546bc31be8c360d"
+        },
+        "configured_block_total": 12,
+        "eligible_conversations_before_outcome_access": 900,
+        "mapping_identified": true,
+        "minimum_required": 200,
+        "scale": "s55",
+        "shuffle_offset": 1,
+        "shuffle_reported_structurally_identical": false,
+        "shuffled_layer_budgets": [
+          [
+            2,
+            5
+          ],
+          [
+            4,
+            4
+          ],
+          [
+            6,
+            3
+          ]
+        ],
+        "sorted_quota_multiset": [
+          3,
+          4,
+          5
+        ],
+        "training_seed": 6071401
+      },
+      {
+        "budget": "2x",
+        "calibrated_layer_budgets": [
+          [
+            2,
+            3
+          ],
+          [
+            4,
+            4
+          ],
+          [
+            6,
+            5
+          ]
+        ],
+        "calibration_artifact": {
+          "path": "artifacts/adaptive_v4_memory/paper_grade/calibration_matrix/s55/seed-6071402/p1-layer-quotas.json",
+          "sha256": "a6ddea75e847490db84e23ccaada8c32a629a8d3df5936007bbfaafdea2da18c"
+        },
+        "calibration_seed": 7071402,
+        "checkpoint": {
+          "bytes": 222269497,
+          "path": "artifacts/adaptive_v4_memory/paper_grade/training/s55/seed-6071402/s55-step-1000.pt",
+          "sha256": "cf1b9dad4cb00370be2268306b872635ae02eb5ca26aaf4b641753ecabab4f55"
+        },
+        "configured_block_total": 12,
+        "eligible_conversations_before_outcome_access": 900,
+        "mapping_identified": true,
+        "minimum_required": 200,
+        "scale": "s55",
+        "shuffle_offset": 1,
+        "shuffle_reported_structurally_identical": false,
+        "shuffled_layer_budgets": [
+          [
+            2,
+            4
+          ],
+          [
+            4,
+            5
+          ],
+          [
+            6,
+            3
+          ]
+        ],
+        "sorted_quota_multiset": [
+          3,
+          4,
+          5
+        ],
+        "training_seed": 6071402
+      },
+      {
+        "budget": "2x",
+        "calibrated_layer_budgets": [
+          [
+            2,
+            4
+          ],
+          [
+            4,
+            4
+          ],
+          [
+            6,
+            4
+          ]
+        ],
+        "calibration_artifact": {
+          "path": "artifacts/adaptive_v4_memory/paper_grade/calibration_matrix/s55/seed-6071403/p1-layer-quotas.json",
+          "sha256": "3d972839074336e1bcbe1840b8bca5a7a29ed824c51ae4831ef806ee503e4f13"
+        },
+        "calibration_seed": 7071403,
+        "checkpoint": {
+          "bytes": 222269497,
+          "path": "artifacts/adaptive_v4_memory/paper_grade/training/s55/seed-6071403/s55-step-1000.pt",
+          "sha256": "b0043170cd2ee43f3c091efafaa17d804a2e0ec67f2b66eaf41042806ea38c02"
+        },
+        "configured_block_total": 12,
+        "eligible_conversations_before_outcome_access": 0,
+        "mapping_identified": false,
+        "minimum_required": 200,
+        "scale": "s55",
+        "shuffle_offset": 0,
+        "shuffle_reported_structurally_identical": true,
+        "shuffled_layer_budgets": [
+          [
+            2,
+            4
+          ],
+          [
+            4,
+            4
+          ],
+          [
+            6,
+            4
+          ]
+        ],
+        "sorted_quota_multiset": [
+          4,
+          4,
+          4
+        ],
+        "training_seed": 6071403
+      },
+      {
+        "budget": "2x",
+        "calibrated_layer_budgets": [
+          [
+            2,
+            3
+          ],
+          [
+            4,
+            3
+          ],
+          [
+            6,
+            3
+          ]
+        ],
+        "calibration_artifact": {
+          "path": "artifacts/adaptive_v4_memory/paper_grade/calibration_matrix/s55/seed-6071404/p1-layer-quotas.json",
+          "sha256": "6db7923b24886b39e7294e7bf14c998c6ddbd86bc718904bbd1e20081d883cbd"
+        },
+        "calibration_seed": 7071404,
+        "checkpoint": {
+          "bytes": 222269497,
+          "path": "artifacts/adaptive_v4_memory/paper_grade/training/s55/seed-6071404/s55-step-1000.pt",
+          "sha256": "6b5fd547cd42fa983abb6c1c2866c60f84bf1449bfecdef8780485d0027de3b9"
+        },
+        "configured_block_total": 9,
+        "eligible_conversations_before_outcome_access": 0,
+        "mapping_identified": false,
+        "minimum_required": 200,
+        "scale": "s55",
+        "shuffle_offset": 0,
+        "shuffle_reported_structurally_identical": true,
+        "shuffled_layer_budgets": [
+          [
+            2,
+            3
+          ],
+          [
+            4,
+            3
+          ],
+          [
+            6,
+            3
+          ]
+        ],
+        "sorted_quota_multiset": [
+          3,
+          3,
+          3
+        ],
+        "training_seed": 6071404
+      },
+      {
+        "budget": "2x",
+        "calibrated_layer_budgets": [
+          [
+            2,
+            4
+          ],
+          [
+            4,
+            3
+          ],
+          [
+            6,
+            5
+          ]
+        ],
+        "calibration_artifact": {
+          "path": "artifacts/adaptive_v4_memory/paper_grade/calibration_matrix/s55/seed-6071405/p1-layer-quotas.json",
+          "sha256": "32d4aada92001f00fa8ede34dc991d7d90e03e3aab8062c27ed400ecab567d5e"
+        },
+        "calibration_seed": 7071405,
+        "checkpoint": {
+          "bytes": 222269497,
+          "path": "artifacts/adaptive_v4_memory/paper_grade/training/s55/seed-6071405/s55-step-1000.pt",
+          "sha256": "488f7f0f7dadeeb4c13fe1fb7d357b4fdad88599611a1dd7bcfa04107418732a"
+        },
+        "configured_block_total": 12,
+        "eligible_conversations_before_outcome_access": 900,
+        "mapping_identified": true,
+        "minimum_required": 200,
+        "scale": "s55",
+        "shuffle_offset": 2,
+        "shuffle_reported_structurally_identical": false,
+        "shuffled_layer_budgets": [
+          [
+            2,
+            5
+          ],
+          [
+            4,
+            4
+          ],
+          [
+            6,
+            3
+          ]
+        ],
+        "sorted_quota_multiset": [
+          3,
+          4,
+          5
+        ],
+        "training_seed": 6071405
+      },
+      {
+        "budget": "4x",
+        "calibrated_layer_budgets": [
+          [
+            2,
+            5
+          ],
+          [
+            4,
+            7
+          ],
+          [
+            6,
+            6
+          ]
+        ],
+        "calibration_artifact": {
+          "path": "artifacts/adaptive_v4_memory/paper_grade/calibration_matrix/s55/seed-6071401/p1-layer-quotas.json",
+          "sha256": "202fc912cbf625701c2ec47d92d221da2a826c0a1a6b7527a3a86c473e09a716"
+        },
+        "calibration_seed": 7071401,
+        "checkpoint": {
+          "bytes": 222269497,
+          "path": "artifacts/adaptive_v4_memory/paper_grade/training/s55/seed-6071401/s55-step-1000.pt",
+          "sha256": "0a8330ed5c2bec8372eb32b575414e9b65509d9a597f8911b546bc31be8c360d"
+        },
+        "configured_block_total": 18,
+        "eligible_conversations_before_outcome_access": 900,
+        "mapping_identified": true,
+        "minimum_required": 200,
+        "scale": "s55",
+        "shuffle_offset": 1,
+        "shuffle_reported_structurally_identical": false,
+        "shuffled_layer_budgets": [
+          [
+            2,
+            7
+          ],
+          [
+            4,
+            6
+          ],
+          [
+            6,
+            5
+          ]
+        ],
+        "sorted_quota_multiset": [
+          5,
+          6,
+          7
+        ],
+        "training_seed": 6071401
+      },
+      {
+        "budget": "4x",
+        "calibrated_layer_budgets": [
+          [
+            2,
+            5
+          ],
+          [
+            4,
+            8
+          ],
+          [
+            6,
+            11
+          ]
+        ],
+        "calibration_artifact": {
+          "path": "artifacts/adaptive_v4_memory/paper_grade/calibration_matrix/s55/seed-6071402/p1-layer-quotas.json",
+          "sha256": "a6ddea75e847490db84e23ccaada8c32a629a8d3df5936007bbfaafdea2da18c"
+        },
+        "calibration_seed": 7071402,
+        "checkpoint": {
+          "bytes": 222269497,
+          "path": "artifacts/adaptive_v4_memory/paper_grade/training/s55/seed-6071402/s55-step-1000.pt",
+          "sha256": "cf1b9dad4cb00370be2268306b872635ae02eb5ca26aaf4b641753ecabab4f55"
+        },
+        "configured_block_total": 24,
+        "eligible_conversations_before_outcome_access": 900,
+        "mapping_identified": true,
+        "minimum_required": 200,
+        "scale": "s55",
+        "shuffle_offset": 1,
+        "shuffle_reported_structurally_identical": false,
+        "shuffled_layer_budgets": [
+          [
+            2,
+            8
+          ],
+          [
+            4,
+            11
+          ],
+          [
+            6,
+            5
+          ]
+        ],
+        "sorted_quota_multiset": [
+          5,
+          8,
+          11
+        ],
+        "training_seed": 6071402
+      },
+      {
+        "budget": "4x",
+        "calibrated_layer_budgets": [
+          [
+            2,
+            7
+          ],
+          [
+            4,
+            6
+          ],
+          [
+            6,
+            7
+          ]
+        ],
+        "calibration_artifact": {
+          "path": "artifacts/adaptive_v4_memory/paper_grade/calibration_matrix/s55/seed-6071403/p1-layer-quotas.json",
+          "sha256": "3d972839074336e1bcbe1840b8bca5a7a29ed824c51ae4831ef806ee503e4f13"
+        },
+        "calibration_seed": 7071403,
+        "checkpoint": {
+          "bytes": 222269497,
+          "path": "artifacts/adaptive_v4_memory/paper_grade/training/s55/seed-6071403/s55-step-1000.pt",
+          "sha256": "b0043170cd2ee43f3c091efafaa17d804a2e0ec67f2b66eaf41042806ea38c02"
+        },
+        "configured_block_total": 20,
+        "eligible_conversations_before_outcome_access": 900,
+        "mapping_identified": true,
+        "minimum_required": 200,
+        "scale": "s55",
+        "shuffle_offset": 1,
+        "shuffle_reported_structurally_identical": false,
+        "shuffled_layer_budgets": [
+          [
+            2,
+            6
+          ],
+          [
+            4,
+            7
+          ],
+          [
+            6,
+            7
+          ]
+        ],
+        "sorted_quota_multiset": [
+          6,
+          7,
+          7
+        ],
+        "training_seed": 6071403
+      },
+      {
+        "budget": "4x",
+        "calibrated_layer_budgets": [
+          [
+            2,
+            5
+          ],
+          [
+            4,
+            5
+          ],
+          [
+            6,
+            5
+          ]
+        ],
+        "calibration_artifact": {
+          "path": "artifacts/adaptive_v4_memory/paper_grade/calibration_matrix/s55/seed-6071404/p1-layer-quotas.json",
+          "sha256": "6db7923b24886b39e7294e7bf14c998c6ddbd86bc718904bbd1e20081d883cbd"
+        },
+        "calibration_seed": 7071404,
+        "checkpoint": {
+          "bytes": 222269497,
+          "path": "artifacts/adaptive_v4_memory/paper_grade/training/s55/seed-6071404/s55-step-1000.pt",
+          "sha256": "6b5fd547cd42fa983abb6c1c2866c60f84bf1449bfecdef8780485d0027de3b9"
+        },
+        "configured_block_total": 15,
+        "eligible_conversations_before_outcome_access": 0,
+        "mapping_identified": false,
+        "minimum_required": 200,
+        "scale": "s55",
+        "shuffle_offset": 0,
+        "shuffle_reported_structurally_identical": true,
+        "shuffled_layer_budgets": [
+          [
+            2,
+            5
+          ],
+          [
+            4,
+            5
+          ],
+          [
+            6,
+            5
+          ]
+        ],
+        "sorted_quota_multiset": [
+          5,
+          5,
+          5
+        ],
+        "training_seed": 6071404
+      },
+      {
+        "budget": "4x",
+        "calibrated_layer_budgets": [
+          [
+            2,
+            6
+          ],
+          [
+            4,
+            5
+          ],
+          [
+            6,
+            8
+          ]
+        ],
+        "calibration_artifact": {
+          "path": "artifacts/adaptive_v4_memory/paper_grade/calibration_matrix/s55/seed-6071405/p1-layer-quotas.json",
+          "sha256": "32d4aada92001f00fa8ede34dc991d7d90e03e3aab8062c27ed400ecab567d5e"
+        },
+        "calibration_seed": 7071405,
+        "checkpoint": {
+          "bytes": 222269497,
+          "path": "artifacts/adaptive_v4_memory/paper_grade/training/s55/seed-6071405/s55-step-1000.pt",
+          "sha256": "488f7f0f7dadeeb4c13fe1fb7d357b4fdad88599611a1dd7bcfa04107418732a"
+        },
+        "configured_block_total": 19,
+        "eligible_conversations_before_outcome_access": 900,
+        "mapping_identified": true,
+        "minimum_required": 200,
+        "scale": "s55",
+        "shuffle_offset": 1,
+        "shuffle_reported_structurally_identical": false,
+        "shuffled_layer_budgets": [
+          [
+            2,
+            5
+          ],
+          [
+            4,
+            8
+          ],
+          [
+            6,
+            6
+          ]
+        ],
+        "sorted_quota_multiset": [
+          5,
+          6,
+          8
+        ],
+        "training_seed": 6071405
+      }
+    ],
+    "unidentified_records": 10
+  },
+  "schema_version": 1,
+  "scientific_interpretation": {
+    "finding": "The existing calibrated policy often collapses to a uniform layer quota. A permutation cannot create a layer-identity intervention when every quota value is equal.",
+    "not_a_quality_result": true,
+    "not_evidence_of_zero_population_effect": true,
+    "not_permission_to_change_the_old_gate_after_outcome_access": true
+  },
+  "source": {
+    "commit": "c5f066800bb85a0220cc1a987bf72ea5bf9bbaa6",
+    "dirty": false,
+    "implementation_digest": "feaa9e622ffba2ea757026d5b75b4bd26c4681615e8f4b9b6d424bd74a79aa48"
+  },
+  "status": "terminal_structural_no_go",
+  "terminal": true
+}

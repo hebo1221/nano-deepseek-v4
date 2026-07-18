@@ -32,7 +32,19 @@ resident on the accelerator.
 
 ## Current status
 
-Status: **paper-grade expansion active; M5 one-token result is a pilot**
+Status: **P2 path localized; current Stage A structurally blocked before outcome access**
+
+The July 19
+[`path-localization and identifiability report`](reports/2026-07-19-p2-path-localization-and-stage-a-identifiability.md)
+records two decisions. First, chunking is sufficient to reproduce the seven
+selected historical query failures without tiering, although tiering is not
+numerically neutral. Second, the planned calibrated-versus-shuffled Stage A is
+not identifiable: 10/20 seed-scale-budget quota vectors are uniform and every
+scale-budget cell misses at least one required checkpoint seed. The current
+9,000-run prospective panel, 36,000-arm-conversation quality matrix, and Stage B
+are therefore unexecuted and fail before GPU allocation. The binding
+[`post-localization amendment`](manifests/p2-post-localization-stage-a-execution-v1.json)
+permits only 707-only calibration redesign until a new contrast is frozen.
 
 No performance or systems claim has been made. M1 adds deterministic baselines,
 an exhaustive Tier-T oracle, differentiable CSA training probes, and two

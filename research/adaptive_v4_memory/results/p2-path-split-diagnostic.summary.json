@@ -1,0 +1,676 @@
+{
+  "audit": {
+    "complete_84_path_run_336_conversation_coverage": true,
+    "diagnostic_implementation_digest_verified": true,
+    "historical_failure_vectors_reproduced": true,
+    "manifest_and_all_bound_input_digests_verified": true,
+    "near_balanced_order_verified": true,
+    "raw_identity_verified": true,
+    "stored_summary_recomputed_exactly": true,
+    "zero_successful_run_budget_violations": true
+  },
+  "auditor_source": {
+    "auditor_implementation_digest": "82970d3cf1435b29955f284c3025aa87eaa653fea35504d090f134a820a60a6e",
+    "commit": "c5f066800bb85a0220cc1a987bf72ea5bf9bbaa6",
+    "dirty": false
+  },
+  "claim_boundary": "Known failure cells are outcome-selected and localization-only. This audit does not estimate controller quality, pin effects, adaptive-quota effects, population path equivalence, natural-language transfer, or production systems performance.",
+  "coverage": {
+    "conversation_path_observations": 336,
+    "known_arm_cells": 7,
+    "path_runs": 84,
+    "repeats_per_path": 3,
+    "successful_path_runs": 72,
+    "unsupported_or_error_path_runs": 12
+  },
+  "decision": {
+    "code_repair_before_stage_a": "No sequential-tiered repair is indicated by this localization. Do not relax the failed historical exact-equivalence gate or use chunk2 for the targeted physical study.",
+    "cross_corner_interchangeability": "not established",
+    "prospective_pin_exposure": "must be reported and nonzero wherever a frozen workload defines protected positions; localization alone cannot validate exercised pin behavior",
+    "prospective_sequential_tiered_integrity": "still required before Stage A quality",
+    "registered_query_root_cause_boundary": "Within the seven outcome-selected localization cells, chunking is sufficient to reproduce every historical registered-query mismatch without tiering; tiering is not necessary for those flips. This is localization, not a population equivalence or quality claim.",
+    "sequential_tiered_stage_a_localization_component": "pass"
+  },
+  "execution_source": {
+    "commit": "e7eea9d0f5aa3328aaa6e1479582be6989497458",
+    "dirty": false,
+    "implementation_digest": "9e70e6a52af52891882fc4315d526698b051a03141d996c68a03758e925692c2"
+  },
+  "experiment_id": "p2-causal-equivalence-diagnostic-audit-v1",
+  "frozen_manifest": {
+    "experiment_id": "p2-post-core-path-split-targeted-contrast-v1",
+    "frozen_at": "2026-07-18T23:45:01+09:00",
+    "path": "research/adaptive_v4_memory/manifests/p2-post-core-path-split-targeted-contrast-v1.json",
+    "protocol_amendment": "2.3-P1",
+    "sha256": "6292beb6ef8d1d2a658458efaca33266559dcff6d778f13ce2fccc74b07936f5"
+  },
+  "localization": {
+    "historical_failure_cells_exactly_reproduced": 7,
+    "numerical_signature": {
+      "first_chunking_action_differing_fields": [
+        "signal"
+      ],
+      "first_chunking_action_query_positions": [
+        64
+      ],
+      "first_chunking_trace_positions": [
+        64,
+        67,
+        68
+      ],
+      "interpretation": "The deterministic one-query flips occur only at zero-to-0.03125 top1/top2 margins and are consistent with bfloat16 chunk-shape numerical sensitivity feeding small controller-signal differences; this diagnostic does not prove rounding is the sole mechanism.",
+      "maximum_abs_query_logit_difference": 0.078125,
+      "maximum_top1_top2_margin": 0.03125,
+      "mismatch_input_positions": [
+        126,
+        1022
+      ],
+      "mismatch_query_indices": [
+        3
+      ],
+      "repeat_stable_first_top1_and_selected_set_divergence_by_cell": [
+        {
+          "cell_id": "2x:long-generation-changing-evidence:context-128:calibrated-no-pins",
+          "chunking_first_selected_set": null,
+          "chunking_first_top1": {
+            "batch_index": 0,
+            "conversation_id": "long-generation-changing-evidence:128:0",
+            "input_position": 126,
+            "left_top1": 112,
+            "predicted_token_position": 127,
+            "right_top1": 126
+          },
+          "tiering_first_selected_set": null,
+          "tiering_first_top1": null
+        },
+        {
+          "cell_id": "2x:long-generation-changing-evidence:context-128:calibrated+pins",
+          "chunking_first_selected_set": null,
+          "chunking_first_top1": {
+            "batch_index": 0,
+            "conversation_id": "long-generation-changing-evidence:128:0",
+            "input_position": 126,
+            "left_top1": 112,
+            "predicted_token_position": 127,
+            "right_top1": 126
+          },
+          "tiering_first_selected_set": null,
+          "tiering_first_top1": null
+        },
+        {
+          "cell_id": "2x:long-generation-changing-evidence:context-128:hierarchical+pins-no-score",
+          "chunking_first_selected_set": null,
+          "chunking_first_top1": {
+            "batch_index": 0,
+            "conversation_id": "long-generation-changing-evidence:128:0",
+            "input_position": 126,
+            "left_top1": 112,
+            "predicted_token_position": 127,
+            "right_top1": 126
+          },
+          "tiering_first_selected_set": null,
+          "tiering_first_top1": null
+        },
+        {
+          "cell_id": "4x:long-generation-changing-evidence:context-1024:fixed",
+          "chunking_first_selected_set": {
+            "batch_index": 0,
+            "conversation_id": "long-generation-changing-evidence:1024:0",
+            "field": "selected_end_positions",
+            "layer_index": 2,
+            "left": [
+              3,
+              19,
+              7,
+              15,
+              23,
+              27,
+              31,
+              103
+            ],
+            "query_position": 149,
+            "right": [
+              3,
+              19,
+              7,
+              15,
+              23,
+              27,
+              31,
+              35
+            ]
+          },
+          "chunking_first_top1": {
+            "batch_index": 1,
+            "conversation_id": "long-generation-changing-evidence:1024:1",
+            "input_position": 292,
+            "left_top1": 112,
+            "predicted_token_position": 293,
+            "right_top1": 128
+          },
+          "tiering_first_selected_set": {
+            "batch_index": 0,
+            "conversation_id": "long-generation-changing-evidence:1024:0",
+            "field": "selected_end_positions",
+            "layer_index": 6,
+            "left": [
+              19,
+              7,
+              3,
+              15,
+              23,
+              31,
+              11,
+              243
+            ],
+            "query_position": 423,
+            "right": [
+              19,
+              7,
+              3,
+              15,
+              31,
+              23,
+              11,
+              243
+            ]
+          },
+          "tiering_first_top1": {
+            "batch_index": 0,
+            "conversation_id": "long-generation-changing-evidence:1024:0",
+            "input_position": 802,
+            "left_top1": 94,
+            "predicted_token_position": 803,
+            "right_top1": 105
+          }
+        },
+        {
+          "cell_id": "4x:long-generation-changing-evidence:context-1024:fixed+pins",
+          "chunking_first_selected_set": {
+            "batch_index": 0,
+            "conversation_id": "long-generation-changing-evidence:1024:0",
+            "field": "selected_end_positions",
+            "layer_index": 2,
+            "left": [
+              3,
+              19,
+              7,
+              15,
+              23,
+              27,
+              31,
+              103
+            ],
+            "query_position": 149,
+            "right": [
+              3,
+              19,
+              7,
+              15,
+              23,
+              27,
+              31,
+              35
+            ]
+          },
+          "chunking_first_top1": {
+            "batch_index": 1,
+            "conversation_id": "long-generation-changing-evidence:1024:1",
+            "input_position": 292,
+            "left_top1": 112,
+            "predicted_token_position": 293,
+            "right_top1": 128
+          },
+          "tiering_first_selected_set": {
+            "batch_index": 0,
+            "conversation_id": "long-generation-changing-evidence:1024:0",
+            "field": "selected_end_positions",
+            "layer_index": 6,
+            "left": [
+              19,
+              7,
+              3,
+              15,
+              23,
+              31,
+              11,
+              243
+            ],
+            "query_position": 423,
+            "right": [
+              19,
+              7,
+              3,
+              15,
+              31,
+              23,
+              11,
+              243
+            ]
+          },
+          "tiering_first_top1": {
+            "batch_index": 0,
+            "conversation_id": "long-generation-changing-evidence:1024:0",
+            "input_position": 802,
+            "left_top1": 94,
+            "predicted_token_position": 803,
+            "right_top1": 105
+          }
+        },
+        {
+          "cell_id": "4x:long-generation-changing-evidence:context-1024:shuffled-quota",
+          "chunking_first_selected_set": {
+            "batch_index": 2,
+            "conversation_id": "long-generation-changing-evidence:1024:2",
+            "field": "selected_end_positions",
+            "layer_index": 4,
+            "left": [
+              27,
+              7,
+              19,
+              23,
+              11,
+              3,
+              31,
+              15,
+              63,
+              59,
+              115
+            ],
+            "query_position": 138,
+            "right": [
+              27,
+              7,
+              19,
+              23,
+              11,
+              3,
+              31,
+              15,
+              63,
+              59,
+              111
+            ]
+          },
+          "chunking_first_top1": {
+            "batch_index": 2,
+            "conversation_id": "long-generation-changing-evidence:1024:2",
+            "input_position": 264,
+            "left_top1": 126,
+            "predicted_token_position": 265,
+            "right_top1": 94
+          },
+          "tiering_first_selected_set": {
+            "batch_index": 3,
+            "conversation_id": "long-generation-changing-evidence:1024:3",
+            "field": "selected_end_positions",
+            "layer_index": 4,
+            "left": [
+              15,
+              19,
+              7,
+              115,
+              183,
+              11,
+              3,
+              27,
+              23,
+              119,
+              239
+            ],
+            "query_position": 340,
+            "right": [
+              15,
+              19,
+              7,
+              115,
+              183,
+              11,
+              3,
+              27,
+              23,
+              119,
+              283
+            ]
+          },
+          "tiering_first_top1": {
+            "batch_index": 0,
+            "conversation_id": "long-generation-changing-evidence:1024:0",
+            "input_position": 1018,
+            "left_top1": 135,
+            "predicted_token_position": 1019,
+            "right_top1": 105
+          }
+        },
+        {
+          "cell_id": "4x:long-generation-changing-evidence:context-1024:shuffled-quota+pins",
+          "chunking_first_selected_set": {
+            "batch_index": 2,
+            "conversation_id": "long-generation-changing-evidence:1024:2",
+            "field": "selected_end_positions",
+            "layer_index": 4,
+            "left": [
+              27,
+              7,
+              19,
+              23,
+              11,
+              3,
+              31,
+              15,
+              63,
+              59,
+              115
+            ],
+            "query_position": 138,
+            "right": [
+              27,
+              7,
+              19,
+              23,
+              11,
+              3,
+              31,
+              15,
+              63,
+              59,
+              111
+            ]
+          },
+          "chunking_first_top1": {
+            "batch_index": 2,
+            "conversation_id": "long-generation-changing-evidence:1024:2",
+            "input_position": 264,
+            "left_top1": 126,
+            "predicted_token_position": 265,
+            "right_top1": 94
+          },
+          "tiering_first_selected_set": {
+            "batch_index": 3,
+            "conversation_id": "long-generation-changing-evidence:1024:3",
+            "field": "selected_end_positions",
+            "layer_index": 4,
+            "left": [
+              15,
+              19,
+              7,
+              115,
+              183,
+              11,
+              3,
+              27,
+              23,
+              119,
+              239
+            ],
+            "query_position": 340,
+            "right": [
+              15,
+              19,
+              7,
+              115,
+              183,
+              11,
+              3,
+              27,
+              23,
+              119,
+              283
+            ]
+          },
+          "tiering_first_top1": {
+            "batch_index": 0,
+            "conversation_id": "long-generation-changing-evidence:1024:0",
+            "input_position": 1018,
+            "left_top1": 135,
+            "predicted_token_position": 1019,
+            "right_top1": 105
+          }
+        }
+      ]
+    },
+    "pin_exposure": {
+      "actions_with_nonempty_pinned_end_positions": 0,
+      "distinct_workload_protected_end_positions": [],
+      "interpretation": "Pin digests are repeat-stable but exposure is zero in these selected long-generation cells. This is trivial integrity, not evidence about the pin mechanism or pin-effect identification.",
+      "successful_controller_actions": 497664
+    },
+    "registered_query_prediction_comparisons": {
+      "historical_resident_chunk2_vs_tiered_tokenwise": {
+        "identical": 0,
+        "observations": 21
+      },
+      "resident_tokenwise_vs_chunk2": {
+        "identical": 0,
+        "observations": 21,
+        "one_query_mismatch": 21
+      },
+      "tokenwise_resident_vs_tiered": {
+        "identical": 21,
+        "observations": 21
+      }
+    },
+    "tiered_chunk2": {
+      "error_message_counts": {
+        "Requested 36 hot blocks exceeds budget 32.": 6,
+        "Requested 47 hot blocks exceeds budget 44.": 6
+      },
+      "full_2x2_interaction_observed": false,
+      "structurally_unsupported_runs": 12,
+      "successful_runs": 9
+    },
+    "tiering_intermediate_drift": {
+      "action_identical_observations": 9,
+      "claim": "Tiering alone preserved registered queries in all selected cells but did not preserve every intermediate logit, top1 token, or controller action.",
+      "post_prefix_top1_identical_observations": 9,
+      "query_predictions_identical_observations": 21
+    }
+  },
+  "raw_artifact": {
+    "bytes": 565255204,
+    "path": "artifacts/adaptive_v4_memory/paper_grade/p2_causal_path_split_diagnostic/s55/seed-6071402/p2-causal-equivalence-diagnostic-v1.raw.json",
+    "sha256": "8e22c83bebb8bf6a24b22070d10080106a03460a47037dcce0f8d2cb7ee56f37"
+  },
+  "runtime_environment": {
+    "cuda_matmul_allow_tf32": false,
+    "cuda_version": "13.0",
+    "cudnn_allow_tf32": true,
+    "cudnn_benchmark": false,
+    "cudnn_deterministic": false,
+    "deterministic_algorithms_enabled": false,
+    "device_name": "NVIDIA GB10",
+    "torch_version": "2.13.0+cu130"
+  },
+  "schema_version": 1,
+  "sequential_tiered_repeat_integrity": {
+    "all_known_arms_descriptive": {
+      "expected_comparisons": 14,
+      "observed_comparisons": 14,
+      "passed": true,
+      "required_exact_fields": [
+        "predictions_identical",
+        "path_neutral_actions_identical",
+        "selected_positions_identical",
+        "pin_sets_identical",
+        "fallback_actions_identical",
+        "controller_rows_identical",
+        "logical_controller_counters_identical",
+        "runtime_replay_digest_identical",
+        "query_logits_bitwise_identical",
+        "post_prefix_top1_identical",
+        "post_prefix_logits_sha256_identical",
+        "accounting_identical",
+        "tier_stats_identical",
+        "both_budget_checks_passed"
+      ]
+    },
+    "by_arm": {
+      "calibrated+pins": {
+        "expected_comparisons": 2,
+        "observed_comparisons": 2,
+        "passed": true,
+        "required_exact_fields": [
+          "predictions_identical",
+          "path_neutral_actions_identical",
+          "selected_positions_identical",
+          "pin_sets_identical",
+          "fallback_actions_identical",
+          "controller_rows_identical",
+          "logical_controller_counters_identical",
+          "runtime_replay_digest_identical",
+          "query_logits_bitwise_identical",
+          "post_prefix_top1_identical",
+          "post_prefix_logits_sha256_identical",
+          "accounting_identical",
+          "tier_stats_identical",
+          "both_budget_checks_passed"
+        ]
+      },
+      "calibrated-no-pins": {
+        "expected_comparisons": 2,
+        "observed_comparisons": 2,
+        "passed": true,
+        "required_exact_fields": [
+          "predictions_identical",
+          "path_neutral_actions_identical",
+          "selected_positions_identical",
+          "pin_sets_identical",
+          "fallback_actions_identical",
+          "controller_rows_identical",
+          "logical_controller_counters_identical",
+          "runtime_replay_digest_identical",
+          "query_logits_bitwise_identical",
+          "post_prefix_top1_identical",
+          "post_prefix_logits_sha256_identical",
+          "accounting_identical",
+          "tier_stats_identical",
+          "both_budget_checks_passed"
+        ]
+      },
+      "fixed": {
+        "expected_comparisons": 2,
+        "observed_comparisons": 2,
+        "passed": true,
+        "required_exact_fields": [
+          "predictions_identical",
+          "path_neutral_actions_identical",
+          "selected_positions_identical",
+          "pin_sets_identical",
+          "fallback_actions_identical",
+          "controller_rows_identical",
+          "logical_controller_counters_identical",
+          "runtime_replay_digest_identical",
+          "query_logits_bitwise_identical",
+          "post_prefix_top1_identical",
+          "post_prefix_logits_sha256_identical",
+          "accounting_identical",
+          "tier_stats_identical",
+          "both_budget_checks_passed"
+        ]
+      },
+      "fixed+pins": {
+        "expected_comparisons": 2,
+        "observed_comparisons": 2,
+        "passed": true,
+        "required_exact_fields": [
+          "predictions_identical",
+          "path_neutral_actions_identical",
+          "selected_positions_identical",
+          "pin_sets_identical",
+          "fallback_actions_identical",
+          "controller_rows_identical",
+          "logical_controller_counters_identical",
+          "runtime_replay_digest_identical",
+          "query_logits_bitwise_identical",
+          "post_prefix_top1_identical",
+          "post_prefix_logits_sha256_identical",
+          "accounting_identical",
+          "tier_stats_identical",
+          "both_budget_checks_passed"
+        ]
+      },
+      "hierarchical+pins-no-score": {
+        "expected_comparisons": 2,
+        "observed_comparisons": 2,
+        "passed": true,
+        "required_exact_fields": [
+          "predictions_identical",
+          "path_neutral_actions_identical",
+          "selected_positions_identical",
+          "pin_sets_identical",
+          "fallback_actions_identical",
+          "controller_rows_identical",
+          "logical_controller_counters_identical",
+          "runtime_replay_digest_identical",
+          "query_logits_bitwise_identical",
+          "post_prefix_top1_identical",
+          "post_prefix_logits_sha256_identical",
+          "accounting_identical",
+          "tier_stats_identical",
+          "both_budget_checks_passed"
+        ]
+      },
+      "shuffled-quota": {
+        "expected_comparisons": 2,
+        "observed_comparisons": 2,
+        "passed": true,
+        "required_exact_fields": [
+          "predictions_identical",
+          "path_neutral_actions_identical",
+          "selected_positions_identical",
+          "pin_sets_identical",
+          "fallback_actions_identical",
+          "controller_rows_identical",
+          "logical_controller_counters_identical",
+          "runtime_replay_digest_identical",
+          "query_logits_bitwise_identical",
+          "post_prefix_top1_identical",
+          "post_prefix_logits_sha256_identical",
+          "accounting_identical",
+          "tier_stats_identical",
+          "both_budget_checks_passed"
+        ]
+      },
+      "shuffled-quota+pins": {
+        "expected_comparisons": 2,
+        "observed_comparisons": 2,
+        "passed": true,
+        "required_exact_fields": [
+          "predictions_identical",
+          "path_neutral_actions_identical",
+          "selected_positions_identical",
+          "pin_sets_identical",
+          "fallback_actions_identical",
+          "controller_rows_identical",
+          "logical_controller_counters_identical",
+          "runtime_replay_digest_identical",
+          "query_logits_bitwise_identical",
+          "post_prefix_top1_identical",
+          "post_prefix_logits_sha256_identical",
+          "accounting_identical",
+          "tier_stats_identical",
+          "both_budget_checks_passed"
+        ]
+      }
+    },
+    "stage_components": {
+      "stage_a_clean_layer_identity": {
+        "localization_component_passed": true,
+        "prospective_integrity_still_required": true,
+        "required_arms": [
+          "calibrated+pins",
+          "shuffled-quota+pins"
+        ]
+      },
+      "stage_b_deployed_operational": {
+        "localization_component_passed": true,
+        "required_arms": [
+          "fixed+pins"
+        ],
+        "stage_a_go_and_prospective_integrity_still_required": true
+      }
+    }
+  },
+  "status": "terminal_localization_audit",
+  "wall_seconds": 2343.8478621868417
+}

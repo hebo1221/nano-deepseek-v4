@@ -1,13 +1,15 @@
 # Paper-grade expansion protocol
 
-Protocol version: 2.3 (post-core execution amendment 2.3-P1)
+Protocol version: 2.4 (post-localization structural-feasibility amendment 2.4-P2)
 Frozen: 2026-07-14  
 Amended: 2026-07-18, after the terminal core audit and observed path-equivalence
-blocker, but before any new path-split or targeted-contrast result
-Status: P2 core terminal; the original 9,000-coordinate, 16-arm causal
-factorial is paused; within P2 causal follow-up, only the manifest-bound
-diagnostic and targeted contrast below are eligible, subject to their
-fail-closed gates
+blocker, but before any new path-split or targeted-contrast result; amended
+again 2026-07-19 after localization and a 707-only feasibility audit, but before
+any prospective path run or 807-series targeted input, target, or prediction
+Status: P2 core and path localization terminal; the original 9,000-coordinate,
+16-arm causal factorial remains paused; the current calibrated-versus-shuffled
+Stage A and its 9,000-run prospective prerequisite are structurally blocked and
+unexecuted; only outcome-independent calibration redesign is eligible
 
 Post-core execution amendment 2.3-P1 pauses, but does not alter or erase, the
 frozen full causal factorial. The pause is grounded in the exogenous July-17
@@ -31,6 +33,39 @@ interchangeability claims; the sequential-tiered panel is blocked only by
 same-path determinism or integrity failure. Its preliminary decision gates are
 not confirmatory, do not replace the full factorial, and cannot satisfy any
 downstream P3 gate.
+
+Post-localization amendment 2.4-P2 is bound by
+`manifests/p2-post-localization-stage-a-execution-v1.json`. The completed
+four-corner diagnostic localizes every selected registered-query mismatch to a
+chunk-sensitive execution shape: resident chunk-2 is sufficient to reproduce
+the categorical failures, whereas resident and tiered tokenwise paths preserve
+the final registered-query predictions in all selected observations. Tiering
+still changes logits and later internal decisions, so cross-corner
+interchangeability remains failed. The selected cells contain no protected
+positions and exercise no pins; they provide no pin-mechanism evidence.
+
+Before launching the prospective panel, a target-free audit enumerated the ten
+frozen 707-series calibration artifacts. Ten of twenty seed-scale-budget quota
+vectors are uniform, making `calibrated+pins` and `shuffled-quota+pins`
+identical. Every scale-by-budget cell lacks at least one of the five required
+identified checkpoint seeds. Because identity is constant within such a cell,
+its eligible count is either 900 or zero and more examples cannot repair the
+gate. The current 3,600-run sequential-tiered phase, 5,400-run cross-corner
+phase, 36,000-arm-conversation quality matrix, and Stage B are therefore
+blocked before GPU allocation. Both output roots were absent and no 807-series
+input or outcome had been opened, so this is structural infeasibility rather
+than outcome-dependent stopping.
+
+Any redesigned rank-sensitive probe is a new arm family and must receive a new
+experiment ID, exact configuration builder, and prospective integrity audit.
+It cannot inherit evidence from the unexecuted old-arm panel. Only 707-only
+continuous layer-signal enrichment, calibration-only feasibility checks, and
+new-seed planning are currently permitted. Future paired quality controls must
+gate exact measured tier hot blocks, tier hot bytes, total hot-resident bytes,
+pin/fallback digests, and nonzero pin exposure in every protected
+coordinate-arm before outcomes are read. Complete calibration ties remain
+structural-zero controls or require new calibration/seeds; arbitrary layer-ID
+or digest tie-breaking cannot be called calibrated layer-importance evidence.
 
 This amendment supersedes the experimental scale of the M5 pilot. It does not
 erase the pilot result: it narrows that result to the exact one-token global M2

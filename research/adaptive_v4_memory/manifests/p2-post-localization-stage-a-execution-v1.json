@@ -1,0 +1,195 @@
+{
+  "schema_version": 1,
+  "experiment_id": "p2-post-localization-stage-a-execution-v1",
+  "status": "frozen_after_localization_and_before_any_prospective_or_807_quality_execution; current_stage_a_structurally_blocked",
+  "frozen_at": "2026-07-19T01:15:00+09:00",
+  "source_commit": "c5f066800bb85a0220cc1a987bf72ea5bf9bbaa6",
+  "parent_contract": {
+    "path": "research/adaptive_v4_memory/manifests/p2-post-core-path-split-targeted-contrast-v1.json",
+    "sha256": "6292beb6ef8d1d2a658458efaca33266559dcff6d778f13ce2fccc74b07936f5",
+    "relationship": "post-localization execution amendment; the parent is preserved and is not overwritten"
+  },
+  "observation_boundary": {
+    "observed_before_this_amendment": [
+      "the frozen seven-cell path-localization raw artifact and compact audit",
+      "the ten frozen 707-series calibration artifacts and their controller configurations",
+      "the calibration-only structural-identifiability audit"
+    ],
+    "not_observed_before_this_amendment": [
+      "any prospective Stage-A path-audit output",
+      "any 807-series Stage-A generated input",
+      "any 807-series Stage-A target",
+      "any 807-series Stage-A prediction or accuracy",
+      "any Stage-B path or quality output"
+    ],
+    "prospective_output_root_existed": false,
+    "targeted_quality_output_root_existed": false,
+    "stopping_classification": "outcome-independent structural infeasibility, not interim-quality early stopping"
+  },
+  "localization_evidence": {
+    "raw": {
+      "path": "artifacts/adaptive_v4_memory/paper_grade/p2_causal_path_split_diagnostic/s55/seed-6071402/p2-causal-equivalence-diagnostic-v1.raw.json",
+      "sha256": "8e22c83bebb8bf6a24b22070d10080106a03460a47037dcce0f8d2cb7ee56f37",
+      "bytes": 565255204
+    },
+    "summary": {
+      "path": "research/adaptive_v4_memory/results/p2-path-split-diagnostic.summary.json",
+      "sha256": "1effb9f4d56f4e4f837407f165c2d94f231062610472af1ea7669aaaf889f546",
+      "bytes": 22082,
+      "auditor_source_commit": "c5f066800bb85a0220cc1a987bf72ea5bf9bbaa6"
+    },
+    "coverage": {
+      "arm_cells": 7,
+      "paths": 4,
+      "repeats": 3,
+      "path_runs": 84,
+      "successful_runs": 72,
+      "expected_error_runs": 12
+    },
+    "decision": {
+      "chunking_sufficient_for_selected_registered_query_failures": true,
+      "tiering_necessary_for_selected_registered_query_failures": false,
+      "tiering_numerically_neutral": false,
+      "cross_corner_interchangeability_established": false,
+      "sequential_tiered_code_repair_before_targeted_study": false,
+      "pin_mechanism_evidence": false
+    },
+    "pin_exposure": {
+      "successful_controller_actions": 497664,
+      "actions_with_nonempty_pin_sets": 0,
+      "workload_protected_positions": 0,
+      "interpretation": "trivial digest integrity only; no pin-effect or exercised-pin claim"
+    }
+  },
+  "structural_identifiability_evidence": {
+    "path": "research/adaptive_v4_memory/results/p2-targeted-stage-a-structural-identifiability.audit.json",
+    "sha256": "0b406fdd7695dccf3ac2cfa143c8c4dca5db5cff01bd6b2a0ecf2dbd1a4a8379",
+    "bytes": 34938,
+    "payload_sha256": "fcfff5377df0a1eec51c0ab50418774214715cb47133053802e7d9bc7f02b44f",
+    "source_commit": "c5f066800bb85a0220cc1a987bf72ea5bf9bbaa6",
+    "inputs": "707-series calibration artifacts, bound checkpoints, and controller configurations only",
+    "outcomes_or_807_inputs_inspected": false,
+    "identified_seed_scale_budget_cells": 10,
+    "unidentified_seed_scale_budget_cells": 10,
+    "scale_budget_cells": [
+      {
+        "scale": "s55",
+        "budget": "2x",
+        "identified_seeds": [6071401, 6071402, 6071405],
+        "unidentified_seeds": [6071403, 6071404],
+        "required_seed_count": 5,
+        "passed": false
+      },
+      {
+        "scale": "s55",
+        "budget": "4x",
+        "identified_seeds": [6071401, 6071402, 6071403, 6071405],
+        "unidentified_seeds": [6071404],
+        "required_seed_count": 5,
+        "passed": false
+      },
+      {
+        "scale": "s151",
+        "budget": "2x",
+        "identified_seeds": [6071405],
+        "unidentified_seeds": [6071401, 6071402, 6071403, 6071404],
+        "required_seed_count": 5,
+        "passed": false
+      },
+      {
+        "scale": "s151",
+        "budget": "4x",
+        "identified_seeds": [6071403, 6071405],
+        "unidentified_seeds": [6071401, 6071402, 6071404],
+        "required_seed_count": 5,
+        "passed": false
+      }
+    ],
+    "mathematical_reason": "A permutation of a uniform quota multiset is identical to the original mapping. Mapping identity is fixed within a seed-scale-budget cell, so its eligible conversation count is either 900 or zero; additional examples cannot satisfy the missing-seed gate."
+  },
+  "execution_decision": {
+    "current_old_arm_prospective_integrity_phase": {
+      "planned_path_runs": 3600,
+      "status": "blocked_unexecuted",
+      "launch_permitted": false
+    },
+    "current_old_arm_cross_corner_phase": {
+      "planned_path_runs": 5400,
+      "status": "blocked_unexecuted_as_stage_a_prerequisite",
+      "launch_permitted": false,
+      "independent_path_population_study_requires_new_objective_and_manifest": true
+    },
+    "current_old_arm_total_prospective_panel": {
+      "planned_path_runs": 9000,
+      "status": "blocked_unexecuted",
+      "launch_permitted": false
+    },
+    "current_stage_a_quality": {
+      "planned_coordinates": 900,
+      "planned_arm_conversations": 36000,
+      "status": "terminal_structural_no_go_unexecuted",
+      "launch_permitted": false,
+      "quality_scoring_permitted": false
+    },
+    "current_stage_b": {
+      "status": "blocked_unexecuted",
+      "fixed_memory_match_prerequisite_build_permitted": false,
+      "launch_permitted": false
+    },
+    "legacy_16_arm_factorial": {
+      "status": "paused",
+      "automatically_resumed": false,
+      "replaced_by_this_amendment": false
+    }
+  },
+  "phase_split_disposition": {
+    "previously_implemented_schedule": "3,600 sequential-tiered primary/replay runs followed by 5,400 non-gating cross-corner runs",
+    "activated": false,
+    "reason": "The current arm contrast failed structural identifiability before either phase began.",
+    "future_requirement": "Any independent population path study must freeze its scientific objective, phase order, same-process versus cross-process comparison rule, complete checkpoint/calibration inventory, resume provenance, and pin-exposure unit in a new manifest before execution."
+  },
+  "future_contrast_requirements": {
+    "allowed_pre_quality_work": [
+      "707-only richer continuous layer-signal calibration",
+      "calibration-only structural feasibility enumeration",
+      "new independently trained and calibrated seed planning",
+      "implementation and tests for a versioned contrast builder"
+    ],
+    "forbidden_until_new_manifest": [
+      "prospective path execution for redesigned arms",
+      "generation or inspection of redesigned 807-series inputs or targets",
+      "quality execution or scoring",
+      "Stage-B prerequisites or execution"
+    ],
+    "new_arm_identity": "A redesigned rank probe is a new configuration family and cannot inherit old-arm prospective integrity evidence.",
+    "exact_paired_controls": [
+      "identical sorted normal and dense quota multisets",
+      "identical configured totals",
+      "identical protected-pin and fallback policies",
+      "identical conversation, checkpoint, dtype, and sequential-tiered path",
+      "exact paired measured tier hot blocks",
+      "exact paired measured tier hot bytes",
+      "exact paired measured total hot-resident bytes",
+      "identical pin-set and fallback-action digests",
+      "zero budget violations"
+    ],
+    "pin_exposure_unit": "Every coordinate-arm with workload-defined protected positions must have nonzero pin exposure; family-arm-config aggregates are reported additionally.",
+    "tie_rule": "Complete calibration ties are structural-zero controls or require new calibration/seeds. Layer ID or digest tie-breaking cannot be claimed as calibrated layer-importance evidence.",
+    "stage_b_bootstrap_seed_if_ever_refrozen": 9171811,
+    "optional_exact_total_stratum_bootstrap_seed_if_ever_refrozen": 9171821,
+    "disjoint_from_stage_a_bootstrap_seeds": true
+  },
+  "next_research_stage": {
+    "name": "707-only continuous layer-rank enrichment",
+    "goal": "Determine whether richer target-free continuous layer summaries eliminate the four fully tied score-demand seed-scale pairs before defining any new quality contrast.",
+    "quality_outcomes_allowed": false,
+    "automatic_stage_b_unlock": false,
+    "candidate_followup_if_fully_identified": "Freeze a mean-preserving heterogeneous quota-template contrast aligned versus anti-aligned with calibration ranks under a new estimand and experiment ID."
+  },
+  "claim_boundary": [
+    "The localization result is outcome-selected implementation diagnosis, not population path equivalence.",
+    "The identifiability result is structural calibration evidence, not an adaptive-quota quality effect.",
+    "No pin, natural-language, larger-model, latency, throughput, HBM-capacity, transfer, or production claim is supported.",
+    "Preventing an unidentifiable experiment is a valid negative design result but not evidence that the population effect is zero."
+  ]
+}
