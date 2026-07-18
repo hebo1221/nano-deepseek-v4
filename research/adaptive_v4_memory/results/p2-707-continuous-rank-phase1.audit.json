@@ -1,0 +1,149 @@
+{
+  "schema_version": 1,
+  "experiment_id": "p2-707-continuous-rank-phase1-decision-v1",
+  "status": "terminal_phase1_no_go",
+  "completed_at": "2026-07-19T03:11:41+09:00",
+  "source": {
+    "commit": "a8ebaf6ebbb6ec78181a916b6f78fd6c45273840",
+    "dirty": false
+  },
+  "manifest": {
+    "path": "research/adaptive_v4_memory/manifests/p2-707-continuous-layer-rank-enrichment-v1.json",
+    "sha256": "36ac64800bf0478cd4890fc90644f53893b2397e9774614b5fa5d42030c820c2",
+    "implementation_digest": "a7315bde5fd6e20e001f3b9d434598e82b5cbc6f86f5605cbf698d3e9257f56f"
+  },
+  "raw_audit": {
+    "path": "artifacts/adaptive_v4_memory/paper_grade/p2_707_continuous_layer_rank/audits/full-forward.audit.json",
+    "bytes": 11925,
+    "sha256": "d813ce37ee50b6ff9b452606598576a90f646abfb5659bc274f75112a02805b6",
+    "payload_sha256": "6b20fb42c2cea94f9faead3433a3266b3634dd33014d4d2521e29b095be838d1"
+  },
+  "raw_cells": {
+    "count": 10,
+    "bytes": 171148205,
+    "binding": "The raw audit contains each cell path, file SHA-256, and payload SHA-256."
+  },
+  "coverage": {
+    "seed_scale_cells": 10,
+    "seed_scale_budget_cells": 20,
+    "conversations": 23040,
+    "batch_runs": 5760,
+    "queries_per_csa_layer_per_cell": 7168,
+    "bootstrap_resamples_per_boundary": 10000,
+    "confidence_level": 0.99
+  },
+  "reproduction": {
+    "prior_calibration_cells_exact": 10,
+    "prior_calibration_cells_total": 10,
+    "all_1x_2x_4x_quota_objects_and_digests_exact": true
+  },
+  "decision_summary": {
+    "point_unique_top_cells": 20,
+    "point_unique_bottom_cells": 20,
+    "pairwise_boundary_decisions": 40,
+    "point_tolerance_failures": 0,
+    "bootstrap_99pct_lower_bound_failures": 16,
+    "split_a_direction_failures": 6,
+    "split_b_direction_failures": 2,
+    "eligible_seed_scale_budget_cells": 8,
+    "ineligible_seed_scale_budget_cells": 12,
+    "all_continuous_boundaries_identified": false,
+    "exact_path_phase_permitted": false,
+    "quality_execution_permitted": false
+  },
+  "cells": [
+    {
+      "scale": "s55",
+      "training_seed": 6071401,
+      "budgets": {
+        "2x": {"eligible": false, "top_layer": 4, "bottom_layer": 2, "failed_checks": ["bootstrap_99pct_lower_bound_strictly_positive"]},
+        "4x": {"eligible": false, "top_layer": 4, "bottom_layer": 2, "failed_checks": ["bootstrap_99pct_lower_bound_strictly_positive"]}
+      }
+    },
+    {
+      "scale": "s55",
+      "training_seed": 6071402,
+      "budgets": {
+        "2x": {"eligible": true, "top_layer": 6, "bottom_layer": 2, "failed_checks": []},
+        "4x": {"eligible": true, "top_layer": 6, "bottom_layer": 2, "failed_checks": []}
+      }
+    },
+    {
+      "scale": "s55",
+      "training_seed": 6071403,
+      "budgets": {
+        "2x": {"eligible": false, "top_layer": 6, "bottom_layer": 4, "failed_checks": ["bootstrap_99pct_lower_bound_strictly_positive", "split_a_difference_strictly_positive"]},
+        "4x": {"eligible": false, "top_layer": 6, "bottom_layer": 4, "failed_checks": ["bootstrap_99pct_lower_bound_strictly_positive", "split_a_difference_strictly_positive"]}
+      }
+    },
+    {
+      "scale": "s55",
+      "training_seed": 6071404,
+      "budgets": {
+        "2x": {"eligible": false, "top_layer": 4, "bottom_layer": 6, "failed_checks": ["bootstrap_99pct_lower_bound_strictly_positive"]},
+        "4x": {"eligible": false, "top_layer": 4, "bottom_layer": 6, "failed_checks": ["bootstrap_99pct_lower_bound_strictly_positive"]}
+      }
+    },
+    {
+      "scale": "s55",
+      "training_seed": 6071405,
+      "budgets": {
+        "2x": {"eligible": true, "top_layer": 6, "bottom_layer": 4, "failed_checks": []},
+        "4x": {"eligible": true, "top_layer": 6, "bottom_layer": 4, "failed_checks": []}
+      }
+    },
+    {
+      "scale": "s151",
+      "training_seed": 6071401,
+      "budgets": {
+        "2x": {"eligible": false, "top_layer": 2, "bottom_layer": 4, "failed_checks": ["bootstrap_99pct_lower_bound_strictly_positive", "split_b_difference_strictly_positive"]},
+        "4x": {"eligible": false, "top_layer": 2, "bottom_layer": 4, "failed_checks": ["bootstrap_99pct_lower_bound_strictly_positive", "split_b_difference_strictly_positive"]}
+      }
+    },
+    {
+      "scale": "s151",
+      "training_seed": 6071402,
+      "budgets": {
+        "2x": {"eligible": false, "top_layer": 10, "bottom_layer": 2, "failed_checks": ["bootstrap_99pct_lower_bound_strictly_positive", "split_a_difference_strictly_positive"]},
+        "4x": {"eligible": false, "top_layer": 10, "bottom_layer": 2, "failed_checks": ["bootstrap_99pct_lower_bound_strictly_positive"]}
+      }
+    },
+    {
+      "scale": "s151",
+      "training_seed": 6071403,
+      "budgets": {
+        "2x": {"eligible": false, "top_layer": 6, "bottom_layer": 4, "failed_checks": ["bootstrap_99pct_lower_bound_strictly_positive", "split_a_difference_strictly_positive"]},
+        "4x": {"eligible": false, "top_layer": 6, "bottom_layer": 4, "failed_checks": ["bootstrap_99pct_lower_bound_strictly_positive", "split_a_difference_strictly_positive"]}
+      }
+    },
+    {
+      "scale": "s151",
+      "training_seed": 6071404,
+      "budgets": {
+        "2x": {"eligible": true, "top_layer": 10, "bottom_layer": 2, "failed_checks": []},
+        "4x": {"eligible": true, "top_layer": 10, "bottom_layer": 2, "failed_checks": []}
+      }
+    },
+    {
+      "scale": "s151",
+      "training_seed": 6071405,
+      "budgets": {
+        "2x": {"eligible": true, "top_layer": 8, "bottom_layer": 2, "failed_checks": []},
+        "4x": {"eligible": true, "top_layer": 8, "bottom_layer": 2, "failed_checks": []}
+      }
+    }
+  ],
+  "stopping_decision": {
+    "phase_1": "terminal_no_go",
+    "phase_2_exact_path": "blocked_unexecuted",
+    "rank_probe": "not_permitted",
+    "quality": "blocked_unexecuted",
+    "stage_b": "blocked_unexecuted",
+    "reason": "The richer continuous statistic removed point ties but did not identify stable extremes in all 20 cells."
+  },
+  "claim_boundary": [
+    "The result is calibration-only structural evidence.",
+    "It does not estimate an adaptive-quota, protected-pin, path-transfer, or quality effect.",
+    "Failure of the rank gate is not evidence that the population quality effect is zero."
+  ]
+}
