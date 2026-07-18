@@ -1,0 +1,313 @@
+{
+  "schema_version": 1,
+  "experiment_id": "p2-707-continuous-layer-rank-enrichment-v1",
+  "status": "frozen_before_any_new_fp32_score_extraction_or_continuous_rank_result",
+  "frozen_at": "2026-07-19T02:16:16+09:00",
+  "quality_execution_permitted": false,
+  "parent_contract": {
+    "path": "research/adaptive_v4_memory/manifests/p2-post-localization-stage-a-execution-v1.json",
+    "sha256": "b1ea8c222a0555e0df58c48fed545125df25bd124d61baf1a7e94cdce5afbc67",
+    "relationship": "707-only calibration enrichment authorized by the parent's next-research-stage clause; no old Stage-A execution is revived"
+  },
+  "observation_boundary": {
+    "observed_before_freeze": [
+      "the ten frozen 707-series discrete P1 quota artifacts and their structural-identifiability audit",
+      "the previously completed outcome-selected path-localization artifact and audit",
+      "CPU-only unit, mutation, and prefix-to-chunk1 smoke-test outputs",
+      "implementation source and static validation results"
+    ],
+    "not_observed_before_freeze": [
+      "any newly extracted full-forward FP32 score stream",
+      "any continuous pre-ceiling demand result from the ten frozen checkpoints",
+      "any exact-path continuous-rank result",
+      "any new quality input, supervision value, prediction, or score"
+    ],
+    "continuous_rank_output_root_existed": false,
+    "adaptation_classification": "design enrichment after a calibration-only structural tie diagnosis, not a confirmatory quality-effect analysis"
+  },
+  "adaptation_disclosure": {
+    "reason_for_new_metric": "Discrete ceil-and-quota aggregation left 10 of 20 seed-scale-budget mappings unidentifiable, including four fully tied score-demand pairs.",
+    "prior_information_used": "Existing 707 calibration structures and the path-localization diagnosis were used to choose a richer target-free statistic and a two-path transfer gate.",
+    "primary_metric_count": 1,
+    "metric_rescue_permitted": false,
+    "layer_id_or_digest_tie_break_permitted": false,
+    "quality_outcomes_used_to_choose_metric": false,
+    "interpretation": "A pass establishes only calibration-layer rank feasibility; it cannot estimate adaptive quota, pin, or quality effects."
+  },
+  "grid": {
+    "scales": ["s55", "s151"],
+    "training_seeds": [6071401, 6071402, 6071403, 6071404, 6071405],
+    "calibration_seeds": [7071401, 7071402, 7071403, 7071404, 7071405],
+    "budgets": ["2x", "4x"],
+    "contexts": [80, 128, 256, 512, 1024],
+    "families": [
+      "single-remote-retrieval",
+      "multiple-independent-needles",
+      "associative-recall",
+      "multi-turn-query-shift",
+      "dense-global-aggregation",
+      "irrelevant-context-local-only",
+      "instruction-persistence",
+      "adversarial-lexical-distractors",
+      "long-generation-changing-evidence"
+    ],
+    "examples_per_family": 256,
+    "batch_size": 4,
+    "full_forward_conversations_per_cell": 2304,
+    "full_forward_batch_runs_per_cell": 576,
+    "full_forward_queries_per_layer": 7168,
+    "exact_path_batches_per_family_context": 1,
+    "exact_path_extraction_orders": ["forward", "reverse"],
+    "exact_path_unique_conversations_per_cell": 180,
+    "exact_path_batch_runs_per_cell": 180,
+    "exact_path_executed_conversations_per_cell": 720,
+    "exact_path_queries_per_layer_per_budget_order": 560
+  },
+  "input_inventory": {
+    "s55/seed-6071401": {
+      "calibration_seed": 7071401,
+      "checkpoint": {
+        "path": "artifacts/adaptive_v4_memory/paper_grade/training/s55/seed-6071401/s55-step-1000.pt",
+        "bytes": 222269497,
+        "sha256": "0a8330ed5c2bec8372eb32b575414e9b65509d9a597f8911b546bc31be8c360d"
+      },
+      "prior_calibration": {
+        "path": "artifacts/adaptive_v4_memory/paper_grade/calibration_matrix/s55/seed-6071401/p1-layer-quotas.json",
+        "bytes": 9510,
+        "sha256": "202fc912cbf625701c2ec47d92d221da2a826c0a1a6b7527a3a86c473e09a716"
+      }
+    },
+    "s55/seed-6071402": {
+      "calibration_seed": 7071402,
+      "checkpoint": {
+        "path": "artifacts/adaptive_v4_memory/paper_grade/training/s55/seed-6071402/s55-step-1000.pt",
+        "bytes": 222269497,
+        "sha256": "cf1b9dad4cb00370be2268306b872635ae02eb5ca26aaf4b641753ecabab4f55"
+      },
+      "prior_calibration": {
+        "path": "artifacts/adaptive_v4_memory/paper_grade/calibration_matrix/s55/seed-6071402/p1-layer-quotas.json",
+        "bytes": 9516,
+        "sha256": "a6ddea75e847490db84e23ccaada8c32a629a8d3df5936007bbfaafdea2da18c"
+      }
+    },
+    "s55/seed-6071403": {
+      "calibration_seed": 7071403,
+      "checkpoint": {
+        "path": "artifacts/adaptive_v4_memory/paper_grade/training/s55/seed-6071403/s55-step-1000.pt",
+        "bytes": 222269497,
+        "sha256": "b0043170cd2ee43f3c091efafaa17d804a2e0ec67f2b66eaf41042806ea38c02"
+      },
+      "prior_calibration": {
+        "path": "artifacts/adaptive_v4_memory/paper_grade/calibration_matrix/s55/seed-6071403/p1-layer-quotas.json",
+        "bytes": 9510,
+        "sha256": "3d972839074336e1bcbe1840b8bca5a7a29ed824c51ae4831ef806ee503e4f13"
+      }
+    },
+    "s55/seed-6071404": {
+      "calibration_seed": 7071404,
+      "checkpoint": {
+        "path": "artifacts/adaptive_v4_memory/paper_grade/training/s55/seed-6071404/s55-step-1000.pt",
+        "bytes": 222269497,
+        "sha256": "6b5fd547cd42fa983abb6c1c2866c60f84bf1449bfecdef8780485d0027de3b9"
+      },
+      "prior_calibration": {
+        "path": "artifacts/adaptive_v4_memory/paper_grade/calibration_matrix/s55/seed-6071404/p1-layer-quotas.json",
+        "bytes": 9510,
+        "sha256": "6db7923b24886b39e7294e7bf14c998c6ddbd86bc718904bbd1e20081d883cbd"
+      }
+    },
+    "s55/seed-6071405": {
+      "calibration_seed": 7071405,
+      "checkpoint": {
+        "path": "artifacts/adaptive_v4_memory/paper_grade/training/s55/seed-6071405/s55-step-1000.pt",
+        "bytes": 222269497,
+        "sha256": "488f7f0f7dadeeb4c13fe1fb7d357b4fdad88599611a1dd7bcfa04107418732a"
+      },
+      "prior_calibration": {
+        "path": "artifacts/adaptive_v4_memory/paper_grade/calibration_matrix/s55/seed-6071405/p1-layer-quotas.json",
+        "bytes": 9510,
+        "sha256": "32d4aada92001f00fa8ede34dc991d7d90e03e3aab8062c27ed400ecab567d5e"
+      }
+    },
+    "s151/seed-6071401": {
+      "calibration_seed": 7071401,
+      "checkpoint": {
+        "path": "artifacts/adaptive_v4_memory/paper_grade/training/s151/seed-6071401/s151-step-1000.pt",
+        "bytes": 606450713,
+        "sha256": "3eca7b855c477718e4af0b37fc6ad4b6a546c5a65abd201f1b1e77edbc19dfec"
+      },
+      "prior_calibration": {
+        "path": "artifacts/adaptive_v4_memory/paper_grade/calibration_matrix/s151/seed-6071401/p1-layer-quotas.json",
+        "bytes": 11213,
+        "sha256": "39fa896339e6b83ddccdddfc4f243b48093427b470ea3d10bf60843560a93eaa"
+      }
+    },
+    "s151/seed-6071402": {
+      "calibration_seed": 7071402,
+      "checkpoint": {
+        "path": "artifacts/adaptive_v4_memory/paper_grade/training/s151/seed-6071402/s151-step-1000.pt",
+        "bytes": 606450713,
+        "sha256": "1095b9b757ff5b939388e7af585190d195077b67baf48a861794596ab019c73d"
+      },
+      "prior_calibration": {
+        "path": "artifacts/adaptive_v4_memory/paper_grade/calibration_matrix/s151/seed-6071402/p1-layer-quotas.json",
+        "bytes": 11213,
+        "sha256": "b5f8b09dff6a117cb90fb0322c8f2476ac19179f80cc1d50cb2d1541b9d395ed"
+      }
+    },
+    "s151/seed-6071403": {
+      "calibration_seed": 7071403,
+      "checkpoint": {
+        "path": "artifacts/adaptive_v4_memory/paper_grade/training/s151/seed-6071403/s151-step-1000.pt",
+        "bytes": 606450713,
+        "sha256": "015649bb949a5574e3c2fe355a5600ecb1f673f4a13441cd0fa2f9e542e9b7ed"
+      },
+      "prior_calibration": {
+        "path": "artifacts/adaptive_v4_memory/paper_grade/calibration_matrix/s151/seed-6071403/p1-layer-quotas.json",
+        "bytes": 11213,
+        "sha256": "4a26cc187438e0d1a45f5870b1fd51a01263eb7cc0ffd95570ca2df1964a49c1"
+      }
+    },
+    "s151/seed-6071404": {
+      "calibration_seed": 7071404,
+      "checkpoint": {
+        "path": "artifacts/adaptive_v4_memory/paper_grade/training/s151/seed-6071404/s151-step-1000.pt",
+        "bytes": 606450713,
+        "sha256": "df52806703d965d5d268cc789461a2de1a64c1cb5b0523eb566e1e77b0248fa1"
+      },
+      "prior_calibration": {
+        "path": "artifacts/adaptive_v4_memory/paper_grade/calibration_matrix/s151/seed-6071404/p1-layer-quotas.json",
+        "bytes": 11213,
+        "sha256": "712f3fea0cf33803a95ce0501b580941fa46f34d85dfe7d309eb9214d4f721d0"
+      }
+    },
+    "s151/seed-6071405": {
+      "calibration_seed": 7071405,
+      "checkpoint": {
+        "path": "artifacts/adaptive_v4_memory/paper_grade/training/s151/seed-6071405/s151-step-1000.pt",
+        "bytes": 606450713,
+        "sha256": "6e07f069f3b55ddbde1952a926d6c26f17c8e6482a0efb9d3a2aad361eed0a25"
+      },
+      "prior_calibration": {
+        "path": "artifacts/adaptive_v4_memory/paper_grade/calibration_matrix/s151/seed-6071405/p1-layer-quotas.json",
+        "bytes": 11214,
+        "sha256": "2630dc5f34539999f83d139d16a4595445209f61ee8f8ce4b6d9c046a49e0230"
+      }
+    }
+  },
+  "implementation": {
+    "source_commit": "64ef4d054fe48c81c3f2b88a3ef137893f887457",
+    "digest": "a7315bde5fd6e20e001f3b9d434598e82b5cbc6f86f5605cbf698d3e9257f56f",
+    "files": {
+      "pyproject.toml": "aece9f2856f5834ad76dabdc443991e81de1dd52191916739aa545dc4aecacc0",
+      "nano_deepseek_v4": "6bff2873d64cca54a96a4a7aa7ed57ba286c8fe0ce3bab3f908a79396d702f34",
+      "research/adaptive_v4_memory/scripts/adaptive_v4_gpu_lock.py": "011491d61cd742ac86410ecf2b2abd8d2af7db837c5036e13770ba56c53e2c16",
+      "research/adaptive_v4_memory/scripts/benchmark_m5_online_controller.py": "10f14f9d2c59acceb08c0f7b387f05eb55a6df26a0f0f9b83a769aed75fa1bdd",
+      "research/adaptive_v4_memory/scripts/calibrate_p1_layer_quotas.py": "449ed129d2a189d048ae6c8bd56bdc618f7fbf385d355327d154a07246e858d0",
+      "research/adaptive_v4_memory/scripts/evaluate_p1_heldout_policy_pilot.py": "44ccb42eeb3e55b054e97bcb06f8dde0e2593e6215343ae753668152712096aa",
+      "research/adaptive_v4_memory/scripts/evaluate_p2_targeted_stage_a_shard.py": "f7a36bc79a1e5fd01e4c66f22112543ee16dcae95e07b9b86d23869de92653c0",
+      "research/adaptive_v4_memory/scripts/freeze_p2_causal_factorial_arms.py": "3b813c8e7c8285835b066e1cec78238df3a16006d13fa200cb246782d375db96",
+      "research/adaptive_v4_memory/scripts/p2_continuous_rank_contract.py": "898f08e67d4d879fac29791ce440f9c9aa875b24cb75fab4a83ba7cfa06bb2cc",
+      "research/adaptive_v4_memory/scripts/p2_continuous_layer_rank.py": "da11a33c6d9ae0cc6469b2c50e09f9c2ef0ea61ee6ffe1818328b095e0e1c9f8",
+      "research/adaptive_v4_memory/scripts/collect_p2_full_forward_continuous_rank.py": "a55a5bcd55d6a8fbb74d911f7eea2f153ca0486a343e406f3b95f43ddb1d8747",
+      "research/adaptive_v4_memory/scripts/collect_p2_exact_path_layer_signals.py": "3125c160893aa04739d0777adac5b7ecf5fd480c147be60e47040e3323b72d09",
+      "research/adaptive_v4_memory/scripts/run_p2_continuous_rank_matrix.py": "0a7a6053189da6cb7d6eb7be1bbcc46ebfb2805897a368c390973dd3ee6fca20",
+      "research/adaptive_v4_memory/scripts/audit_p2_continuous_rank.py": "fe28a45be17005f13327811092ccd00b2d3254512c985ff391637d92bddfb4a5"
+    }
+  },
+  "primary_statistic": {
+    "query_level_formula": "candidate_blocks == 0 ? 0 : min(candidate_blocks, max(min_blocks_per_layer, top_p_cardinality) + uncertainty * max_extra_blocks_per_layer)",
+    "relationship_to_p1": "exact continuous relaxation of the final per-query ceiling while retaining candidate clipping, the configured floor, and the original P1 signal recipe",
+    "slice_statistic": "exact empirical upper-five-percent mean with fractional boundary mass",
+    "layer_statistic": "equal-weight macro average of the 45 family-by-context slice statistics",
+    "tail_quantile": 0.95,
+    "numerical_tolerance": "64 * eps(float32) * max(1, abs(left_score), abs(right_score))",
+    "point_tie_policy": "all exact point-score boundary ties remain unresolved"
+  },
+  "phase_1_full_forward": {
+    "purpose": "reproduce each frozen P1 calibration and determine whether the single primary continuous statistic identifies stable unique extremes",
+    "execution": "the exact existing full-forward calibration collector, 256 examples per family and batch size four",
+    "total_cells": 10,
+    "total_conversations": 23040,
+    "total_batch_runs": 5760,
+    "reproduction_gate": "the complete 1x, 2x, and 4x quota objects, calibration digests, signal configurations, workload counts, and checkpoint bindings must reproduce exactly",
+    "inference": {
+      "bootstrap_resamples": 10000,
+      "confidence_level": 0.99,
+      "resampling_unit": "paired complete trace batch, sampled within each of 45 workload slices",
+      "deterministic_stability_split": "canonical trace-batch alternation A/B within every slice",
+      "required_checks": [
+        "a unique point top and a unique point bottom",
+        "top-versus-adjacent and adjacent-versus-bottom point gaps exceed the frozen float32 tolerance",
+        "every paired 99-percent bootstrap lower bound is strictly positive",
+        "both deterministic A and B split differences are strictly positive"
+      ]
+    },
+    "continue_gate": "all 20 seed-scale-budget cells pass every check; otherwise Phase 2 is terminally blocked"
+  },
+  "phase_2_exact_path": {
+    "purpose": "test whether Phase-1 extremes transfer to the literal sequential-tiered runtime path without using any quality outcome",
+    "reference": "budget-specific uniform-total fixed+pins, protected pins enabled, adaptive signals and dense fallback disabled",
+    "integer_schedule": "canonical-index Bresenham low/high mixture across 45 slices, with exact aggregate configured-total equality to the calibrated mean",
+    "path": "one full-model prefix forward followed by one-token full-model forwards through sequential tiering",
+    "coordinates": "the first complete five-context cycle for each of nine frozen family streams",
+    "orders": ["forward", "reverse"],
+    "total_cells": 10,
+    "total_unique_conversations": 1800,
+    "total_executed_conversations": 7200,
+    "total_batch_runs": 1800,
+    "repeat_rule": "forward and reverse are deterministic integrity repeats and are never uncertainty-resampling units",
+    "inference": {
+      "bootstrap_resamples": 10000,
+      "confidence_level": 0.99,
+      "resampling_unit": "paired frozen family-context slice",
+      "required_checks": [
+        "canonical workload, semantic query, exact FP32 score, and demand-observation streams agree across orders",
+        "a unique top and bottom are identified above tolerance with strictly positive paired-slice 99-percent lower bounds",
+        "the exact-path top and bottom equal the corresponding Phase-1 top and bottom"
+      ]
+    },
+    "terminal_gate": "all 20 seed-scale-budget cells pass; a pass permits only design of a new rank-probe manifest, never its execution"
+  },
+  "bootstrap_seeds": {
+    "formula": "7171901 + 100 * scale_index + 10 * training_seed_index + budget_index",
+    "scale_order": ["s55", "s151"],
+    "training_seed_order": [6071401, 6071402, 6071403, 6071404, 6071405],
+    "budget_order": ["2x", "4x"],
+    "values": {
+      "s55/seed-6071401": {"2x": 7171901, "4x": 7171902},
+      "s55/seed-6071402": {"2x": 7171911, "4x": 7171912},
+      "s55/seed-6071403": {"2x": 7171921, "4x": 7171922},
+      "s55/seed-6071404": {"2x": 7171931, "4x": 7171932},
+      "s55/seed-6071405": {"2x": 7171941, "4x": 7171942},
+      "s151/seed-6071401": {"2x": 7172001, "4x": 7172002},
+      "s151/seed-6071402": {"2x": 7172011, "4x": 7172012},
+      "s151/seed-6071403": {"2x": 7172021, "4x": 7172022},
+      "s151/seed-6071404": {"2x": 7172031, "4x": 7172032},
+      "s151/seed-6071405": {"2x": 7172041, "4x": 7172042}
+    }
+  },
+  "integrity_and_stopping": {
+    "artifact_publication": "exclusive atomic hard-link publication under a new output root; existing cells are deep-validated before resume",
+    "deep_validation": "Phase-1 statistics are recomputed from serialized target-free demand rows; Phase-2 observations are recomputed from serialized replay queries and canonical configurations",
+    "phase_1_failure": "publish the terminal audit and stop before exact-path execution",
+    "phase_2_failure": "publish the terminal audit and do not design or execute a quality probe under this contract",
+    "phase_2_success": "a separate versioned manifest and fresh seed namespace are required before any mechanistic or quality probe",
+    "quality_namespace_reuse_permitted": false,
+    "automatic_old_stage_a_unlock": false,
+    "automatic_stage_b_unlock": false
+  },
+  "data_access_boundary": {
+    "supervision_values_accessed": false,
+    "model_output_vectors_accessed": false,
+    "raw_tokens_serialized": false,
+    "full_forward_artifact": "target-free continuous demand rows plus exact query/FP32-score stream digests",
+    "exact_path_artifact": "registered-position replay-query metadata, exact FP32 block scores, demand observations, and canonical workload digests"
+  },
+  "claim_boundary": [
+    "This study can establish only target-free calibration-rank feasibility and path transfer.",
+    "It cannot identify an adaptive-quota magnitude effect, protected-pin effect, or quality effect.",
+    "It cannot support natural-language, larger-model, HBM, latency, throughput, tail-failure, or production claims.",
+    "A terminal no-go is informative design evidence and is not evidence that the population quality effect is zero."
+  ]
+}
