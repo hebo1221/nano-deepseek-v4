@@ -1,0 +1,453 @@
+{
+  "schema_version": 1,
+  "experiment_id": "p2-post-core-path-split-targeted-contrast-v1",
+  "status": "frozen_before_new_diagnostic_or_targeted_contrast_results; original_full_factorial_paused",
+  "frozen_at": "2026-07-18T23:45:01+09:00",
+  "protocol_amendment": "2.3-P1",
+  "decision": {
+    "full_factorial": "pause",
+    "paused_manifest": "research/adaptive_v4_memory/manifests/p2-causal-factorial-v1.json",
+    "paused_manifest_sha256": "b49e9a1a0927d8d26c0dd949d4a12932204cf521a687c5daf2bb75270fe65a2c",
+    "paused_scope": "the 9,000-coordinate, 16-arm primary causal factorial and its downstream 7,200-coordinate seed extension",
+    "replacement": false,
+    "effect_on_prior_contract": "The prior factorial remains frozen and reportable as unexecuted. This manifest neither edits its arms and gates nor permits a partial matrix to be labeled complete. Resumption requires a later explicit amendment and every original prerequisite.",
+    "effect_on_core": "none; the terminal 4,500-shard P2 core matrix and both terminal summaries remain immutable and separately reportable",
+    "effect_on_downstream_gates": "The targeted study cannot satisfy the original primary or confirmatory causal-factorial gate; every P3 path that requires those terminal audits remains blocked."
+  },
+  "timing_and_observation_boundary": {
+    "exogenous_july_17_pivot": {
+      "path": "research/adaptive_v4_memory/deep_research_swarm_2026-07-17.md",
+      "sha256": "3befdb6c0a28a531602314e73a4d4bf73a9a8ac194cbdadfd03d1c9309ee8744",
+      "git_commit": "cb7fde0065b50abae59aa585478f0b2898ee4858",
+      "commit_time": "2026-07-17T10:20:45+09:00",
+      "timing": "frozen while P2 core was still running and before either terminal core summary existed",
+      "decision_relevance": "demoted the broad adaptive-memory/runtime build and prioritized a trace-first native cross-path sufficiency study"
+    },
+    "observed_before_this_freeze": [
+      "the terminal core quality audit and its strict copy",
+      "the completed S55/6071401 causal path-equivalence audit",
+      "the failed S55/6071402 causal path-equivalence audit and its seven already-known mismatched arm records"
+    ],
+    "not_observed_before_this_freeze": [
+      "any result from the four-corner path-by-residency diagnostic defined here",
+      "any result from the prospective equivalence panel defined here",
+      "any 807-series held-out result for the staged exploratory decision panel",
+      "any held-out causal-factorial shard or causal-factorial quality summary"
+    ],
+    "selection_disclosure": "The path-localization cells are selected because their mismatches were already observed. They are localization-only and are prohibited from confirmatory inference, effect estimation, equivalence-rate claims, or quality claims. The exploratory targeted panel retains every pre-existing scale, budget, family, and context but freezes replicate 0 only; neither its coordinates nor gates are selected from its unseen outcomes."
+  },
+  "bound_evidence_snapshot": {
+    "terminal_core_summary": {
+      "path": "artifacts/adaptive_v4_memory/paper_grade/p2-core-quality-matrix.summary.json",
+      "sha256": "6178d588381ea0491593012153d66dbb781439d33c08f3f3308abaad0a24b124"
+    },
+    "terminal_core_strict_summary": {
+      "path": "artifacts/adaptive_v4_memory/paper_grade/p2-core-quality-matrix.strict.summary.json",
+      "sha256": "6178d588381ea0491593012153d66dbb781439d33c08f3f3308abaad0a24b124"
+    },
+    "equivalence_pass": {
+      "path": "artifacts/adaptive_v4_memory/paper_grade/p2_causal_equivalence/s55/seed-6071401.summary.json",
+      "sha256": "44f12d0600637e524d42daebfc8a51232d99611664bc2b1867cf59de490a4ef9",
+      "observed_records": 5760,
+      "all_predictions_identical": true,
+      "all_budget_checks_passed": true
+    },
+    "equivalence_blocker": {
+      "path": "artifacts/adaptive_v4_memory/paper_grade/p2_causal_equivalence/s55/seed-6071402.summary.json",
+      "sha256": "e497910121ed300037f2b0c11fa5ef8327c62c4b439d5f4f41dd2ff99c6ee17c",
+      "raw_path": "artifacts/adaptive_v4_memory/paper_grade/p2_causal_equivalence/s55/seed-6071402.raw.json",
+      "raw_sha256": "9f10ebd05ab5adbec5f801cb9e1509ba8557cfe6ca3f7cd84a9b6ae7cdf0d0de",
+      "observed_records": 5760,
+      "mismatched_records": 7,
+      "all_predictions_identical": false,
+      "all_budget_checks_passed": true
+    }
+  },
+  "pause_basis": {
+    "quality_outcome_is_not_a_stop_rule": true,
+    "reasons": [
+      {
+        "kind": "exogenous_research_pivot",
+        "detail": "The July-17 frontier decision predates terminal core outcomes and makes a full legacy controller factorial lower priority than trace-first cross-path research."
+      },
+      {
+        "kind": "frozen_cost",
+        "detail": "The original primary contract requires 9,000 coordinates, 2,880,000 quality arm-conversations, and 720,000 direct physical arm-conversations before the separate 7,200-coordinate extension."
+      },
+      {
+        "kind": "equivalence_blocker",
+        "detail": "Only two of ten checkpoint-scale equivalence audits exist at freeze time; S55/6071402 fails exact prediction equivalence in 7 of 5,760 records, and eight checkpoint-scale audits are absent. No held-out causal-factorial shard may run through that failed prerequisite."
+      }
+    ],
+    "interpretation": "This is a documented portfolio pause plus a fail-closed computational-equivalence blocker, not outcome-dependent deletion of a low-quality arm or scale.",
+    "heldout_causal_factorial_files_at_freeze": 0
+  },
+  "path_split_diagnostic": {
+    "status": "frozen_not_executed",
+    "purpose": "Localize whether the known prediction divergence is caused by chunking, residency implementation, or their interaction before any causal quality contrast is interpreted.",
+    "artifact_contract": {
+      "experiment_id": "p2-causal-equivalence-diagnostic-v1",
+      "output_root": "artifacts/adaptive_v4_memory/paper_grade/p2_causal_path_split_diagnostic",
+      "existing_artifact_overwrite_allowed": false,
+      "primary_equivalence_artifact_mutation_allowed": false
+    },
+    "frozen_input_artifacts": {
+      "checkpoint": {
+        "path": "artifacts/adaptive_v4_memory/paper_grade/training/s55/seed-6071402/s55-step-1000.pt",
+        "sha256": "cf1b9dad4cb00370be2268306b872635ae02eb5ca26aaf4b641753ecabab4f55"
+      },
+      "calibration": {
+        "path": "artifacts/adaptive_v4_memory/paper_grade/calibration_matrix/s55/seed-6071402/p1-layer-quotas.json",
+        "sha256": "a6ddea75e847490db84e23ccaada8c32a629a8d3df5936007bbfaafdea2da18c"
+      },
+      "physical_hot_memory_match": {
+        "path": "artifacts/adaptive_v4_memory/paper_grade/p2_causal_hot_memory/s55/seed-6071402/p2-causal-hot-memory-match.summary.json",
+        "sha256": "d20a8ca3e7baa1655be53074a363e38c2ccc46ef38ffb3d3fb1b6898f8ec46a1"
+      },
+      "p2_core_matrix": {
+        "path": "artifacts/adaptive_v4_memory/paper_grade/p2-core-quality-matrix.json",
+        "sha256": "6b6fbddc064d6b3d106bd2b7641dd117429d0726417af91d20c76b0da56f3141"
+      },
+      "p2_core_audit": {
+        "path": "artifacts/adaptive_v4_memory/paper_grade/p2-core-quality-matrix.summary.json",
+        "sha256": "6178d588381ea0491593012153d66dbb781439d33c08f3f3308abaad0a24b124"
+      }
+    },
+    "factorial": {
+      "execution_path": [
+        "sequential",
+        "chunked"
+      ],
+      "residency": [
+        "resident",
+        "tiered"
+      ],
+      "required_corners": [
+        "sequential-resident",
+        "sequential-tiered",
+        "chunked-resident",
+        "chunked-tiered"
+      ]
+    },
+    "paired_controls": [
+      "identical checkpoint",
+      "identical conversation and generation seed",
+      "identical complete controller configuration",
+      "identical dtype and recorded kernel settings within one process",
+      "identical configured layer quotas, pin set, and fallback setting",
+      "deterministic globally near-balanced corner order with each positional count differing by at most one"
+    ],
+    "localization_panel": {
+      "source": "the digest-bound S55/6071402 raw equivalence artifact above",
+      "role": "localization_only",
+      "known_cells": [
+        {
+          "scale": "s55",
+          "training_seed": 6071402,
+          "budget": "2x",
+          "family": "long-generation-changing-evidence",
+          "context": 128,
+          "conversation_id": "long-generation-changing-evidence:128:0",
+          "known_mismatched_arms": [
+            "calibrated+pins",
+            "calibrated-no-pins",
+            "hierarchical+pins-no-score"
+          ]
+        },
+        {
+          "scale": "s55",
+          "training_seed": 6071402,
+          "budget": "4x",
+          "family": "long-generation-changing-evidence",
+          "context": 1024,
+          "conversation_id": "long-generation-changing-evidence:1024:0",
+          "known_mismatched_arms": [
+            "fixed",
+            "fixed+pins",
+            "shuffled-quota",
+            "shuffled-quota+pins"
+          ]
+        }
+      ],
+      "required_arm_cells": "the seven already-known mismatched arm-cell records listed above",
+      "optional_non_gating_controls": "already-passing arms from the same two cells may be run for localization context but cannot enter any gate or inference",
+      "required_repeats_per_corner": 3,
+      "expected_required_arm_batch_path_runs": 84,
+      "expected_required_conversation_path_runs": 336,
+      "required_trace": [
+        "token predictions",
+        "first divergent generated position",
+        "selected-block identity digest at every controller action",
+        "configured and realized block totals",
+        "pin-set and fallback-action digests",
+        "first divergent layer and token when present"
+      ],
+      "prohibited_uses": [
+        "confirmatory inference",
+        "population path-equivalence rates",
+        "controller quality effects",
+        "family or context generalization",
+        "selection or tuning of a quality threshold"
+      ]
+    },
+    "prospective_equivalence_panel": {
+      "role": "outcome-independent staged path audit; computational equivalence only",
+      "generation_seed_base_by_scale": {
+        "s55": 9171801,
+        "s151": 9171802
+      },
+      "generation_seed_formula": "generation_seed_base_by_scale[scale] + (training_seed-6071401)*100000000 + family_index*10000000 + context*1000; family_index follows the frozen p2-causal-factorial-v1 family order",
+      "training_seeds": [
+        6071401,
+        6071402,
+        6071403,
+        6071404,
+        6071405
+      ],
+      "scales": [
+        "s55",
+        "s151"
+      ],
+      "budgets": [
+        "2x",
+        "4x"
+      ],
+      "arms_by_stage": {
+        "stage_a_clean_layer_identity": [
+          "calibrated+pins",
+          "shuffled-quota+pins"
+        ],
+        "stage_b_deployed_increment": [
+          "fixed+pins"
+        ]
+      },
+      "families": "all nine families from p2-causal-factorial-v1",
+      "contexts": [
+        80,
+        128,
+        256,
+        512,
+        1024
+      ],
+      "fresh_conversations_per_family_context": 1,
+      "required_corners": "all four execution-path by residency corners once, followed by one additional sequential-tiered integrity replay of the same input and configuration",
+      "corner_repeats": 1,
+      "sequential_tiered_total_runs_per_arm_coordinate": 2,
+      "expected_stage_a_arm_corner_records": 7200,
+      "expected_stage_a_sequential_tiered_replay_records": 1800,
+      "expected_stage_a_total_path_runs": 9000,
+      "expected_stage_b_incremental_arm_corner_records": 3600,
+      "expected_stage_b_sequential_tiered_replay_records": 900,
+      "expected_stage_b_total_path_runs": 4500,
+      "maximum_expected_path_runs": 13500,
+      "stage_b_runs_only_after_stage_a_preliminary_go": true,
+      "collision_rule": "fail if any generated conversation content digest equals a localization-panel conversation",
+      "outcome_access": "targets may be carried for deterministic replay but accuracy is not computed or inspected until the equivalence audit is terminal"
+    },
+    "cross_corner_interchangeability_gate": {
+      "pass": "Exact token predictions, selected-block identities, controller counters, quota totals, pin sets, fallback actions, and budget checks across all four corners permit only a computational interchangeability statement for this prospective panel.",
+      "fail": "Any cross-corner mismatch kills or narrows execution-corner interchangeability claims and must be localized without deleting the record. It does not block the physical-only targeted study, whose frozen execution corner is sequential-tiered.",
+      "repair_rule": "A code or numerical repair requires a new implementation digest and newly frozen fresh path-panel seed namespace before any later cross-corner equivalence claim.",
+      "localization_does_not_unlock": "Reproducing or fixing only the seven known arm-cell records never establishes population path equivalence."
+    },
+    "sequential_tiered_eligibility_gate": {
+      "scope": "stage-specific eligibility for the targeted study only",
+      "pass": "For the arms admitted to the current stage, sequential-tiered repeats are internally deterministic in every required localization arm-cell, and every prospective sequential-tiered record has stable action, budget, pin-set, fallback, and artifact digests with no unexplained same-path drift.",
+      "fail": "Any unexplained sequential-tiered repeat drift, action drift, budget violation, pin-set drift, fallback drift, or integrity/provenance failure blocks the affected stage.",
+      "cross_corner_results_used_as_blocker": false
+    },
+    "nonclaims": [
+      "no quality or accuracy comparison",
+      "no evidence for adaptive quota, pins, hierarchy, or HCA",
+      "no proof of population-wide equivalence from the known cells",
+      "no production latency, throughput, HBM, or transfer claim"
+    ]
+  },
+  "targeted_causal_study": {
+    "status": "frozen_staged_exploratory_decision_panel; stage_a_blocked_only_on_sequential_tiered_integrity",
+    "purpose": "First screen calibrated layer identity with the exact-multiset pair. Only if that mechanism screen passes, pay the fixed-policy calibration and execution cost needed to screen deployed operational benefit.",
+    "relationship_to_original_factorial": "This preserves the original arm definitions and every factor level but freezes only replicate 0 and three arms. It is exploratory, cannot replace the 16-arm factorial, and cannot support confirmatory or component claims.",
+    "arms": [
+      "fixed+pins",
+      "calibrated+pins",
+      "shuffled-quota+pins"
+    ],
+    "stage_sequence": [
+      {
+        "stage": "A",
+        "name": "clean_layer_identity",
+        "arms": [
+          "calibrated+pins",
+          "shuffled-quota+pins"
+        ],
+        "prerequisites": [
+          "stage-A sequential-tiered integrity gate",
+          "exact quota-multiset, total, pin-set, fallback, and configuration controls"
+        ],
+        "fixed_memory_match_required": false,
+        "stop_rule": "If the frozen preliminary clean-layer-identity continue gate fails, report Stage A, disclose the two already-existing S55/6071401 and S55/6071402 fixed-match artifacts, and do not build any additional fixed memory-match prerequisites or run Stage B."
+      },
+      {
+        "stage": "B",
+        "name": "deployed_operational",
+        "incremental_arm": "fixed+pins",
+        "prerequisites": [
+          "terminal Stage-A preliminary GO",
+          "stage-B sequential-tiered integrity gate",
+          "calibration-only physical hot-memory matching for fixed+pins"
+        ],
+        "stop_rule": "If calibration-only matching or integrity fails, report Stage B as blocked; do not retune on 807-series data."
+      }
+    ],
+    "arm_source": "research/adaptive_v4_memory/manifests/p2-causal-factorial-v1.json",
+    "arm_mutation_or_retuning": false,
+    "contrasts": {
+      "clean_layer_identity": {
+        "contrast": "calibrated+pins - shuffled-quota+pins",
+        "estimand": "effect of assigning the same non-uniform quota multiset to its calibrated layer identities rather than a calibration-digest-derived cyclic shuffle",
+        "required_exact_controls_per_batch": [
+          "identical sorted layer-quota multiset",
+          "identical total configured blocks",
+          "identical protected pin policy and pin-set digest",
+          "identical fallback and causal signal settings",
+          "identical conversation, checkpoint, dtype, and execution corner"
+        ],
+        "uniform_mapping_rule": "If the calibrated and shuffled mappings are structurally identical, retain the record for audit but exclude it from layer-identity evidence and report its zero-identification status.",
+        "claim_scope": "clean causal layer-identity contrast on Tier-S synthetic workloads"
+      },
+      "deployed_operational": {
+        "contrast": "calibrated+pins - fixed+pins",
+        "estimand": "operational effect of the deployed calibrated allocation relative to the calibration-frozen low/high fixed schedule at matched mean physical hot memory",
+        "memory_requirement": "mean measured hot-resident bytes within 1 percent in every seed-scale-budget cell using 707-series calibration only, then reported again on held-out data",
+        "confounding_disclosure": "The fixed low/high schedule can change total configured quota per batch. Therefore this contrast combines layer allocation with per-batch total/schedule variation and is not a pure allocation effect.",
+        "pure_allocation_claim_allowed": false
+      },
+      "deployed_exact_total_stratum": {
+        "contrast": "calibrated+pins - fixed+pins restricted to configuration-eligible exact-total batches",
+        "eligibility": "The exact configured-total equality indicator must be computed from frozen arm configurations and the 707-series schedule before any 807-series target or prediction is read.",
+        "required_exact_controls_per_batch": [
+          "identical total configured blocks",
+          "identical protected pin policy and pin-set digest",
+          "identical conversation, checkpoint, dtype, and execution corner"
+        ],
+        "feasibility_rule": "Report this stratum only if every scale-budget cell contains all five seeds and at least 200 eligible conversations per seed. Otherwise report it as unavailable; do not change the fixed schedule, interpolate accuracy, or filter on outcomes.",
+        "interpretation": "supporting exact-total allocation contrast only; the clean shuffled-quota contrast remains the primary layer-identity test"
+      }
+    },
+    "frozen_grid": {
+      "scales": [
+        "s55",
+        "s151"
+      ],
+      "training_seeds": [
+        6071401,
+        6071402,
+        6071403,
+        6071404,
+        6071405
+      ],
+      "evaluation_seeds": [
+        8071401,
+        8071402,
+        8071403,
+        8071404,
+        8071405
+      ],
+      "budgets": [
+        "2x",
+        "4x"
+      ],
+      "families": "all nine frozen synthetic families",
+      "contexts": [
+        80,
+        128,
+        256,
+        512,
+        1024
+      ],
+      "replicates": [
+        0
+      ],
+      "training_to_evaluation_seed_mapping": {
+        "6071401": 8071401,
+        "6071402": 8071402,
+        "6071403": 8071403,
+        "6071404": 8071404,
+        "6071405": 8071405
+      },
+      "workload_seed_formula": "evaluation_seed + family_index*10000000 + context*1000 + replicate; family_index follows the frozen p2-causal-factorial-v1 family order and replicate is exactly 0",
+      "examples_per_seed_scale_family": 100,
+      "examples_per_context_seed_scale_family": 20,
+      "examples_per_shard": 20,
+      "paired_coordinates": 900,
+      "stage_a_arm_conversations": 36000,
+      "stage_b_incremental_arm_conversations": 18000,
+      "maximum_targeted_arm_conversations": 54000,
+      "execution_corner": "sequential-tiered",
+      "cell_selection_from_core_outcomes": false
+    },
+    "statistics": {
+      "paired_unit": "complete conversation",
+      "conversation_outcome": "query accuracy = correct_count / total registered query positions within the conversation",
+      "paired_difference": "candidate conversation query accuracy minus comparator conversation query accuracy on the identical targets and query positions",
+      "cell_seed_effect": "unweighted arithmetic mean of eligible paired conversation differences across all nine families, five contexts, and twenty conversations in one training-seed x scale x budget cell",
+      "pooled_cell_effect": "unweighted arithmetic mean of the five frozen training-seed effects; all five seeds must be present",
+      "independent_cluster": "training checkpoint seed",
+      "bootstrap_resamples": 10000,
+      "bootstrap_algorithm": "NumPy default_rng draws a 10000 by 5 integer index matrix uniformly with replacement from the ordered five seed effects; each row mean forms the bootstrap distribution; report the linear-interpolated percentile quantiles at 0.025 and 0.975",
+      "bootstrap_seed_by_contrast": {
+        "stage_a_clean_layer_identity": 9171803,
+        "stage_b_deployed_operational": 9171804
+      },
+      "bootstrap_seed_cell_offset": "add 0, 1, 2, or 3 in lexicographic (scale, budget) order: s151/2x, s151/4x, s55/2x, s55/4x",
+      "preliminary_decision_contrasts_in_order": [
+        "stage_a_clean_layer_identity",
+        "stage_b_deployed_operational_if_stage_a_go"
+      ],
+      "descriptive_cells": 8,
+      "cluster_bootstrap_confidence_level": 0.95,
+      "multiplicity": "No confirmatory multiplicity claim is made. Report every contrast-by-scale-by-budget estimate and its descriptive 95 percent seed-cluster interval.",
+      "exact_seed_sign_flip": "enumerate all 32 assignments; report the resolution-limited p-value but do not use p<0.05 as a gate",
+      "exact_seed_sign_flip_rule": "two-sided fraction of the 32 signed five-seed means whose absolute value is at least abs(observed mean)-16*float64 epsilon",
+      "missing_or_invalid_pair_rule": "no imputation; any missing required arm pair, target mismatch, query-position mismatch, exact-control violation, non-finite value, or absent seed blocks the affected stage",
+      "uniform_mapping_exclusion_rule": "retain and count structurally identical calibrated/shuffled mappings in the audit, exclude them from the Stage-A effect before reading targets, and require all five seeds plus at least 200 identified conversations per seed in every scale-budget cell",
+      "required_slices": [
+        "contrast",
+        "scale",
+        "budget",
+        "training-seed",
+        "family",
+        "context"
+      ],
+      "localization_panel_pooling": false
+    },
+    "preliminary_decision_gates": {
+      "stage_a_eligibility": "Sequential-tiered integrity passes for calibrated+pins and shuffled-quota+pins, and every clean exact-control check passes. No fixed arm or physical fixed-match artifact is required. Cross-corner equivalence is not required.",
+      "clean_layer_identity_continue": "Preliminary GO only if, in each of four scale-by-budget cells, the pooled effect is strictly positive, at least four of five seed effects are strictly positive, and the descriptive 95 percent seed-cluster interval has a nonnegative lower bound.",
+      "stage_b_eligibility": "Stage A reaches preliminary GO, sequential-tiered integrity passes for fixed+pins, and the fixed arm passes calibration-only physical hot-memory matching before any Stage-B 807-series result is read.",
+      "deployed_operational_continue": "Preliminary GO only if, in each of four scale-by-budget cells, the pooled effect is strictly positive, at least four of five seed effects are strictly positive, the descriptive 95 percent seed-cluster interval has a nonnegative lower bound, and the one-percent memory-match contract holds.",
+      "mechanism_no_go": "Failure of any clean-layer-identity decision cell stops further adaptive-quota mechanism investment under this line and prevents Stage B, including its fixed memory-match prerequisites. It is a preliminary program decision, not confirmatory evidence that the population effect is null or negative.",
+      "deployment_no_go": "Failure of any deployed-operational decision cell stops adaptive-quota systems expansion, even if the clean screen passes. It is not a confirmatory deployed-superiority test.",
+      "full_factorial_resume": "Passing both gates does not automatically resume the 16-arm factorial; it only permits a separate resource and novelty review followed by an explicit amendment."
+    },
+    "nonclaims": [
+      "not an estimate of the protected-pin effect",
+      "not an estimate of local adaptation, hierarchy, cross-layer signaling, refresh reuse, score concentration, or fallback effects",
+      "not a completed or reduced substitute for the 16-arm causal factorial",
+      "not confirmatory inference or a paper-grade causal effect estimate",
+      "not natural-language, model-family, long-context, or production generalization",
+      "not a latency, throughput, HBM-capacity, transfer, or cost benefit",
+      "not evidence for the July-17 HCA conditional-information hypotheses",
+      "not native-quality preservation unless a separate native contrast is executed under a frozen contract",
+      "not a pure allocation claim from calibrated+pins versus fixed+pins unless the prospectively eligible exact-total stratum is available"
+    ]
+  },
+  "reporting_rules": [
+    "Report the original core, the full-factorial pause, the path-localization panel, the prospective equivalence audit, and the targeted contrasts as separate evidence objects.",
+    "Never pool the known mismatch cells with the prospective equivalence panel or use them in a confidence interval or p-value.",
+    "Never drop a failing corner, arm, seed, scale, budget, family, context, or exact-control violation.",
+    "Report unavailable exact-total strata and blocked studies explicitly rather than repairing them after target observation.",
+    "Retain raw per-batch quota totals, sorted quota-multiset digests, pin-set digests, measured hot bytes, execution-corner labels, and artifact SHA-256 values."
+  ],
+  "claim_boundary": "This post-core amendment pauses the legacy full factorial and preregisters only a computational path-by-residency diagnostic plus a 900-coordinate exploratory three-arm Tier-S decision panel. Known failure cells can localize implementation divergence but are never confirmatory. Cross-corner mismatch limits interchangeability claims but does not block the sequential-tiered panel. The clean calibrated-versus-shuffled screen is interpretable only when quota multisets and pins are exact; the calibrated-versus-fixed screen is operational and remains confounded by per-batch total scheduling unless a prospectively defined exact-total stratum exists. Neither screen supports confirmatory inference."
+}

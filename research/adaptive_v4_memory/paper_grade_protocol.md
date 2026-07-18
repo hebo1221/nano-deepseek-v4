@@ -1,10 +1,36 @@
 # Paper-grade expansion protocol
 
-Protocol version: 2.3
+Protocol version: 2.3 (post-core execution amendment 2.3-P1)
 Frozen: 2026-07-14  
-Amended: 2026-07-15, before any causal-factorial held-out shard
-Status: active; P2 synthetic core runs first, followed by causal ablations,
-natural-language evaluation, and systems evaluation
+Amended: 2026-07-18, after the terminal core audit and observed path-equivalence
+blocker, but before any new path-split or targeted-contrast result
+Status: P2 core terminal; the original 9,000-coordinate, 16-arm causal
+factorial is paused; within P2 causal follow-up, only the manifest-bound
+diagnostic and targeted contrast below are eligible, subject to their
+fail-closed gates
+
+Post-core execution amendment 2.3-P1 pauses, but does not alter or erase, the
+frozen full causal factorial. The pause is grounded in the exogenous July-17
+literature pivot, its frozen marginal cost, and the S55/6071402 exact
+path-equivalence failure; it is not a core-quality early stop. Before any new
+result, `manifests/p2-post-core-path-split-targeted-contrast-v1.json` freezes a
+2x2 sequential/chunked by resident/tiered diagnostic and a staged,
+900-coordinate exploratory decision panel. Already-known mismatch cells are
+localization-only and cannot enter confirmatory inference. The panel separately
+screens the operational `calibrated+pins` versus `fixed+pins` contrast and the
+cleaner layer-identity `calibrated+pins` versus `shuffled-quota+pins` contrast,
+with exact per-batch totals reported when prospectively feasible. Stage A runs
+only the clean calibrated-versus-shuffled pair; the two already-existing S55
+fixed-policy match artifacts are disclosed, but any additional fixed-policy
+memory matching and the deployed Stage B run are forbidden unless Stage A
+reaches preliminary GO. The manifest binds every localization input by SHA-256,
+forbids artifact overwrite, distinguishes 84 arm-batch path runs from 336
+conversation-path observations, and freezes the targeted outcome, weighting,
+bootstrap seeds, and exclusion rules. Cross-corner mismatch limits only
+interchangeability claims; the sequential-tiered panel is blocked only by
+same-path determinism or integrity failure. Its preliminary decision gates are
+not confirmatory, do not replace the full factorial, and cannot satisfy any
+downstream P3 gate.
 
 This amendment supersedes the experimental scale of the M5 pilot. It does not
 erase the pilot result: it narrows that result to the exact one-token global M2
