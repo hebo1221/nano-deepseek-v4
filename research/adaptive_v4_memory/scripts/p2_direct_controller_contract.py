@@ -17,13 +17,38 @@ from freeze_p2_causal_factorial_arms import (
 
 from nano_deepseek_v4 import PAPER_GRADE_WORKLOAD_FAMILIES, TrainingFreeControllerConfig
 
-EXPERIMENT_ID = "p2-post-rank-direct-controller-v1"
+EXPERIMENT_ID = "p2-post-rank-direct-controller-v1.1"
 DIRECT_CALIBRATION_EXPERIMENT_ID = "p2-post-rank-direct-soft-lag-calibration-v1"
 DIRECT_TOP_P_MATCH_EXPERIMENT_ID = "p2-post-rank-direct-top-p-physical-match-v1"
 TOP_P_MATCH_ATTESTATION_PURPOSE = "p2-direct-top-p-physical-match-v1"
 LEGACY_CALIBRATION_SCAFFOLD_ID = "p1-layer-quota-calibration-pilot-v1"
-MANIFEST_PATH = Path("research/adaptive_v4_memory/manifests/p2-post-rank-direct-controller-v1.json")
-MANIFEST_STATUS = "frozen_before_any_fresh_direct_controller_quality_result"
+MANIFEST_PATH = Path(
+    "research/adaptive_v4_memory/manifests/p2-post-rank-direct-controller-v1-1.json"
+)
+MANIFEST_STATUS = (
+    "amended_after_training_validator_false_negative_before_calibration_or_held_out_quality"
+)
+SUPERSEDED_MANIFEST_PATH = (
+    "research/adaptive_v4_memory/manifests/p2-post-rank-direct-controller-v1.json"
+)
+SUPERSEDED_MANIFEST_SHA256 = "d8d969b480d692e7ffa17b94504a7b25b75be602e1ce5c8d1821f9f2937384a7"
+SUPERSEDED_IMPLEMENTATION_SOURCE_COMMIT = "d2bc60fecb573170e1bf175713ad9f4320f881a5"
+SUPERSEDED_IMPLEMENTATION_TREE_DIGEST = (
+    "96dc5cd28bb113d0c659f8b0deab17f612170584c4187aa1ef211bd4bb139734"
+)
+SUPERSEDED_ATTEMPT_SOURCE_COMMIT = "f48e69e3cf4c52621095365cf60cf2d4a4f8476b"
+SUPERSEDED_MATRIX_SHA256 = "dc469a9c22ef295ed61022042fd6f1c4ddbd8544adb144986d590fc0f7b2ef7f"
+SUPERSEDED_CLAIM_SHA256 = "60724fc6226380bc8b457cc3e4518c5060beda037fb4878f21b14614bb204309"
+SUPERSEDED_TRAINING_SUMMARY_SHA256 = (
+    "9e3225442e621e6a957a2f3e53138686be7a37f2495552804be9d133d92dd8cf"
+)
+SUPERSEDED_CHECKPOINT_SHA256 = "dfaa5da812e4a4301d8744ccacb5871dffcc19491a9fd2af4815cc24d0ca2f7f"
+VALIDATOR_AMENDMENT_REPORT_PATH = (
+    "research/adaptive_v4_memory/reports/2026-07-19-p2-direct-training-validator-amendment.md"
+)
+VALIDATOR_AMENDMENT_REPORT_SHA256 = (
+    "371080e0e7f34534165afb2c0325b6d6ef4d698a198db9b42e60367a05663820"
+)
 
 SCALES = ("s55", "s151")
 DIRECT_CSA_LAYERS_BY_SCALE = {
@@ -419,6 +444,7 @@ def expected_confirmatory_success_gate() -> dict[str, Any]:
 # freezing.
 PACKAGE_IMPLEMENTATION_ROOT = "nano_deepseek_v4"
 PROJECT_DEPENDENCY_SPEC_PATH = "pyproject.toml"
+PROTOCOL_FREEZE_PATHS = (VALIDATOR_AMENDMENT_REPORT_PATH,)
 DIRECT_RESEARCH_IMPLEMENTATION_PATHS = (
     "research/adaptive_v4_memory/scripts/adaptive_v4_execution_environment.py",
     "research/adaptive_v4_memory/scripts/adaptive_v4_gpu_lock.py",
@@ -436,9 +462,15 @@ DIRECT_RESEARCH_IMPLEMENTATION_PATHS = (
     "research/adaptive_v4_memory/scripts/audit_p2_direct_controller_integrity.py",
     "research/adaptive_v4_memory/scripts/summarize_p2_direct_controller.py",
 )
+SUPERSEDED_V1_IMPLEMENTATION_PATHS = (
+    PROJECT_DEPENDENCY_SPEC_PATH,
+    PACKAGE_IMPLEMENTATION_ROOT,
+    *DIRECT_RESEARCH_IMPLEMENTATION_PATHS,
+)
 IMPLEMENTATION_PATHS = (
     PROJECT_DEPENDENCY_SPEC_PATH,
     PACKAGE_IMPLEMENTATION_ROOT,
+    *PROTOCOL_FREEZE_PATHS,
     *DIRECT_RESEARCH_IMPLEMENTATION_PATHS,
 )
 MANIFEST_TOP_LEVEL_FIELDS = frozenset(
@@ -845,6 +877,9 @@ def _validate_implementation_inventory(
         raise RuntimeError(
             f"Direct-controller implementation paths are missing: {missing_research}"
         )
+    missing_protocol = [path for path in PROTOCOL_FREEZE_PATHS if path not in tracked_paths]
+    if missing_protocol:
+        raise RuntimeError(f"Protocol freeze paths are missing: {missing_protocol}")
     return canonical
 
 
@@ -945,6 +980,62 @@ def implementation_tree_digest_at_commit(source_commit: str) -> str:
         parsed_entries.append((path, f"{mode} {object_id} 0\t{path}"))
     canonical_entries = _validate_implementation_inventory(parsed_entries)
     return _implementation_index_digest(IMPLEMENTATION_PATHS, canonical_entries)
+
+
+def superseded_v1_implementation_tree_digest_at_commit() -> str:
+    """Recompute the v1 digest with its exact pre-amendment inventory.
+
+    Revision 1.1 adds the incident report to the canonical inventory, so the current inventory
+    must never be used to reinterpret the parent commit.  This explicit compatibility verifier
+    has no caller-selected paths or commit and is used only by the one-shot admission gate.
+    """
+
+    source_commit = SUPERSEDED_IMPLEMENTATION_SOURCE_COMMIT
+    tracked_tree = subprocess.run(
+        [
+            "git",
+            "ls-tree",
+            "-r",
+            "--full-tree",
+            source_commit,
+            "--",
+            *SUPERSEDED_V1_IMPLEMENTATION_PATHS,
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    parsed_entries: list[tuple[str, str]] = []
+    for entry in (line for line in tracked_tree.splitlines() if line):
+        metadata, separator, path = entry.partition("\t")
+        fields = metadata.split()
+        if separator != "\t" or len(fields) != 3 or not path:
+            raise RuntimeError("Superseded implementation commit-tree entry is malformed.")
+        mode, object_type, object_id = fields
+        if object_type != "blob" or mode not in {"100644", "100755"} or not is_git_oid(object_id):
+            raise RuntimeError(
+                "Superseded implementation tree contains an invalid, symlink, or non-blob entry."
+            )
+        parsed_entries.append((path, f"{mode} {object_id} 0\t{path}"))
+    paths = [path for path, _entry in parsed_entries]
+    _require(len(paths) == len(set(paths)), "Superseded implementation inventory is duplicated.")
+    canonical_entries = tuple(entry for _path, entry in sorted(parsed_entries))
+    _require(
+        tuple(entry for _path, entry in parsed_entries) == canonical_entries,
+        "Superseded implementation Git entries are not canonical.",
+    )
+    tracked_paths = set(paths)
+    package_prefix = PACKAGE_IMPLEMENTATION_ROOT.rstrip("/") + "/"
+    _require(
+        PROJECT_DEPENDENCY_SPEC_PATH in tracked_paths
+        and any(path.startswith(package_prefix) for path in tracked_paths)
+        and all(path in tracked_paths for path in DIRECT_RESEARCH_IMPLEMENTATION_PATHS),
+        "Superseded implementation inventory is incomplete.",
+    )
+    return _implementation_index_digest(
+        SUPERSEDED_V1_IMPLEMENTATION_PATHS,
+        canonical_entries,
+    )
 
 
 def seed_triplet(training_seed: int) -> tuple[int, int, int]:
@@ -2439,6 +2530,68 @@ def validate_arm_semantics(arms: Mapping[str, BuiltCausalArm]) -> None:
     )
 
 
+def expected_adaptation_disclosure() -> dict[str, Any]:
+    """Return the exact pre-held-out amendment disclosure for revision 1.1.
+
+    The first prerequisite trainer completed normally, but the frozen runner rejected a
+    legitimate sparse-AdamW checkpoint because it treated every parameter-local optimizer
+    counter as a global step counter.  These immutable identifiers bind the only artifact that
+    may enter through the one-shot admission path.  No threshold below the already frozen 1,000
+    global steps is learned from these values.
+    """
+
+    return {
+        "post_707_rank_no_go": True,
+        "prior_p2_quality_results_observed": True,
+        "preheldout_validator_amendment": {
+            "reason": "sparse-adamw-parameter-local-step-validator-false-negative-v1",
+            "stage": "first-training-prerequisite-before-calibration-top-p-or-held-out-quality",
+            "training_diagnostics_observed": True,
+            "calibration_results_observed": False,
+            "top_p_results_observed": False,
+            "held_out_controller_quality_observed": False,
+            "failed_coordinate": {"scale": "s55", "training_seed": 6071406},
+            "superseded_manifest": {
+                "path": SUPERSEDED_MANIFEST_PATH,
+                "sha256": SUPERSEDED_MANIFEST_SHA256,
+                "implementation_source_commit": SUPERSEDED_IMPLEMENTATION_SOURCE_COMMIT,
+                "implementation_tree_digest": SUPERSEDED_IMPLEMENTATION_TREE_DIGEST,
+                "attempt_source_commit": SUPERSEDED_ATTEMPT_SOURCE_COMMIT,
+            },
+            "incident_report": {
+                "path": VALIDATOR_AMENDMENT_REPORT_PATH,
+                "sha256": VALIDATOR_AMENDMENT_REPORT_SHA256,
+            },
+            "frozen_artifact_sha256": {
+                "matrix_ledger": SUPERSEDED_MATRIX_SHA256,
+                "claim": SUPERSEDED_CLAIM_SHA256,
+                "training_summary": SUPERSEDED_TRAINING_SUMMARY_SHA256,
+                "checkpoint": SUPERSEDED_CHECKPOINT_SHA256,
+            },
+            "existing_artifact_bytes_may_change": False,
+            "existing_claim_may_be_deleted_or_moved": False,
+            "scientific_subprocess_reexecution_for_admission": False,
+            "read_only_git_provenance_commands_within_admission_creation": [
+                "git ls-tree",
+                "git merge-base --is-ancestor",
+            ],
+            "admission_creation_requires_exclusive_matrix_gpu_and_device_leases": True,
+            "admission_commit_rule": "fsynced-staging-hard-link-no-replace-v1",
+            "admission_public_binding_uses_single_verified_inode": True,
+            "amended_ledger_validated_before_new_training_child": True,
+            "admission_and_ledger_snapshots_held_across_new_training_child": True,
+            "one_shot_exact_byte_admission_required": True,
+            "corrected_predicate": (
+                "always-gradient-step-equals-1000-and-routed-expert-pairs-share-"
+                "finite-integral-step-in-1-through-1000-v1"
+            ),
+            "seed_grid_changed": False,
+            "training_hyperparameters_changed": False,
+            "controller_arms_or_estimands_changed": False,
+        },
+    }
+
+
 def build_manifest_payload(
     *,
     attestation_key_id: str,
@@ -2461,10 +2614,7 @@ def build_manifest_payload(
         "experiment_id": EXPERIMENT_ID,
         "status": MANIFEST_STATUS,
         "attestation": attestation.public_manifest_contract(attestation_key_id),
-        "adaptation_disclosure": {
-            "post_707_rank_no_go": True,
-            "prior_p2_quality_results_observed": True,
-        },
+        "adaptation_disclosure": expected_adaptation_disclosure(),
         "cohort": {
             "training_seeds": list(TRAINING_SEEDS),
             "calibration_seeds": list(CALIBRATION_SEEDS),
@@ -2588,11 +2738,9 @@ def validate_manifest_payload(
         "Paper-grade attestation storage, transport, or threat model drifted.",
     )
 
-    disclosure = payload.get("adaptation_disclosure", {})
-    _require(disclosure.get("post_707_rank_no_go") is True, "Post-rank adaptation is undisclosed.")
     _require(
-        disclosure.get("prior_p2_quality_results_observed") is True,
-        "Prior P2 outcome inspection is undisclosed.",
+        payload.get("adaptation_disclosure") == expected_adaptation_disclosure(),
+        "Pre-held-out amendment or prior-outcome disclosure drifted.",
     )
 
     cohort = payload.get("cohort", {})

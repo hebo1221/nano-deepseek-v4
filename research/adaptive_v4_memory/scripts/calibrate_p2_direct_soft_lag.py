@@ -1303,7 +1303,7 @@ def establish_provenance(
         else Path(os.path.abspath(training_summary_path))
     )
     ledger_path = (
-        output_root / "training-matrix.summary.json"
+        output_root / training_matrix.MATRIX_SUMMARY.name
         if training_matrix_summary_path is None
         else Path(os.path.abspath(training_matrix_summary_path))
     )
@@ -1330,16 +1330,15 @@ def establish_provenance(
         "Terminal training matrix execution environment is missing.",
     )
     training_summary, validated_checkpoint, raw_checkpoint = (
-        training_matrix.load_validated_training_bundle(
+        training_matrix.load_validated_training_bundle_for_ledger_record(
             summary_path,
             output_root=output_root,
-            train_script=training_matrix.TRAIN_SCRIPT,
             context=context,
             scale=scale,
             seed=training_seed,
             trust_root=trust_root,
-            launch_nonce=launch_nonce,
-            trainer_sha256=trainer_sha256,
+            trainer_binding=trainer_snapshot.public_binding,
+            ledger_record=ledger_record,
             expected_execution_environment=cast(Mapping[str, Any], ledger_execution_environment),
         )
     )

@@ -175,7 +175,7 @@ changed, and no P3 dataset, prediction, or result cell existed at amendment time
 
 Version 2.5 creates the prospective direct-controller study rather than
 relabeling the structurally blocked Stage A. Its sole contract is
-`manifests/p2-post-rank-direct-controller-v1.json`. The cohort uses five fresh
+`manifests/p2-post-rank-direct-controller-v1-1.json`. The cohort uses five fresh
 training, calibration, and evaluation seeds; S55 and S151; 2x and 4x budgets;
 nine families; five contexts; ten 20-example replicates; and exactly 1,000
 examples per seed-scale-family. The budget-expanded grid is 9,000 shards,
@@ -645,6 +645,26 @@ NO-GO artifacts become terminal evidence; an unexpected trainer, calibrator,
 top-p validator, or evaluator exit without its terminal artifact preserves the
 coordinate claim as orphan evidence and remains incomplete pending a recorded
 manual quarantine.
+
+Before calibration or held-out controller evaluation, the first direct-training
+prerequisite exposed a validator specification defect: parameter-local AdamW
+steps for sparsely routed experts were incorrectly required to equal the global
+1,000-step count. Revision 1.1 does not authorize a retry. It binds the preserved
+v1 manifest, ledger, claim, summary, and checkpoint by exact hash and admits that
+single existing bundle through an HMAC admission-creation subroutine with zero
+scientific or experimental subprocesses. Within that subroutine only frozen
+read-only `git ls-tree` and `git merge-base --is-ancestor` provenance probes are
+permitted; current manifest/source preflight outside it may use other frozen
+read-only Git commands. The admission is atomically committed from a fsynced
+staging inode under the matrix, scheduler, and physical-device leases, and the
+amended ledger is reloaded and validated before a new training child. Dense and
+always-gradient parameters must remain at step 1,000; each routed expert pair
+must share a finite integral update count in `1..1000`. The old bytes and claim
+remain immutable, all seeds and scientific settings are unchanged, and the
+incident plus observed training-diagnostic boundary must be disclosed in the
+paper. See the checked
+[`2026-07-19-p2-direct-training-validator-amendment.md`](reports/2026-07-19-p2-direct-training-validator-amendment.md)
+report for the complete recovery gate.
 
 ## 11. Claim boundary
 

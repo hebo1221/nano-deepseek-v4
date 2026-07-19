@@ -25,13 +25,21 @@ import train_m1_associative_recall as trainer
 
 EXPERIMENT_ID = "p2-post-rank-direct-training-v1"
 ARTIFACT_TYPE = "training-matrix"
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 STEPS = 1_000
 MINIMUM_STEPS = STEPS
 FROZEN_SCALES = ("s55", "s151")
 FROZEN_TRAINING_SEEDS = (6071406, 6071407, 6071408, 6071409, 6071410)
 OUTPUT_ROOT = Path("artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/training")
-MATRIX_SUMMARY = OUTPUT_ROOT / "training-matrix.summary.json"
+MATRIX_SUMMARY_NAME = "training-matrix-v1-1.summary.json"
+MATRIX_SUMMARY = OUTPUT_ROOT / MATRIX_SUMMARY_NAME
+SUPERSEDED_MATRIX_SUMMARY_NAME = "training-matrix.summary.json"
+PREHELDOUT_ADMISSION_NAME = "training-v1-1-preheldout-admission.json"
+PREHELDOUT_ADMISSION_STAGING_NAME = ".p2-direct-training-v1-1-admission.pending"
+PREHELDOUT_ADMISSION_COORDINATE = ("s55", 6071406)
+PREHELDOUT_ADMISSION_ID = "p2-direct-training-preheldout-admission-v1.1"
+PREHELDOUT_ADMISSION_REASON = "sparse-adamw-parameter-local-step-validator-false-negative-v1"
+REQUIRE_PREHELDOUT_ADMISSION = True
 TRAIN_SCRIPT = Path(__file__).with_name("train_m1_associative_recall.py")
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 TRAIN_IMPLEMENTATION_PATH = TRAIN_SCRIPT.resolve().relative_to(REPOSITORY_ROOT).as_posix()
@@ -54,7 +62,9 @@ TRAINER_FD_BOOTSTRAP = (
     "exec(compile(data,p,'exec'),g,g)"
 )
 SUMMARY_ATTESTATION_PURPOSE = trainer.DIRECT_SUMMARY_ATTESTATION_PURPOSE
-MATRIX_ATTESTATION_PURPOSE = "p2-direct-training-matrix-v1"
+MATRIX_ATTESTATION_PURPOSE = "p2-direct-training-matrix-v1.1"
+SUPERSEDED_MATRIX_ATTESTATION_PURPOSE = "p2-direct-training-matrix-v1"
+PREHELDOUT_ADMISSION_ATTESTATION_PURPOSE = "p2-direct-training-preheldout-admission-v1.1"
 TRAINING_SUMMARY_FIELDS = frozenset(
     {
         "schema_version",
@@ -125,13 +135,61 @@ TRAINING_MATRIX_FIELDS = frozenset(
         "expected_runs",
         "completed_runs",
         "runs",
+        "preheldout_admission",
         "payload_sha256",
         "attestation",
+    }
+)
+SUPERSEDED_TRAINING_MATRIX_FIELDS = TRAINING_MATRIX_FIELDS - {"preheldout_admission"}
+PREHELDOUT_ADMISSION_FIELDS = frozenset(
+    {
+        "schema_version",
+        "admission_id",
+        "status",
+        "reason",
+        "current_source",
+        "current_manifest",
+        "coordinate",
+        "superseded_manifest",
+        "superseded_matrix_ledger",
+        "preserved_claim",
+        "training_summary",
+        "checkpoint",
+        "canonical_trainer",
+        "execution_environment",
+        "scientific_child_processes_started_at_creation",
+        "read_only_git_provenance_commands_within_admission_creation",
+        "exclusive_matrix_lock_verified_immediately_before_creation",
+        "scheduler_gpu_lease_verified_immediately_before_creation",
+        "physical_device_guard_verified_immediately_before_creation",
+        "downstream_roots_absence_verified_immediately_before_creation",
+        "direct_root_top_level_inventory_verified_immediately_before_creation",
+        "admitted_run_record",
+        "payload_sha256",
+        "attestation",
+    }
+)
+PREHELDOUT_ADMISSION_BINDING_FIELDS = frozenset(
+    {
+        "path",
+        "sha256",
+        "bytes",
+        "payload_sha256",
+        "attestation_mac",
+        "admission_id",
+        "coordinate",
+        "preserved_claim_sha256",
+        "admitted_run_record_sha256",
     }
 )
 FROZEN_HYPERPARAMETERS = trainer.direct_training_hyperparameters()
 EVALUATION_STEPS = (1, *range(50, STEPS + 1, 50))
 LOCK_NAME = ".p2-direct-training-matrix.lock"
+ADMISSION_READ_ONLY_GIT_PROVENANCE_COMMANDS = (
+    "git ls-tree",
+    "git merge-base --is-ancestor",
+)
+ADMISSION_DIRECT_ROOT_TOP_LEVEL_INVENTORY = (LOCK_NAME, "training")
 CLAIM_NAME = ".p2-direct-training-cell.claim"
 GPU_LEASE_SEMANTICS = "project-persistent-inode-exclusive-whole-matrix-v1"
 GPU_LEASE_SCOPE = "before-preflight-through-terminal-validation"
@@ -150,6 +208,30 @@ class FrozenContext:
     manifest_path: Path
     manifest_binding: dict[str, Any]
     source: dict[str, str | bool]
+
+
+@dataclass(frozen=True)
+class ValidatedPreheldoutAdmission:
+    payload: dict[str, Any]
+    public_binding: dict[str, Any]
+    admitted_run_record: dict[str, Any]
+    training_summary: dict[str, Any]
+    checkpoint: dict[str, Any]
+    raw_checkpoint: Mapping[str, Any] | None
+    superseded_context: FrozenContext
+
+
+@dataclass(frozen=True)
+class ValidatedSupersededBundle:
+    context: FrozenContext
+    manifest_binding: dict[str, Any]
+    matrix_ledger_binding: dict[str, Any]
+    claim_binding: dict[str, Any]
+    execution_environment: dict[str, Any]
+    training_summary: dict[str, Any]
+    checkpoint: dict[str, Any]
+    raw_checkpoint: Mapping[str, Any] | None
+    run_record: dict[str, Any]
 
 
 @dataclass(frozen=True)
@@ -179,8 +261,13 @@ class _MatrixLockLease:
     file_descriptor: int
     device: int
     inode: int
+    exclusive_lock_acquired: bool
 
     def assert_held(self) -> None:
+        _require(
+            self.exclusive_lock_acquired,
+            "Training matrix lock lease was not acquired exclusively.",
+        )
         try:
             opened = os.fstat(self.file_descriptor)
             current = os.stat(self.path, follow_symlinks=False)
@@ -582,12 +669,58 @@ def _publish_matrix_ledger(
     matrix_lock.assert_held()
 
 
+def _open_exact_matrix_snapshot(
+    path: Path, payload: Mapping[str, Any]
+) -> attestation.OpenedRegularFile:
+    opened = attestation.open_regular_nofollow(path)
+    try:
+        expected = (json.dumps(payload, indent=2, sort_keys=True, allow_nan=False) + "\n").encode()
+        _require(
+            opened.read_bytes() == expected,
+            "On-disk training ledger differs from the exact pre-child snapshot.",
+        )
+        opened.assert_unchanged()
+        return opened
+    except BaseException:
+        opened.close()
+        raise
+
+
+def _open_exact_admission_snapshot(
+    binding: Mapping[str, Any],
+) -> attestation.OpenedRegularFile:
+    path = binding.get("path")
+    _require(isinstance(path, str), "Admission snapshot path is invalid.")
+    opened = attestation.open_regular_nofollow(Path(cast(str, path)))
+    try:
+        _require(
+            opened.sha256 == binding.get("sha256") and opened.bytes == binding.get("bytes"),
+            "On-disk admission differs from the ledger-bound pre-child snapshot.",
+        )
+        opened.assert_unchanged()
+        return opened
+    except BaseException:
+        opened.close()
+        raise
+
+
 def _validated_source_state(state: Mapping[str, Any]) -> dict[str, str | bool]:
     commit = state.get("commit")
     _require(contract.is_git_oid(commit), "Source commit is missing or invalid.")
     _require(state.get("dirty") is False, "Direct training requires clean source.")
     _require(set(state) == {"commit", "dirty"}, "Source-state schema drifted.")
     return {"commit": str(commit), "dirty": False}
+
+
+def _superseded_attempt_is_ancestor_of_head(commit: str) -> bool:
+    result = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", commit, "HEAD"],
+        cwd=REPOSITORY_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    return result.returncode == 0
 
 
 def _manifest_binding(
@@ -669,6 +802,65 @@ def assert_environment_unchanged(context: FrozenContext) -> None:
         _validated_source_state(contract.source_state()) == context.source,
         "Source commit changed during training.",
     )
+
+
+def _superseded_manifest_path() -> Path:
+    candidate = Path(contract.SUPERSEDED_MANIFEST_PATH)
+    return candidate if candidate.is_absolute() else REPOSITORY_ROOT / candidate
+
+
+def _load_superseded_manifest_binding(
+    *, trust_root: attestation.TrustRoot
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    path = _superseded_manifest_path().resolve()
+    opened = attestation.open_regular_nofollow(path)
+    try:
+        _require(
+            opened.sha256 == contract.SUPERSEDED_MANIFEST_SHA256,
+            "Superseded manifest bytes do not match the frozen admission digest.",
+        )
+        try:
+            payload = json.loads(opened.read_bytes().decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise ValueError("Superseded manifest is invalid JSON.") from error
+        _require(isinstance(payload, dict), "Superseded manifest must be a JSON object.")
+        _require(
+            set(payload) == contract.MANIFEST_TOP_LEVEL_FIELDS
+            and payload.get("schema_version") == 1
+            and payload.get("experiment_id") == "p2-post-rank-direct-controller-v1"
+            and payload.get("status") == "frozen_before_any_fresh_direct_controller_quality_result",
+            "Superseded manifest schema or identity drifted.",
+        )
+        implementation = payload.get("implementation")
+        _require(
+            isinstance(implementation, Mapping)
+            and set(implementation) == contract.MANIFEST_IMPLEMENTATION_FIELDS,
+            "Superseded manifest implementation binding drifted.",
+        )
+        implementation = cast(Mapping[str, Any], implementation)
+        _require(
+            tuple(implementation.get("paths", ()))
+            == (
+                contract.PROJECT_DEPENDENCY_SPEC_PATH,
+                contract.PACKAGE_IMPLEMENTATION_ROOT,
+                *contract.DIRECT_RESEARCH_IMPLEMENTATION_PATHS,
+            )
+            and implementation.get("source_commit")
+            == contract.SUPERSEDED_IMPLEMENTATION_SOURCE_COMMIT
+            and implementation.get("tree_digest") == contract.SUPERSEDED_IMPLEMENTATION_TREE_DIGEST
+            and contract.superseded_v1_implementation_tree_digest_at_commit()
+            == contract.SUPERSEDED_IMPLEMENTATION_TREE_DIGEST,
+            "Superseded manifest implementation tree is not the frozen v1 tree.",
+        )
+        binding = _manifest_binding(path, payload, manifest_sha256=opened.sha256)
+        _require(
+            binding["attestation"]["key_id"] == trust_root.key_id,
+            "Superseded and current manifests do not share the attestation trust root.",
+        )
+        opened.assert_unchanged()
+        return payload, binding
+    finally:
+        opened.close()
 
 
 def _seed_values(seed: int) -> dict[str, int]:
@@ -833,7 +1025,7 @@ def _validate_training_command(
         command
         == build_training_command(
             train_script=train_script,
-            output_root=output_dir.parent.parent,
+            output_root=command_output_dir.parent.parent,
             scale=scale,
             seed=seed,
             context=context,
@@ -890,11 +1082,46 @@ def _assert_finite_tensors(value: Any, *, label: str) -> None:
             _assert_finite_tensors(child, label=f"{label}[{index}]")
 
 
+def _routed_expert_parameter_pairs(
+    model_named_parameters: Sequence[tuple[str, torch.nn.Parameter]],
+    *,
+    expected_state_parameter_ids: set[int],
+) -> tuple[tuple[int, int], ...]:
+    parameter_ids = {name: index for index, (name, _parameter) in enumerate(model_named_parameters)}
+    routed_ids = {
+        index
+        for index, (name, _parameter) in enumerate(model_named_parameters)
+        if index in expected_state_parameter_ids and ".moe.experts." in name
+    }
+    pairs: list[tuple[int, int]] = []
+    gate_suffix = ".gate_up_proj.weight"
+    down_suffix = ".down_proj.weight"
+    for gate_id, (name, _parameter) in enumerate(model_named_parameters):
+        if gate_id not in routed_ids or not name.endswith(gate_suffix):
+            continue
+        down_name = name.removesuffix(gate_suffix) + down_suffix
+        candidate_down_id = parameter_ids.get(down_name)
+        _require(
+            candidate_down_id is not None and candidate_down_id in routed_ids,
+            "Routed-expert optimizer parameter pairing drifted.",
+        )
+        down_id = cast(int, candidate_down_id)
+        pairs.append((gate_id, down_id))
+    paired_ids = [parameter_id for pair in pairs for parameter_id in pair]
+    _require(
+        len(paired_ids) == len(set(paired_ids)) and set(paired_ids) == routed_ids,
+        "Routed-expert optimizer parameter pairing drifted.",
+    )
+    return tuple(pairs)
+
+
 def _validate_optimizer_state(
     optimizer: Any,
     *,
     expected_parameter_count: int,
     expected_state_parameter_ids: set[int],
+    expected_routed_expert_parameter_pairs: Sequence[tuple[int, int]],
+    expected_named_parameters: Sequence[tuple[str, torch.nn.Parameter]],
 ) -> None:
     _require(isinstance(optimizer, Mapping), "Training optimizer state is missing.")
     _require(set(optimizer) == {"state", "param_groups"}, "Optimizer state schema drifted.")
@@ -940,17 +1167,71 @@ def _validate_optimizer_state(
         "Optimizer hyperparameters drifted.",
     )
     _require(set(state) == expected_state_parameter_ids, "Optimizer state inventory drifted.")
+    _require(
+        len(expected_named_parameters) == expected_parameter_count,
+        "Optimizer named-parameter contract drifted.",
+    )
+    routed_parameter_ids = {
+        parameter_id for pair in expected_routed_expert_parameter_pairs for parameter_id in pair
+    }
+    _require(
+        len(routed_parameter_ids) == 2 * len(expected_routed_expert_parameter_pairs)
+        and routed_parameter_ids <= expected_state_parameter_ids,
+        "Routed-expert optimizer parameter pairing drifted.",
+    )
+    step_values: dict[int, int] = {}
     for parameter_id, parameter_state in state.items():
+        _require(
+            type(parameter_id) is int and 0 <= parameter_id < expected_parameter_count,
+            "Optimizer state parameter ID is invalid.",
+        )
         _require(isinstance(parameter_state, Mapping), "Optimizer parameter state is invalid.")
+        _require(
+            set(parameter_state) == {"step", "exp_avg", "exp_avg_sq"},
+            "Optimizer parameter-state schema drifted.",
+        )
+        parameter_name, expected_parameter = expected_named_parameters[parameter_id]
+        for moment_name in ("exp_avg", "exp_avg_sq"):
+            moment = parameter_state.get(moment_name)
+            _require(
+                isinstance(moment, torch.Tensor)
+                and tuple(moment.shape) == tuple(expected_parameter.shape)
+                and moment.dtype == expected_parameter.dtype,
+                f"Optimizer {moment_name} tensor contract drifted for {parameter_name}.",
+            )
+        _assert_finite_tensors(parameter_state, label=f"optimizer.state.{parameter_id}")
         step = parameter_state.get("step")
         if isinstance(step, torch.Tensor):
-            _require(step.numel() == 1, "Optimizer step tensor is invalid.")
-            step_value = float(step.item())
+            _require(step.ndim == 0 and step.numel() == 1, "Optimizer step tensor is invalid.")
+            raw_step_value = step.item()
         else:
-            _require(isinstance(step, (int, float)), "Optimizer step marker is invalid.")
-            step_value = float(step)
-        _require(step_value == STEPS, "Optimizer did not complete exactly 1000 steps.")
-        _assert_finite_tensors(parameter_state, label=f"optimizer.state.{parameter_id}")
+            raw_step_value = step
+        _require(
+            isinstance(raw_step_value, (int, float)) and not isinstance(raw_step_value, bool),
+            "Optimizer step marker is invalid.",
+        )
+        step_value = float(raw_step_value)
+        _require(
+            math.isfinite(step_value) and step_value.is_integer(),
+            "Optimizer step marker must be a finite integer.",
+        )
+        integral_step = int(step_value)
+        if parameter_id in routed_parameter_ids:
+            _require(
+                1 <= integral_step <= STEPS,
+                "Routed-expert optimizer update count is outside the frozen step range.",
+            )
+        else:
+            _require(
+                integral_step == STEPS,
+                "Non-routed optimizer parameter did not complete exactly 1000 steps.",
+            )
+        step_values[parameter_id] = integral_step
+    for gate_id, down_id in expected_routed_expert_parameter_pairs:
+        _require(
+            step_values[gate_id] == step_values[down_id],
+            "Routed-expert optimizer parameter-pair update counts differ.",
+        )
 
 
 def _validate_checkpoint(
@@ -1037,7 +1318,11 @@ def _validate_checkpoint(
         expected_probe.load_state_dict(dict(probe_state), strict=True, assign=True)
         model_named_parameters = tuple(expected_model.named_parameters())
         probe_named_parameters = tuple(expected_probe.named_parameters())
-        parameter_count = len(model_named_parameters) + len(probe_named_parameters)
+        optimizer_named_parameters = (
+            *model_named_parameters,
+            *((f"probe_objective.{name}", parameter) for name, parameter in probe_named_parameters),
+        )
+        parameter_count = len(optimizer_named_parameters)
         # The frozen direct objective executes the full-sequence path, so cache-only HCA
         # compressors and the unused MTP branch legitimately never acquire AdamW state.
         expected_state_parameter_ids = {
@@ -1046,12 +1331,18 @@ def _validate_checkpoint(
             if not name.startswith("mtp_modules.") and ".self_attn.hca." not in name
         }
         expected_state_parameter_ids.update(range(len(model_named_parameters), parameter_count))
+        expected_routed_expert_parameter_pairs = _routed_expert_parameter_pairs(
+            model_named_parameters,
+            expected_state_parameter_ids=expected_state_parameter_ids,
+        )
         _assert_finite_tensors(state, label="checkpoint.model")
         _assert_finite_tensors(probe_state, label="checkpoint.probe_objective")
         _validate_optimizer_state(
             raw.get("optimizer"),
             expected_parameter_count=parameter_count,
             expected_state_parameter_ids=expected_state_parameter_ids,
+            expected_routed_expert_parameter_pairs=expected_routed_expert_parameter_pairs,
+            expected_named_parameters=optimizer_named_parameters,
         )
         del expected_model, expected_probe
     except (RuntimeError, TypeError, ValueError) as error:
@@ -1520,13 +1811,867 @@ def _run_record(
         "canonical_trainer_sha256": trainer_sha256,
         "checkpoint": payload["checkpoint"],
         "summary": {
-            "path": str(summary_path),
+            "path": str(summary_path.resolve()),
             "sha256": summary_sha256,
             "bytes": summary_bytes,
             "payload_sha256": payload["payload_sha256"],
             "attestation_mac": payload["attestation"]["mac"],
         },
     }
+
+
+def _exact_regular_file_binding(path: Path, *, expected_sha256: str, label: str) -> dict[str, Any]:
+    opened = attestation.open_regular_nofollow(path)
+    try:
+        _require(opened.sha256 == expected_sha256, f"{label} exact-byte digest drifted.")
+        binding = {"path": str(path), "sha256": opened.sha256, "bytes": opened.bytes}
+        opened.assert_unchanged()
+        return binding
+    finally:
+        opened.close()
+
+
+def _load_superseded_empty_matrix_ledger(
+    *,
+    output_root: Path,
+    manifest_binding: Mapping[str, Any],
+    trust_root: attestation.TrustRoot,
+    trainer_binding: Mapping[str, Any],
+) -> tuple[dict[str, Any], FrozenContext, dict[str, Any], dict[str, Any]]:
+    ledger_path = output_root / SUPERSEDED_MATRIX_SUMMARY_NAME
+    opened = attestation.open_regular_nofollow(ledger_path)
+    try:
+        _require(
+            opened.sha256 == contract.SUPERSEDED_MATRIX_SHA256,
+            "Superseded training matrix exact-byte digest drifted.",
+        )
+        try:
+            payload = json.loads(opened.read_bytes().decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise ValueError("Superseded training matrix is invalid JSON.") from error
+        _require(isinstance(payload, dict), "Superseded training matrix must be a JSON object.")
+        _require(
+            set(payload) == SUPERSEDED_TRAINING_MATRIX_FIELDS,
+            "Superseded training matrix top-level schema drifted.",
+        )
+        _validate_payload_digest(payload, label="Superseded training matrix")
+        envelope = payload.get("attestation")
+        _require(
+            isinstance(envelope, Mapping),
+            "Superseded training matrix attestation is missing.",
+        )
+        semantic = dict(payload)
+        semantic.pop("attestation")
+        attestation.verify_attestation(
+            semantic,
+            cast(Mapping[str, Any], envelope),
+            trust_root=trust_root,
+            purpose=SUPERSEDED_MATRIX_ATTESTATION_PURPOSE,
+        )
+        raw_source = payload.get("source")
+        _require(
+            isinstance(raw_source, Mapping),
+            "Superseded training matrix source binding is missing.",
+        )
+        source = _validated_source_state(cast(Mapping[str, Any], raw_source))
+        _require(
+            source["commit"] == contract.SUPERSEDED_ATTEMPT_SOURCE_COMMIT,
+            "Superseded attempt source commit drifted.",
+        )
+        _require(
+            _superseded_attempt_is_ancestor_of_head(cast(str, source["commit"])),
+            "Superseded attempt source commit is not an ancestor of current HEAD.",
+        )
+        context = FrozenContext(
+            manifest_path=_superseded_manifest_path().resolve(),
+            manifest_binding=dict(manifest_binding),
+            source=source,
+        )
+        _require(
+            payload.get("schema_version") == 3
+            and payload.get("experiment_id") == EXPERIMENT_ID
+            and payload.get("artifact_type") == ARTIFACT_TYPE
+            and payload.get("status") == "in_progress"
+            and payload.get("manifest") == dict(manifest_binding)
+            and payload.get("attestation_contract") == manifest_binding["attestation"]
+            and payload.get("canonical_trainer") == dict(trainer_binding)
+            and tuple(payload.get("scales", ())) == FROZEN_SCALES
+            and tuple(payload.get("frozen_training_seeds", ())) == FROZEN_TRAINING_SEEDS
+            and payload.get("steps") == STEPS
+            and payload.get("minimum_steps") == MINIMUM_STEPS
+            and payload.get("seed_rules") == SEED_RULES
+            and payload.get("expected_runs") == 10
+            and payload.get("completed_runs") == 0
+            and payload.get("runs") == [],
+            "Superseded training matrix is not the exact authenticated empty prefix.",
+        )
+        _validate_gpu_lease_binding(payload.get("gpu_lease"))
+        raw_environment = payload.get("execution_environment")
+        _require(
+            isinstance(raw_environment, Mapping),
+            "Superseded training matrix execution environment is missing.",
+        )
+        frozen_environment = execution_environment.validate_execution_environment(
+            cast(Mapping[str, Any], raw_environment)
+        )
+        opened.assert_unchanged()
+        binding = {
+            "path": str(ledger_path.resolve()),
+            "sha256": opened.sha256,
+            "bytes": opened.bytes,
+            "payload_sha256": payload["payload_sha256"],
+            "attestation_mac": payload["attestation"]["mac"],
+            "source": source,
+            "status": "in_progress",
+            "completed_runs": 0,
+        }
+        return payload, context, binding, frozen_environment
+    finally:
+        opened.close()
+
+
+def _load_preserved_claim(*, output_root: Path) -> dict[str, Any]:
+    scale, seed = PREHELDOUT_ADMISSION_COORDINATE
+    claim_path = _run_output_dir(output_root, scale, seed) / CLAIM_NAME
+    opened = attestation.open_regular_nofollow(claim_path)
+    try:
+        _require(
+            opened.sha256 == contract.SUPERSEDED_CLAIM_SHA256,
+            "Preserved training claim exact-byte digest drifted.",
+        )
+        raw = opened.read_bytes()
+        try:
+            text = raw.decode("ascii")
+        except UnicodeDecodeError as error:
+            raise ValueError("Preserved training claim is not ASCII.") from error
+        _require(
+            text.endswith("\n") and text.count("\n") == 1 and contract.is_sha256(text[:-1]),
+            "Preserved training claim nonce encoding drifted.",
+        )
+        opened.assert_unchanged()
+        return {
+            "path": str(claim_path.resolve()),
+            "sha256": opened.sha256,
+            "bytes": opened.bytes,
+            "launch_nonce": text[:-1],
+            "retention": "registered-exact-byte-claim-must-remain-forever",
+        }
+    finally:
+        opened.close()
+
+
+def _validate_superseded_training_bundle(
+    *,
+    output_root: Path,
+    trust_root: attestation.TrustRoot,
+    trainer_binding: Mapping[str, Any],
+    expected_execution_environment: Mapping[str, Any] | None,
+    return_raw_checkpoint: bool,
+) -> ValidatedSupersededBundle:
+    _manifest, manifest_binding = _load_superseded_manifest_binding(trust_root=trust_root)
+    (
+        _old_ledger,
+        old_context,
+        matrix_ledger_binding,
+        frozen_environment,
+    ) = _load_superseded_empty_matrix_ledger(
+        output_root=output_root,
+        manifest_binding=manifest_binding,
+        trust_root=trust_root,
+        trainer_binding=trainer_binding,
+    )
+    if expected_execution_environment is not None:
+        _require(
+            frozen_environment
+            == execution_environment.validate_execution_environment(expected_execution_environment),
+            "Superseded bundle execution environment differs from the amended matrix.",
+        )
+    claim_binding = _load_preserved_claim(output_root=output_root)
+    scale, seed = PREHELDOUT_ADMISSION_COORDINATE
+    summary_path = _training_summary_path(output_root, scale, seed)
+    checkpoint_path = _checkpoint_path(output_root, scale, seed)
+    summary_file = _exact_regular_file_binding(
+        summary_path,
+        expected_sha256=contract.SUPERSEDED_TRAINING_SUMMARY_SHA256,
+        label="Superseded training summary",
+    )
+    checkpoint_file = _exact_regular_file_binding(
+        checkpoint_path,
+        expected_sha256=contract.SUPERSEDED_CHECKPOINT_SHA256,
+        label="Superseded training checkpoint",
+    )
+    launch_nonce = cast(str, claim_binding["launch_nonce"])
+    trainer_sha256 = cast(str, trainer_binding["sha256"])
+    raw_checkpoint: Mapping[str, Any] | None = None
+    if return_raw_checkpoint:
+        summary, checkpoint, raw_checkpoint = load_validated_training_bundle(
+            summary_path,
+            output_root=output_root,
+            train_script=TRAIN_SCRIPT,
+            context=old_context,
+            scale=scale,
+            seed=seed,
+            trust_root=trust_root,
+            launch_nonce=launch_nonce,
+            trainer_sha256=trainer_sha256,
+            expected_execution_environment=frozen_environment,
+        )
+    else:
+        summary = load_validated_training_summary(
+            summary_path,
+            output_root=output_root,
+            train_script=TRAIN_SCRIPT,
+            context=old_context,
+            scale=scale,
+            seed=seed,
+            trust_root=trust_root,
+            launch_nonce=launch_nonce,
+            trainer_sha256=trainer_sha256,
+            expected_execution_environment=frozen_environment,
+        )
+        checkpoint = cast(dict[str, Any], summary["checkpoint"])
+    _require(
+        checkpoint == summary["checkpoint"]
+        and checkpoint.get("sha256") == contract.SUPERSEDED_CHECKPOINT_SHA256
+        and checkpoint.get("bytes") == checkpoint_file["bytes"]
+        and Path(os.path.abspath(cast(str, checkpoint.get("path"))))
+        == Path(os.path.abspath(checkpoint_path)),
+        "Superseded checkpoint binding drifted.",
+    )
+    _require(
+        summary_file["sha256"] == contract.SUPERSEDED_TRAINING_SUMMARY_SHA256,
+        "Superseded summary binding drifted.",
+    )
+    _exact_regular_file_binding(
+        summary_path,
+        expected_sha256=contract.SUPERSEDED_TRAINING_SUMMARY_SHA256,
+        label="Superseded training summary",
+    )
+    _exact_regular_file_binding(
+        checkpoint_path,
+        expected_sha256=contract.SUPERSEDED_CHECKPOINT_SHA256,
+        label="Superseded training checkpoint",
+    )
+    run_record = _run_record(
+        summary,
+        summary_path=summary_path,
+        scale=scale,
+        seed=seed,
+        launch_nonce=launch_nonce,
+        trainer_sha256=trainer_sha256,
+    )
+    return ValidatedSupersededBundle(
+        context=old_context,
+        manifest_binding=manifest_binding,
+        matrix_ledger_binding=matrix_ledger_binding,
+        claim_binding=claim_binding,
+        execution_environment=frozen_environment,
+        training_summary=summary,
+        checkpoint=dict(checkpoint),
+        raw_checkpoint=raw_checkpoint,
+        run_record=run_record,
+    )
+
+
+def _downstream_roots(output_root: Path) -> tuple[Path, ...]:
+    parent = Path(os.path.abspath(output_root)).parent
+    return tuple(
+        parent / name
+        for name in (
+            "calibration",
+            "top_p_physical_match",
+            "controller",
+            "controller-integrity.json",
+            "controller-summary.json",
+            ".controller.p2-direct-controller-workers",
+        )
+    )
+
+
+def _preflight_direct_root_top_level(*, output_root: Path) -> None:
+    root = Path(os.path.abspath(output_root))
+    direct_root = root.parent
+    lock_path = direct_root / LOCK_NAME
+    _require(root.name == "training", "Superseded training root name drifted.")
+    _require(
+        direct_root.is_dir() and not direct_root.is_symlink(),
+        "Superseded direct artifact root is unsafe.",
+    )
+    _require(root.is_dir() and not root.is_symlink(), "Superseded training root is unsafe.")
+    expected_top_level = {root, lock_path}
+    observed_top_level: set[Path] = set()
+    for item in direct_root.iterdir():
+        absolute_item = Path(os.path.abspath(item))
+        _require(
+            not item.is_symlink(),
+            f"One-shot admission found a symlink in the direct artifact root: {item}",
+        )
+        _require(
+            absolute_item in expected_top_level,
+            f"One-shot admission found an unregistered direct artifact: {item}",
+        )
+        observed_top_level.add(absolute_item)
+    _require(
+        observed_top_level == expected_top_level,
+        "One-shot admission requires the exact direct-root top-level inventory.",
+    )
+    lock_stat = os.stat(lock_path, follow_symlinks=False)
+    _require(
+        stat.S_ISREG(lock_stat.st_mode)
+        and lock_stat.st_uid == os.getuid()
+        and lock_stat.st_nlink == 1
+        and stat.S_IMODE(lock_stat.st_mode) == 0o600,
+        "One-shot admission matrix lock ownership, link count, or mode is unsafe.",
+    )
+
+
+def _preflight_exact_superseded_inventory(
+    *, output_root: Path, include_committed_admission: bool = False
+) -> None:
+    root = Path(os.path.abspath(output_root))
+    scale, seed = PREHELDOUT_ADMISSION_COORDINATE
+    output_dir = _run_output_dir(root, scale, seed)
+    allowed = {
+        root / SUPERSEDED_MATRIX_SUMMARY_NAME,
+        root / scale,
+        output_dir,
+        output_dir / CLAIM_NAME,
+        _training_summary_path(root, scale, seed),
+        _checkpoint_path(root, scale, seed),
+    }
+    if include_committed_admission:
+        allowed.add(root / PREHELDOUT_ADMISSION_NAME)
+    _preflight_direct_root_top_level(output_root=root)
+    for item in root.rglob("*"):
+        _require(not item.is_symlink(), f"Superseded training tree contains a symlink: {item}")
+        _require(
+            Path(os.path.abspath(item)) in allowed,
+            f"One-shot admission found an unregistered training artifact: {item}",
+        )
+
+
+def _admission_encoded_bytes(payload: Mapping[str, Any]) -> bytes:
+    return (json.dumps(payload, indent=2, sort_keys=True, allow_nan=False) + "\n").encode("utf-8")
+
+
+def _admission_staging_path(path: Path) -> Path:
+    absolute = Path(os.path.abspath(path))
+    return absolute.parent.parent.parent / PREHELDOUT_ADMISSION_STAGING_NAME
+
+
+def _fsync_directory(path: Path) -> None:
+    descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_CLOEXEC", 0))
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def _read_safe_admission_staging(path: Path) -> bytes:
+    opened = attestation.open_regular_nofollow(path)
+    try:
+        file_stat = os.fstat(opened.file_descriptor)
+        _require(
+            file_stat.st_uid == os.getuid()
+            and file_stat.st_nlink == 1
+            and stat.S_IMODE(file_stat.st_mode) == 0o600,
+            "Admission staging ownership, link count, or mode is unsafe.",
+        )
+        raw = opened.read_bytes()
+        opened.assert_unchanged()
+        return raw
+    finally:
+        opened.close()
+
+
+def _fsync_safe_owned_regular_file(path: Path, *, allowed_link_counts: frozenset[int]) -> None:
+    no_follow = getattr(os, "O_NOFOLLOW", None)
+    _require(no_follow is not None, "Admission durability requires O_NOFOLLOW support.")
+    descriptor = os.open(
+        path,
+        os.O_RDWR | getattr(os, "O_CLOEXEC", 0) | cast(int, no_follow),
+    )
+    try:
+        opened = os.fstat(descriptor)
+        current = os.stat(path, follow_symlinks=False)
+        identity = (opened.st_dev, opened.st_ino, opened.st_size)
+        _require(
+            stat.S_ISREG(opened.st_mode)
+            and (opened.st_dev, opened.st_ino) == (current.st_dev, current.st_ino)
+            and opened.st_uid == current.st_uid == os.getuid()
+            and opened.st_nlink == current.st_nlink
+            and opened.st_nlink in allowed_link_counts
+            and stat.S_IMODE(opened.st_mode) == stat.S_IMODE(current.st_mode) == 0o600,
+            "Admission durable inode ownership, identity, link count, or mode is unsafe.",
+        )
+        os.fsync(descriptor)
+        after = os.fstat(descriptor)
+        current_after = os.stat(path, follow_symlinks=False)
+        _require(
+            (after.st_dev, after.st_ino, after.st_size) == identity
+            and (current_after.st_dev, current_after.st_ino, current_after.st_size) == identity,
+            "Admission durable inode changed while it was fsynced.",
+        )
+    finally:
+        os.close(descriptor)
+
+
+def _exclusive_write_admission(path: Path, payload: Mapping[str, Any]) -> None:
+    path = Path(os.path.abspath(path))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    staging_path = _admission_staging_path(path)
+    encoded = _admission_encoded_bytes(payload)
+    no_follow = getattr(os, "O_NOFOLLOW", 0)
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_CLOEXEC", 0) | no_follow
+    if os.path.lexists(staging_path):
+        staged = _read_safe_admission_staging(staging_path)
+        if staged != encoded:
+            _require(
+                len(staged) < len(encoded) and encoded.startswith(staged),
+                "Admission staging bytes are not an exact recoverable prefix.",
+            )
+            os.unlink(staging_path)
+            _fsync_directory(staging_path.parent)
+    if not os.path.lexists(staging_path):
+        try:
+            descriptor = os.open(staging_path, flags, 0o600)
+        except FileExistsError as error:
+            raise ValueError("Admission staging path changed during creation.") from error
+        try:
+            view = memoryview(encoded)
+            while view:
+                written = os.write(descriptor, view)
+                _require(written > 0, "Pre-held-out admission write made no progress.")
+                view = view[written:]
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+        _fsync_directory(staging_path.parent)
+    _require(
+        _read_safe_admission_staging(staging_path) == encoded,
+        "Admission staging bytes drifted before atomic commit.",
+    )
+    _fsync_safe_owned_regular_file(staging_path, allowed_link_counts=frozenset({1}))
+    _fsync_directory(staging_path.parent)
+    _require(
+        _read_safe_admission_staging(staging_path) == encoded,
+        "Admission staging bytes drifted after durability recovery.",
+    )
+    try:
+        os.link(staging_path, path, follow_symlinks=False)
+    except FileExistsError as error:
+        raise ValueError(
+            "Pre-held-out admission already exists and cannot be recreated."
+        ) from error
+    _fsync_directory(path.parent)
+    os.unlink(staging_path)
+    _fsync_directory(staging_path.parent)
+    opened = attestation.open_regular_nofollow(path)
+    try:
+        final_stat = os.fstat(opened.file_descriptor)
+        _require(
+            opened.read_bytes() == encoded
+            and final_stat.st_uid == os.getuid()
+            and final_stat.st_nlink == 1
+            and stat.S_IMODE(final_stat.st_mode) == 0o600,
+            "Committed admission bytes, ownership, link count, or mode drifted.",
+        )
+        opened.assert_unchanged()
+    finally:
+        opened.close()
+
+
+def _cleanup_committed_admission_staging(path: Path, payload: Mapping[str, Any]) -> None:
+    path = Path(os.path.abspath(path))
+    staging_path = _admission_staging_path(path)
+    if not os.path.lexists(staging_path):
+        return
+    final = attestation.open_regular_nofollow(path)
+    staged = attestation.open_regular_nofollow(staging_path)
+    try:
+        expected = _admission_encoded_bytes(payload)
+        _require(
+            (final.device, final.inode) == (staged.device, staged.inode)
+            and final.read_bytes() == staged.read_bytes() == expected,
+            "Committed admission staging recovery found a different inode or bytes.",
+        )
+        final.assert_unchanged()
+        staged.assert_unchanged()
+    finally:
+        staged.close()
+        final.close()
+    _fsync_safe_owned_regular_file(path, allowed_link_counts=frozenset({2}))
+    _fsync_directory(path.parent)
+    os.unlink(staging_path)
+    _fsync_directory(staging_path.parent)
+    committed = attestation.open_regular_nofollow(path)
+    try:
+        committed_stat = os.fstat(committed.file_descriptor)
+        _require(
+            committed_stat.st_nlink == 1,
+            "Committed admission link count did not recover to one.",
+        )
+        committed.assert_unchanged()
+    finally:
+        committed.close()
+
+
+def _admission_public_binding(
+    opened: attestation.OpenedRegularFile, payload: Mapping[str, Any]
+) -> dict[str, Any]:
+    opened.assert_unchanged()
+    binding = {
+        "path": str(opened.path),
+        "sha256": opened.sha256,
+        "bytes": opened.bytes,
+        "payload_sha256": payload.get("payload_sha256"),
+        "attestation_mac": cast(Mapping[str, Any], payload["attestation"]).get("mac"),
+        "admission_id": payload.get("admission_id"),
+        "coordinate": payload.get("coordinate"),
+        "preserved_claim_sha256": cast(Mapping[str, Any], payload["preserved_claim"]).get("sha256"),
+        "admitted_run_record_sha256": contract.json_digest(payload["admitted_run_record"]),
+    }
+    _require(
+        set(binding) == PREHELDOUT_ADMISSION_BINDING_FIELDS,
+        "Pre-held-out admission public binding schema drifted.",
+    )
+    opened.assert_unchanged()
+    return binding
+
+
+def _admission_semantic_payload(
+    *,
+    output_root: Path,
+    context: FrozenContext,
+    trainer_binding: Mapping[str, Any],
+    bundle: ValidatedSupersededBundle,
+) -> dict[str, Any]:
+    scale, seed = PREHELDOUT_ADMISSION_COORDINATE
+    return {
+        "schema_version": 1,
+        "admission_id": PREHELDOUT_ADMISSION_ID,
+        "status": "terminal",
+        "reason": PREHELDOUT_ADMISSION_REASON,
+        "current_source": context.source,
+        "current_manifest": context.manifest_binding,
+        "coordinate": {"scale": scale, "training_seed": seed},
+        "superseded_manifest": bundle.manifest_binding,
+        "superseded_matrix_ledger": bundle.matrix_ledger_binding,
+        "preserved_claim": bundle.claim_binding,
+        "training_summary": bundle.run_record["summary"],
+        "checkpoint": bundle.checkpoint,
+        "canonical_trainer": dict(trainer_binding),
+        "execution_environment": bundle.execution_environment,
+        "scientific_child_processes_started_at_creation": 0,
+        "read_only_git_provenance_commands_within_admission_creation": list(
+            ADMISSION_READ_ONLY_GIT_PROVENANCE_COMMANDS
+        ),
+        "exclusive_matrix_lock_verified_immediately_before_creation": True,
+        "scheduler_gpu_lease_verified_immediately_before_creation": True,
+        "physical_device_guard_verified_immediately_before_creation": True,
+        "downstream_roots_absence_verified_immediately_before_creation": [
+            str(path) for path in _downstream_roots(output_root)
+        ],
+        "direct_root_top_level_inventory_verified_immediately_before_creation": list(
+            ADMISSION_DIRECT_ROOT_TOP_LEVEL_INVENTORY
+        ),
+        "admitted_run_record": bundle.run_record,
+    }
+
+
+def load_preheldout_admission(
+    *,
+    output_root: Path,
+    context: FrozenContext,
+    trust_root: attestation.TrustRoot,
+    trainer_binding: Mapping[str, Any],
+    expected_execution_environment: Mapping[str, Any] | None = None,
+    return_raw_checkpoint: bool = False,
+) -> ValidatedPreheldoutAdmission:
+    path = output_root / PREHELDOUT_ADMISSION_NAME
+    _require(path.is_file(), "Required pre-held-out training admission is missing.")
+    _require(not path.is_symlink(), "Pre-held-out training admission may not be a symlink.")
+    opened = attestation.open_regular_nofollow(path)
+    try:
+        admission_stat = os.fstat(opened.file_descriptor)
+        _require(
+            admission_stat.st_uid == os.getuid()
+            and admission_stat.st_nlink == 1
+            and stat.S_IMODE(admission_stat.st_mode) == 0o600,
+            "Pre-held-out admission ownership, link count, or mode is unsafe.",
+        )
+        raw_bytes = opened.read_bytes()
+        try:
+            payload = json.loads(raw_bytes.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise ValueError("Pre-held-out training admission is invalid JSON.") from error
+        _require(isinstance(payload, dict), "Pre-held-out admission must be a JSON object.")
+        canonical_bytes = (
+            json.dumps(payload, indent=2, sort_keys=True, allow_nan=False) + "\n"
+        ).encode("utf-8")
+        _require(
+            raw_bytes == canonical_bytes,
+            "Pre-held-out admission exact-byte encoding drifted.",
+        )
+        _require(
+            set(payload) == PREHELDOUT_ADMISSION_FIELDS,
+            "Pre-held-out admission top-level schema drifted.",
+        )
+        _validate_payload_digest(payload, label="Pre-held-out admission")
+        envelope = payload.get("attestation")
+        _require(isinstance(envelope, Mapping), "Pre-held-out admission attestation is missing.")
+        semantic = dict(payload)
+        semantic.pop("attestation")
+        attestation.verify_attestation(
+            semantic,
+            cast(Mapping[str, Any], envelope),
+            trust_root=trust_root,
+            purpose=PREHELDOUT_ADMISSION_ATTESTATION_PURPOSE,
+        )
+        bundle = _validate_superseded_training_bundle(
+            output_root=output_root,
+            trust_root=trust_root,
+            trainer_binding=trainer_binding,
+            expected_execution_environment=expected_execution_environment,
+            return_raw_checkpoint=return_raw_checkpoint,
+        )
+        expected = _attested_payload(
+            _admission_semantic_payload(
+                output_root=output_root,
+                context=context,
+                trainer_binding=trainer_binding,
+                bundle=bundle,
+            ),
+            trust_root=trust_root,
+            purpose=PREHELDOUT_ADMISSION_ATTESTATION_PURPOSE,
+        )
+        _require(
+            payload == expected,
+            "Pre-held-out admission semantic or exact-byte evidence binding drifted.",
+        )
+        opened.assert_unchanged()
+        binding = _admission_public_binding(opened, payload)
+        return ValidatedPreheldoutAdmission(
+            payload=payload,
+            public_binding=binding,
+            admitted_run_record=bundle.run_record,
+            training_summary=bundle.training_summary,
+            checkpoint=bundle.checkpoint,
+            raw_checkpoint=bundle.raw_checkpoint,
+            superseded_context=bundle.context,
+        )
+    finally:
+        opened.close()
+
+
+def _assert_admission_leases(
+    *,
+    output_root: Path,
+    matrix_lock: _MatrixLockLease,
+    gpu_lease: gpu_lock.GPULockLease,
+    device_guard: gpu_lock.GPULockLease,
+) -> None:
+    matrix_lock.assert_held()
+    gpu_lease.assert_held()
+    device_guard.assert_held()
+    _require(
+        Path(os.path.abspath(matrix_lock.path))
+        == Path(os.path.abspath(output_root)).parent / LOCK_NAME,
+        "Pre-held-out admission matrix lock path drifted.",
+    )
+
+
+def _load_or_create_preheldout_admission(
+    *,
+    output_root: Path,
+    matrix_summary: Path,
+    context: FrozenContext,
+    trust_root: attestation.TrustRoot,
+    trainer_binding: Mapping[str, Any],
+    expected_execution_environment: Mapping[str, Any],
+    trainer_subprocesses_started: int,
+    matrix_lock: _MatrixLockLease,
+    gpu_lease: gpu_lock.GPULockLease,
+    device_guard: gpu_lock.GPULockLease,
+) -> ValidatedPreheldoutAdmission | None:
+    path = output_root / PREHELDOUT_ADMISSION_NAME
+    if not REQUIRE_PREHELDOUT_ADMISSION:
+        _require(
+            not os.path.lexists(path),
+            "Unit-test admission bypass may not coexist with an admission record.",
+        )
+        return None
+    _assert_admission_leases(
+        output_root=output_root,
+        matrix_lock=matrix_lock,
+        gpu_lease=gpu_lease,
+        device_guard=device_guard,
+    )
+    if path.exists():
+        if os.path.lexists(_admission_staging_path(path)):
+            _cleanup_committed_admission_staging(path, _load_json(path))
+        admission = load_preheldout_admission(
+            output_root=output_root,
+            context=context,
+            trust_root=trust_root,
+            trainer_binding=trainer_binding,
+            expected_execution_environment=expected_execution_environment,
+        )
+        _assert_admission_leases(
+            output_root=output_root,
+            matrix_lock=matrix_lock,
+            gpu_lease=gpu_lease,
+            device_guard=device_guard,
+        )
+        if not os.path.lexists(matrix_summary):
+            _require(
+                not any(os.path.lexists(root) for root in _downstream_roots(output_root)),
+                "Unpromoted admission requires every downstream artifact to be absent.",
+            )
+            _preflight_exact_superseded_inventory(
+                output_root=output_root,
+                include_committed_admission=True,
+            )
+        return admission
+    _require(
+        not os.path.lexists(path),
+        "Pre-held-out admission path exists but is not a regular file.",
+    )
+    _require(
+        not os.path.lexists(matrix_summary),
+        "Current training ledger exists without its required pre-held-out admission.",
+    )
+    _require(
+        trainer_subprocesses_started == 0,
+        "Pre-held-out admission must precede every trainer subprocess.",
+    )
+    downstream_roots = _downstream_roots(output_root)
+    _require(
+        not any(os.path.lexists(root) for root in downstream_roots),
+        "Pre-held-out admission requires every direct downstream artifact to be absent.",
+    )
+    _preflight_exact_superseded_inventory(output_root=output_root)
+    _assert_admission_leases(
+        output_root=output_root,
+        matrix_lock=matrix_lock,
+        gpu_lease=gpu_lease,
+        device_guard=device_guard,
+    )
+    bundle = _validate_superseded_training_bundle(
+        output_root=output_root,
+        trust_root=trust_root,
+        trainer_binding=trainer_binding,
+        expected_execution_environment=expected_execution_environment,
+        return_raw_checkpoint=False,
+    )
+    _require(
+        not any(os.path.lexists(root) for root in downstream_roots),
+        "Pre-held-out admission requires every direct downstream artifact to remain absent.",
+    )
+    _preflight_exact_superseded_inventory(output_root=output_root)
+    payload = _attested_payload(
+        _admission_semantic_payload(
+            output_root=output_root,
+            context=context,
+            trainer_binding=trainer_binding,
+            bundle=bundle,
+        ),
+        trust_root=trust_root,
+        purpose=PREHELDOUT_ADMISSION_ATTESTATION_PURPOSE,
+    )
+    _assert_admission_leases(
+        output_root=output_root,
+        matrix_lock=matrix_lock,
+        gpu_lease=gpu_lease,
+        device_guard=device_guard,
+    )
+    _require(
+        not any(os.path.lexists(root) for root in downstream_roots),
+        "Pre-held-out admission requires downstream artifacts to remain absent at commit.",
+    )
+    _preflight_exact_superseded_inventory(output_root=output_root)
+    _exclusive_write_admission(path, payload)
+    _assert_admission_leases(
+        output_root=output_root,
+        matrix_lock=matrix_lock,
+        gpu_lease=gpu_lease,
+        device_guard=device_guard,
+    )
+    _require(
+        not any(os.path.lexists(root) for root in downstream_roots),
+        "Admission postflight found a direct downstream artifact.",
+    )
+    _preflight_exact_superseded_inventory(
+        output_root=output_root,
+        include_committed_admission=True,
+    )
+    admission = load_preheldout_admission(
+        output_root=output_root,
+        context=context,
+        trust_root=trust_root,
+        trainer_binding=trainer_binding,
+        expected_execution_environment=expected_execution_environment,
+    )
+    _assert_admission_leases(
+        output_root=output_root,
+        matrix_lock=matrix_lock,
+        gpu_lease=gpu_lease,
+        device_guard=device_guard,
+    )
+    return admission
+
+
+def load_validated_training_bundle_for_ledger_record(
+    summary_path: Path,
+    *,
+    output_root: Path,
+    context: FrozenContext,
+    scale: str,
+    seed: int,
+    trust_root: attestation.TrustRoot,
+    trainer_binding: Mapping[str, Any],
+    ledger_record: Mapping[str, Any],
+    expected_execution_environment: Mapping[str, Any] | None = None,
+) -> tuple[dict[str, Any], dict[str, Any], Mapping[str, Any]]:
+    if (scale, seed) == PREHELDOUT_ADMISSION_COORDINATE and REQUIRE_PREHELDOUT_ADMISSION:
+        admission = load_preheldout_admission(
+            output_root=output_root,
+            context=context,
+            trust_root=trust_root,
+            trainer_binding=trainer_binding,
+            expected_execution_environment=expected_execution_environment,
+            return_raw_checkpoint=True,
+        )
+        _require(
+            dict(ledger_record) == admission.admitted_run_record,
+            "Admitted first training record differs from the exclusive admission.",
+        )
+        _require(
+            Path(os.path.abspath(summary_path))
+            == Path(os.path.abspath(_training_summary_path(output_root, scale, seed))),
+            "Admitted training summary path drifted.",
+        )
+        _require(
+            admission.raw_checkpoint is not None,
+            "Admitted training bundle lost its checkpoint payload.",
+        )
+        return (
+            admission.training_summary,
+            admission.checkpoint,
+            cast(Mapping[str, Any], admission.raw_checkpoint),
+        )
+    return load_validated_training_bundle(
+        summary_path,
+        output_root=output_root,
+        train_script=TRAIN_SCRIPT,
+        context=context,
+        scale=scale,
+        seed=seed,
+        trust_root=trust_root,
+        launch_nonce=cast(str, ledger_record["launch_nonce"]),
+        trainer_sha256=cast(str, trainer_binding["sha256"]),
+        expected_execution_environment=expected_execution_environment,
+    )
 
 
 def _matrix_payload(
@@ -1537,6 +2682,7 @@ def _matrix_payload(
     trainer_binding: Mapping[str, Any],
     gpu_lease_binding: Mapping[str, Any],
     execution_environment_binding: Mapping[str, Any],
+    preheldout_admission: Mapping[str, Any] | None,
 ) -> dict[str, Any]:
     expected_runs = len(FROZEN_SCALES) * len(FROZEN_TRAINING_SEEDS)
     payload = {
@@ -1560,6 +2706,9 @@ def _matrix_payload(
         "expected_runs": expected_runs,
         "completed_runs": len(runs),
         "runs": list(runs),
+        "preheldout_admission": (
+            None if preheldout_admission is None else dict(preheldout_admission)
+        ),
     }
     return _attested_payload(
         payload,
@@ -1642,6 +2791,24 @@ def validate_matrix_summary(
     _require(payload.get("steps") == STEPS, "Training matrix step count drifted.")
     _require(payload.get("minimum_steps") == MINIMUM_STEPS, "Minimum steps drifted.")
     _require(payload.get("seed_rules") == SEED_RULES, "Matrix seed rules drifted.")
+    validated_admission: ValidatedPreheldoutAdmission | None = None
+    if REQUIRE_PREHELDOUT_ADMISSION:
+        validated_admission = load_preheldout_admission(
+            output_root=output_root,
+            context=context,
+            trust_root=trust_root,
+            trainer_binding=trainer_binding,
+            expected_execution_environment=frozen_environment,
+        )
+        _require(
+            payload.get("preheldout_admission") == validated_admission.public_binding,
+            "Training matrix pre-held-out admission binding drifted.",
+        )
+    else:
+        _require(
+            payload.get("preheldout_admission") is None,
+            "Unit-test matrix may not carry a pre-held-out admission binding.",
+        )
     coordinates = [(scale, seed) for scale in FROZEN_SCALES for seed in FROZEN_TRAINING_SEEDS]
     _require(payload.get("expected_runs") == len(coordinates), "Expected run count drifted.")
     runs = payload.get("runs")
@@ -1649,6 +2816,11 @@ def validate_matrix_summary(
         raise ValueError("Training matrix run inventory is invalid.")
     _require(payload.get("completed_runs") == len(runs), "Completed run count drifted.")
     _require(len(runs) <= len(coordinates), "Training matrix contains extra runs.")
+    if validated_admission is not None:
+        _require(
+            bool(runs) and runs[0] == validated_admission.admitted_run_record,
+            "Training matrix did not register the admitted first run exactly once.",
+        )
     expected_status = "terminal" if len(runs) == len(coordinates) else "in_progress"
     _require(payload.get("status") == expected_status, "Training matrix status drifted.")
 
@@ -1669,18 +2841,21 @@ def validate_matrix_summary(
         )
         summary_path = _training_summary_path(output_root, scale, seed)
         _require(summary_path.is_file(), "Training matrix references a missing summary.")
-        summary = load_validated_training_summary(
-            summary_path,
-            output_root=output_root,
-            train_script=train_script,
-            context=context,
-            scale=scale,
-            seed=seed,
-            trust_root=trust_root,
-            launch_nonce=str(launch_nonce),
-            trainer_sha256=str(trainer_sha256),
-            expected_execution_environment=frozen_environment,
-        )
+        if validated_admission is not None and (scale, seed) == PREHELDOUT_ADMISSION_COORDINATE:
+            summary = validated_admission.training_summary
+        else:
+            summary = load_validated_training_summary(
+                summary_path,
+                output_root=output_root,
+                train_script=train_script,
+                context=context,
+                scale=scale,
+                seed=seed,
+                trust_root=trust_root,
+                launch_nonce=str(launch_nonce),
+                trainer_sha256=str(trainer_sha256),
+                expected_execution_environment=frozen_environment,
+            )
         expected_record = _run_record(
             summary,
             summary_path=summary_path,
@@ -1701,6 +2876,7 @@ def validate_matrix_summary(
         output_root=output_root,
         matrix_summary=matrix_summary_path,
         completed_count=len(validated),
+        admission=validated_admission,
     )
     return validated
 
@@ -1803,13 +2979,15 @@ def _matrix_lock(output_root: Path) -> Iterator[_MatrixLockLease]:
     acquired = False
     try:
         opened = os.fstat(descriptor)
-        lease = _MatrixLockLease(
-            path=lock_path,
-            file_descriptor=descriptor,
-            device=opened.st_dev,
-            inode=opened.st_ino,
+        current = os.stat(lock_path, follow_symlinks=False)
+        _require(
+            stat.S_ISREG(opened.st_mode)
+            and (opened.st_dev, opened.st_ino) == (current.st_dev, current.st_ino)
+            and opened.st_uid == current.st_uid == os.getuid()
+            and opened.st_nlink == current.st_nlink == 1
+            and stat.S_IMODE(opened.st_mode) == stat.S_IMODE(current.st_mode) == 0o600,
+            "Training matrix lock ownership, identity, link count, or mode is unsafe.",
         )
-        lease.assert_held()
         try:
             fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError as error:
@@ -1817,6 +2995,13 @@ def _matrix_lock(output_root: Path) -> Iterator[_MatrixLockLease]:
                 "Another direct-training matrix runner holds the exclusive lock."
             ) from error
         acquired = True
+        lease = _MatrixLockLease(
+            path=lock_path,
+            file_descriptor=descriptor,
+            device=opened.st_dev,
+            inode=opened.st_ino,
+            exclusive_lock_acquired=True,
+        )
         lease.assert_held()
         try:
             yield lease
@@ -1867,6 +3052,7 @@ def _preflight_all_coordinates(
     output_root: Path,
     matrix_summary: Path,
     completed_count: int,
+    admission: ValidatedPreheldoutAdmission | None,
 ) -> None:
     root = Path(os.path.abspath(output_root))
     summary = Path(os.path.abspath(matrix_summary))
@@ -1879,6 +3065,17 @@ def _preflight_all_coordinates(
         return
     _require(root.is_dir() and not root.is_symlink(), "Training output root is unsafe.")
     allowed: set[Path] = {summary}
+    if admission is not None:
+        _require(
+            completed_count >= 1,
+            "The admitted first coordinate is missing from the current training prefix.",
+        )
+        allowed.update(
+            {
+                root / SUPERSEDED_MATRIX_SUMMARY_NAME,
+                root / PREHELDOUT_ADMISSION_NAME,
+            }
+        )
     coordinates = [(scale, seed) for scale in FROZEN_SCALES for seed in FROZEN_TRAINING_SEEDS]
     for index, (scale, seed) in enumerate(coordinates):
         scale_dir = root / scale
@@ -1887,10 +3084,21 @@ def _preflight_all_coordinates(
         checkpoint_path = _checkpoint_path(root, scale, seed)
         claim_path = output_dir / CLAIM_NAME
         allowed.update((scale_dir, output_dir))
-        _require(
-            not os.path.lexists(claim_path),
-            f"Crash-stale training claim detected: {scale}/{seed}.",
-        )
+        if admission is not None and index == 0:
+            _require(
+                os.path.lexists(claim_path)
+                and Path(os.path.abspath(cast(str, admission.payload["preserved_claim"]["path"])))
+                == claim_path
+                and admission.payload["preserved_claim"]["sha256"]
+                == contract.SUPERSEDED_CLAIM_SHA256,
+                "Registered pre-held-out claim disappeared or drifted.",
+            )
+            allowed.add(claim_path)
+        else:
+            _require(
+                not os.path.lexists(claim_path),
+                f"Crash-stale training claim detected: {scale}/{seed}.",
+            )
         if index < completed_count:
             allowed.update((summary_path, checkpoint_path))
             _require(
@@ -1988,6 +3196,19 @@ def _run_matrix_under_gpu_lease(
         matrix_lock.assert_held()
         gpu_lease.assert_held()
         device_guard.assert_held()
+        trainer_subprocesses_started = 0
+        admission = _load_or_create_preheldout_admission(
+            output_root=output_root,
+            matrix_summary=matrix_summary,
+            context=context,
+            trust_root=trust_root,
+            trainer_binding=trainer_binding,
+            expected_execution_environment=frozen_execution_environment,
+            trainer_subprocesses_started=trainer_subprocesses_started,
+            matrix_lock=matrix_lock,
+            gpu_lease=gpu_lease,
+            device_guard=device_guard,
+        )
         completed: list[dict[str, Any]] = []
         if matrix_summary.exists():
             gpu_lease.assert_held()
@@ -2003,10 +3224,13 @@ def _run_matrix_under_gpu_lease(
                 expected_execution_environment=frozen_execution_environment,
             )
             matrix_lock.assert_held()
+        elif admission is not None:
+            completed = [admission.admitted_run_record]
         _preflight_all_coordinates(
             output_root=output_root,
             matrix_summary=matrix_summary,
             completed_count=len(completed),
+            admission=admission,
         )
         assert_environment_unchanged(context)
         verification, _ = _open_canonical_trainer(canonical_trainer, expected=trainer_snapshot)
@@ -2024,11 +3248,41 @@ def _run_matrix_under_gpu_lease(
                     trainer_binding=trainer_binding,
                     gpu_lease_binding=gpu_lease_binding,
                     execution_environment_binding=frozen_execution_environment,
+                    preheldout_admission=(None if admission is None else admission.public_binding),
                 ),
                 matrix_lock=matrix_lock,
             )
             gpu_lease.assert_held()
             device_guard.assert_held()
+
+        matrix_lock.assert_held()
+        gpu_lease.assert_held()
+        device_guard.assert_held()
+        persisted_completed = validate_matrix_summary(
+            _load_json(matrix_summary),
+            output_root=output_root,
+            train_script=canonical_trainer,
+            context=context,
+            trust_root=trust_root,
+            trainer_binding=trainer_binding,
+            expected_gpu_lease=gpu_lease_binding,
+            expected_execution_environment=frozen_execution_environment,
+        )
+        _require(
+            persisted_completed == completed,
+            "Persisted amended training ledger failed pre-child independent validation.",
+        )
+        matrix_lock.assert_held()
+        gpu_lease.assert_held()
+        device_guard.assert_held()
+        if REQUIRE_PREHELDOUT_ADMISSION and len(completed) < len(FROZEN_SCALES) * len(
+            FROZEN_TRAINING_SEEDS
+        ):
+            _require(
+                not any(os.path.lexists(root) for root in _downstream_roots(output_root)),
+                "Incomplete direct training requires every downstream artifact to be absent.",
+            )
+            _preflight_direct_root_top_level(output_root=output_root)
 
         coordinates = [(scale, seed) for scale in FROZEN_SCALES for seed in FROZEN_TRAINING_SEEDS]
         for scale, seed in coordinates[len(completed) :]:
@@ -2060,14 +3314,56 @@ def _run_matrix_under_gpu_lease(
                 )
                 gpu_lease.assert_held()
                 device_guard.assert_held()
-                result = _run_trainer_from_stable_script(
-                    command,
-                    canonical=canonical_trainer,
-                    expected=trainer_snapshot,
-                    trust_root=trust_root,
-                    gpu_lease=gpu_lease,
-                    device_guard=device_guard,
+                matrix_snapshot = _open_exact_matrix_snapshot(
+                    matrix_summary,
+                    _matrix_payload(
+                        completed,
+                        context=context,
+                        trust_root=trust_root,
+                        trainer_binding=trainer_binding,
+                        gpu_lease_binding=gpu_lease_binding,
+                        execution_environment_binding=frozen_execution_environment,
+                        preheldout_admission=(
+                            None if admission is None else admission.public_binding
+                        ),
+                    ),
                 )
+                try:
+                    admission_snapshot = (
+                        None
+                        if admission is None
+                        else _open_exact_admission_snapshot(admission.public_binding)
+                    )
+                except BaseException:
+                    matrix_snapshot.close()
+                    raise
+                try:
+                    matrix_snapshot.assert_unchanged()
+                    if admission_snapshot is not None:
+                        admission_snapshot.assert_unchanged()
+                    trainer_subprocesses_started += 1
+                    result = _run_trainer_from_stable_script(
+                        command,
+                        canonical=canonical_trainer,
+                        expected=trainer_snapshot,
+                        trust_root=trust_root,
+                        gpu_lease=gpu_lease,
+                        device_guard=device_guard,
+                    )
+                    matrix_snapshot.assert_unchanged()
+                    if admission_snapshot is not None:
+                        admission_snapshot.assert_unchanged()
+                finally:
+                    try:
+                        matrix_snapshot.assert_unchanged()
+                    finally:
+                        try:
+                            if admission_snapshot is not None:
+                                admission_snapshot.assert_unchanged()
+                        finally:
+                            if admission_snapshot is not None:
+                                admission_snapshot.close()
+                            matrix_snapshot.close()
                 matrix_lock.assert_held()
                 gpu_lease.assert_held()
                 device_guard.assert_held()
@@ -2115,6 +3411,9 @@ def _run_matrix_under_gpu_lease(
                         trainer_binding=trainer_binding,
                         gpu_lease_binding=gpu_lease_binding,
                         execution_environment_binding=frozen_execution_environment,
+                        preheldout_admission=(
+                            None if admission is None else admission.public_binding
+                        ),
                     ),
                     matrix_lock=matrix_lock,
                 )
@@ -2130,6 +3429,7 @@ def _run_matrix_under_gpu_lease(
             trainer_binding=trainer_binding,
             gpu_lease_binding=gpu_lease_binding,
             execution_environment_binding=frozen_execution_environment,
+            preheldout_admission=(None if admission is None else admission.public_binding),
         )
         gpu_lease.assert_held()
         device_guard.assert_held()

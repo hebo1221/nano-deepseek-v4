@@ -426,5 +426,21 @@ generation seeds. Its dependency order is training, direct SoftLag calibration,
 40-cell physical top-p matching, the complete 9,000-shard quality matrix,
 one-pass integrity audit, and deterministic statistical replay. All artifacts
 are bound to one external HMAC trust root and the clean implementation tree.
+The original v1 runner stopped after its first child because it incorrectly
+treated sparse-expert AdamW update counters as global steps. No calibration,
+physical match, or held-out result had run. The v1 bytes and claim remain
+preserved; the v1.1 manifest permits only a signed admission with zero
+scientific or experimental subprocesses for that exact checkpoint. Within the
+one-shot admission-creation subroutine its only child processes are frozen
+read-only `git ls-tree` and `git merge-base --is-ancestor` provenance probes.
+The canonical runner may use other frozen read-only Git probes during current
+manifest/source preflight outside that subroutine. The other nine frozen
+training cells run only after the atomic admission and amended ledger have both
+been independently reloaded and validated. The
+cohort, trainer, hyperparameters, arms, estimands, and gates did not change; the
+incident and the fact that first-cell training diagnostics were visible are
+recorded in the checked
+[`2026-07-19-p2-direct-training-validator-amendment.md`](reports/2026-07-19-p2-direct-training-validator-amendment.md)
+report.
 See [`paper_grade_protocol.md`](paper_grade_protocol.md) and
 [`reproduction.md`](reproduction.md) for the exact gate and commands.

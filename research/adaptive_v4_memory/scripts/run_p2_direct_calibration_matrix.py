@@ -1016,24 +1016,23 @@ def _validate_training_input(
     _require(
         summary_path.is_file(), f"Direct training summary is missing: {scale}/{training_seed}."
     )
-    summary = training_matrix.load_validated_training_summary(
-        summary_path,
-        output_root=training_output_root,
-        train_script=training_matrix.TRAIN_SCRIPT,
-        context=context,
-        scale=scale,
-        seed=training_seed,
-        trust_root=trust_root,
-        launch_nonce=cast(str, ledger_record["launch_nonce"]),
-        trainer_sha256=cast(str, trainer_binding["sha256"]),
+    summary, checkpoint, _raw_checkpoint = (
+        training_matrix.load_validated_training_bundle_for_ledger_record(
+            summary_path,
+            output_root=training_output_root,
+            context=context,
+            scale=scale,
+            seed=training_seed,
+            trust_root=trust_root,
+            trainer_binding=trainer_binding,
+            ledger_record=ledger_record,
+        )
     )
-    checkpoint = summary.get("checkpoint")
-    _require(isinstance(checkpoint, dict), "Validated training checkpoint binding is missing.")
     _require(
         ledger_record.get("checkpoint") == checkpoint,
         "Terminal training ledger checkpoint binding drifted.",
     )
-    return summary_path, summary, cast(dict[str, Any], checkpoint)
+    return summary_path, summary, checkpoint
 
 
 def build_calibration_command(

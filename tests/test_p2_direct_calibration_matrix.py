@@ -78,6 +78,7 @@ class FakeGPUController:
 
 @pytest.fixture(autouse=True)
 def fake_gpu_lease(monkeypatch: pytest.MonkeyPatch) -> FakeGPUController:
+    monkeypatch.setattr(matrix.training_matrix, "REQUIRE_PREHELDOUT_ADMISSION", False)
     controller = FakeGPUController(events=[], leases=[])
 
     def acquire(label: str, *, path: Path) -> FakeGPULease:

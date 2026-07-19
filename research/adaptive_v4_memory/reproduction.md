@@ -67,7 +67,7 @@ sequential-tier equivalence for every seed, scale, budget, family, context, and 
 ## P2 prospective direct-controller cohort
 
 The version-2.5 cohort is separate from the legacy factorial above. It uses the
-checked-in `p2-post-rank-direct-controller-v1.json` manifest, fresh 6071406--
+checked-in `p2-post-rank-direct-controller-v1-1.json` amendment manifest, fresh 6071406--
 6071410/7071406--7071410/10071406--10071410 seed namespaces, 19 arms, 9,000
 budget shards, and exactly 154,280,000 decode-token rows when no technical
 failure occurs. Run only from the clean implementation commit bound by that
@@ -86,8 +86,20 @@ export ADAPTIVE_V4_ATTESTATION_KEY_PATH="$HOME/.adaptive-v4/direct-controller-at
 test -z "$(git status --porcelain)"
 ```
 
-Execute the dependency chain in order. The training and calibration matrices
-contain ten seed-scale cells each; top-p physical matching contains 40 cells.
+Execute the dependency chain in order. The amended training ledger contains one
+exact-byte admission plus nine new cells; calibration still contains ten
+seed-scale cells and top-p physical matching contains 40 cells. The original
+v1 manifest, empty-prefix ledger, claim, summary, and checkpoint remain at their
+original paths and must not be edited, moved, deleted, or retried. On the first
+v1.1 invocation the training runner performs the HMAC-attested admission with
+zero scientific or experimental subprocesses defined in
+[`2026-07-19-p2-direct-training-validator-amendment.md`](reports/2026-07-19-p2-direct-training-validator-amendment.md),
+using only frozen read-only `git ls-tree` and `git merge-base --is-ancestor`
+provenance probes inside the admission-creation subroutine. Current
+manifest/source preflight outside that subroutine may use other frozen
+read-only Git probes. The runner atomically commits the admission, reloads and
+validates it together with the amended ledger, then launches only the remaining
+nine training coordinates.
 Exit code 2 from a terminal calibration, physical-match, or controller artifact
 means a recorded NO-GO, not permission to delete and rerun it.
 Controller exit code 3 reports a fully validated `draining_infrastructure` or

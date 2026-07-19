@@ -505,6 +505,7 @@ def _manifest_provenance_history(repo: Path) -> tuple[str, str, str]:
     inventory_files = (
         contract.PROJECT_DEPENDENCY_SPEC_PATH,
         f"{contract.PACKAGE_IMPLEMENTATION_ROOT}/__init__.py",
+        *contract.PROTOCOL_FREEZE_PATHS,
         *contract.DIRECT_RESEARCH_IMPLEMENTATION_PATHS,
     )
     for relative in inventory_files:
@@ -1094,6 +1095,50 @@ def test_manifest_contract_accepts_only_same_path_outcome_independent_design() -
     round_tripped = json.loads(json.dumps(payload))
     assert contract.validate_manifest_payload(round_tripped) is round_tripped
 
+
+def test_manifest_binds_exact_preheldout_validator_amendment() -> None:
+    payload = _manifest()
+    assert payload["experiment_id"] == "p2-post-rank-direct-controller-v1.1"
+    assert payload["adaptation_disclosure"] == contract.expected_adaptation_disclosure()
+    amendment = payload["adaptation_disclosure"]["preheldout_validator_amendment"]
+    assert amendment["one_shot_exact_byte_admission_required"] is True
+    assert amendment["held_out_controller_quality_observed"] is False
+    assert amendment["frozen_artifact_sha256"]["checkpoint"] == (
+        contract.SUPERSEDED_CHECKPOINT_SHA256
+    )
+    assert amendment["incident_report"] == {
+        "path": contract.VALIDATOR_AMENDMENT_REPORT_PATH,
+        "sha256": contract.VALIDATOR_AMENDMENT_REPORT_SHA256,
+    }
+
+    for field in (
+        "existing_artifact_bytes_may_change",
+        "existing_claim_may_be_deleted_or_moved",
+        "scientific_subprocess_reexecution_for_admission",
+    ):
+        drifted = copy.deepcopy(payload)
+        drifted["adaptation_disclosure"]["preheldout_validator_amendment"][field] = True
+        with pytest.raises(ValueError, match="amendment|disclosure"):
+            contract.validate_manifest_payload(drifted, verify_implementation=False)
+
+    drifted = copy.deepcopy(payload)
+    drifted["adaptation_disclosure"]["preheldout_validator_amendment"][
+        "read_only_git_provenance_commands_within_admission_creation"
+    ].append("git status")
+    with pytest.raises(ValueError, match="amendment|disclosure"):
+        contract.validate_manifest_payload(drifted, verify_implementation=False)
+
+    for field in (
+        "admission_creation_requires_exclusive_matrix_gpu_and_device_leases",
+        "admission_public_binding_uses_single_verified_inode",
+        "amended_ledger_validated_before_new_training_child",
+        "admission_and_ledger_snapshots_held_across_new_training_child",
+    ):
+        drifted = copy.deepcopy(payload)
+        drifted["adaptation_disclosure"]["preheldout_validator_amendment"][field] = False
+        with pytest.raises(ValueError, match="amendment|disclosure"):
+            contract.validate_manifest_payload(drifted, verify_implementation=False)
+
     mutations: tuple[tuple[str, str, object], ...] = (
         ("execution_contract", "literal_model_path", "chunked"),
         ("execution_contract", "same_literal_path_for_every_arm", False),
@@ -1215,6 +1260,7 @@ def test_implementation_digest_binds_complete_package_and_exact_research_invento
     assert contract.IMPLEMENTATION_PATHS == (
         contract.PROJECT_DEPENDENCY_SPEC_PATH,
         contract.PACKAGE_IMPLEMENTATION_ROOT,
+        *contract.PROTOCOL_FREEZE_PATHS,
         *contract.DIRECT_RESEARCH_IMPLEMENTATION_PATHS,
     )
     assert "pyproject.toml" in contract.IMPLEMENTATION_PATHS
@@ -1230,6 +1276,17 @@ def test_implementation_digest_binds_complete_package_and_exact_research_invento
         "research/adaptive_v4_memory/scripts/audit_p2_direct_controller_integrity.py",
         "research/adaptive_v4_memory/scripts/summarize_p2_direct_controller.py",
     }.issubset(contract.IMPLEMENTATION_PATHS)
+
+
+def test_superseded_v1_digest_uses_exact_parent_inventory() -> None:
+    assert contract.SUPERSEDED_V1_IMPLEMENTATION_PATHS == (
+        contract.PROJECT_DEPENDENCY_SPEC_PATH,
+        contract.PACKAGE_IMPLEMENTATION_ROOT,
+        *contract.DIRECT_RESEARCH_IMPLEMENTATION_PATHS,
+    )
+    assert contract.superseded_v1_implementation_tree_digest_at_commit() == (
+        contract.SUPERSEDED_IMPLEMENTATION_TREE_DIGEST
+    )
 
 
 def test_implementation_digest_changes_when_config_git_object_changes() -> None:
@@ -1272,6 +1329,7 @@ def test_implementation_digest_rejects_untracked_descendants(
     tracked_paths = (
         "pyproject.toml",
         "nano_deepseek_v4/__init__.py",
+        *contract.PROTOCOL_FREEZE_PATHS,
         *contract.DIRECT_RESEARCH_IMPLEMENTATION_PATHS,
     )
     tracked = "\n".join(f"100644 {'a' * 40} 0\t{path}" for path in sorted(tracked_paths))
