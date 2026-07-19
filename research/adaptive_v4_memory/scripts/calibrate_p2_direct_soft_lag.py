@@ -5,7 +5,6 @@ import hashlib
 import json
 import math
 import os
-import platform
 import tempfile
 from collections import Counter, defaultdict
 from collections.abc import Callable, Mapping, Sequence
@@ -15,6 +14,7 @@ from pathlib import Path
 from statistics import median
 from typing import Any, cast
 
+import adaptive_v4_execution_environment as execution_environment
 import p2_direct_attestation as attestation
 import p2_direct_controller_contract as contract
 import run_p2_direct_training_matrix as training_matrix
@@ -34,7 +34,7 @@ from nano_deepseek_v4 import (
 
 EXPERIMENT_ID = "p2-post-rank-direct-soft-lag-calibration-v1"
 ARTIFACT_TYPE = "direct-soft-lag-calibration"
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 3
 ATTESTATION_PURPOSE = "p2-direct-soft-lag-calibration-v1"
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 
@@ -64,6 +64,40 @@ CLAIM_BOUNDARY = (
     "answer-free first-query cold-start calibration-only structural identifiability; no "
     "steady-state, late-query long-context, held-out quality, or physical-HBM result; a separate "
     "answer-free late-query calibration is required for long-context representativeness"
+)
+CALIBRATION_ARTIFACT_FIELDS = frozenset(
+    {
+        "schema_version",
+        "experiment_id",
+        "artifact_type",
+        "status",
+        "terminal_decision",
+        "budget_decisions",
+        "scale",
+        "training_seed",
+        "seed",
+        "calibration_seed",
+        "evaluation_seed_reserved",
+        "allowed_training_seeds",
+        "allowed_calibration_seeds",
+        "source",
+        "manifest",
+        "checkpoint",
+        "training_summary",
+        "contexts",
+        "families",
+        "batch_size",
+        "examples_per_context_family",
+        "examples_per_family",
+        "workload",
+        "calibrations",
+        "leakage_guard",
+        "environment",
+        "device_context",
+        "claim_boundary",
+        "payload_sha256",
+        "attestation",
+    }
 )
 
 FIXED_TOPK = {"s55": 2, "s151": 1}
@@ -1290,6 +1324,11 @@ def establish_provenance(
     )
     launch_nonce = cast(str, ledger_record["launch_nonce"])
     trainer_sha256 = cast(str, ledger_record["canonical_trainer_sha256"])
+    ledger_execution_environment = ledger.get("execution_environment")
+    _require(
+        isinstance(ledger_execution_environment, Mapping),
+        "Terminal training matrix execution environment is missing.",
+    )
     training_summary, validated_checkpoint, raw_checkpoint = (
         training_matrix.load_validated_training_bundle(
             summary_path,
@@ -1301,6 +1340,7 @@ def establish_provenance(
             trust_root=trust_root,
             launch_nonce=launch_nonce,
             trainer_sha256=trainer_sha256,
+            expected_execution_environment=cast(Mapping[str, Any], ledger_execution_environment),
         )
     )
     _require(
@@ -1456,6 +1496,7 @@ def build_calibration_artifact(
             "teacher_forced_response_tokens_in_prefix": (TEACHER_FORCED_RESPONSE_TOKENS_IN_PREFIX),
         },
         "environment": dict(runtime_environment),
+        "device_context": execution_environment.selected_device_context(runtime_environment),
         "claim_boundary": CLAIM_BOUNDARY,
     }
     assert_no_supervision_fields(payload)
@@ -1539,12 +1580,26 @@ def validate_calibration_artifact(
     verify_bindings: bool = False,
     trust_root: attestation.TrustRoot | None = None,
 ) -> dict[str, Any]:
+    _require(
+        set(payload) == CALIBRATION_ARTIFACT_FIELDS,
+        "Calibration artifact top-level schema drifted.",
+    )
     assert_no_supervision_fields(payload)
     _validate_payload_digest(payload)
     _require(payload.get("schema_version") == SCHEMA_VERSION, "Calibration schema drifted.")
     _require(payload.get("experiment_id") == EXPERIMENT_ID, "Wrong calibration artifact.")
     _require(payload.get("artifact_type") == ARTIFACT_TYPE, "Calibration type drifted.")
     _require(payload.get("status") == "terminal", "Calibration is not terminal.")
+    raw_environment = payload.get("environment")
+    _require(isinstance(raw_environment, Mapping), "Calibration environment is missing.")
+    validated_environment = execution_environment.validate_execution_environment(
+        cast(Mapping[str, Any], raw_environment)
+    )
+    _require(
+        payload.get("device_context")
+        == execution_environment.selected_device_context(validated_environment),
+        "Calibration logical-device context drifted.",
+    )
     scale = payload.get("scale")
     training_seed = payload.get("training_seed")
     _require(scale in FROZEN_SCALES, "Calibration scale drifted.")
@@ -1843,29 +1898,7 @@ def validate_calibration_artifact(
     )
     environment = payload.get("environment")
     _require(isinstance(environment, Mapping), "Calibration environment binding is missing.")
-    environment = cast(Mapping[str, Any], environment)
-    _require(
-        isinstance(environment.get("python"), str)
-        and bool(environment.get("python"))
-        and isinstance(environment.get("torch"), str)
-        and bool(environment.get("torch"))
-        and environment.get("device_type") == "cuda"
-        and isinstance(environment.get("device_index"), int)
-        and not isinstance(environment.get("device_index"), bool)
-        and cast(int, environment.get("device_index")) >= 0
-        and environment.get("dtype") == "bfloat16"
-        and isinstance(environment.get("cuda_device_name"), str)
-        and bool(environment.get("cuda_device_name"))
-        and isinstance(environment.get("cuda_capability"), list)
-        and len(cast(list[Any], environment.get("cuda_capability"))) == 2
-        and all(
-            isinstance(value, int) and not isinstance(value, bool) and value >= 0
-            for value in cast(list[Any], environment.get("cuda_capability"))
-        )
-        and isinstance(environment.get("torch_cuda_version"), str)
-        and bool(environment.get("torch_cuda_version")),
-        "Calibration CUDA/bfloat16 environment drifted.",
-    )
+    execution_environment.validate_execution_environment(cast(Mapping[str, Any], environment))
 
     if verify_bindings:
         _validate_external_bindings(
@@ -1999,28 +2032,24 @@ def main() -> None:
     parser.add_argument("--manifest", type=Path, default=contract.MANIFEST_PATH)
     parser.add_argument("--training-summary", type=Path)
     parser.add_argument("--training-matrix-summary", type=Path)
-    parser.add_argument("--device", default="cuda")
+    parser.add_argument("--device", default="cuda:0")
+    parser.add_argument("--expected-device-routing-identity-json", required=True)
     parser.add_argument("--dtype", choices=("bfloat16",), default="bfloat16")
     args = parser.parse_args()
 
-    device = torch.device(args.device)
-    if device.type != "cuda":
-        raise ValueError("Frozen direct soft-lag calibration requires a CUDA device.")
-    if not torch.cuda.is_available():
-        raise RuntimeError("Direct soft-lag calibration requires an available CUDA device.")
+    try:
+        expected_routing_identity = json.loads(args.expected_device_routing_identity_json)
+    except json.JSONDecodeError as error:
+        raise ValueError("Calibration physical-device guard identity is invalid JSON.") from error
+    _require(
+        isinstance(expected_routing_identity, Mapping),
+        "Calibration physical-device guard identity is invalid.",
+    )
+    device, runtime_environment = execution_environment.activate_explicit_cuda_device(
+        args.device,
+        expected_routing_identity=cast(Mapping[str, Any], expected_routing_identity),
+    )
     dtype = torch.bfloat16
-    cuda_index = device.index if device.index is not None else torch.cuda.current_device()
-    _require(isinstance(torch.version.cuda, str), "Torch CUDA runtime version is unavailable.")
-    runtime_environment = {
-        "python": platform.python_version(),
-        "torch": torch.__version__,
-        "device_type": "cuda",
-        "device_index": cuda_index,
-        "dtype": "bfloat16",
-        "cuda_device_name": torch.cuda.get_device_name(cuda_index),
-        "cuda_capability": list(torch.cuda.get_device_capability(cuda_index)),
-        "torch_cuda_version": torch.version.cuda,
-    }
     frozen_context = training_matrix.establish_frozen_context(args.manifest)
     trust_root = attestation.trust_root_from_inherited_environment(
         expected_key_id=str(frozen_context.manifest_binding["attestation"]["key_id"])

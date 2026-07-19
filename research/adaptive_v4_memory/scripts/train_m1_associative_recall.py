@@ -15,6 +15,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any, cast
 
+import adaptive_v4_execution_environment as execution_environment
 import p2_direct_attestation as attestation
 import torch
 import torch.nn.functional as F
@@ -44,7 +45,8 @@ SCALE_OVERRIDES = {
 SEQUENCE_LENGTHS = (48, 64, 80)
 TRAIN_SEQUENCE_LENGTHS = (64, 80)
 DIRECT_TRAINING_EXPERIMENT_ID = "p2-post-rank-direct-training-v1"
-DIRECT_CHECKPOINT_SCHEMA_VERSION = 3
+DIRECT_SUMMARY_SCHEMA_VERSION = 3
+DIRECT_CHECKPOINT_SCHEMA_VERSION = 4
 DIRECT_TRANSCRIPT_SCHEME = "sha256-ordered-training-step-chain-v1"
 DIRECT_SUMMARY_ATTESTATION_PURPOSE = "p2-direct-training-summary-v1"
 DIRECT_TRAINING_HYPERPARAMETERS: dict[str, Any] = {
@@ -468,14 +470,30 @@ def _save_checkpoint_atomically(
     }
 
 
+def _expected_device_routing_identity(args: argparse.Namespace) -> dict[str, str] | None:
+    raw = args.expected_device_routing_identity_json
+    if not raw:
+        if args.experiment_id == DIRECT_TRAINING_EXPERIMENT_ID:
+            raise ValueError("Direct training physical-device guard identity is missing.")
+        return None
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError as error:
+        raise ValueError("Training physical-device guard identity is invalid JSON.") from error
+    if not isinstance(payload, Mapping):
+        raise ValueError("Training physical-device guard identity is invalid.")
+    return execution_environment.validate_device_routing_identity(payload)
+
+
 def train(args: argparse.Namespace) -> dict:
-    if not torch.cuda.is_available():
-        raise RuntimeError("Tier-S training requires a CUDA device.")
     initialization_seed = args.seed
     data_order_seed = args.seed + 1
     training_evaluation_seed = args.seed + 10_000
     torch.manual_seed(initialization_seed)
-    device = torch.device("cuda")
+    device, stable_execution_environment = execution_environment.activate_explicit_cuda_device(
+        args.device,
+        expected_routing_identity=_expected_device_routing_identity(args),
+    )
     config = build_config(args.scale)
     source = _source_state()
     trust_root: attestation.TrustRoot | None = None
@@ -734,6 +752,7 @@ def train(args: argparse.Namespace) -> dict:
             "manifest_sha256": args.manifest_sha256,
             "implementation_digest": args.implementation_digest,
             "implementation_source_commit": args.implementation_source_commit,
+            "execution_environment": stable_execution_environment,
         }
         checkpoint = _save_checkpoint_atomically(
             model,
@@ -745,7 +764,11 @@ def train(args: argparse.Namespace) -> dict:
         )
     torch.cuda.synchronize()
     result = {
-        "schema_version": 1,
+        "schema_version": (
+            DIRECT_SUMMARY_SCHEMA_VERSION
+            if args.experiment_id == DIRECT_TRAINING_EXPERIMENT_ID
+            else 1
+        ),
         "experiment_id": args.experiment_id,
         "scale": args.scale,
         "seed": args.seed,
@@ -779,10 +802,14 @@ def train(args: argparse.Namespace) -> dict:
             "root": transcript_root,
         },
         "checkpoint": checkpoint,
+        "execution_environment": stable_execution_environment,
         "runtime": {
             "python": platform.python_version(),
             "torch": torch.__version__,
-            "device": torch.cuda.get_device_name(0),
+            "device": execution_environment.selected_device_class(stable_execution_environment)[
+                "name"
+            ],
+            **execution_environment.selected_device_context(stable_execution_environment),
             "elapsed_seconds": time.time() - started,
             "peak_allocated_bytes": torch.cuda.max_memory_allocated(),
             "peak_reserved_bytes": torch.cuda.max_memory_reserved(),
@@ -827,6 +854,8 @@ def main() -> int:
     parser.add_argument("--target-accuracy", type=float, default=0.85)
     parser.add_argument("--minimum-memory-gap", type=float, default=0.2)
     parser.add_argument("--seed", type=int, default=20260714)
+    parser.add_argument("--device", default="cuda:0")
+    parser.add_argument("--expected-device-routing-identity-json", default="")
     parser.add_argument("--source-commit", default="")
     parser.add_argument("--manifest-path", default="")
     parser.add_argument("--manifest-experiment-id", default="")

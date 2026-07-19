@@ -342,6 +342,18 @@ def test_exclusive_atomic_writer_refuses_overwrite(tmp_path: Path) -> None:
     assert not rejected_after_link.exists()
 
 
+@pytest.mark.parametrize("mutation", ["missing", "extra"])
+def test_calibration_artifact_top_level_schema_is_exact(mutation: str) -> None:
+    payload = {field: None for field in calibration.CALIBRATION_ARTIFACT_FIELDS}
+    if mutation == "missing":
+        payload.pop("claim_boundary")
+    else:
+        payload["unregistered"] = True
+
+    with pytest.raises(ValueError, match="top-level schema drifted"):
+        calibration.validate_calibration_artifact(payload)
+
+
 def test_checkpoint_model_uses_already_validated_raw_bytes_and_rejects_drift(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

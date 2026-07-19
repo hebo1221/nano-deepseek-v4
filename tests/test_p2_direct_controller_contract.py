@@ -4,6 +4,7 @@ import copy
 import json
 import sys
 from collections.abc import Callable, Mapping
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
@@ -13,9 +14,14 @@ SCRIPTS = Path(__file__).resolve().parents[1] / "research/adaptive_v4_memory/scr
 sys.path.insert(0, str(SCRIPTS))
 
 import p2_direct_controller_contract as contract  # noqa: E402
+import validate_p2_direct_top_p_physical_match as physical  # noqa: E402
 from freeze_p2_causal_factorial_arms import (  # noqa: E402
     SUPPLEMENTAL_BASELINE_ARMS,
     build_arm_configs,
+)
+
+from nano_deepseek_v4.causal_memory_controller import (  # noqa: E402
+    _make_physical_snapshot,
 )
 
 TEST_TRUST_ROOT = contract.attestation.TrustRoot(
@@ -124,25 +130,142 @@ def _match_artifact(
     low: int,
     high: int,
     numerator: int,
-    denominator: int = 4,
     trust_root: contract.attestation.TrustRoot = TEST_TRUST_ROOT,
 ) -> dict[str, Any]:
     cell = calibration["calibrations"][budget]
     global_budget = cell["requested_global_budget"]
     csa_layers = [layer for layer, _ in cell["quota"]["layer_budgets"]]
+    denominator = contract.TOP_P_MATCH_OBSERVATION_COUNT
+    target_count = global_budget // len(csa_layers)
+
+    def layer_record(layer: int, count: int, action_id: str) -> dict[str, Any]:
+        positions = list(range(count))
+        value_bytes = count * contract.TOP_P_MATCH_VALUE_WIDTH * 2
+        position_bytes = count * 8
+        return {
+            "layer_index": layer,
+            "action_id": action_id,
+            "selected_end_positions": positions,
+            "resident_block_ids": [f"l{layer}:b0:e{position}" for position in positions],
+            "resident_end_positions": positions,
+            "hot_value_shape": [1, count, contract.TOP_P_MATCH_VALUE_WIDTH],
+            "hot_position_shape": [1, count],
+            "hot_value_dtype": contract.TOP_P_MATCH_VALUE_DTYPE,
+            "hot_position_dtype": contract.TOP_P_MATCH_POSITION_DTYPE,
+            "hot_value_device": "cuda:0",
+            "hot_position_device": "cuda:0",
+            "hot_value_bytes": value_bytes,
+            "hot_position_bytes": position_bytes,
+            "hot_resident_bytes": value_bytes + position_bytes,
+        }
+
+    target_layer_bytes = target_count * 136
+    runtime = physical._json_clone(
+        asdict(
+            _make_physical_snapshot(
+                apply_query_position=64,
+                plan_audit_digest="7" * 64,
+                layer_capacity_blocks=tuple((layer, target_count) for layer in csa_layers),
+                layer_selected_blocks=tuple((layer, target_count) for layer in csa_layers),
+                layer_selected_end_positions=tuple(
+                    (layer, tuple(range(target_count))) for layer in csa_layers
+                ),
+                layer_hot_blocks=tuple((layer, target_count) for layer in csa_layers),
+                layer_hot_end_positions=tuple(
+                    (layer, tuple(range(target_count))) for layer in csa_layers
+                ),
+                layer_hot_bytes=tuple((layer, target_layer_bytes) for layer in csa_layers),
+                layer_hot_devices=tuple((layer, "cuda:0") for layer in csa_layers),
+                layer_protected_blocks=tuple((layer, 0) for layer in csa_layers),
+                layer_protected_end_positions=tuple((layer, ()) for layer in csa_layers),
+                layer_h2d_bytes=tuple((layer, 0) for layer in csa_layers),
+                layer_d2h_bytes=tuple((layer, 0) for layer in csa_layers),
+                layer_decode_h2d_delta_bytes=tuple((layer, 0) for layer in csa_layers),
+                layer_decode_d2h_delta_bytes=tuple((layer, 0) for layer in csa_layers),
+                layer_rebalance_h2d_delta_bytes=tuple((layer, 0) for layer in csa_layers),
+                layer_rebalance_d2h_delta_bytes=tuple((layer, 0) for layer in csa_layers),
+                layer_h2d_delta_bytes=tuple((layer, 0) for layer in csa_layers),
+                layer_d2h_delta_bytes=tuple((layer, 0) for layer in csa_layers),
+                cuda_peak_allocated_bytes=global_budget * 136,
+                cuda_peak_reserved_bytes=global_budget * 136,
+                is_cuda_hbm_evidence=True,
+            )
+        )
+    )
+
+    def execution(
+        *, role: str, arm: str, pair_id: str, count: int, snapshot: Any
+    ) -> dict[str, Any]:
+        trace_id = f"{pair_id}/{role}"
+        action_ids = [f"{trace_id}:l{layer}:b0:q64" for layer in csa_layers]
+        layers = [
+            layer_record(layer, count, action_id)
+            for layer, action_id in zip(csa_layers, action_ids, strict=True)
+        ]
+        hot_bytes = sum(item["hot_resident_bytes"] for item in layers)
+        return physical._digest_execution(
+            {
+                "arm": arm,
+                "trace_id": trace_id,
+                "request_id": "request-0",
+                "token_event_id": f"{trace_id}/token-64",
+                "source_signal_position": 64,
+                "apply_query_key_position": 65,
+                "source_token_id": 3,
+                "apply_token_id": 101,
+                "action_ids": action_ids,
+                "action_digests": [f"{layer:064x}" for layer in csa_layers],
+                "configured_capacity_blocks_per_layer": [[layer, count] for layer in csa_layers],
+                "selected_blocks_per_layer": [[layer, count] for layer in csa_layers],
+                "layers": layers,
+                "hot_resident_bytes": hot_bytes,
+                "cuda_peak_allocated_bytes": hot_bytes,
+                "cuda_peak_reserved_bytes": hot_bytes,
+                "is_cuda_hbm_evidence": True,
+                "runtime_soft_lag_snapshot": snapshot,
+            }
+        )
+
     observations = []
     for index in range(denominator):
         high_selected = (index + 1) * numerator // denominator > index * numerator // denominator
-        observations.append(
-            {
-                "observation_index": index,
-                "schedule_variant": "high" if high_selected else "low",
-                "target_hot_resident_bytes": 100,
-                "comparator_hot_resident_bytes": 100,
-                "target_is_cuda_hbm_evidence": True,
-                "comparator_is_cuda_hbm_evidence": True,
-            }
+        coordinate = contract.top_p_match_coordinate(
+            index, calibration_seed=calibration["calibration_seed"]
         )
+        pair_id = (
+            f"{contract.DIRECT_TOP_P_MATCH_EXPERIMENT_ID}:{calibration['scale']}:"
+            f"train-{calibration['training_seed']}:cal-{calibration['calibration_seed']}:"
+            f"{budget}:{comparator}:{coordinate['family']}:context-{coordinate['context']}:"
+            f"conversation-{coordinate['conversation_index']}"
+        )
+        comparator_count = high if high_selected else low
+        observations.append(
+            physical._digest_observation(
+                {
+                    "observation_index": index,
+                    "schedule_variant": "high" if high_selected else "low",
+                    "coordinate": coordinate,
+                    "pair_id": pair_id,
+                    "target": execution(
+                        role="target",
+                        arm=contract.PRIMARY_ADAPTIVE_ARM,
+                        pair_id=pair_id,
+                        count=target_count,
+                        snapshot=runtime,
+                    ),
+                    "comparator": execution(
+                        role="comparator",
+                        arm=comparator,
+                        pair_id=pair_id,
+                        count=comparator_count,
+                        snapshot=None,
+                    ),
+                }
+            )
+        )
+    target_total = sum(item["target"]["hot_resident_bytes"] for item in observations)
+    comparator_total = sum(item["comparator"]["hot_resident_bytes"] for item in observations)
+    relative = abs(comparator_total - target_total) / target_total
     payload = {
         "schema_version": 1,
         "experiment_id": contract.DIRECT_TOP_P_MATCH_EXPERIMENT_ID,
@@ -169,26 +292,42 @@ def _match_artifact(
         "source": calibration["source"],
         "manifest": calibration["manifest"],
         "checkpoint": calibration["checkpoint"],
+        "validator": {
+            "module_name": contract.TOP_P_MATCH_CANONICAL_MODULE,
+            "canonical_repository_path": contract.TOP_P_MATCH_CANONICAL_MODULE_PATH,
+            "module_sha256": physical._canonical_module_sha256(),
+            "implementation_digest": calibration["manifest"]["implementation_digest"],
+            "implementation_source_commit": calibration["manifest"]["implementation_source_commit"],
+        },
+        "observation_grid": physical._observation_grid(),
         "schedule": {
             "uniform_low_blocks_per_layer": low,
             "uniform_high_blocks_per_layer": high,
             "mixture_high_numerator": numerator,
             "mixture_denominator": denominator,
+            "csa_layer_count": len(csa_layers),
+            "low_total_capacity_blocks": low * len(csa_layers),
+            "high_total_capacity_blocks": high * len(csa_layers),
+            "cap_search_min": 1,
+            "cap_search_max": global_budget // len(csa_layers),
         },
         "raw_physical_observations": observations,
         "summary": {
             "observation_count": len(observations),
-            "target_hot_resident_bytes_total": 100 * len(observations),
-            "comparator_hot_resident_bytes_total": 100 * len(observations),
-            "relative_difference": 0.0,
+            "target_hot_resident_bytes_total": target_total,
+            "comparator_hot_resident_bytes_total": comparator_total,
+            "relative_difference": relative,
         },
         "audit": {
             "payload_digest_verified": True,
             "external_bindings_verified": True,
             "raw_observations_replayed": True,
             "cuda_hbm_bytes_verified": True,
+            "tensor_shapes_dtypes_devices_verified": True,
+            "resident_action_snapshot_bindings_verified": True,
             "deterministic_schedule_verified": True,
             "calibration_only_scope_verified": True,
+            "canonical_module_origin_verified": True,
         },
     }
     return _attest_payload(
@@ -210,18 +349,18 @@ def _comparator_matches(
             "fixed-top-p-0.5+pins",
             calibration=calibration,
             budget=budget,
-            low=2,
-            high=3,
-            numerator=2,
+            low=3,
+            high=4,
+            numerator=446,
             trust_root=trust_root,
         ),
         "fixed-top-p-0.8+pins": _match_artifact(
             "fixed-top-p-0.8+pins",
             calibration=calibration,
             budget=budget,
-            low=3,
+            low=4,
             high=4,
-            numerator=3,
+            numerator=0,
             trust_root=trust_root,
         ),
     }
@@ -342,89 +481,53 @@ def stub_full_calibration_validator(
 
 
 def _manifest() -> dict[str, Any]:
-    return {
-        "schema_version": 1,
-        "experiment_id": contract.EXPERIMENT_ID,
-        "status": contract.MANIFEST_STATUS,
-        "attestation": contract.attestation.public_manifest_contract("e" * 64),
-        "adaptation_disclosure": {
-            "post_707_rank_no_go": True,
-            "prior_p2_quality_results_observed": True,
-        },
-        "cohort": {
-            "training_seeds": list(contract.TRAINING_SEEDS),
-            "calibration_seeds": list(contract.CALIBRATION_SEEDS),
-            "evaluation_seeds": list(contract.EVALUATION_SEEDS),
-            "seed_namespaces_pairwise_disjoint": True,
-            "fresh_evaluation_namespace": True,
-        },
-        "grid": {
-            "scales": list(contract.SCALES),
-            "budgets": list(contract.BUDGETS),
-            "families": list(contract.FAMILIES),
-            "contexts": list(contract.CONTEXTS),
-            "replicates": list(contract.REPLICATES),
-            "examples_per_shard": contract.EXAMPLES_PER_SHARD,
-            "generation_seed_rule": contract.GENERATION_SEED_RULE,
-            "paired_across_scales_budgets_and_arms": True,
-            "cardinalities": contract.expected_grid_cardinalities(),
-        },
-        "phases": {
-            "phase_a_confirmatory_set": list(contract.CONFIRMATORY_ARM_NAMES),
-            "phase_a_pareto_sensitivities": list(contract.SENSITIVITY_COMPARATOR_ARMS),
-            "phase_a_all": list(contract.PHASE_A_ARM_NAMES),
-            "phase_b_diagnostic": list(contract.PHASE_B_DIAGNOSTIC_ARM_NAMES),
-            "all_arms": list(contract.ALL_ARM_NAMES),
-            "arm_features": contract.expected_arm_features(),
-        },
-        "primary_estimand": {
-            "adaptive_arm": contract.PRIMARY_ADAPTIVE_ARM,
-            "confirmatory_comparators": list(contract.CONFIRMATORY_COMPARATOR_ARMS),
-            "confirmatory_estimands": contract.CONFIRMATORY_ESTIMANDS,
-            "confirmatory_decision_rule": contract.CONFIRMATORY_DECISION_RULE,
-            "pareto_sensitivity_comparators": list(contract.SENSITIVITY_COMPARATOR_ARMS),
-            "comparator_selection_from_outcomes": False,
-            "strongest_fixed_comparator_rule": contract.STRONGEST_FIXED_COMPARATOR_RULE,
-            "top_p_sensitivity_rule": contract.TOP_P_SENSITIVITY_RULE,
-            "top_p_calibration_only_mean_hot_byte_matching": True,
-            "top_p_eligible_for_primary_comparison": False,
-            "primary_exact_fill_required": True,
-            "memory_match_target_metric": contract.PHYSICAL_MATCH_TARGET_METRIC,
-        },
-        "execution_contract": {
-            "literal_model_path": contract.EXECUTION_PATH,
-            "same_literal_path_for_every_arm": True,
-            "batch_size": contract.BATCH_SIZE,
-            "decode_tokens_per_step": contract.DECODE_TOKENS_PER_STEP,
-            "single_token_decode": True,
-            "exact_fill_arms": list(contract.EXACT_FILL_ARM_NAMES),
-            "variable_fill_sensitivity_arms": list(contract.VARIABLE_FILL_SENSITIVITY_ARMS),
-            "exact_fill_rule": contract.EXACT_FILL_RULE,
-            "per_layer_hot_floor": contract.PER_LAYER_HOT_FLOOR,
-            "zero_cap_tier_stores_forbidden": True,
-            "physical_audit_rule": contract.PHYSICAL_AUDIT_RULE,
-            "soft_lag_signal_rule": contract.SOFT_LAG_SIGNAL_RULE,
-            "signal_diagnostic_rule": contract.SIGNAL_DIAGNOSTIC_RULE,
-            "signal_weight_rule": contract.expected_signal_weight_rule(),
-            "legacy_configs_are_scaffolds_only": True,
-            "direct_arm_semantics_authoritative": True,
-            "balanced_feasible_control_rule": contract.BALANCED_FEASIBLE_CONTROL_RULE,
-            "configured_caps_are_physical_evidence": False,
-            "actual_hot_tensor_bytes_recorded_per_token": True,
-            "cuda_peak_allocated_and_reserved_recorded": True,
-            "pin_ids_and_counts_bound_before_resize": True,
-            "fallback_boundary": contract.FALLBACK_BOUNDARY,
-            "fallback_preserves_exact_b": True,
-            "chunked_equivalence_required": False,
-            "outcome_dependent_early_stopping": False,
-            "phase_b_runs_regardless_of_phase_a_outcomes": True,
-        },
-        "implementation": {
-            "paths": list(contract.IMPLEMENTATION_PATHS),
-            "tree_digest": "a" * 64,
-            "source_commit": "b" * 40,
-        },
-    }
+    return contract.build_manifest_payload(
+        attestation_key_id="e" * 64,
+        implementation_tree_digest="a" * 64,
+        implementation_source_commit="b" * 40,
+    )
+
+
+def _git(repo: Path, *arguments: str) -> str:
+    return contract.subprocess.run(
+        ["git", *arguments],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+
+def _manifest_provenance_history(repo: Path) -> tuple[str, str, str]:
+    _git(repo, "init", "-q")
+    _git(repo, "config", "user.email", "manifest-test@example.invalid")
+    _git(repo, "config", "user.name", "Manifest Test")
+    inventory_files = (
+        contract.PROJECT_DEPENDENCY_SPEC_PATH,
+        f"{contract.PACKAGE_IMPLEMENTATION_ROOT}/__init__.py",
+        *contract.DIRECT_RESEARCH_IMPLEMENTATION_PATHS,
+    )
+    for relative in inventory_files:
+        path = repo / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(f"# frozen inventory: {relative}\n", encoding="utf-8")
+    _git(repo, "add", "--", *inventory_files)
+    _git(repo, "-c", "commit.gpgsign=false", "commit", "-qm", "base implementation")
+    older_commit = _git(repo, "rev-parse", "HEAD")
+
+    package_file = repo / contract.PACKAGE_IMPLEMENTATION_ROOT / "__init__.py"
+    package_file.write_text("# implementation revision two\n", encoding="utf-8")
+    _git(repo, "add", "--", str(package_file.relative_to(repo)))
+    _git(repo, "-c", "commit.gpgsign=false", "commit", "-qm", "implementation revision")
+    implementation_commit = _git(repo, "rev-parse", "HEAD")
+
+    manifest_file = repo / contract.MANIFEST_PATH
+    manifest_file.parent.mkdir(parents=True, exist_ok=True)
+    manifest_file.write_text("{}\n", encoding="utf-8")
+    _git(repo, "add", "--", str(manifest_file.relative_to(repo)))
+    _git(repo, "-c", "commit.gpgsign=false", "commit", "-qm", "freeze manifest")
+    descendant_manifest_commit = _git(repo, "rev-parse", "HEAD")
+    return older_commit, implementation_commit, descendant_manifest_commit
 
 
 def _schedule_totals(arm: Any) -> list[int]:
@@ -442,7 +545,20 @@ def test_seed_grid_and_conversation_cardinalities_are_paper_grade() -> None:
     assert contract.EXAMPLES_PER_FAMILY == 1_000
     assert contract.UNIQUE_SHARDS_TOTAL == 4_500
     assert contract.BUDGET_SHARDS_TOTAL == 9_000
+    assert contract.DISTINCT_GENERATED_CONVERSATIONS_TOTAL == 45_000
+    assert contract.SCALE_SPECIFIC_CONVERSATION_EVALUATIONS_TOTAL == 90_000
+    assert contract.BUDGET_EXPANDED_CONVERSATION_EVALUATIONS_TOTAL == 180_000
     assert contract.expected_grid_cardinalities()["all_arm_conversations"] == 3_420_000
+    assert contract.DECODE_TOKEN_STEPS_PER_FAMILY_CONTEXT_SWEEP == 2_030
+    assert contract.EXPECTED_RAW_TOKEN_ROWS_WITHOUT_FAILURES == 154_280_000
+    assert (
+        contract.expected_grid_cardinalities()["raw_token_rows_without_technical_failures"]
+        == 154_280_000
+    )
+    statistical = contract.expected_statistical_analysis_contract()
+    assert statistical["numpy_rng"] == "numpy.random.Generator(numpy.random.PCG64)"
+    assert statistical["numpy_quantile_method"] == "linear"
+    assert statistical["exact_dependency_lock_bound"] is False
 
 
 @pytest.mark.usefixtures("stub_full_calibration_validator")
@@ -478,7 +594,7 @@ def test_direct_builder_rejects_digest_bound_target_free_no_go(gate: str) -> Non
 def test_direct_builder_rejects_self_hashed_envelope_without_full_artifact() -> None:
     """A digest-valid local envelope cannot stand in for deterministic full replay."""
 
-    with pytest.raises(ValueError, match="Calibration schema drifted"):
+    with pytest.raises(ValueError, match="Calibration artifact top-level schema drifted"):
         _quality_build(_calibration())
 
 
@@ -620,8 +736,8 @@ def test_confirmatory_controls_are_exact_b_while_top_p_uses_mean_matches() -> No
     assert _schedule_totals(arms["fixed+pins"]) == [12]
     assert _schedule_totals(arms[contract.CLEAN_ALLOCATOR_CONTROL_ARM]) == [12]
     assert _schedule_totals(arms["fixed"]) == [12]
-    assert _schedule_totals(arms["fixed-top-p-0.5+pins"]) == [6, 9]
-    assert _schedule_totals(arms["fixed-top-p-0.8+pins"]) == [9, 12]
+    assert _schedule_totals(arms["fixed-top-p-0.5+pins"]) == [9, 12]
+    assert _schedule_totals(arms["fixed-top-p-0.8+pins"]) == [12]
     assert arms["fixed"].mixture_high_numerator == 0
     assert arms["fixed+pins"].mixture_high_numerator == 0
     assert arms[contract.CLEAN_ALLOCATOR_CONTROL_ARM].mixture_high_numerator == 0
@@ -629,8 +745,8 @@ def test_confirmatory_controls_are_exact_b_while_top_p_uses_mean_matches() -> No
     assert metadata["physical_match_target_metric"] == "hot_resident_bytes"
     assert metadata["signal_diagnostic_rule"] == contract.SIGNAL_DIAGNOSTIC_RULE
     schedules = metadata["top_p_sensitivity_schedules"]
-    assert schedules["fixed-top-p-0.5+pins"]["mixture_high_numerator"] == 2
-    assert schedules["fixed-top-p-0.8+pins"]["mixture_high_numerator"] == 3
+    assert schedules["fixed-top-p-0.5+pins"]["mixture_high_numerator"] == 446
+    assert schedules["fixed-top-p-0.8+pins"]["mixture_high_numerator"] == 0
     assert metadata["strongest_fixed_comparator_rule"] == (contract.STRONGEST_FIXED_COMPARATOR_RULE)
     assert tuple(metadata["confirmatory_comparators"]) == (
         "fixed+pins",
@@ -693,17 +809,14 @@ def test_strict_matching_rejects_calibration_digest_and_tolerance_drift() -> Non
         _quality_build(_calibration(), comparator_matches=matches)
 
     matches = _comparator_matches()
-    artifact = matches["fixed-top-p-0.5+pins"]
-    for observation in artifact["raw_physical_observations"]:
-        observation["comparator_hot_resident_bytes"] = 102
-    count = len(artifact["raw_physical_observations"])
-    artifact["summary"] = {
-        "observation_count": count,
-        "target_hot_resident_bytes_total": 100 * count,
-        "comparator_hot_resident_bytes_total": 102 * count,
-        "relative_difference": 0.02,
-    }
-    _resign_match(artifact)
+    matches["fixed-top-p-0.5+pins"] = _match_artifact(
+        "fixed-top-p-0.5+pins",
+        calibration=_calibration(),
+        budget="2x",
+        low=3,
+        high=4,
+        numerator=400,
+    )
     with pytest.raises(ValueError, match="relative difference exceeded"):
         _quality_build(_calibration(), comparator_matches=matches)
 
@@ -1001,6 +1114,14 @@ def test_manifest_contract_accepts_only_same_path_outcome_independent_design() -
         ("primary_estimand", "top_p_eligible_for_primary_comparison", True),
         ("primary_estimand", "confirmatory_comparators", ["fixed+pins"]),
         ("primary_estimand", "confirmatory_decision_rule", "take outcome maximum"),
+        ("statistical_analysis", "paired_bootstrap_resamples", 1_000),
+        ("statistical_analysis", "seed_p_value_used_as_success_gate", True),
+        (
+            "confirmatory_success_gate",
+            "original_central_and_both_hsoft_comparators_must_pass_every_cell",
+            False,
+        ),
+        ("confirmatory_success_gate", "top_p_eligible_for_primary_gate", True),
     )
     for section, field, value in mutations:
         drifted = copy.deepcopy(payload)
@@ -1028,6 +1149,56 @@ def test_manifest_contract_rejects_arm_seed_and_cardinality_drift() -> None:
         contract.validate_manifest_payload(drifted)
 
 
+def test_manifest_contract_rejects_extra_top_level_and_implementation_fields() -> None:
+    payload = _manifest()
+
+    top_level_extra = copy.deepcopy(payload)
+    top_level_extra["undeclared_provenance"] = True
+    with pytest.raises(ValueError, match="top-level schema drifted"):
+        contract.validate_manifest_payload(top_level_extra)
+
+    implementation_extra = copy.deepcopy(payload)
+    implementation_extra["implementation"]["caller_selected_note"] = "not bound"
+    with pytest.raises(ValueError, match="Implementation provenance schema drifted"):
+        contract.validate_manifest_payload(implementation_extra)
+
+
+def test_manifest_rejects_ancestor_commit_with_current_index_digest(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    older_commit, _, descendant_commit = _manifest_provenance_history(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    current_digest = contract.implementation_tree_digest()
+    payload = contract.build_manifest_payload(
+        attestation_key_id="e" * 64,
+        implementation_tree_digest=current_digest,
+        implementation_source_commit=older_commit,
+    )
+
+    assert contract.source_state() == {"commit": descendant_commit, "dirty": False}
+    with pytest.raises(ValueError, match="declared source commit tree"):
+        contract.validate_manifest_payload(payload, verify_implementation=True)
+
+
+def test_manifest_accepts_implementation_commit_from_descendant_manifest_commit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _, implementation_commit, descendant_commit = _manifest_provenance_history(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    frozen_digest = contract.implementation_tree_digest_at_commit(implementation_commit)
+    payload = contract.build_manifest_payload(
+        attestation_key_id="e" * 64,
+        implementation_tree_digest=frozen_digest,
+        implementation_source_commit=implementation_commit,
+    )
+
+    assert contract.source_state() == {"commit": descendant_commit, "dirty": False}
+    assert contract.implementation_tree_digest() == frozen_digest
+    assert contract.validate_manifest_payload(payload, verify_implementation=True) is payload
+
+
 def test_implementation_digest_binds_complete_package_and_exact_research_inventory() -> None:
     tracked_tree = contract.subprocess.run(
         ["git", "ls-files", "-s", "--", contract.PACKAGE_IMPLEMENTATION_ROOT],
@@ -1042,11 +1213,14 @@ def test_implementation_digest_binds_complete_package_and_exact_research_invento
     assert "nano_deepseek_v4/__init__.py" in tracked_paths
     assert "nano_deepseek_v4/py.typed" in tracked_paths
     assert contract.IMPLEMENTATION_PATHS == (
+        contract.PROJECT_DEPENDENCY_SPEC_PATH,
         contract.PACKAGE_IMPLEMENTATION_ROOT,
         *contract.DIRECT_RESEARCH_IMPLEMENTATION_PATHS,
     )
+    assert "pyproject.toml" in contract.IMPLEMENTATION_PATHS
     assert str(contract.MANIFEST_PATH) not in contract.IMPLEMENTATION_PATHS
     assert {
+        "research/adaptive_v4_memory/scripts/adaptive_v4_gpu_lock.py",
         "research/adaptive_v4_memory/scripts/train_m1_associative_recall.py",
         "research/adaptive_v4_memory/scripts/run_p2_direct_training_matrix.py",
         "research/adaptive_v4_memory/scripts/calibrate_p2_direct_soft_lag.py",
@@ -1096,6 +1270,7 @@ def test_implementation_digest_rejects_untracked_descendants(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     tracked_paths = (
+        "pyproject.toml",
         "nano_deepseek_v4/__init__.py",
         *contract.DIRECT_RESEARCH_IMPLEMENTATION_PATHS,
     )

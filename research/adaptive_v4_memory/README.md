@@ -32,7 +32,7 @@ resident on the accelerator.
 
 ## Current status
 
-Status: **P2 path localized; current Stage A structurally blocked before outcome access**
+Status: **legacy Stage A structurally blocked; prospective 19-arm direct cohort in preflight**
 
 The July 19
 [`path-localization and identifiability report`](reports/2026-07-19-p2-path-localization-and-stage-a-identifiability.md)
@@ -45,6 +45,15 @@ scale-budget cell misses at least one required checkpoint seed. The current
 are therefore unexecuted and fail before GPU allocation. The binding
 [`post-localization amendment`](manifests/p2-post-localization-stage-a-execution-v1.json)
 permits only 707-only calibration redesign until a new contrast is frozen.
+
+Protocol 2.5 now freezes that redesign as a separate prospective cohort rather
+than reviving the non-identifiable panel. It uses five fresh training,
+calibration, and evaluation seeds, 19 direct sequential-tier arms, 9,000
+budget shards, 3.42 million arm-conversations, and 154.28 million expected raw
+decode-token rows. The original `calibrated+pins > fixed+pins` question remains
+the central causal contrast; two Hsoft comparisons are required independently,
+not substituted for it. The implementation/attestation/storage/concurrency
+preflight is active, and no fresh held-out quality shard has been launched.
 
 No performance or systems claim has been made. M1 adds deterministic baselines,
 an exhaustive Tier-T oracle, differentiable CSA training probes, and two
@@ -313,6 +322,14 @@ fixed-policy floor, and protected end positions are inherited by the physical
 tier store. This is still calibration-only evidence: held-out quality was not
 inspected. See the checked five-seed calibration report and summary.
 
+Prospective direct reruns now bind one exact CUDA/software/platform environment
+across every training and calibration cell, run sealed child bytes under Python
+isolated mode, and inherit both the parent scheduler lease and the selected
+UUID/PCI-derived physical-device guard into each child.
+Their exact-schema ledgers and output roots are validated as closed-world
+inventories at terminal and downstream load, so signed extra fields or orphaned
+files are not accepted as evidence.
+
 The first paired held-out pilot now covers all nine families and five contexts
 on S55 seed 6071401 with 13 policies. Hierarchical calibration versus fixed was
 +2.32 pp at 1x, -0.18 pp at 2x, and +0.18 pp at 4x over 560 queries. The 1x
@@ -387,7 +404,7 @@ chunk=2 validation; the clean-source chunk=1 audit subsequently matched all
 1,260 core-policy records and 3,920 predictions exactly. Its full quality
 matrix therefore uses token-by-token cache evaluation.
 
-## P2 training matrix
+## Legacy P2 training matrix
 
 The preregistered 5-seed × 2-scale Tier-S training matrix is complete. All ten
 runs reached exactly 1,000 steps from one clean source commit, and an independent
@@ -400,3 +417,14 @@ for a paper-level claim. See the checked P2 training report and summary.
 This completes only the training prerequisite. The nine-family, 1,000-example,
 multi-context, multi-budget held-out policy matrix and its paired statistical
 analysis remain active P2 work.
+
+## Prospective direct-controller matrix
+
+The direct cohort has its own fresh 6071406--6071410 checkpoints,
+7071406--7071410 target-free calibrations, and 10071406--10071410 held-out
+generation seeds. Its dependency order is training, direct SoftLag calibration,
+40-cell physical top-p matching, the complete 9,000-shard quality matrix,
+one-pass integrity audit, and deterministic statistical replay. All artifacts
+are bound to one external HMAC trust root and the clean implementation tree.
+See [`paper_grade_protocol.md`](paper_grade_protocol.md) and
+[`reproduction.md`](reproduction.md) for the exact gate and commands.

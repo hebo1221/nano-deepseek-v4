@@ -64,6 +64,147 @@ parallel runners first require exact serial/parallel probes. P2 causal also
 requires calibration-only physical-memory matching and exact chunked-quality versus
 sequential-tier equivalence for every seed, scale, budget, family, context, and arm.
 
+## P2 prospective direct-controller cohort
+
+The version-2.5 cohort is separate from the legacy factorial above. It uses the
+checked-in `p2-post-rank-direct-controller-v1.json` manifest, fresh 6071406--
+6071410/7071406--7071410/10071406--10071410 seed namespaces, 19 arms, 9,000
+budget shards, and exactly 154,280,000 decode-token rows when no technical
+failure occurs. Run only from the clean implementation commit bound by that
+manifest.
+
+Create one high-entropy trust root outside the repository and every artifact
+root. Keep the same file for the entire cohort; never copy its bytes into a
+command, log, manifest, or artifact:
+
+```bash
+install -d -m 700 "$HOME/.adaptive-v4"
+umask 077
+openssl rand 64 > "$HOME/.adaptive-v4/direct-controller-attestation.key"
+chmod 600 "$HOME/.adaptive-v4/direct-controller-attestation.key"
+export ADAPTIVE_V4_ATTESTATION_KEY_PATH="$HOME/.adaptive-v4/direct-controller-attestation.key"
+test -z "$(git status --porcelain)"
+```
+
+Execute the dependency chain in order. The training and calibration matrices
+contain ten seed-scale cells each; top-p physical matching contains 40 cells.
+Exit code 2 from a terminal calibration, physical-match, or controller artifact
+means a recorded NO-GO, not permission to delete and rerun it.
+Controller exit code 3 reports a fully validated `draining_infrastructure` or
+`paused_infrastructure` state. Non-owner workers and the coordinator may observe
+and return that state but may not mutate it; only its bound owner can rerun the
+headroom check after capacity changes.
+Controller exit code 3 is a retryable, HMAC-attested infrastructure pause or
+in-flight drain; it is nonterminal evidence and never a quality-gate pass.
+
+```bash
+.venv/bin/python research/adaptive_v4_memory/scripts/run_p2_direct_training_matrix.py \
+  --gpu-lock-path /tmp/adaptive-v4-direct-gpu0.lock
+.venv/bin/python research/adaptive_v4_memory/scripts/run_p2_direct_calibration_matrix.py \
+  --gpu-lock-path /tmp/adaptive-v4-direct-gpu0.lock
+.venv/bin/python research/adaptive_v4_memory/scripts/run_p2_direct_top_p_physical_matrix.py \
+  --gpu-lock-path /tmp/adaptive-v4-direct-gpu0.lock
+.venv/bin/python research/adaptive_v4_memory/scripts/run_p2_direct_controller_matrix.py \
+  --gpu-lock-path /tmp/adaptive-v4-direct-gpu0.lock
+.venv/bin/python research/adaptive_v4_memory/scripts/audit_p2_direct_controller_integrity.py
+.venv/bin/python research/adaptive_v4_memory/scripts/summarize_p2_direct_controller.py
+```
+
+Training and calibration freeze one exact CUDA execution environment before
+their first cell and require byte-for-byte semantic equality for every child
+artifact and exact resume. The binding includes the Python executable and
+version, PyTorch/CUDA runtime and driver, platform, `CUDA_VISIBLE_DEVICES`, the
+complete visible-device inventory, current device index, UUID/PCI routing,
+compute capability, and memory size; elapsed time and peak-memory counters are
+validated runtime measurements but are deliberately outside the stable binding.
+Their sealed script bootstraps use Python isolated mode (`-I`), transport the
+attestation key only through a sealed descriptor, and pass both already-held
+GPU descriptors into each child: the user-selected scheduler lease and a
+canonical physical-device guard derived from the selected UUID (PCI fallback).
+A child therefore keeps both kernel leases if its runner dies; no child acquires
+a nested lease and a different scheduler path cannot bypass physical exclusion.
+
+The prospective training/calibration summaries, artifacts, and matrix ledgers
+use exact schemas. Their output roots are closed-world inventories on preflight,
+terminal validation, and downstream consumption: an extra, missing, renamed,
+symlinked, or orphaned file fails closed even when a supplied JSON payload has a
+valid MAC. Preserve each canonical matrix ledger with its registered cell files
+when archiving. Controller-compatible multi-GPU comparison is narrower: it
+compares the GPU class selected by `current_device_index` and may ignore routing
+topology. The selected logical index is nevertheless frozen into the local
+execution binding, forwarded as an explicit `cuda:N` child argument, and
+checked against the child's UUID/PCI evidence; execution never silently falls
+back to visible device zero.
+
+Calibration and top-p physical matching create a persistent exact-coordinate
+claim before each child launch. They remove it only after the newly published
+terminal artifact, exit code, provenance, and frozen execution environment have
+all validated, immediately before authoritative ledger promotion. An exception,
+unexpected exit, or missing/invalid artifact preserves the claim as fail-closed
+evidence; a crash after claim release but before ledger commit instead leaves an
+orphan artifact. Both states block resume pending an explicit recorded operator
+quarantine, because no whole-process retry policy was frozen.
+
+The controller runner computes an observed component-wise high-water planning
+estimate from fixed sidecar bytes, actual envelope bytes, and bytes per
+decode-token row against the exact remaining token weights. Before each launch
+it requires at least the frozen one-shard headroom and, once usable observations
+exist, the larger observed next-shard estimate. This is neither a future upper
+bound nor a space reservation: unseen compression behavior and concurrent
+writers can still exhaust the filesystem. Insufficient headroom raises a typed,
+retryable infrastructure pause before a cell claim or evaluator launch. The
+runner publishes that condition directly as `paused_infrastructure` only when
+no distributed claim is live. Otherwise it first publishes an HMAC-attested
+`draining_infrastructure` state: no new claim may start, but already-running
+claims may commit without becoming orphans. Each such commit re-attests the
+latest sparse ledger, storage evidence, live-claim inventory, and `statvfs`;
+the last commit converts an insufficient drain to `paused_infrastructure`.
+Only the originally bound worker may rerun the frozen check and publish the
+`in_progress` transition before claiming the exact next coordinate. Neither
+blocked state is a terminal pass or summarizable evidence. Raw outcome, token,
+and failure sidecars are streamed once into the summary; the integrity audit
+and terminal summary retain HMAC bindings to every raw bundle.
+
+An evaluator-caught arm error is already a terminal technical-failure bundle
+and remains in the intent-to-treat cohort. By contrast, an unexpected child
+exit with no terminal envelope is not silently retried: its coordinate claim
+is preserved as fail-closed orphan evidence and blocks resume until an operator
+performs and records a manual quarantine decision. This manifest did not freeze
+a bounded whole-process retry policy, so deleting that claim and rerunning the
+coordinate would create an unregistered selection path.
+
+The training, calibration, and top-p physical-match matrices use the same
+no-silent-retry boundary. Each coordinate acquires an exclusive persistent
+claim before its child starts; only an expected exit with a fully validated
+terminal artifact may complete the claim/ledger transaction. An unexpected
+exit or missing artifact preserves the claim, and subsequent preflight rejects
+the coordinate until manual quarantine is recorded. A signed terminal NO-GO is
+evidence to commit, not a reason to delete or rerun the cell.
+
+Distributed mode currently supports one host with a shared local filesystem.
+Each worker receives its modulo partition and a distinct scheduler-lease path;
+the runner additionally acquires the canonical guard for the GPU actually
+selected by that process. A coordinator-only invocation publishes the canonical
+terminal merge only after every worker ledger is terminal. The same GPU model,
+compute capability, memory size, Python/PyTorch/CUDA runtime and driver are
+required; UUID, PCI address, logical index, and `CUDA_VISIBLE_DEVICES` may
+differ. On a four-GPU single host, launch worker index `N` with
+`CUDA_VISIBLE_DEVICES=N`, `--worker-count 4 --worker-index N`, and
+`--gpu-lock-path /tmp/adaptive-v4-gpu-N.lock`, then run one coordinator process
+with `--worker-count 4 --coordinator-only`. Merely changing the scheduler path
+without selecting a different physical GPU fails on the canonical guard.
+Multi-host PID/claim coordination is not implemented and must not be inferred
+from this command.
+The public matrix also binds the closed-world sibling directory
+`.<output-root-name>.p2-direct-controller-workers`, including its canonical
+worker filenames and each file's size, SHA-256, payload digest, attestation,
+terminal status, assigned coordinate count, and absolute root path. Preserve
+that directory beside the output root at its original absolute path for
+authoritative replay. A relocated copy is archival backup only and does not
+become valid evidence merely by retaining the sibling layout; a moved, missing,
+extra, renamed, or mutated ledger makes replay fail closed. A single-worker run
+requires this sibling directory to be absent.
+
 ## P3 compatible-model natural and safety evidence
 
 Acquire only the revisions pinned in the P3 manifests, prepare their source/data

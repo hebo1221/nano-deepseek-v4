@@ -48,11 +48,56 @@ EXAMPLES_PER_FAMILY = len(CONTEXTS) * len(REPLICATES) * EXAMPLES_PER_SHARD
 UNIQUE_SHARDS_PER_SEED_SCALE = len(FAMILIES) * len(CONTEXTS) * len(REPLICATES)
 UNIQUE_SHARDS_TOTAL = len(TRAINING_SEEDS) * len(SCALES) * UNIQUE_SHARDS_PER_SEED_SCALE
 BUDGET_SHARDS_TOTAL = len(BUDGETS) * UNIQUE_SHARDS_TOTAL
-UNIQUE_CONVERSATIONS_TOTAL = UNIQUE_SHARDS_TOTAL * EXAMPLES_PER_SHARD
+DISTINCT_GENERATED_CONVERSATIONS_TOTAL = (
+    len(TRAINING_SEEDS) * len(FAMILIES) * len(CONTEXTS) * len(REPLICATES) * EXAMPLES_PER_SHARD
+)
+SCALE_SPECIFIC_CONVERSATION_EVALUATIONS_TOTAL = UNIQUE_SHARDS_TOTAL * EXAMPLES_PER_SHARD
+BUDGET_EXPANDED_CONVERSATION_EVALUATIONS_TOTAL = BUDGET_SHARDS_TOTAL * EXAMPLES_PER_SHARD
+
+# Sequential decoding starts immediately before the first query in each frozen
+# workload.  This registry makes the full no-failure token evidence cardinality
+# preregistered rather than inferred after looking at the raw study.
+DECODE_TOKENS_PER_EXAMPLE_BY_FAMILY_CONTEXT = {
+    "single-remote-retrieval": {context: 2 for context in CONTEXTS},
+    "multiple-independent-needles": {context: 12 for context in CONTEXTS},
+    "associative-recall": {context: 3 for context in CONTEXTS},
+    "multi-turn-query-shift": {context: 12 for context in CONTEXTS},
+    "dense-global-aggregation": {context: 24 for context in CONTEXTS},
+    "irrelevant-context-local-only": {context: 2 for context in CONTEXTS},
+    "instruction-persistence": {context: 12 for context in CONTEXTS},
+    "adversarial-lexical-distractors": {context: 3 for context in CONTEXTS},
+    "long-generation-changing-evidence": {
+        80: 16,
+        128: 64,
+        256: 192,
+        512: 448,
+        1024: 960,
+    },
+}
+DECODE_TOKEN_STEPS_PER_FAMILY_CONTEXT_SWEEP = sum(
+    DECODE_TOKENS_PER_EXAMPLE_BY_FAMILY_CONTEXT[family][context]
+    for family in FAMILIES
+    for context in CONTEXTS
+)
+EXPECTED_RAW_TOKEN_ROWS_WITHOUT_FAILURES_PER_ARM = (
+    DECODE_TOKEN_STEPS_PER_FAMILY_CONTEXT_SWEEP
+    * EXAMPLES_PER_SHARD
+    * len(REPLICATES)
+    * len(BUDGETS)
+    * len(TRAINING_SEEDS)
+    * len(SCALES)
+)
 
 PRIMARY_ADAPTIVE_ARM = "hierarchical-soft-lag+pins"
 CONVENTIONAL_FIXED_COMPARATOR_ARM = "fixed+pins"
 CLEAN_ALLOCATOR_CONTROL_ARM = "hierarchical-balanced-fixed+pins"
+ORIGINAL_CENTRAL_CAUSAL_CANDIDATE_ARM = "calibrated+pins"
+ORIGINAL_CENTRAL_CAUSAL_COMPARATOR_ARM = "fixed+pins"
+ORIGINAL_CENTRAL_CAUSAL_CONTRAST_NAME = "calibrated_pins_vs_fixed_pins"
+ORIGINAL_CENTRAL_CAUSAL_ARM_SET = (
+    ORIGINAL_CENTRAL_CAUSAL_CANDIDATE_ARM,
+    ORIGINAL_CENTRAL_CAUSAL_COMPARATOR_ARM,
+)
 CONFIRMATORY_COMPARATOR_ARMS = (
     CONVENTIONAL_FIXED_COMPARATOR_ARM,
     CLEAN_ALLOCATOR_CONTROL_ARM,
@@ -80,6 +125,9 @@ PHASE_B_DIAGNOSTIC_ARM_NAMES = (
     "hierarchical-soft-lag+pins+fallback",
 )
 ALL_ARM_NAMES = (*PHASE_A_ARM_NAMES, *PHASE_B_DIAGNOSTIC_ARM_NAMES)
+EXPECTED_RAW_TOKEN_ROWS_WITHOUT_FAILURES = EXPECTED_RAW_TOKEN_ROWS_WITHOUT_FAILURES_PER_ARM * len(
+    ALL_ARM_NAMES
+)
 VARIABLE_FILL_SENSITIVITY_ARMS = SENSITIVITY_COMPARATOR_ARMS
 EXACT_FILL_ARM_NAMES = tuple(
     name for name in ALL_ARM_NAMES if name not in VARIABLE_FILL_SENSITIVITY_ARMS
@@ -93,6 +141,83 @@ PHYSICAL_MATCH_TARGET_METRIC = "hot_resident_bytes"
 FIXED_MIXTURE_RULE = "deterministic-bresenham-by-paired-batch-index"
 MAX_RELATIVE_HOT_BYTES_DIFFERENCE = 0.01
 GENERATION_SEED_RULE = "evaluation_seed*100000 + family_index*1000 + context_index*10 + replicate"
+TOP_P_MATCH_CONVERSATIONS_PER_CONTEXT_FAMILY = 10
+TOP_P_MATCH_CONVERSATION_INDICES = tuple(range(TOP_P_MATCH_CONVERSATIONS_PER_CONTEXT_FAMILY))
+TOP_P_MATCH_OBSERVATION_COUNT = (
+    len(FAMILIES) * len(CONTEXTS) * TOP_P_MATCH_CONVERSATIONS_PER_CONTEXT_FAMILY
+)
+TOP_P_MATCH_GENERATION_SEED_RULE = (
+    "calibration_seed*100000 + family_index*10000 + context_index*1000 + conversation_index"
+)
+TOP_P_MATCH_VALUE_WIDTH = 64
+TOP_P_MATCH_VALUE_DTYPE = "torch.bfloat16"
+TOP_P_MATCH_POSITION_DTYPE = "torch.int64"
+TOP_P_MATCH_VALUE_ELEMENT_BYTES = 2
+TOP_P_MATCH_POSITION_ELEMENT_BYTES = 8
+TOP_P_MATCH_CANONICAL_MODULE = "validate_p2_direct_top_p_physical_match"
+TOP_P_MATCH_CANONICAL_MODULE_PATH = (
+    "research/adaptive_v4_memory/scripts/validate_p2_direct_top_p_physical_match.py"
+)
+TOP_P_MATCH_OBSERVATION_FIELDS = frozenset(
+    {
+        "observation_index",
+        "schedule_variant",
+        "coordinate",
+        "pair_id",
+        "target",
+        "comparator",
+        "pair_digest",
+    }
+)
+TOP_P_MATCH_COORDINATE_FIELDS = frozenset(
+    {
+        "family",
+        "context",
+        "conversation_index",
+        "generation_seed",
+    }
+)
+TOP_P_MATCH_EXECUTION_FIELDS = frozenset(
+    {
+        "arm",
+        "trace_id",
+        "request_id",
+        "token_event_id",
+        "source_signal_position",
+        "apply_query_key_position",
+        "source_token_id",
+        "apply_token_id",
+        "action_ids",
+        "action_digests",
+        "configured_capacity_blocks_per_layer",
+        "selected_blocks_per_layer",
+        "layers",
+        "hot_resident_bytes",
+        "cuda_peak_allocated_bytes",
+        "cuda_peak_reserved_bytes",
+        "is_cuda_hbm_evidence",
+        "runtime_soft_lag_snapshot",
+        "physical_snapshot_digest",
+    }
+)
+TOP_P_MATCH_LAYER_FIELDS = frozenset(
+    {
+        "layer_index",
+        "action_id",
+        "selected_end_positions",
+        "resident_block_ids",
+        "resident_end_positions",
+        "hot_value_shape",
+        "hot_position_shape",
+        "hot_value_dtype",
+        "hot_position_dtype",
+        "hot_value_device",
+        "hot_position_device",
+        "hot_value_bytes",
+        "hot_position_bytes",
+        "hot_resident_bytes",
+    }
+)
 EXACT_FILL_RULE = (
     "every exact-fill arm must select and physically materialize exactly feasible B_t blocks "
     "after pins, where B_t=min(frozen global B, summed candidate caps); pins are charged "
@@ -154,12 +279,149 @@ SIGNAL_DIAGNOSTIC_RULE = (
     "report clipping and quota-movement rates by seed, scale, budget, family, context, and regime"
 )
 
+PRIMARY_QUALITY_METRIC = "accuracy"
+SECONDARY_QUALITY_METRICS = ("all_queries_correct",)
+TECHNICAL_FAILURE_QUALITY_SCORE = 0.0
+STATISTICAL_BOOTSTRAP_RESAMPLES = 20_000
+STATISTICAL_CONFIDENCE_LEVEL = 0.95
+FOUR_CELL_FAMILYWISE_CONFIDENCE_LEVEL = 0.9875
+STATISTICAL_NUMPY_RNG = "numpy.random.Generator(numpy.random.PCG64)"
+STATISTICAL_NUMPY_QUANTILE_METHOD = "linear"
+STATISTICAL_DEPENDENCY_BOUNDARY = (
+    "the tracked pyproject.toml constrains project dependencies but is not an exact environment "
+    "lock; terminal summaries must record and validate the exact Python and NumPy versions used"
+)
+SEED_EXACT_TEST_ALPHA = 0.05
+INDEPENDENT_SEED_CLUSTERS = len(TRAINING_SEEDS)
+EXACT_SEED_SIGN_FLIP_ASSIGNMENTS = 1 << INDEPENDENT_SEED_CLUSTERS
+MINIMUM_ATTAINABLE_TWO_SIDED_SEED_P = 2.0 / EXACT_SEED_SIGN_FLIP_ASSIGNMENTS
+CAUSAL_DIAGNOSTIC_CONTRAST_COUNT = 15
+CAUSAL_DIAGNOSTIC_CONTRAST_SPECS = (
+    ("adaptive_quota_without_pins", "calibrated-no-pins", "fixed"),
+    ("pin_fixed", "fixed+pins", "fixed"),
+    ("pin_calibrated", "calibrated+pins", "calibrated-no-pins"),
+    ("pin_shuffled_quota", "shuffled-quota+pins", "shuffled-quota"),
+    ("pin_local", "local+pins", "local-no-pins"),
+    ("pin_hsoft", PRIMARY_ADAPTIVE_ARM, "hierarchical-soft-lag-no-pins"),
+    ("calibrated_quota_vs_shuffled", "calibrated+pins", "shuffled-quota+pins"),
+    ("dynamic_hsoft_vs_calibrated_static", PRIMARY_ADAPTIVE_ARM, "calibrated+pins"),
+    ("hierarchical_hsoft_vs_local", PRIMARY_ADAPTIVE_ARM, "local+pins"),
+    ("score_signal", PRIMARY_ADAPTIVE_ARM, "hierarchical-soft-lag+pins-no-score"),
+    ("temporal_signal", PRIMARY_ADAPTIVE_ARM, "hierarchical-soft-lag+pins-no-temporal"),
+    ("cross_layer_signal", PRIMARY_ADAPTIVE_ARM, "hierarchical-soft-lag+pins-no-cross-layer"),
+    ("refresh_reuse", PRIMARY_ADAPTIVE_ARM, "hierarchical-soft-lag+pins-no-refresh"),
+    (
+        "quota_identity_vs_permuted",
+        PRIMARY_ADAPTIVE_ARM,
+        "hierarchical-soft-lag+pins-permuted-quota",
+    ),
+    ("resident_fallback_increment", "hierarchical-soft-lag+pins+fallback", PRIMARY_ADAPTIVE_ARM),
+)
+
+
+def expected_statistical_analysis_contract() -> dict[str, Any]:
+    """Return the outcome-independent statistical preregistration bound by the manifest."""
+
+    return {
+        "primary_quality_metric": PRIMARY_QUALITY_METRIC,
+        "secondary_quality_metrics": list(SECONDARY_QUALITY_METRICS),
+        "technical_failure_policy": "intent-to-treat-zero-and-confirmatory-no-go",
+        "technical_failure_quality_score": TECHNICAL_FAILURE_QUALITY_SCORE,
+        "paired_bootstrap_resamples": STATISTICAL_BOOTSTRAP_RESAMPLES,
+        "paired_conversation_confidence_level": STATISTICAL_CONFIDENCE_LEVEL,
+        "paired_conversation_scope": "conditional-on-observed-fitted-model-cohort",
+        "independent_cluster": "training checkpoint seed",
+        "independent_seed_clusters_per_scale_budget": INDEPENDENT_SEED_CLUSTERS,
+        "seed_cluster_bootstrap_resamples": STATISTICAL_BOOTSTRAP_RESAMPLES,
+        "seed_cluster_confidence_level": STATISTICAL_CONFIDENCE_LEVEL,
+        "exact_seed_sign_flip_assignments": EXACT_SEED_SIGN_FLIP_ASSIGNMENTS,
+        "minimum_attainable_two_sided_seed_p": MINIMUM_ATTAINABLE_TWO_SIDED_SEED_P,
+        "seed_exact_test_alpha": SEED_EXACT_TEST_ALPHA,
+        "seed_p_value_used_as_success_gate": False,
+        "numpy_rng": STATISTICAL_NUMPY_RNG,
+        "numpy_quantile_method": STATISTICAL_NUMPY_QUANTILE_METHOD,
+        "project_dependency_spec_bound": True,
+        "exact_dependency_lock_bound": False,
+        "dependency_boundary": STATISTICAL_DEPENDENCY_BOUNDARY,
+        "primary_four_cell_confidence_level": FOUR_CELL_FAMILYWISE_CONFIDENCE_LEVEL,
+        "primary_four_cell_correction": (
+            "Bonferroni over 2 scales x 2 budgets, separately for each frozen confirmatory "
+            "comparator, using five independent training-seed means"
+        ),
+        "confirmatory_comparators_pooled_selected_or_dropped": False,
+        "family_correction": (
+            "Holm-Bonferroni over all 9 workload families separately within each contrast, "
+            "scale, budget, and quality metric"
+        ),
+        "diagnostic_contrast_correction": (
+            "Holm-Bonferroni over all 15 preregistered causal diagnostic contrasts separately "
+            "within each scale, budget, and quality metric"
+        ),
+        "causal_diagnostic_contrast_count": CAUSAL_DIAGNOSTIC_CONTRAST_COUNT,
+        "causal_diagnostic_contrasts": [
+            {"name": name, "candidate": candidate, "comparator": comparator}
+            for name, candidate, comparator in CAUSAL_DIAGNOSTIC_CONTRAST_SPECS
+        ],
+        "top_p_sensitivity_in_confirmatory_multiplicity": False,
+        "required_slices": ["scale", "budget", "training_seed", "family", "context"],
+        "required_joint_quality_slice": [
+            "scale",
+            "budget",
+            "training_seed",
+            "family",
+            "context",
+        ],
+        "worst_family_context_slice_reported": True,
+        "worst_joint_training_seed_family_context_slice_reported": True,
+        "population_generalization_from_conversation_count": False,
+    }
+
+
+def expected_confirmatory_success_gate() -> dict[str, Any]:
+    """Return the exact bounded cohort gate, distinct from population significance."""
+
+    return {
+        "primary_metric": PRIMARY_QUALITY_METRIC,
+        "original_central_causal_contrast": {
+            "name": ORIGINAL_CENTRAL_CAUSAL_CONTRAST_NAME,
+            "candidate": ORIGINAL_CENTRAL_CAUSAL_CANDIDATE_ARM,
+            "comparator": ORIGINAL_CENTRAL_CAUSAL_COMPARATOR_ARM,
+        },
+        "direct_hsoft_candidate": PRIMARY_ADAPTIVE_ARM,
+        "direct_hsoft_comparators": list(CONFIRMATORY_COMPARATOR_ARMS),
+        "all_three_contrasts_evaluated_independently": True,
+        "required_scales": list(SCALES),
+        "required_budgets": list(BUDGETS),
+        "required_seed_effects_per_scale_budget": len(TRAINING_SEEDS),
+        "conditions_per_comparator_scale_budget": [
+            "pooled paired intent-to-treat mean strictly positive",
+            "all five training-seed mean differences strictly positive",
+            "paired conversation bootstrap 95 percent lower bound strictly positive",
+            "training-seed-cluster bootstrap 95 percent lower bound strictly positive",
+            "Bonferroni four-cell 98.75 percent seed-cluster lower bound strictly positive",
+            "zero candidate or comparator technical failures",
+            "exact paired physical hot-resident-byte parity for all five seeds",
+        ],
+        "original_central_and_both_hsoft_comparators_must_pass_every_cell": True,
+        "exact_seed_p_value_used_as_success_gate": False,
+        "population_significance_reported_separately": True,
+        "top_p_eligible_for_primary_gate": False,
+        "diagnostic_ablation_eligible_for_arm_selection": False,
+        "pass_label": "GO-OBSERVED-COHORT-BOUNDED",
+        "fail_label": "NO-GO-CONFIRMATORY",
+    }
+
+
 # The manifest is intentionally not an implementation input: it binds this tracked tree after
-# implementation is complete. The package root binds every tracked runtime/package dependency,
-# while research programs are enumerated exactly. Future execution/audit programs must remain in
-# this inventory and be implemented before freezing.
+# implementation is complete. The package root binds every tracked runtime module, pyproject.toml
+# binds the available (non-locking) dependency specification, and research programs are enumerated
+# exactly. Future execution/audit programs must remain in this inventory and be implemented before
+# freezing.
 PACKAGE_IMPLEMENTATION_ROOT = "nano_deepseek_v4"
+PROJECT_DEPENDENCY_SPEC_PATH = "pyproject.toml"
 DIRECT_RESEARCH_IMPLEMENTATION_PATHS = (
+    "research/adaptive_v4_memory/scripts/adaptive_v4_execution_environment.py",
+    "research/adaptive_v4_memory/scripts/adaptive_v4_gpu_lock.py",
     "research/adaptive_v4_memory/scripts/freeze_p2_causal_factorial_arms.py",
     "research/adaptive_v4_memory/scripts/p2_direct_attestation.py",
     "research/adaptive_v4_memory/scripts/train_m1_associative_recall.py",
@@ -168,12 +430,35 @@ DIRECT_RESEARCH_IMPLEMENTATION_PATHS = (
     "research/adaptive_v4_memory/scripts/calibrate_p2_direct_soft_lag.py",
     "research/adaptive_v4_memory/scripts/run_p2_direct_calibration_matrix.py",
     "research/adaptive_v4_memory/scripts/validate_p2_direct_top_p_physical_match.py",
+    "research/adaptive_v4_memory/scripts/run_p2_direct_top_p_physical_matrix.py",
     "research/adaptive_v4_memory/scripts/evaluate_p2_direct_controller_shard.py",
     "research/adaptive_v4_memory/scripts/run_p2_direct_controller_matrix.py",
     "research/adaptive_v4_memory/scripts/audit_p2_direct_controller_integrity.py",
     "research/adaptive_v4_memory/scripts/summarize_p2_direct_controller.py",
 )
-IMPLEMENTATION_PATHS = (PACKAGE_IMPLEMENTATION_ROOT, *DIRECT_RESEARCH_IMPLEMENTATION_PATHS)
+IMPLEMENTATION_PATHS = (
+    PROJECT_DEPENDENCY_SPEC_PATH,
+    PACKAGE_IMPLEMENTATION_ROOT,
+    *DIRECT_RESEARCH_IMPLEMENTATION_PATHS,
+)
+MANIFEST_TOP_LEVEL_FIELDS = frozenset(
+    {
+        "schema_version",
+        "experiment_id",
+        "status",
+        "attestation",
+        "adaptation_disclosure",
+        "cohort",
+        "grid",
+        "phases",
+        "primary_estimand",
+        "execution_contract",
+        "statistical_analysis",
+        "confirmatory_success_gate",
+        "implementation",
+    }
+)
+MANIFEST_IMPLEMENTATION_FIELDS = frozenset({"paths", "tree_digest", "source_commit"})
 
 QuotaRuntime = Literal[
     "balanced-feasible",
@@ -190,6 +475,7 @@ AnalysisRole = Literal[
     "primary-comparator",
     "pareto-sensitivity",
     "causal-diagnostic",
+    "central-confirmatory-and-causal-diagnostic",
 ]
 SIGNAL_WEIGHT_NAMES = ("entropy", "margin", "temporal", "cross_layer")
 DEFAULT_SIGNAL_WEIGHTS = (0.35, 0.20, 0.25, 0.20)
@@ -315,7 +601,7 @@ _EXPECTED_ARM_SEMANTICS = (
         "calibrated+pins",
         "calibrated-static",
         "exact-feasible-B",
-        "causal-diagnostic",
+        "central-confirmatory-and-causal-diagnostic",
         False,
         False,
         False,
@@ -532,8 +818,38 @@ def _implementation_index_digest(paths: tuple[str, ...], entries: tuple[str, ...
     )
 
 
+def _validate_implementation_inventory(
+    parsed_entries: list[tuple[str, str]],
+) -> tuple[str, ...]:
+    """Validate and canonically order normalized stage-zero implementation entries."""
+
+    if len(IMPLEMENTATION_PATHS) != len(set(IMPLEMENTATION_PATHS)):
+        raise RuntimeError("Canonical implementation path inventory contains duplicates.")
+    paths = [path for path, _ in parsed_entries]
+    if len(paths) != len(set(paths)):
+        raise RuntimeError("Implementation Git inventory contains duplicate paths.")
+    canonical = tuple(entry for _, entry in sorted(parsed_entries))
+    if tuple(entry for _, entry in parsed_entries) != canonical:
+        raise RuntimeError("Implementation Git entry ordering drifted from canonical order.")
+    tracked_paths = set(paths)
+    if PROJECT_DEPENDENCY_SPEC_PATH not in tracked_paths:
+        raise RuntimeError("Tracked project dependency specification is missing.")
+    package_prefix = PACKAGE_IMPLEMENTATION_ROOT.rstrip("/") + "/"
+    package_paths = {path for path in tracked_paths if path.startswith(package_prefix)}
+    if not package_paths:
+        raise RuntimeError("Tracked package implementation inventory is empty.")
+    missing_research = [
+        path for path in DIRECT_RESEARCH_IMPLEMENTATION_PATHS if path not in tracked_paths
+    ]
+    if missing_research:
+        raise RuntimeError(
+            f"Direct-controller implementation paths are missing: {missing_research}"
+        )
+    return canonical
+
+
 def implementation_tree_digest(paths: tuple[str, ...] = IMPLEMENTATION_PATHS) -> str:
-    """Digest the dependency-complete, tracked implementation inventory.
+    """Digest the tracked implementation and non-locking dependency-spec inventory.
 
     The public inventory is deliberately canonical rather than a caller-selected subset. This
     prevents a reordered or narrowed path tuple from producing an apparently valid paper freeze.
@@ -558,20 +874,14 @@ def implementation_tree_digest(paths: tuple[str, ...] = IMPLEMENTATION_PATHS) ->
         fields = metadata.split()
         if separator != "\t" or len(fields) != 3 or fields[2] != "0" or not path:
             raise RuntimeError("Implementation git-index entry is malformed or not at stage zero.")
+        mode, object_id, _ = fields
+        if mode not in {"100644", "100755"} or not is_git_oid(object_id):
+            raise RuntimeError(
+                "Implementation git-index entry is not a regular tracked blob; "
+                "symlinks and submodules are forbidden."
+            )
         parsed_entries.append((path, entry))
-    canonical_entries = tuple(entry for _, entry in sorted(parsed_entries))
-    if entries != canonical_entries:
-        raise RuntimeError("Implementation git-index entry ordering drifted from canonical order.")
-    tracked_paths = {path for path, _ in parsed_entries}
-    package_prefix = PACKAGE_IMPLEMENTATION_ROOT.rstrip("/") + "/"
-    package_paths = {path for path in tracked_paths if path.startswith(package_prefix)}
-    if not package_paths:
-        raise RuntimeError("Tracked package implementation inventory is empty.")
-    missing_research = [
-        path for path in DIRECT_RESEARCH_IMPLEMENTATION_PATHS if path not in tracked_paths
-    ]
-    if missing_research:
-        raise RuntimeError(f"Untracked direct-controller implementation paths: {missing_research}")
+    canonical_entries = _validate_implementation_inventory(parsed_entries)
     untracked_output = subprocess.run(
         ["git", "ls-files", "--others", "--exclude-standard", "--", *paths],
         check=True,
@@ -583,7 +893,58 @@ def implementation_tree_digest(paths: tuple[str, ...] = IMPLEMENTATION_PATHS) ->
         raise RuntimeError(
             f"Untracked files exist inside the implementation inventory: {list(untracked_paths)}"
         )
-    return _implementation_index_digest(paths, entries)
+    return _implementation_index_digest(paths, canonical_entries)
+
+
+def implementation_tree_digest_at_commit(source_commit: str) -> str:
+    """Digest the canonical implementation inventory from a declared Git commit tree.
+
+    Commit-tree records are normalized to the same stage-zero representation used for the
+    checked-out Git index. The inventory cannot be narrowed by a caller, and the package root is
+    traversed recursively by ``git ls-tree -r``.
+    """
+
+    _require(is_git_oid(source_commit), "Implementation source commit is invalid.")
+    commit_check = subprocess.run(
+        ["git", "cat-file", "-e", f"{source_commit}^{{commit}}"],
+        capture_output=True,
+        text=True,
+    )
+    _require(
+        commit_check.returncode == 0,
+        "Implementation source commit does not name a Git commit object.",
+    )
+    tracked_tree = subprocess.run(
+        [
+            "git",
+            "ls-tree",
+            "-r",
+            "--full-tree",
+            source_commit,
+            "--",
+            *IMPLEMENTATION_PATHS,
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    entries = tuple(line for line in tracked_tree.splitlines() if line)
+    parsed_entries: list[tuple[str, str]] = []
+    for entry in entries:
+        metadata, separator, path = entry.partition("\t")
+        fields = metadata.split()
+        if separator != "\t" or len(fields) != 3 or not path:
+            raise RuntimeError("Implementation commit-tree entry is malformed.")
+        mode, object_type, object_id = fields
+        if object_type != "blob" or mode not in {"100644", "100755"}:
+            raise RuntimeError(
+                "Implementation commit tree contains a symlink, submodule, or non-blob entry."
+            )
+        if not is_git_oid(object_id):
+            raise RuntimeError("Implementation commit-tree object ID is invalid.")
+        parsed_entries.append((path, f"{mode} {object_id} 0\t{path}"))
+    canonical_entries = _validate_implementation_inventory(parsed_entries)
+    return _implementation_index_digest(IMPLEMENTATION_PATHS, canonical_entries)
 
 
 def seed_triplet(training_seed: int) -> tuple[int, int, int]:
@@ -633,6 +994,64 @@ def generation_seed(evaluation_seed: int, family: str, context: int, replicate: 
     )
 
 
+def top_p_match_generation_seed(
+    calibration_seed: int,
+    family: str,
+    context: int,
+    conversation_index: int,
+) -> int:
+    """Return one frozen calibration-only physical-match workload seed."""
+
+    if calibration_seed not in CALIBRATION_SEEDS:
+        raise ValueError(f"Unregistered direct-controller calibration seed: {calibration_seed}")
+    if family not in FAMILIES:
+        raise ValueError(f"Unregistered direct-controller family: {family}")
+    if context not in CONTEXTS:
+        raise ValueError(f"Unregistered direct-controller context: {context}")
+    if conversation_index not in TOP_P_MATCH_CONVERSATION_INDICES:
+        raise ValueError("Top-p physical-match conversation index is outside the frozen grid.")
+    return (
+        calibration_seed * 100_000
+        + FAMILIES.index(family) * 10_000
+        + CONTEXTS.index(context) * 1_000
+        + conversation_index
+    )
+
+
+def top_p_match_coordinate(
+    observation_index: int,
+    *,
+    calibration_seed: int,
+) -> dict[str, int | str]:
+    """Map one canonical row index to its immutable calibration coordinate."""
+
+    if (
+        isinstance(observation_index, bool)
+        or not isinstance(observation_index, int)
+        or not 0 <= observation_index < TOP_P_MATCH_OBSERVATION_COUNT
+    ):
+        raise ValueError("Top-p physical-match observation index is outside the frozen grid.")
+    per_family = len(CONTEXTS) * TOP_P_MATCH_CONVERSATIONS_PER_CONTEXT_FAMILY
+    family_index, within_family = divmod(observation_index, per_family)
+    context_index, conversation_index = divmod(
+        within_family,
+        TOP_P_MATCH_CONVERSATIONS_PER_CONTEXT_FAMILY,
+    )
+    family = FAMILIES[family_index]
+    context = CONTEXTS[context_index]
+    return {
+        "family": family,
+        "context": context,
+        "conversation_index": conversation_index,
+        "generation_seed": top_p_match_generation_seed(
+            calibration_seed,
+            family,
+            context,
+            conversation_index,
+        ),
+    }
+
+
 def expected_grid_cardinalities() -> dict[str, int]:
     return {
         "seeds": len(TRAINING_SEEDS),
@@ -646,7 +1065,14 @@ def expected_grid_cardinalities() -> dict[str, int]:
         "unique_shards_per_seed_scale": UNIQUE_SHARDS_PER_SEED_SCALE,
         "unique_shards_total": UNIQUE_SHARDS_TOTAL,
         "budget_shards_total": BUDGET_SHARDS_TOTAL,
-        "unique_conversations_total": UNIQUE_CONVERSATIONS_TOTAL,
+        "distinct_generated_conversations_total": DISTINCT_GENERATED_CONVERSATIONS_TOTAL,
+        "scale_specific_conversation_evaluations_total": (
+            SCALE_SPECIFIC_CONVERSATION_EVALUATIONS_TOTAL
+        ),
+        "budget_expanded_conversation_evaluations_total": (
+            BUDGET_EXPANDED_CONVERSATION_EVALUATIONS_TOTAL
+        ),
+        "raw_token_rows_without_technical_failures": (EXPECTED_RAW_TOKEN_ROWS_WITHOUT_FAILURES),
         "phase_a_arm_conversations": (
             BUDGET_SHARDS_TOTAL * EXAMPLES_PER_SHARD * len(PHASE_A_ARM_NAMES)
         ),
@@ -816,6 +1242,418 @@ def _direct_physical_match_validator() -> Callable[..., dict[str, Any]]:
     return cast(Callable[..., dict[str, Any]], validator)
 
 
+def _strict_top_p_layer_pairs(
+    raw: object,
+    *,
+    layers: tuple[int, ...],
+    name: str,
+    positive: bool,
+) -> dict[int, int]:
+    _require(isinstance(raw, list), f"{name} must be an ordered layer-pair list.")
+    pairs = cast(list[Any], raw)
+    result: dict[int, int] = {}
+    inventory: list[int] = []
+    for item in pairs:
+        _require(
+            isinstance(item, list)
+            and len(item) == 2
+            and type(item[0]) is int
+            and type(item[1]) is int
+            and item[0] >= 0
+            and item[1] >= int(positive),
+            f"{name} contains an invalid layer pair.",
+        )
+        layer, value = cast(list[int], item)
+        inventory.append(layer)
+        result[layer] = value
+    _require(
+        tuple(inventory) == layers and len(result) == len(layers),
+        f"{name} layer inventory drifted.",
+    )
+    return result
+
+
+def _strict_top_p_position_list(raw: object, *, name: str) -> tuple[int, ...]:
+    _require(isinstance(raw, list), f"{name} must be a position list.")
+    positions = tuple(cast(list[int], raw))
+    _require(
+        all(type(value) is int and value >= 0 for value in positions)
+        and positions == tuple(sorted(set(positions))),
+        f"{name} must contain canonical sorted unique non-negative integers.",
+    )
+    return positions
+
+
+def _strict_top_p_layer_position_pairs(
+    raw: object,
+    *,
+    layers: tuple[int, ...],
+    name: str,
+) -> dict[int, tuple[int, ...]]:
+    _require(isinstance(raw, list), f"{name} must be an ordered layer-position list.")
+    result: dict[int, tuple[int, ...]] = {}
+    inventory: list[int] = []
+    for item in cast(list[Any], raw):
+        _require(
+            isinstance(item, list) and len(item) == 2 and type(item[0]) is int,
+            f"{name} contains an invalid layer-position pair.",
+        )
+        layer = cast(int, item[0])
+        inventory.append(layer)
+        result[layer] = _strict_top_p_position_list(item[1], name=f"{name} layer {layer}")
+    _require(
+        tuple(inventory) == layers and len(result) == len(layers),
+        f"{name} layer inventory drifted.",
+    )
+    return result
+
+
+def _strict_top_p_cuda_device(value: object, *, name: str) -> str:
+    _require(isinstance(value, str), f"{name} must be a CUDA device string.")
+    device = cast(str, value)
+    prefix, separator, suffix = device.partition(":")
+    _require(
+        prefix == "cuda"
+        and separator == ":"
+        and suffix.isascii()
+        and suffix.isdecimal()
+        and suffix == str(int(suffix)),
+        f"{name} must be a canonical indexed CUDA device.",
+    )
+    return device
+
+
+def _validate_top_p_execution_record(
+    raw: object,
+    *,
+    arm: str,
+    role: Literal["target", "comparator"],
+    pair_id: str,
+    layers: tuple[int, ...],
+    expected_total_capacity: int | None,
+    expected_total_selected: int | None,
+) -> tuple[dict[str, Any], int]:
+    _require(isinstance(raw, Mapping), "Top-p physical execution record is missing.")
+    item = cast(Mapping[str, Any], raw)
+    _require(set(item) == TOP_P_MATCH_EXECUTION_FIELDS, "Physical execution schema drifted.")
+    trace_id = f"{pair_id}/{role}"
+    _require(
+        item.get("arm") == arm and item.get("trace_id") == trace_id,
+        f"Top-p {role} arm or trace identity drifted.",
+    )
+    request_id = item.get("request_id")
+    source_position = item.get("source_signal_position")
+    apply_position = item.get("apply_query_key_position")
+    source_token_id = item.get("source_token_id")
+    apply_token_id = item.get("apply_token_id")
+    _require(
+        isinstance(request_id, str)
+        and bool(request_id)
+        and type(source_position) is int
+        and source_position > 0
+        and type(apply_position) is int
+        and apply_position == source_position + 1
+        and type(source_token_id) is int
+        and source_token_id >= 0
+        and type(apply_token_id) is int
+        and apply_token_id >= 0,
+        f"Top-p {role} request/token coordinate is invalid.",
+    )
+    _require(
+        item.get("token_event_id") == f"{trace_id}/token-{source_position}",
+        f"Top-p {role} token event identity drifted.",
+    )
+    action_ids = item.get("action_ids")
+    action_digests = item.get("action_digests")
+    expected_action_ids = [f"{trace_id}:l{layer}:b0:q{source_position}" for layer in layers]
+    _require(action_ids == expected_action_ids, f"Top-p {role} action identities drifted.")
+    _require(
+        isinstance(action_digests, list)
+        and len(action_digests) == len(layers)
+        and all(is_sha256(value) for value in action_digests),
+        f"Top-p {role} action digests are invalid.",
+    )
+    capacities = _strict_top_p_layer_pairs(
+        item.get("configured_capacity_blocks_per_layer"),
+        layers=layers,
+        name=f"Top-p {role} capacities",
+        positive=True,
+    )
+    selected = _strict_top_p_layer_pairs(
+        item.get("selected_blocks_per_layer"),
+        layers=layers,
+        name=f"Top-p {role} selected counts",
+        positive=True,
+    )
+    if expected_total_capacity is not None:
+        _require(
+            sum(capacities.values()) == expected_total_capacity,
+            f"Top-p {role} configured capacity total drifted.",
+        )
+    if expected_total_selected is not None:
+        _require(
+            sum(selected.values()) == expected_total_selected,
+            f"Top-p {role} selected total drifted.",
+        )
+    _require(
+        all(selected[layer] <= capacities[layer] for layer in layers),
+        f"Top-p {role} selected blocks exceed physical capacity.",
+    )
+    raw_layers = item.get("layers")
+    _require(
+        isinstance(raw_layers, list) and len(raw_layers) == len(layers),
+        f"Top-p {role} layer evidence is incomplete.",
+    )
+    hot_total = 0
+    device: str | None = None
+    for offset, (layer, raw_layer) in enumerate(
+        zip(layers, cast(list[Any], raw_layers), strict=True)
+    ):
+        _require(isinstance(raw_layer, Mapping), "Physical layer evidence is invalid.")
+        layer_item = cast(Mapping[str, Any], raw_layer)
+        _require(set(layer_item) == TOP_P_MATCH_LAYER_FIELDS, "Physical layer schema drifted.")
+        _require(
+            layer_item.get("layer_index") == layer
+            and layer_item.get("action_id") == expected_action_ids[offset],
+            f"Top-p {role} layer/action inventory drifted.",
+        )
+        selected_positions = _strict_top_p_position_list(
+            layer_item.get("selected_end_positions"),
+            name=f"Top-p {role} selected positions layer {layer}",
+        )
+        resident_positions = _strict_top_p_position_list(
+            layer_item.get("resident_end_positions"),
+            name=f"Top-p {role} resident positions layer {layer}",
+        )
+        _require(
+            selected_positions == resident_positions and len(resident_positions) == selected[layer],
+            f"Top-p {role} selected/resident identities drifted at layer {layer}.",
+        )
+        expected_block_ids = [f"l{layer}:b0:e{position}" for position in resident_positions]
+        _require(
+            layer_item.get("resident_block_ids") == expected_block_ids,
+            f"Top-p {role} resident block IDs drifted at layer {layer}.",
+        )
+        value_shape = layer_item.get("hot_value_shape")
+        position_shape = layer_item.get("hot_position_shape")
+        _require(
+            value_shape == [1, selected[layer], TOP_P_MATCH_VALUE_WIDTH]
+            and position_shape == [1, selected[layer]],
+            f"Top-p {role} hot tensor shapes drifted at layer {layer}.",
+        )
+        _require(
+            layer_item.get("hot_value_dtype") == TOP_P_MATCH_VALUE_DTYPE
+            and layer_item.get("hot_position_dtype") == TOP_P_MATCH_POSITION_DTYPE,
+            f"Top-p {role} hot tensor dtypes drifted at layer {layer}.",
+        )
+        value_device = _strict_top_p_cuda_device(
+            layer_item.get("hot_value_device"),
+            name=f"Top-p {role} value device layer {layer}",
+        )
+        position_device = _strict_top_p_cuda_device(
+            layer_item.get("hot_position_device"),
+            name=f"Top-p {role} position device layer {layer}",
+        )
+        _require(
+            value_device == position_device,
+            f"Top-p {role} hot tensor devices differ at layer {layer}.",
+        )
+        if device is None:
+            device = value_device
+        _require(device == value_device, f"Top-p {role} spans multiple CUDA devices.")
+        value_bytes = selected[layer] * TOP_P_MATCH_VALUE_WIDTH * TOP_P_MATCH_VALUE_ELEMENT_BYTES
+        position_bytes = selected[layer] * TOP_P_MATCH_POSITION_ELEMENT_BYTES
+        _require(
+            layer_item.get("hot_value_bytes") == value_bytes
+            and layer_item.get("hot_position_bytes") == position_bytes
+            and layer_item.get("hot_resident_bytes") == value_bytes + position_bytes,
+            f"Top-p {role} tensor byte arithmetic drifted at layer {layer}.",
+        )
+        hot_total += value_bytes + position_bytes
+    peak_allocated = item.get("cuda_peak_allocated_bytes")
+    peak_reserved = item.get("cuda_peak_reserved_bytes")
+    _require(
+        item.get("hot_resident_bytes") == hot_total
+        and type(peak_allocated) is int
+        and peak_allocated >= hot_total
+        and type(peak_reserved) is int
+        and peak_reserved >= peak_allocated
+        and item.get("is_cuda_hbm_evidence") is True,
+        f"Top-p {role} CUDA HBM totals or peak evidence drifted.",
+    )
+    runtime_snapshot = item.get("runtime_soft_lag_snapshot")
+    if role == "target":
+        _require(isinstance(runtime_snapshot, Mapping), "Target runtime snapshot is missing.")
+        snapshot = cast(Mapping[str, Any], runtime_snapshot)
+        snapshot_capacities = _strict_top_p_layer_pairs(
+            snapshot.get("layer_capacity_blocks"),
+            layers=layers,
+            name="Target runtime snapshot capacities",
+            positive=True,
+        )
+        snapshot_selected = _strict_top_p_layer_position_pairs(
+            snapshot.get("layer_selected_end_positions"),
+            layers=layers,
+            name="Target runtime snapshot selections",
+        )
+        snapshot_hot = _strict_top_p_layer_position_pairs(
+            snapshot.get("layer_hot_end_positions"),
+            layers=layers,
+            name="Target runtime snapshot residents",
+        )
+        snapshot_selected_counts = _strict_top_p_layer_pairs(
+            snapshot.get("layer_selected_blocks"),
+            layers=layers,
+            name="Target runtime snapshot selected counts",
+            positive=True,
+        )
+        snapshot_hot_counts = _strict_top_p_layer_pairs(
+            snapshot.get("layer_hot_blocks"),
+            layers=layers,
+            name="Target runtime snapshot hot counts",
+            positive=True,
+        )
+        snapshot_devices = snapshot.get("layer_hot_devices")
+        _require(
+            isinstance(snapshot_devices, list)
+            and snapshot_devices
+            == [
+                [
+                    layer,
+                    cast(list[Mapping[str, Any]], raw_layers)[offset]["hot_value_device"],
+                ]
+                for offset, layer in enumerate(layers)
+            ],
+            "Target runtime snapshot CUDA devices drifted from captured tensors.",
+        )
+        _require(
+            snapshot.get("apply_query_position") == source_position
+            and snapshot_capacities == capacities
+            and snapshot_selected_counts == selected
+            and snapshot_hot_counts == selected
+            and all(
+                snapshot_selected[layer]
+                == snapshot_hot[layer]
+                == tuple(
+                    cast(list[Mapping[str, Any]], raw_layers)[offset]["resident_end_positions"]
+                )
+                for offset, layer in enumerate(layers)
+            )
+            and snapshot.get("total_hot_blocks") == sum(selected.values())
+            and snapshot.get("total_hot_bytes") == hot_total
+            and snapshot.get("is_cuda_hbm_evidence") is True
+            and type(snapshot.get("cuda_peak_allocated_bytes")) is int
+            and cast(int, snapshot["cuda_peak_allocated_bytes"]) >= hot_total
+            and type(snapshot.get("cuda_peak_reserved_bytes")) is int
+            and cast(int, snapshot["cuda_peak_reserved_bytes"])
+            >= cast(int, snapshot["cuda_peak_allocated_bytes"])
+            and cast(int, peak_allocated) >= cast(int, snapshot["cuda_peak_allocated_bytes"])
+            and cast(int, peak_reserved) >= cast(int, snapshot["cuda_peak_reserved_bytes"])
+            and is_sha256(snapshot.get("plan_audit_digest"))
+            and is_sha256(snapshot.get("snapshot_digest")),
+            "Target runtime SoftLagPhysicalSnapshot binding drifted.",
+        )
+        runtime_hot_bytes = _strict_top_p_layer_pairs(
+            snapshot.get("layer_hot_bytes"),
+            layers=layers,
+            name="Target runtime snapshot hot bytes",
+            positive=True,
+        )
+        _require(
+            all(
+                runtime_hot_bytes[layer]
+                == cast(list[Mapping[str, Any]], raw_layers)[offset]["hot_resident_bytes"]
+                for offset, layer in enumerate(layers)
+            ),
+            "Target runtime snapshot tensor bytes drifted from captured tensors.",
+        )
+    else:
+        _require(runtime_snapshot is None, "Comparator may not claim a soft-lag runtime snapshot.")
+    digest_source = dict(item)
+    physical_digest = digest_source.pop("physical_snapshot_digest")
+    _require(
+        is_sha256(physical_digest) and physical_digest == json_digest(digest_source),
+        f"Top-p {role} physical snapshot digest drifted.",
+    )
+    return dict(item), hot_total
+
+
+def _validate_top_p_observation(
+    raw: object,
+    *,
+    index: int,
+    calibration_seed: int,
+    scale: str,
+    training_seed: int,
+    budget: str,
+    comparator: str,
+    layers: tuple[int, ...],
+    global_budget: int,
+    low: int,
+    high: int,
+    numerator: int,
+    denominator: int,
+) -> tuple[int, int]:
+    _require(isinstance(raw, Mapping), "Top-p physical-match observation is invalid.")
+    item = cast(Mapping[str, Any], raw)
+    _require(set(item) == TOP_P_MATCH_OBSERVATION_FIELDS, "Physical observation schema drifted.")
+    expected_coordinate = top_p_match_coordinate(index, calibration_seed=calibration_seed)
+    expected_high = (index + 1) * numerator // denominator > index * numerator // denominator
+    variant = "high" if expected_high else "low"
+    _require(
+        item.get("observation_index") == index
+        and item.get("schedule_variant") == variant
+        and item.get("coordinate") == expected_coordinate,
+        "Top-p physical-match coordinate or Bresenham schedule drifted.",
+    )
+    family = expected_coordinate["family"]
+    context = expected_coordinate["context"]
+    conversation = expected_coordinate["conversation_index"]
+    pair_id = (
+        f"{DIRECT_TOP_P_MATCH_EXPERIMENT_ID}:{scale}:train-{training_seed}:"
+        f"cal-{calibration_seed}:{budget}:{comparator}:{family}:context-{context}:"
+        f"conversation-{conversation}"
+    )
+    _require(item.get("pair_id") == pair_id, "Top-p paired-request identity drifted.")
+    target, target_bytes = _validate_top_p_execution_record(
+        item.get("target"),
+        arm=PRIMARY_ADAPTIVE_ARM,
+        role="target",
+        pair_id=pair_id,
+        layers=layers,
+        expected_total_capacity=global_budget,
+        expected_total_selected=global_budget,
+    )
+    cap = high if expected_high else low
+    comparator_item, comparator_bytes = _validate_top_p_execution_record(
+        item.get("comparator"),
+        arm=comparator,
+        role="comparator",
+        pair_id=pair_id,
+        layers=layers,
+        expected_total_capacity=cap * len(layers),
+        expected_total_selected=None,
+    )
+    for field in (
+        "request_id",
+        "source_signal_position",
+        "apply_query_key_position",
+        "source_token_id",
+        "apply_token_id",
+    ):
+        _require(
+            target[field] == comparator_item[field],
+            f"Top-p paired target/comparator {field} drifted.",
+        )
+    digest_source = dict(item)
+    pair_digest = digest_source.pop("pair_digest")
+    _require(
+        is_sha256(pair_digest) and pair_digest == json_digest(digest_source),
+        "Top-p paired observation digest drifted.",
+    )
+    return target_bytes, comparator_bytes
+
+
 def _resolved_match_item(
     artifact: Mapping[str, Any],
     *,
@@ -874,6 +1712,8 @@ def _resolved_match_item(
         "source",
         "manifest",
         "checkpoint",
+        "validator",
+        "observation_grid",
         "schedule",
         "raw_physical_observations",
         "summary",
@@ -973,6 +1813,41 @@ def _resolved_match_item(
         "Top-p physical-match calibration/source/checkpoint binding drifted.",
     )
 
+    validator_binding = item.get("validator")
+    _require(isinstance(validator_binding, Mapping), "Top-p validator binding is missing.")
+    validator_binding = cast(Mapping[str, Any], validator_binding)
+    implementation_digest = cast(Mapping[str, Any], item["manifest"]).get("implementation_digest")
+    implementation_source_commit = cast(Mapping[str, Any], item["manifest"]).get(
+        "implementation_source_commit"
+    )
+    _require(
+        validator_binding
+        == {
+            "module_name": TOP_P_MATCH_CANONICAL_MODULE,
+            "canonical_repository_path": TOP_P_MATCH_CANONICAL_MODULE_PATH,
+            "module_sha256": validator_binding.get("module_sha256"),
+            "implementation_digest": implementation_digest,
+            "implementation_source_commit": implementation_source_commit,
+        }
+        and is_sha256(validator_binding.get("module_sha256")),
+        "Top-p canonical validator/implementation binding drifted.",
+    )
+    observation_grid = item.get("observation_grid")
+    _require(
+        observation_grid
+        == {
+            "families": list(FAMILIES),
+            "contexts": list(CONTEXTS),
+            "conversation_indices": list(TOP_P_MATCH_CONVERSATION_INDICES),
+            "conversations_per_context_family": (TOP_P_MATCH_CONVERSATIONS_PER_CONTEXT_FAMILY),
+            "observation_count": TOP_P_MATCH_OBSERVATION_COUNT,
+            "generation_seed_rule": TOP_P_MATCH_GENERATION_SEED_RULE,
+            "calibration_only": True,
+            "evaluation_seed_accessed": False,
+        },
+        "Top-p calibration-only observation grid drifted.",
+    )
+
     schedule = item.get("schedule")
     _require(isinstance(schedule, Mapping), "Top-p physical-match schedule is missing.")
     schedule = cast(Mapping[str, Any], schedule)
@@ -983,6 +1858,11 @@ def _resolved_match_item(
             "uniform_high_blocks_per_layer",
             "mixture_high_numerator",
             "mixture_denominator",
+            "csa_layer_count",
+            "low_total_capacity_blocks",
+            "high_total_capacity_blocks",
+            "cap_search_min",
+            "cap_search_max",
         },
         "Top-p physical-match schedule schema drifted.",
     )
@@ -998,57 +1878,50 @@ def _resolved_match_item(
     high = cast(int, high)
     numerator = cast(int, numerator)
     denominator = cast(int, denominator)
+    maximum_cap = expected_global_block_budget // len(expected_csa_layers)
     _require(
-        0 < low <= high <= expected_global_block_budget
+        0 < low <= high <= maximum_cap
         and high - low <= 1
-        and denominator > 0
+        and denominator == TOP_P_MATCH_OBSERVATION_COUNT
         and 0 <= numerator < denominator
         and ((high == low and numerator == 0) or (high == low + 1 and numerator > 0)),
         "Top-p physical-match schedule arithmetic is invalid or exceeds frozen global B.",
     )
+    _require(
+        schedule.get("csa_layer_count") == len(expected_csa_layers)
+        and schedule.get("low_total_capacity_blocks") == low * len(expected_csa_layers)
+        and schedule.get("high_total_capacity_blocks") == high * len(expected_csa_layers)
+        and schedule.get("cap_search_min") == 1
+        and schedule.get("cap_search_max") == maximum_cap,
+        "Top-p physical-match schedule capacity audit drifted.",
+    )
 
     observations = item.get("raw_physical_observations")
     _require(
-        isinstance(observations, list) and bool(observations),
+        isinstance(observations, list) and len(observations) == TOP_P_MATCH_OBSERVATION_COUNT,
         "Top-p physical-match raw HBM observations are missing.",
     )
     observations = cast(list[Any], observations)
     target_total = 0
     comparator_total = 0
     for index, raw in enumerate(observations):
-        _require(isinstance(raw, Mapping), "Top-p physical-match observation is invalid.")
-        raw = cast(Mapping[str, Any], raw)
-        _require(
-            set(raw)
-            == {
-                "observation_index",
-                "schedule_variant",
-                "target_hot_resident_bytes",
-                "comparator_hot_resident_bytes",
-                "target_is_cuda_hbm_evidence",
-                "comparator_is_cuda_hbm_evidence",
-            },
-            "Top-p physical-match observation schema drifted.",
+        target_bytes, comparator_bytes = _validate_top_p_observation(
+            raw,
+            index=index,
+            calibration_seed=expected_calibration_seed,
+            scale=expected_scale,
+            training_seed=expected_training_seed,
+            budget=budget,
+            comparator=comparator,
+            layers=expected_csa_layers,
+            global_budget=expected_global_block_budget,
+            low=low,
+            high=high,
+            numerator=numerator,
+            denominator=denominator,
         )
-        expected_high = (index + 1) * numerator // denominator > index * numerator // denominator
-        _require(
-            raw.get("observation_index") == index
-            and raw.get("schedule_variant") == ("high" if expected_high else "low")
-            and raw.get("target_is_cuda_hbm_evidence") is True
-            and raw.get("comparator_is_cuda_hbm_evidence") is True,
-            "Top-p physical-match observation schedule or CUDA provenance drifted.",
-        )
-        target_bytes = raw.get("target_hot_resident_bytes")
-        comparator_bytes = raw.get("comparator_hot_resident_bytes")
-        _require(
-            type(target_bytes) is int
-            and target_bytes > 0
-            and type(comparator_bytes) is int
-            and comparator_bytes > 0,
-            "Top-p physical-match HBM byte observation is invalid.",
-        )
-        target_total += cast(int, target_bytes)
-        comparator_total += cast(int, comparator_bytes)
+        target_total += target_bytes
+        comparator_total += comparator_bytes
 
     summary = item.get("summary")
     _require(isinstance(summary, Mapping), "Top-p physical-match summary is missing.")
@@ -1075,7 +1948,7 @@ def _resolved_match_item(
     )
     _require(
         relative <= MAX_RELATIVE_HOT_BYTES_DIFFERENCE,
-        "Comparator hot-memory relative difference exceeded the frozen tolerance.",
+        ("Comparator hot-memory relative difference exceeded the frozen tolerance."),
     )
     audit = item.get("audit")
     _require(
@@ -1085,8 +1958,11 @@ def _resolved_match_item(
             "external_bindings_verified": True,
             "raw_observations_replayed": True,
             "cuda_hbm_bytes_verified": True,
+            "tensor_shapes_dtypes_devices_verified": True,
+            "resident_action_snapshot_bindings_verified": True,
             "deterministic_schedule_verified": True,
             "calibration_only_scope_verified": True,
+            "canonical_module_origin_verified": True,
         },
         "Authoritative top-p physical-match audit is incomplete.",
     )
@@ -1563,10 +2439,119 @@ def validate_arm_semantics(arms: Mapping[str, BuiltCausalArm]) -> None:
     )
 
 
+def build_manifest_payload(
+    *,
+    attestation_key_id: str,
+    implementation_tree_digest: str,
+    implementation_source_commit: str,
+) -> dict[str, Any]:
+    """Build the sole frozen direct-study manifest from post-commit provenance."""
+
+    _require(is_sha256(attestation_key_id), "Manifest attestation key ID is invalid.")
+    _require(
+        is_sha256(implementation_tree_digest),
+        "Manifest implementation tree digest is invalid.",
+    )
+    _require(
+        is_git_oid(implementation_source_commit),
+        "Manifest implementation source commit is invalid.",
+    )
+    return {
+        "schema_version": 1,
+        "experiment_id": EXPERIMENT_ID,
+        "status": MANIFEST_STATUS,
+        "attestation": attestation.public_manifest_contract(attestation_key_id),
+        "adaptation_disclosure": {
+            "post_707_rank_no_go": True,
+            "prior_p2_quality_results_observed": True,
+        },
+        "cohort": {
+            "training_seeds": list(TRAINING_SEEDS),
+            "calibration_seeds": list(CALIBRATION_SEEDS),
+            "evaluation_seeds": list(EVALUATION_SEEDS),
+            "seed_namespaces_pairwise_disjoint": True,
+            "fresh_evaluation_namespace": True,
+        },
+        "grid": {
+            "scales": list(SCALES),
+            "budgets": list(BUDGETS),
+            "families": list(FAMILIES),
+            "contexts": list(CONTEXTS),
+            "replicates": list(REPLICATES),
+            "examples_per_shard": EXAMPLES_PER_SHARD,
+            "generation_seed_rule": GENERATION_SEED_RULE,
+            "paired_across_scales_budgets_and_arms": True,
+            "cardinalities": expected_grid_cardinalities(),
+        },
+        "phases": {
+            "original_central_causal_set": list(ORIGINAL_CENTRAL_CAUSAL_ARM_SET),
+            "phase_a_confirmatory_set": list(CONFIRMATORY_ARM_NAMES),
+            "phase_a_pareto_sensitivities": list(SENSITIVITY_COMPARATOR_ARMS),
+            "phase_a_all": list(PHASE_A_ARM_NAMES),
+            "phase_b_diagnostic": list(PHASE_B_DIAGNOSTIC_ARM_NAMES),
+            "all_arms": list(ALL_ARM_NAMES),
+            "arm_features": expected_arm_features(),
+        },
+        "primary_estimand": {
+            "adaptive_arm": PRIMARY_ADAPTIVE_ARM,
+            "confirmatory_comparators": list(CONFIRMATORY_COMPARATOR_ARMS),
+            "confirmatory_estimands": CONFIRMATORY_ESTIMANDS,
+            "confirmatory_decision_rule": CONFIRMATORY_DECISION_RULE,
+            "pareto_sensitivity_comparators": list(SENSITIVITY_COMPARATOR_ARMS),
+            "comparator_selection_from_outcomes": False,
+            "strongest_fixed_comparator_rule": STRONGEST_FIXED_COMPARATOR_RULE,
+            "top_p_sensitivity_rule": TOP_P_SENSITIVITY_RULE,
+            "top_p_calibration_only_mean_hot_byte_matching": True,
+            "top_p_eligible_for_primary_comparison": False,
+            "primary_exact_fill_required": True,
+            "memory_match_target_metric": PHYSICAL_MATCH_TARGET_METRIC,
+        },
+        "execution_contract": {
+            "literal_model_path": EXECUTION_PATH,
+            "same_literal_path_for_every_arm": True,
+            "batch_size": BATCH_SIZE,
+            "decode_tokens_per_step": DECODE_TOKENS_PER_STEP,
+            "single_token_decode": True,
+            "exact_fill_arms": list(EXACT_FILL_ARM_NAMES),
+            "variable_fill_sensitivity_arms": list(VARIABLE_FILL_SENSITIVITY_ARMS),
+            "exact_fill_rule": EXACT_FILL_RULE,
+            "per_layer_hot_floor": PER_LAYER_HOT_FLOOR,
+            "zero_cap_tier_stores_forbidden": True,
+            "physical_audit_rule": PHYSICAL_AUDIT_RULE,
+            "soft_lag_signal_rule": SOFT_LAG_SIGNAL_RULE,
+            "signal_diagnostic_rule": SIGNAL_DIAGNOSTIC_RULE,
+            "signal_weight_rule": expected_signal_weight_rule(),
+            "legacy_configs_are_scaffolds_only": True,
+            "direct_arm_semantics_authoritative": True,
+            "balanced_feasible_control_rule": BALANCED_FEASIBLE_CONTROL_RULE,
+            "configured_caps_are_physical_evidence": False,
+            "actual_hot_tensor_bytes_recorded_per_token": True,
+            "cuda_peak_allocated_and_reserved_recorded": True,
+            "pin_ids_and_counts_bound_before_resize": True,
+            "fallback_boundary": FALLBACK_BOUNDARY,
+            "fallback_preserves_exact_b": True,
+            "chunked_equivalence_required": False,
+            "outcome_dependent_early_stopping": False,
+            "phase_b_runs_regardless_of_phase_a_outcomes": True,
+        },
+        "statistical_analysis": expected_statistical_analysis_contract(),
+        "confirmatory_success_gate": expected_confirmatory_success_gate(),
+        "implementation": {
+            "paths": list(IMPLEMENTATION_PATHS),
+            "tree_digest": implementation_tree_digest,
+            "source_commit": implementation_source_commit,
+        },
+    }
+
+
 def validate_manifest_payload(
     payload: dict[str, Any], *, verify_implementation: bool = False
 ) -> dict[str, Any]:
     validate_seed_namespaces()
+    _require(
+        set(payload) == MANIFEST_TOP_LEVEL_FIELDS,
+        "Direct-controller manifest top-level schema drifted.",
+    )
     _require(payload.get("schema_version") == 1, "Direct-controller manifest schema drifted.")
     _require(payload.get("experiment_id") == EXPERIMENT_ID, "Wrong direct-controller manifest.")
     _require(payload.get("status") == MANIFEST_STATUS, "Manifest is not frozen pre-outcome.")
@@ -1644,6 +2629,10 @@ def validate_manifest_payload(
     )
 
     phases = payload.get("phases", {})
+    _require(
+        tuple(phases.get("original_central_causal_set", ())) == ORIGINAL_CENTRAL_CAUSAL_ARM_SET,
+        "Original central causal arm set drifted.",
+    )
     _require(
         tuple(phases.get("phase_a_confirmatory_set", ())) == CONFIRMATORY_ARM_NAMES,
         "Phase-A confirmatory set drifted.",
@@ -1772,7 +2761,22 @@ def validate_manifest_payload(
         "Phase B must not be gated by Phase-A outcomes.",
     )
 
-    implementation = payload.get("implementation", {})
+    _require(
+        payload.get("statistical_analysis") == expected_statistical_analysis_contract(),
+        "Direct-controller statistical preregistration drifted.",
+    )
+    _require(
+        payload.get("confirmatory_success_gate") == expected_confirmatory_success_gate(),
+        "Direct-controller confirmatory success gate drifted.",
+    )
+
+    implementation = payload.get("implementation")
+    _require(isinstance(implementation, Mapping), "Implementation provenance is missing.")
+    implementation = cast(Mapping[str, Any], implementation)
+    _require(
+        set(implementation) == MANIFEST_IMPLEMENTATION_FIELDS,
+        "Implementation provenance schema drifted.",
+    )
     _require(
         tuple(implementation.get("paths", ())) == IMPLEMENTATION_PATHS,
         "Implementation path inventory drifted.",
@@ -1780,8 +2784,14 @@ def validate_manifest_payload(
     _require(is_sha256(implementation.get("tree_digest")), "Implementation digest is invalid.")
     _require(is_git_oid(implementation.get("source_commit")), "Implementation commit is invalid.")
     if verify_implementation:
+        frozen_digest = cast(str, implementation["tree_digest"])
+        frozen_source_commit = cast(str, implementation["source_commit"])
         _require(
-            implementation.get("tree_digest") == implementation_tree_digest(),
+            frozen_digest == implementation_tree_digest_at_commit(frozen_source_commit),
+            "Frozen implementation digest does not match its declared source commit tree.",
+        )
+        _require(
+            frozen_digest == implementation_tree_digest(),
             "Checked-out implementation tree differs from the frozen manifest.",
         )
         state = source_state()
@@ -1791,7 +2801,7 @@ def validate_manifest_payload(
                 "git",
                 "merge-base",
                 "--is-ancestor",
-                str(implementation["source_commit"]),
+                frozen_source_commit,
                 str(state["commit"]),
             ],
             capture_output=True,
@@ -1815,4 +2825,24 @@ def load_manifest(
 validate_seed_namespaces()
 _require(len(FAMILIES) == 9, "The paper-grade workload-family registry drifted.")
 _require(EXAMPLES_PER_FAMILY == 1_000, "The frozen family sample size drifted.")
+_require(
+    DISTINCT_GENERATED_CONVERSATIONS_TOTAL == 45_000
+    and SCALE_SPECIFIC_CONVERSATION_EVALUATIONS_TOTAL == 90_000
+    and BUDGET_EXPANDED_CONVERSATION_EVALUATIONS_TOTAL == 180_000,
+    "The generated/scale-specific/budget-expanded conversation cardinalities drifted.",
+)
 _require(len(ALL_ARM_NAMES) == len(set(ALL_ARM_NAMES)) == 19, "The arm registry drifted.")
+_require(
+    set(DECODE_TOKENS_PER_EXAMPLE_BY_FAMILY_CONTEXT) == set(FAMILIES)
+    and all(
+        set(per_context) == set(CONTEXTS)
+        and all(type(value) is int and value > 0 for value in per_context.values())
+        for per_context in DECODE_TOKENS_PER_EXAMPLE_BY_FAMILY_CONTEXT.values()
+    ),
+    "The frozen decode-token registry drifted.",
+)
+_require(
+    DECODE_TOKEN_STEPS_PER_FAMILY_CONTEXT_SWEEP == 2_030
+    and EXPECTED_RAW_TOKEN_ROWS_WITHOUT_FAILURES == 154_280_000,
+    "The no-failure raw-token evidence cardinality drifted.",
+)

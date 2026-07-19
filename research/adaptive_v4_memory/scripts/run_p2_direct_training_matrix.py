@@ -6,15 +6,18 @@ import json
 import math
 import os
 import secrets
+import stat
 import subprocess
 import sys
 import tempfile
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, cast
 
+import adaptive_v4_execution_environment as execution_environment
+import adaptive_v4_gpu_lock as gpu_lock
 import p2_direct_attestation as attestation
 import p2_direct_controller_contract as contract
 import torch
@@ -22,6 +25,7 @@ import train_m1_associative_recall as trainer
 
 EXPERIMENT_ID = "p2-post-rank-direct-training-v1"
 ARTIFACT_TYPE = "training-matrix"
+SCHEMA_VERSION = 3
 STEPS = 1_000
 MINIMUM_STEPS = STEPS
 FROZEN_SCALES = ("s55", "s151")
@@ -31,6 +35,9 @@ MATRIX_SUMMARY = OUTPUT_ROOT / "training-matrix.summary.json"
 TRAIN_SCRIPT = Path(__file__).with_name("train_m1_associative_recall.py")
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 TRAIN_IMPLEMENTATION_PATH = TRAIN_SCRIPT.resolve().relative_to(REPOSITORY_ROOT).as_posix()
+GPU_LOCK_IMPLEMENTATION_PATH = (
+    Path(gpu_lock.__file__).resolve().relative_to(REPOSITORY_ROOT).as_posix()
+)
 TRAINER_FD_ENV = "ADAPTIVE_V4_CANONICAL_TRAINER_FD"
 TRAINER_FD_BOOTSTRAP = (
     "import os,sys;"
@@ -48,10 +55,88 @@ TRAINER_FD_BOOTSTRAP = (
 )
 SUMMARY_ATTESTATION_PURPOSE = trainer.DIRECT_SUMMARY_ATTESTATION_PURPOSE
 MATRIX_ATTESTATION_PURPOSE = "p2-direct-training-matrix-v1"
+TRAINING_SUMMARY_FIELDS = frozenset(
+    {
+        "schema_version",
+        "experiment_id",
+        "scale",
+        "seed",
+        "initialization_seed",
+        "data_order_seed",
+        "training_evaluation_seed",
+        "source",
+        "command",
+        "parameters",
+        "auxiliary_parameters",
+        "config",
+        "task_config",
+        "sequence_lengths",
+        "training_sequence_lengths",
+        "num_queries_per_training_sequence",
+        "batch_size",
+        "learning_rate",
+        "weight_decay",
+        "ranking_loss_weight",
+        "read_ranking_loss_weight",
+        "value_loss_weight",
+        "training_topk",
+        "steps_completed",
+        "stopped_early",
+        "history",
+        "training_hyperparameters",
+        "training_transcript",
+        "checkpoint",
+        "execution_environment",
+        "runtime",
+        "direct_training_contract",
+        "payload_sha256",
+        "attestation",
+    }
+)
+TRAINING_RUNTIME_FIELDS = frozenset(
+    {
+        "python",
+        "torch",
+        "device",
+        "device_spec",
+        "logical_device_index",
+        "elapsed_seconds",
+        "peak_allocated_bytes",
+        "peak_reserved_bytes",
+    }
+)
+TRAINING_MATRIX_FIELDS = frozenset(
+    {
+        "schema_version",
+        "experiment_id",
+        "artifact_type",
+        "status",
+        "source",
+        "manifest",
+        "attestation_contract",
+        "canonical_trainer",
+        "gpu_lease",
+        "execution_environment",
+        "scales",
+        "frozen_training_seeds",
+        "steps",
+        "minimum_steps",
+        "seed_rules",
+        "expected_runs",
+        "completed_runs",
+        "runs",
+        "payload_sha256",
+        "attestation",
+    }
+)
 FROZEN_HYPERPARAMETERS = trainer.direct_training_hyperparameters()
 EVALUATION_STEPS = (1, *range(50, STEPS + 1, 50))
 LOCK_NAME = ".p2-direct-training-matrix.lock"
 CLAIM_NAME = ".p2-direct-training-cell.claim"
+GPU_LEASE_SEMANTICS = "project-persistent-inode-exclusive-whole-matrix-v1"
+GPU_LEASE_SCOPE = "before-preflight-through-terminal-validation"
+GPU_LEASE_ACQUISITION_ORDER = "gpu-lease-before-matrix-lock-before-cell-claim"
+GPU_DEVICE_GUARD_SCOPE = "after-exact-environment-capture-through-terminal-validation"
 
 SEED_RULES = {
     "initialization_seed": "training_seed",
@@ -88,9 +173,189 @@ class CanonicalTrainerSnapshot:
         }
 
 
+@dataclass(frozen=True)
+class _MatrixLockLease:
+    path: Path
+    file_descriptor: int
+    device: int
+    inode: int
+
+    def assert_held(self) -> None:
+        try:
+            opened = os.fstat(self.file_descriptor)
+            current = os.stat(self.path, follow_symlinks=False)
+        except OSError as error:
+            raise ValueError(
+                "Training matrix lock path was deleted or became inaccessible while held."
+            ) from error
+        _require(
+            stat.S_ISREG(opened.st_mode),
+            "Training matrix lock descriptor is no longer a regular file.",
+        )
+        _require(
+            (opened.st_dev, opened.st_ino) == (self.device, self.inode),
+            "Training matrix lock descriptor identity changed while held.",
+        )
+        _require(
+            stat.S_ISREG(current.st_mode)
+            and (current.st_dev, current.st_ino) == (self.device, self.inode),
+            "Training matrix lock path was replaced while held.",
+        )
+        _require(
+            opened.st_uid == current.st_uid == os.getuid()
+            and opened.st_nlink == current.st_nlink == 1
+            and stat.S_IMODE(opened.st_mode) == stat.S_IMODE(current.st_mode) == 0o600,
+            "Training matrix lock ownership, link count, or mode is unsafe.",
+        )
+
+
 def _require(condition: bool, message: str) -> None:
     if not condition:
         raise ValueError(message)
+
+
+def _canonical_gpu_lock_path(path: Path) -> Path:
+    absolute = Path(os.path.abspath(path))
+    _require(not absolute.is_symlink(), "Training GPU lease path may not be a symbolic link.")
+    try:
+        resolved = absolute.resolve(strict=False)
+    except OSError as error:
+        raise ValueError("Training GPU lease path cannot be resolved safely.") from error
+    _require(
+        resolved == absolute,
+        "Training GPU lease path must use its exact resolved non-symlink path.",
+    )
+    return absolute
+
+
+def _device_guard_binding(
+    device_guard: gpu_lock.GPULockLease,
+    *,
+    routing_identity: Mapping[str, Any],
+) -> dict[str, Any]:
+    device_guard.assert_held()
+    expected_path = gpu_lock.canonical_device_guard_path(routing_identity)
+    _require(
+        device_guard.path == expected_path,
+        "Training physical-device guard path does not match the selected GPU.",
+    )
+    return {
+        "path": str(expected_path),
+        "semantics": gpu_lock.DEVICE_GUARD_SEMANTICS,
+        "scope": GPU_DEVICE_GUARD_SCOPE,
+        "implementation_path": GPU_LOCK_IMPLEMENTATION_PATH,
+        "nonblocking": True,
+        "persistent_inode": True,
+        "device": device_guard.device,
+        "inode": device_guard.inode,
+    }
+
+
+def _gpu_lease_binding(
+    path: Path,
+    *,
+    frozen_execution_environment: Mapping[str, Any],
+    device_guard: gpu_lock.GPULockLease,
+) -> dict[str, Any]:
+    routing_identity = execution_environment.selected_device_routing_identity(
+        frozen_execution_environment
+    )
+    return {
+        "path": str(_canonical_gpu_lock_path(path)),
+        "semantics": GPU_LEASE_SEMANTICS,
+        "scope": GPU_LEASE_SCOPE,
+        "acquisition_order": GPU_LEASE_ACQUISITION_ORDER,
+        "child_nested_lease": False,
+        "portable_identity": "canonical-path-only-inode-excluded",
+        "selected_device_class": execution_environment.selected_device_class(
+            frozen_execution_environment
+        ),
+        "selected_device_routing_identity": routing_identity,
+        "device_guard": _device_guard_binding(
+            device_guard,
+            routing_identity=routing_identity,
+        ),
+    }
+
+
+def _validate_gpu_lease_binding(
+    value: Any,
+    *,
+    expected: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    _require(isinstance(value, Mapping), "Training matrix GPU lease binding is missing.")
+    raw = cast(Mapping[str, Any], value)
+    _require(
+        set(raw)
+        == {
+            "path",
+            "semantics",
+            "scope",
+            "acquisition_order",
+            "child_nested_lease",
+            "portable_identity",
+            "selected_device_class",
+            "selected_device_routing_identity",
+            "device_guard",
+        }
+        and isinstance(raw.get("path"), str)
+        and bool(raw["path"]),
+        "Training matrix GPU lease binding schema drifted.",
+    )
+    _require(
+        raw.get("path") == str(_canonical_gpu_lock_path(Path(cast(str, raw["path"]))))
+        and raw.get("semantics") == GPU_LEASE_SEMANTICS
+        and raw.get("scope") == GPU_LEASE_SCOPE
+        and raw.get("acquisition_order") == GPU_LEASE_ACQUISITION_ORDER
+        and raw.get("child_nested_lease") is False
+        and raw.get("portable_identity") == "canonical-path-only-inode-excluded",
+        "Training matrix GPU lease semantics drifted.",
+    )
+    selected_class = raw.get("selected_device_class")
+    routing_identity = raw.get("selected_device_routing_identity")
+    guard = raw.get("device_guard")
+    _require(
+        isinstance(selected_class, Mapping)
+        and set(selected_class) == execution_environment.SELECTED_DEVICE_CLASS_FIELDS
+        and isinstance(routing_identity, Mapping)
+        and set(routing_identity) == execution_environment.SELECTED_DEVICE_ROUTING_IDENTITY_FIELDS
+        and isinstance(guard, Mapping),
+        "Training matrix selected-device lease binding schema drifted.",
+    )
+    routing_identity = cast(Mapping[str, Any], routing_identity)
+    guard = cast(Mapping[str, Any], guard)
+    expected_guard_path = gpu_lock.canonical_device_guard_path(routing_identity)
+    _require(
+        set(guard)
+        == {
+            "path",
+            "semantics",
+            "scope",
+            "implementation_path",
+            "nonblocking",
+            "persistent_inode",
+            "device",
+            "inode",
+        }
+        and guard.get("path") == str(expected_guard_path)
+        and guard.get("semantics") == gpu_lock.DEVICE_GUARD_SEMANTICS
+        and guard.get("scope") == GPU_DEVICE_GUARD_SCOPE
+        and guard.get("implementation_path") == GPU_LOCK_IMPLEMENTATION_PATH
+        and guard.get("nonblocking") is True
+        and guard.get("persistent_inode") is True
+        and type(guard.get("device")) is int
+        and cast(int, guard["device"]) >= 0
+        and type(guard.get("inode")) is int
+        and cast(int, guard["inode"]) > 0,
+        "Training matrix physical-device guard binding drifted.",
+    )
+    replayed = dict(raw)
+    if expected is not None:
+        _require(
+            dict(raw) == dict(expected),
+            "Training matrix GPU lease path or semantics drifted on resume.",
+        )
+    return replayed
 
 
 def _canonical_train_script(candidate: Path) -> Path:
@@ -179,7 +444,11 @@ def _run_trainer_from_stable_script(
     canonical: Path,
     expected: CanonicalTrainerSnapshot,
     trust_root: attestation.TrustRoot,
+    gpu_lease: gpu_lock.GPULockLease,
+    device_guard: gpu_lock.GPULockLease,
 ) -> subprocess.CompletedProcess[Any]:
+    gpu_lease.assert_held()
+    device_guard.assert_held()
     opened, snapshot = _open_canonical_trainer(canonical, expected=expected)
     trainer_fd = _sealed_trainer_copy(opened, expected=snapshot)
     key_fd = attestation.create_sealed_key_fd(trust_root)
@@ -189,6 +458,7 @@ def _run_trainer_from_stable_script(
     environment[attestation.KEY_FD_ENV] = str(key_fd)
     bootstrap_command = [
         command[0],
+        "-I",
         "-c",
         TRAINER_FD_BOOTSTRAP,
         str(canonical),
@@ -198,9 +468,16 @@ def _run_trainer_from_stable_script(
         result = subprocess.run(
             bootstrap_command,
             check=False,
-            pass_fds=(trainer_fd, key_fd),
+            pass_fds=(
+                trainer_fd,
+                key_fd,
+                gpu_lease.fileno(),
+                device_guard.fileno(),
+            ),
             env=environment,
         )
+        gpu_lease.assert_held()
+        device_guard.assert_held()
         opened.assert_unchanged()
         return result
     finally:
@@ -292,6 +569,17 @@ def _atomic_write_json(path: Path, payload: Mapping[str, Any]) -> None:
     finally:
         if temporary is not None:
             temporary.unlink(missing_ok=True)
+
+
+def _publish_matrix_ledger(
+    path: Path,
+    payload: Mapping[str, Any],
+    *,
+    matrix_lock: _MatrixLockLease,
+) -> None:
+    matrix_lock.assert_held()
+    _atomic_write_json(path, payload)
+    matrix_lock.assert_held()
 
 
 def _validated_source_state(state: Mapping[str, Any]) -> dict[str, str | bool]:
@@ -412,7 +700,13 @@ def build_training_command(
     context: FrozenContext,
     launch_nonce: str,
     trainer_sha256: str,
+    device_index: int = 0,
+    device_routing_identity: Mapping[str, Any],
 ) -> list[str]:
+    _require(type(device_index) is int and device_index >= 0, "Training device index is invalid.")
+    routing_identity = execution_environment.validate_device_routing_identity(
+        device_routing_identity
+    )
     return [
         sys.executable,
         str(train_script),
@@ -451,6 +745,10 @@ def build_training_command(
         "--eval-batch-size",
         str(FROZEN_HYPERPARAMETERS["eval_batch_size"]),
         "--disable-early-stop",
+        "--device",
+        f"cuda:{device_index}",
+        "--expected-device-routing-identity-json",
+        json.dumps(routing_identity, sort_keys=True, separators=(",", ":")),
         "--output-dir",
         str(_run_output_dir(output_root, scale, seed)),
         "--source-commit",
@@ -496,6 +794,8 @@ def _validate_training_command(
     context: FrozenContext,
     launch_nonce: str,
     trainer_sha256: str,
+    device_index: int,
+    device_routing_identity: Mapping[str, Any],
 ) -> None:
     _require(isinstance(command, list), "Training command is missing or invalid.")
     _require(len(command) >= 2, "Training command is incomplete.")
@@ -510,6 +810,12 @@ def _validate_training_command(
         "--seed": str(seed),
         "--steps": str(STEPS),
         "--minimum-steps": str(MINIMUM_STEPS),
+        "--device": f"cuda:{device_index}",
+        "--expected-device-routing-identity-json": json.dumps(
+            execution_environment.validate_device_routing_identity(device_routing_identity),
+            sort_keys=True,
+            separators=(",", ":"),
+        ),
     }
     for option, value in expected.items():
         _require(
@@ -533,6 +839,8 @@ def _validate_training_command(
             context=context,
             launch_nonce=launch_nonce,
             trainer_sha256=trainer_sha256,
+            device_index=device_index,
+            device_routing_identity=device_routing_identity,
         ),
         "Training command contains unregistered arguments or ordering drift.",
     )
@@ -546,6 +854,7 @@ def _checkpoint_provenance(
     launch_nonce: str,
     trainer_sha256: str,
     transcript_root: str,
+    execution_environment_binding: Mapping[str, Any],
 ) -> dict[str, Any]:
     return {
         "schema_version": 1,
@@ -566,6 +875,7 @@ def _checkpoint_provenance(
         "manifest_sha256": context.manifest_binding["sha256"],
         "implementation_digest": context.manifest_binding["implementation_digest"],
         "implementation_source_commit": context.manifest_binding["implementation_source_commit"],
+        "execution_environment": dict(execution_environment_binding),
     }
 
 
@@ -653,6 +963,7 @@ def _validate_checkpoint(
     launch_nonce: str,
     trainer_sha256: str,
     transcript_root: str,
+    execution_environment_binding: Mapping[str, Any],
     return_raw: bool = False,
 ) -> dict[str, Any] | tuple[dict[str, Any], Mapping[str, Any]]:
     _require(isinstance(checkpoint, dict), "Training checkpoint metadata is missing.")
@@ -756,6 +1067,7 @@ def _validate_checkpoint(
             launch_nonce=launch_nonce,
             trainer_sha256=trainer_sha256,
             transcript_root=transcript_root,
+            execution_environment_binding=execution_environment_binding,
         ),
         "Training checkpoint internal provenance drifted.",
     )
@@ -932,9 +1244,17 @@ def _validate_training_base(
     seed: int,
     launch_nonce: str,
     trainer_sha256: str,
+    expected_execution_environment: Mapping[str, Any] | None,
     return_raw_checkpoint: bool = False,
 ) -> dict[str, Any] | tuple[dict[str, Any], Mapping[str, Any]]:
-    _require(payload.get("schema_version") == 1, "Training summary schema drifted.")
+    _require(
+        set(payload) == TRAINING_SUMMARY_FIELDS,
+        "Training summary top-level schema drifted.",
+    )
+    _require(
+        payload.get("schema_version") == trainer.DIRECT_SUMMARY_SCHEMA_VERSION,
+        "Training summary schema drifted.",
+    )
     _require(payload.get("experiment_id") == EXPERIMENT_ID, "Wrong training experiment ID.")
     _require(payload.get("scale") == scale, "Training scale drifted.")
     _require(payload.get("seed") == seed, "Training seed drifted.")
@@ -954,6 +1274,49 @@ def _validate_training_base(
         f"Direct training must complete exactly {STEPS} steps.",
     )
     _require(payload.get("stopped_early") is False, "Direct training early stopping is forbidden.")
+    raw_environment = payload.get("execution_environment")
+    _require(
+        isinstance(raw_environment, Mapping),
+        "Training summary execution environment is missing.",
+    )
+    frozen_environment = execution_environment.validate_execution_environment(
+        cast(Mapping[str, Any], raw_environment)
+    )
+    if expected_execution_environment is not None:
+        _require(
+            frozen_environment
+            == execution_environment.validate_execution_environment(expected_execution_environment),
+            "Training summary execution environment drifted across the matrix.",
+        )
+    runtime = payload.get("runtime")
+    _require(isinstance(runtime, Mapping), "Training runtime provenance is missing.")
+    runtime = cast(Mapping[str, Any], runtime)
+    _require(set(runtime) == TRAINING_RUNTIME_FIELDS, "Training runtime schema drifted.")
+    selected_device = execution_environment.selected_device_class(frozen_environment)
+    _require(
+        runtime.get("python") == frozen_environment["python_version"]
+        and runtime.get("torch") == frozen_environment["torch_version"]
+        and runtime.get("device") == selected_device["name"],
+        "Training runtime software or selected-device provenance drifted.",
+    )
+    _require(
+        {
+            "device_spec": runtime.get("device_spec"),
+            "logical_device_index": runtime.get("logical_device_index"),
+        }
+        == execution_environment.selected_device_context(frozen_environment),
+        "Training runtime logical-device context drifted.",
+    )
+    _finite_number(runtime.get("elapsed_seconds"), label="runtime.elapsed_seconds", minimum=0.0)
+    peak_allocated = runtime.get("peak_allocated_bytes")
+    peak_reserved = runtime.get("peak_reserved_bytes")
+    _require(
+        type(peak_allocated) is int
+        and peak_allocated >= 0
+        and type(peak_reserved) is int
+        and peak_reserved >= peak_allocated,
+        "Training runtime CUDA memory counters are invalid.",
+    )
     _validate_history(payload.get("history"))
     transcript_root = _validate_transcript(
         payload.get("training_transcript"),
@@ -973,6 +1336,10 @@ def _validate_training_base(
         context=context,
         launch_nonce=launch_nonce,
         trainer_sha256=trainer_sha256,
+        device_index=cast(int, frozen_environment["current_device_index"]),
+        device_routing_identity=execution_environment.selected_device_routing_identity(
+            frozen_environment
+        ),
     )
     return _validate_checkpoint(
         payload.get("checkpoint"),
@@ -983,6 +1350,7 @@ def _validate_training_base(
         launch_nonce=launch_nonce,
         trainer_sha256=trainer_sha256,
         transcript_root=transcript_root,
+        execution_environment_binding=frozen_environment,
         return_raw=return_raw_checkpoint,
     )
 
@@ -1019,6 +1387,7 @@ def validate_training_summary(
     trust_root: attestation.TrustRoot,
     launch_nonce: str,
     trainer_sha256: str,
+    expected_execution_environment: Mapping[str, Any] | None = None,
     return_raw_checkpoint: bool = False,
 ) -> dict[str, Any] | tuple[dict[str, Any], Mapping[str, Any]]:
     _require(
@@ -1054,6 +1423,7 @@ def validate_training_summary(
         seed=seed,
         launch_nonce=launch_nonce,
         trainer_sha256=trainer_sha256,
+        expected_execution_environment=expected_execution_environment,
         return_raw_checkpoint=return_raw_checkpoint,
     )
 
@@ -1069,6 +1439,7 @@ def load_validated_training_summary(
     trust_root: attestation.TrustRoot,
     launch_nonce: str,
     trainer_sha256: str,
+    expected_execution_environment: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     payload = _load_json(summary_path)
     _require(
@@ -1087,6 +1458,7 @@ def load_validated_training_summary(
         trust_root=trust_root,
         launch_nonce=launch_nonce,
         trainer_sha256=trainer_sha256,
+        expected_execution_environment=expected_execution_environment,
     )
     return payload
 
@@ -1102,6 +1474,7 @@ def load_validated_training_bundle(
     trust_root: attestation.TrustRoot,
     launch_nonce: str,
     trainer_sha256: str,
+    expected_execution_environment: Mapping[str, Any] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any], Mapping[str, Any]]:
     payload = _load_json(summary_path)
     validated = validate_training_summary(
@@ -1114,6 +1487,7 @@ def load_validated_training_bundle(
         trust_root=trust_root,
         launch_nonce=launch_nonce,
         trainer_sha256=trainer_sha256,
+        expected_execution_environment=expected_execution_environment,
         return_raw_checkpoint=True,
     )
     _require(isinstance(validated, tuple), "Validated training bundle lost checkpoint bytes.")
@@ -1161,10 +1535,12 @@ def _matrix_payload(
     context: FrozenContext,
     trust_root: attestation.TrustRoot,
     trainer_binding: Mapping[str, Any],
+    gpu_lease_binding: Mapping[str, Any],
+    execution_environment_binding: Mapping[str, Any],
 ) -> dict[str, Any]:
     expected_runs = len(FROZEN_SCALES) * len(FROZEN_TRAINING_SEEDS)
     payload = {
-        "schema_version": 1,
+        "schema_version": SCHEMA_VERSION,
         "experiment_id": EXPERIMENT_ID,
         "artifact_type": ARTIFACT_TYPE,
         "status": "terminal" if len(runs) == expected_runs else "in_progress",
@@ -1172,6 +1548,10 @@ def _matrix_payload(
         "manifest": context.manifest_binding,
         "attestation_contract": context.manifest_binding["attestation"],
         "canonical_trainer": dict(trainer_binding),
+        "gpu_lease": dict(gpu_lease_binding),
+        "execution_environment": execution_environment.validate_execution_environment(
+            execution_environment_binding
+        ),
         "scales": list(FROZEN_SCALES),
         "frozen_training_seeds": list(FROZEN_TRAINING_SEEDS),
         "steps": STEPS,
@@ -1196,7 +1576,13 @@ def validate_matrix_summary(
     context: FrozenContext,
     trust_root: attestation.TrustRoot,
     trainer_binding: Mapping[str, Any],
+    expected_gpu_lease: Mapping[str, Any] | None = None,
+    expected_execution_environment: Mapping[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
+    _require(
+        set(payload) == TRAINING_MATRIX_FIELDS,
+        "Training matrix top-level schema drifted.",
+    )
     _validate_payload_digest(payload, label="Training matrix")
     envelope = payload.get("attestation")
     _require(isinstance(envelope, Mapping), "Training matrix attestation is missing.")
@@ -1208,7 +1594,7 @@ def validate_matrix_summary(
         trust_root=trust_root,
         purpose=MATRIX_ATTESTATION_PURPOSE,
     )
-    _require(payload.get("schema_version") == 1, "Training matrix schema drifted.")
+    _require(payload.get("schema_version") == SCHEMA_VERSION, "Training matrix schema drifted.")
     _require(payload.get("experiment_id") == EXPERIMENT_ID, "Wrong training matrix ID.")
     _require(payload.get("artifact_type") == ARTIFACT_TYPE, "Training matrix type drifted.")
     _require(payload.get("source") == context.source, "Training matrix source drifted.")
@@ -1223,6 +1609,31 @@ def validate_matrix_summary(
         payload.get("canonical_trainer") == dict(trainer_binding),
         "Training matrix canonical trainer binding drifted.",
     )
+    validated_gpu_lease = _validate_gpu_lease_binding(
+        payload.get("gpu_lease"),
+        expected=expected_gpu_lease,
+    )
+    raw_environment = payload.get("execution_environment")
+    _require(
+        isinstance(raw_environment, Mapping),
+        "Training matrix execution environment is missing.",
+    )
+    frozen_environment = execution_environment.validate_execution_environment(
+        cast(Mapping[str, Any], raw_environment)
+    )
+    _require(
+        validated_gpu_lease["selected_device_class"]
+        == execution_environment.selected_device_class(frozen_environment)
+        and validated_gpu_lease["selected_device_routing_identity"]
+        == execution_environment.selected_device_routing_identity(frozen_environment),
+        "Training matrix GPU lease is not bound to its exact selected device.",
+    )
+    if expected_execution_environment is not None:
+        _require(
+            frozen_environment
+            == execution_environment.validate_execution_environment(expected_execution_environment),
+            "Training matrix execution environment changed on exact resume.",
+        )
     _require(tuple(payload.get("scales", ())) == FROZEN_SCALES, "Training scales drifted.")
     _require(
         tuple(payload.get("frozen_training_seeds", ())) == FROZEN_TRAINING_SEEDS,
@@ -1268,6 +1679,7 @@ def validate_matrix_summary(
             trust_root=trust_root,
             launch_nonce=str(launch_nonce),
             trainer_sha256=str(trainer_sha256),
+            expected_execution_environment=frozen_environment,
         )
         expected_record = _run_record(
             summary,
@@ -1279,6 +1691,17 @@ def validate_matrix_summary(
         )
         _require(record == expected_record, f"Training matrix run record drifted: {scale}/{seed}.")
         validated.append(expected_record)
+    matrix_summary_path = Path(os.path.abspath(output_root)) / MATRIX_SUMMARY.name
+    on_disk = _load_json(matrix_summary_path)
+    _require(
+        attestation.canonical_json(on_disk) == attestation.canonical_json(dict(payload)),
+        "Training matrix ledger bytes do not match the supplied payload.",
+    )
+    _preflight_all_coordinates(
+        output_root=output_root,
+        matrix_summary=matrix_summary_path,
+        completed_count=len(validated),
+    )
     return validated
 
 
@@ -1292,6 +1715,14 @@ def load_terminal_matrix_record(
     seed: int,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     payload = _load_json(matrix_summary)
+    validated_records = validate_matrix_summary(
+        payload,
+        output_root=matrix_summary.parent,
+        train_script=TRAIN_SCRIPT,
+        context=context,
+        trust_root=trust_root,
+        trainer_binding=trainer_binding,
+    )
     _validate_payload_digest(payload, label="Training matrix")
     envelope = payload.get("attestation")
     _require(isinstance(envelope, Mapping), "Training matrix attestation is missing.")
@@ -1318,8 +1749,9 @@ def load_terminal_matrix_record(
         payload.get("canonical_trainer") == dict(trainer_binding),
         "Training ledger canonical trainer drifted.",
     )
-    runs = payload.get("runs")
-    _require(isinstance(runs, list) and len(runs) == 10, "Training ledger run grid is invalid.")
+    _validate_gpu_lease_binding(payload.get("gpu_lease"))
+    runs = validated_records
+    _require(len(runs) == 10, "Training ledger run grid is invalid.")
     coordinates = [
         (item_scale, item_seed)
         for item_scale in FROZEN_SCALES
@@ -1327,7 +1759,7 @@ def load_terminal_matrix_record(
     ]
     observed_nonces: set[str] = set()
     selected: dict[str, Any] | None = None
-    for record, coordinate in zip(cast(list[Any], runs), coordinates, strict=True):
+    for record, coordinate in zip(runs, coordinates, strict=True):
         _require(isinstance(record, dict), "Training ledger record is invalid.")
         _require(
             (record.get("scale"), record.get("seed")) == coordinate,
@@ -1358,21 +1790,42 @@ def _assert_no_orphaned_output(output_dir: Path) -> None:
 
 
 @contextmanager
-def _matrix_lock(output_root: Path) -> Any:
-    lock_path = output_root.parent / LOCK_NAME
+def _matrix_lock(output_root: Path) -> Iterator[_MatrixLockLease]:
+    lock_path = Path(os.path.abspath(output_root)).parent / LOCK_NAME
     lock_path.parent.mkdir(parents=True, exist_ok=True)
-    descriptor = os.open(lock_path, os.O_RDWR | os.O_CREAT | getattr(os, "O_CLOEXEC", 0), 0o600)
+    no_follow = getattr(os, "O_NOFOLLOW", None)
+    _require(no_follow is not None, "Training matrix locking requires O_NOFOLLOW support.")
+    flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_CLOEXEC", 0) | cast(int, no_follow)
     try:
+        descriptor = os.open(lock_path, flags, 0o600)
+    except OSError as error:
+        raise ValueError("Training matrix lock could not be opened safely.") from error
+    acquired = False
+    try:
+        opened = os.fstat(descriptor)
+        lease = _MatrixLockLease(
+            path=lock_path,
+            file_descriptor=descriptor,
+            device=opened.st_dev,
+            inode=opened.st_ino,
+        )
+        lease.assert_held()
         try:
             fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError as error:
             raise ValueError(
                 "Another direct-training matrix runner holds the exclusive lock."
             ) from error
-        yield
+        acquired = True
+        lease.assert_held()
+        try:
+            yield lease
+        finally:
+            lease.assert_held()
     finally:
         try:
-            fcntl.flock(descriptor, fcntl.LOCK_UN)
+            if acquired:
+                fcntl.flock(descriptor, fcntl.LOCK_UN)
         finally:
             os.close(descriptor)
 
@@ -1412,26 +1865,60 @@ def _cell_claim(output_dir: Path, *, launch_nonce: str) -> Any:
 def _preflight_all_coordinates(
     *,
     output_root: Path,
+    matrix_summary: Path,
     completed_count: int,
 ) -> None:
+    root = Path(os.path.abspath(output_root))
+    summary = Path(os.path.abspath(matrix_summary))
+    _require(
+        summary == root / MATRIX_SUMMARY.name,
+        "Training matrix summary must use its canonical output-root path.",
+    )
+    if not root.exists():
+        _require(completed_count == 0, "Completed training prefix lost its output root.")
+        return
+    _require(root.is_dir() and not root.is_symlink(), "Training output root is unsafe.")
+    allowed: set[Path] = {summary}
     coordinates = [(scale, seed) for scale in FROZEN_SCALES for seed in FROZEN_TRAINING_SEEDS]
     for index, (scale, seed) in enumerate(coordinates):
-        output_dir = _run_output_dir(output_root, scale, seed)
-        summary_path = _training_summary_path(output_root, scale, seed)
+        scale_dir = root / scale
+        output_dir = _run_output_dir(root, scale, seed)
+        summary_path = _training_summary_path(root, scale, seed)
+        checkpoint_path = _checkpoint_path(root, scale, seed)
         claim_path = output_dir / CLAIM_NAME
-        _require(not claim_path.exists(), f"Crash-stale training claim detected: {scale}/{seed}.")
+        allowed.update((scale_dir, output_dir))
+        _require(
+            not os.path.lexists(claim_path),
+            f"Crash-stale training claim detected: {scale}/{seed}.",
+        )
         if index < completed_count:
+            allowed.update((summary_path, checkpoint_path))
             _require(
-                summary_path.is_file(), f"Completed training summary disappeared: {scale}/{seed}."
+                output_dir.is_dir()
+                and not output_dir.is_symlink()
+                and summary_path.is_file()
+                and not summary_path.is_symlink()
+                and checkpoint_path.is_file()
+                and not checkpoint_path.is_symlink(),
+                f"Completed training bundle disappeared or became unsafe: {scale}/{seed}.",
             )
             continue
+        if output_dir.exists():
+            _require(
+                output_dir.is_dir()
+                and not output_dir.is_symlink()
+                and not any(output_dir.iterdir()),
+                f"Refusing orphaned or stale future training output: {scale}/{seed}.",
+            )
+    for item in root.rglob("*"):
+        _require(not item.is_symlink(), f"Training output tree contains a symlink: {item}")
         _require(
-            not output_dir.exists() or not any(output_dir.iterdir()),
-            f"Refusing orphaned or stale future training output: {scale}/{seed}.",
+            Path(os.path.abspath(item)) in allowed,
+            f"Training output tree contains an unregistered orphan: {item}",
         )
 
 
-def run_matrix(
+def _run_matrix_under_gpu_lease(
     *,
     manifest_path: Path = contract.MANIFEST_PATH,
     output_root: Path = OUTPUT_ROOT,
@@ -1439,7 +1926,24 @@ def run_matrix(
     train_script: Path = TRAIN_SCRIPT,
     steps: int = STEPS,
     attestation_key_path: Path | None = None,
+    gpu_lease: gpu_lock.GPULockLease,
+    device_guard: gpu_lock.GPULockLease,
+    gpu_lease_binding: Mapping[str, Any],
+    frozen_execution_environment: Mapping[str, Any],
 ) -> dict[str, Any]:
+    gpu_lease.assert_held()
+    device_guard.assert_held()
+    _require(
+        dict(gpu_lease_binding)
+        == _gpu_lease_binding(
+            gpu_lease.path,
+            frozen_execution_environment=frozen_execution_environment,
+            device_guard=device_guard,
+        ),
+        "Training GPU lease binding does not match the held lease.",
+    )
+    gpu_lease.assert_held()
+    device_guard.assert_held()
     _require(tuple(contract.SCALES) == FROZEN_SCALES, "Contract training scales drifted.")
     _require(
         tuple(contract.TRAINING_SEEDS) == FROZEN_TRAINING_SEEDS,
@@ -1450,8 +1954,9 @@ def run_matrix(
     _require(not output_root.is_symlink(), "Training output root may not be a symbolic link.")
     _require(not matrix_summary.is_symlink(), "Training matrix may not be a symbolic link.")
     _require(
-        matrix_summary.resolve().is_relative_to(output_root.resolve()),
-        "Training matrix summary must be stored under the training output root.",
+        Path(os.path.abspath(matrix_summary))
+        == Path(os.path.abspath(output_root)) / MATRIX_SUMMARY.name,
+        "Training matrix summary must use its canonical output-root path.",
     )
     context = establish_frozen_context(manifest_path)
     expected_key_id = str(context.manifest_binding["attestation"]["key_id"])
@@ -1479,9 +1984,14 @@ def run_matrix(
     )
     trainer_binding = trainer_snapshot.public_binding
 
-    with _matrix_lock(output_root):
+    with _matrix_lock(output_root) as matrix_lock:
+        matrix_lock.assert_held()
+        gpu_lease.assert_held()
+        device_guard.assert_held()
         completed: list[dict[str, Any]] = []
         if matrix_summary.exists():
+            gpu_lease.assert_held()
+            device_guard.assert_held()
             completed = validate_matrix_summary(
                 _load_json(matrix_summary),
                 output_root=output_root,
@@ -1489,25 +1999,46 @@ def run_matrix(
                 context=context,
                 trust_root=trust_root,
                 trainer_binding=trainer_binding,
+                expected_gpu_lease=gpu_lease_binding,
+                expected_execution_environment=frozen_execution_environment,
             )
-        _preflight_all_coordinates(output_root=output_root, completed_count=len(completed))
+            matrix_lock.assert_held()
+        _preflight_all_coordinates(
+            output_root=output_root,
+            matrix_summary=matrix_summary,
+            completed_count=len(completed),
+        )
         assert_environment_unchanged(context)
         verification, _ = _open_canonical_trainer(canonical_trainer, expected=trainer_snapshot)
         verification.close()
+        matrix_lock.assert_held()
         if not matrix_summary.exists():
-            _atomic_write_json(
+            gpu_lease.assert_held()
+            device_guard.assert_held()
+            _publish_matrix_ledger(
                 matrix_summary,
                 _matrix_payload(
                     completed,
                     context=context,
                     trust_root=trust_root,
                     trainer_binding=trainer_binding,
+                    gpu_lease_binding=gpu_lease_binding,
+                    execution_environment_binding=frozen_execution_environment,
                 ),
+                matrix_lock=matrix_lock,
             )
+            gpu_lease.assert_held()
+            device_guard.assert_held()
 
         coordinates = [(scale, seed) for scale in FROZEN_SCALES for seed in FROZEN_TRAINING_SEEDS]
         for scale, seed in coordinates[len(completed) :]:
+            matrix_lock.assert_held()
+            gpu_lease.assert_held()
+            device_guard.assert_held()
             assert_environment_unchanged(context)
+            execution_environment.assert_exact_execution_environment(frozen_execution_environment)
+            gpu_lease.assert_held()
+            device_guard.assert_held()
             launch_nonce = secrets.token_hex(32)
             summary_path = _training_summary_path(output_root, scale, seed)
             output_dir = _run_output_dir(output_root, scale, seed)
@@ -1520,12 +2051,28 @@ def run_matrix(
                     context=context,
                     launch_nonce=launch_nonce,
                     trainer_sha256=trainer_snapshot.sha256,
+                    device_index=cast(int, frozen_execution_environment["current_device_index"]),
+                    device_routing_identity=(
+                        execution_environment.selected_device_routing_identity(
+                            frozen_execution_environment
+                        )
+                    ),
                 )
+                gpu_lease.assert_held()
+                device_guard.assert_held()
                 result = _run_trainer_from_stable_script(
                     command,
                     canonical=canonical_trainer,
                     expected=trainer_snapshot,
                     trust_root=trust_root,
+                    gpu_lease=gpu_lease,
+                    device_guard=device_guard,
+                )
+                matrix_lock.assert_held()
+                gpu_lease.assert_held()
+                device_guard.assert_held()
+                execution_environment.assert_exact_execution_environment(
+                    frozen_execution_environment
                 )
                 if result.returncode != 0:
                     raise subprocess.CalledProcessError(result.returncode, command)
@@ -1544,7 +2091,9 @@ def run_matrix(
                     trust_root=trust_root,
                     launch_nonce=launch_nonce,
                     trainer_sha256=trainer_snapshot.sha256,
+                    expected_execution_environment=frozen_execution_environment,
                 )
+                matrix_lock.assert_held()
                 record = _run_record(
                     summary,
                     summary_path=summary_path,
@@ -1553,25 +2102,40 @@ def run_matrix(
                     launch_nonce=launch_nonce,
                     trainer_sha256=trainer_snapshot.sha256,
                 )
+                matrix_lock.assert_held()
                 completed.append(record)
-                _atomic_write_json(
+                gpu_lease.assert_held()
+                device_guard.assert_held()
+                _publish_matrix_ledger(
                     matrix_summary,
                     _matrix_payload(
                         completed,
                         context=context,
                         trust_root=trust_root,
                         trainer_binding=trainer_binding,
+                        gpu_lease_binding=gpu_lease_binding,
+                        execution_environment_binding=frozen_execution_environment,
                     ),
+                    matrix_lock=matrix_lock,
                 )
+                gpu_lease.assert_held()
 
+        gpu_lease.assert_held()
+        device_guard.assert_held()
         assert_environment_unchanged(context)
         terminal = _matrix_payload(
             completed,
             context=context,
             trust_root=trust_root,
             trainer_binding=trainer_binding,
+            gpu_lease_binding=gpu_lease_binding,
+            execution_environment_binding=frozen_execution_environment,
         )
-        _atomic_write_json(matrix_summary, terminal)
+        gpu_lease.assert_held()
+        device_guard.assert_held()
+        _publish_matrix_ledger(matrix_summary, terminal, matrix_lock=matrix_lock)
+        gpu_lease.assert_held()
+        device_guard.assert_held()
         validate_matrix_summary(
             terminal,
             output_root=output_root,
@@ -1579,8 +2143,66 @@ def run_matrix(
             context=context,
             trust_root=trust_root,
             trainer_binding=trainer_binding,
+            expected_gpu_lease=gpu_lease_binding,
+            expected_execution_environment=frozen_execution_environment,
         )
+        matrix_lock.assert_held()
+        gpu_lease.assert_held()
+        device_guard.assert_held()
         return terminal
+
+
+def run_matrix(
+    *,
+    manifest_path: Path = contract.MANIFEST_PATH,
+    output_root: Path = OUTPUT_ROOT,
+    matrix_summary: Path = MATRIX_SUMMARY,
+    train_script: Path = TRAIN_SCRIPT,
+    steps: int = STEPS,
+    attestation_key_path: Path | None = None,
+    gpu_lock_path: Path | None = None,
+) -> dict[str, Any]:
+    """Run the complete CUDA training matrix under one project-wide GPU lease."""
+
+    requested_gpu_lock = gpu_lock.DEFAULT_LOCK_PATH if gpu_lock_path is None else gpu_lock_path
+    lease = gpu_lock.acquire_gpu_lock(
+        "p2-direct-training-matrix",
+        path=requested_gpu_lock,
+    )
+    device_guard: gpu_lock.GPULockLease | None = None
+    try:
+        lease.assert_held()
+        frozen_execution_environment = execution_environment.capture_execution_environment()
+        lease.assert_held()
+        routing_identity = execution_environment.selected_device_routing_identity(
+            frozen_execution_environment
+        )
+        device_guard = gpu_lock.acquire_device_guard(
+            "p2-direct-training-matrix",
+            routing_identity,
+        )
+        device_guard.assert_held()
+        lease_binding = _gpu_lease_binding(
+            lease.path,
+            frozen_execution_environment=frozen_execution_environment,
+            device_guard=device_guard,
+        )
+        return _run_matrix_under_gpu_lease(
+            manifest_path=manifest_path,
+            output_root=output_root,
+            matrix_summary=matrix_summary,
+            train_script=train_script,
+            steps=steps,
+            attestation_key_path=attestation_key_path,
+            gpu_lease=lease,
+            device_guard=device_guard,
+            gpu_lease_binding=lease_binding,
+            frozen_execution_environment=frozen_execution_environment,
+        )
+    finally:
+        if device_guard is not None:
+            device_guard.close()
+        lease.close()
 
 
 def main() -> int:
@@ -1591,12 +2213,14 @@ def main() -> int:
     parser.add_argument("--output-root", type=Path, default=OUTPUT_ROOT)
     parser.add_argument("--matrix-summary", type=Path, default=MATRIX_SUMMARY)
     parser.add_argument("--steps", type=int, default=STEPS)
+    parser.add_argument("--gpu-lock-path", type=Path)
     args = parser.parse_args()
     result = run_matrix(
         manifest_path=args.manifest,
         output_root=args.output_root,
         matrix_summary=args.matrix_summary,
         steps=args.steps,
+        gpu_lock_path=args.gpu_lock_path,
     )
     print(
         json.dumps(

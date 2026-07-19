@@ -18,6 +18,35 @@ import p2_direct_attestation as attestation  # noqa: E402
 import run_p2_direct_training_matrix as matrix  # noqa: E402
 
 
+def _execution_environment() -> dict[str, Any]:
+    return {
+        "schema_version": matrix.execution_environment.SCHEMA_VERSION,
+        "python_implementation": "CPython",
+        "python_version": "3.12.0",
+        "python_executable": str(Path(sys.executable).resolve()),
+        "torch_version": "2.7.0+cu128",
+        "cuda_runtime_version": "12.8",
+        "cuda_driver_version": "570.00",
+        "cuda_visible_devices": "0",
+        "platform_system": "Linux",
+        "platform_release": "test-kernel",
+        "platform_machine": "x86_64",
+        "platform_string": "Linux-test-x86_64",
+        "current_device_index": 0,
+        "visible_device_count": 1,
+        "visible_devices": [
+            {
+                "logical_index": 0,
+                "name": "Test CUDA GPU",
+                "uuid": "GPU-test-0",
+                "pci_bus_id": "0000:01:00.0",
+                "compute_capability": [9, 0],
+                "total_memory_bytes": 80 * 1024**3,
+            }
+        ],
+    }
+
+
 @dataclass(frozen=True)
 class FrozenEnvironment:
     manifest_path: Path
@@ -26,6 +55,65 @@ class FrozenEnvironment:
     trust_root: attestation.TrustRoot
     context: matrix.FrozenContext
     trainer: matrix.CanonicalTrainerSnapshot
+    execution_environment: dict[str, Any]
+
+
+@dataclass
+class FakeGPULease:
+    path: Path
+    events: list[str]
+    file_descriptor: int = 2
+    device: int = 1
+    inode: int = 2
+    closed: bool = False
+
+    def assert_held(self) -> None:
+        assert not self.closed
+        self.events.append("assert-held")
+
+    def fileno(self) -> int:
+        self.assert_held()
+        return self.file_descriptor
+
+    def close(self) -> None:
+        assert not self.closed
+        self.events.append("close")
+        self.closed = True
+
+
+@dataclass
+class FakeGPUController:
+    events: list[str]
+    leases: list[FakeGPULease]
+
+
+@pytest.fixture(autouse=True)
+def fake_gpu_lease(monkeypatch: pytest.MonkeyPatch) -> FakeGPUController:
+    controller = FakeGPUController(events=[], leases=[])
+
+    def acquire(label: str, *, path: Path) -> FakeGPULease:
+        controller.events.append(f"acquire:{label}:{path}")
+        lease = FakeGPULease(
+            path=Path(path),
+            events=controller.events,
+            file_descriptor=2,
+        )
+        controller.leases.append(lease)
+        return lease
+
+    def acquire_device_guard(
+        label: str,
+        routing_identity: dict[str, Any],
+    ) -> FakeGPULease:
+        path = matrix.gpu_lock.canonical_device_guard_path(routing_identity)
+        controller.events.append(f"acquire-device:{label}:{path}")
+        lease = FakeGPULease(path=path, events=controller.events, file_descriptor=3)
+        controller.leases.append(lease)
+        return lease
+
+    monkeypatch.setattr(matrix.gpu_lock, "acquire_gpu_lock", acquire)
+    monkeypatch.setattr(matrix.gpu_lock, "acquire_device_guard", acquire_device_guard)
+    return controller
 
 
 def _tiny_config(_scale: str) -> matrix.trainer.DeepSeekV4Config:
@@ -56,6 +144,12 @@ def _tiny_config(_scale: str) -> matrix.trainer.DeepSeekV4Config:
 @pytest.fixture
 def frozen_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> FrozenEnvironment:
     monkeypatch.setattr(matrix.trainer, "build_config", _tiny_config)
+    stable_environment = _execution_environment()
+    monkeypatch.setattr(
+        matrix.execution_environment,
+        "capture_execution_environment",
+        lambda: copy.deepcopy(stable_environment),
+    )
     key_path = tmp_path / "paper-grade-attestation.key"
     key_path.write_bytes(bytes(range(32)))
     key_path.chmod(0o600)
@@ -104,6 +198,7 @@ def frozen_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Froze
         trust_root=trust_root,
         context=context,
         trainer=trainer_snapshot,
+        execution_environment=stable_environment,
     )
 
 
@@ -244,6 +339,7 @@ def _write_valid_summary(
                 launch_nonce=launch_nonce,
                 trainer_sha256=env.trainer.sha256,
                 transcript_root=transcript["root"],
+                execution_environment_binding=env.execution_environment,
             ),
             "config": matrix.asdict(config),
             "model": model.state_dict(),
@@ -261,15 +357,46 @@ def _write_valid_summary(
             context=env.context,
             launch_nonce=launch_nonce,
             trainer_sha256=env.trainer.sha256,
+            device_routing_identity=(
+                matrix.execution_environment.selected_device_routing_identity(
+                    env.execution_environment
+                )
+            ),
         )
+    task_config = {
+        "vocab_size": config.vocab_size,
+        "num_pairs": 10,
+        "key_start": 16,
+        "key_count": 64,
+        "value_start": 80,
+        "value_count": 64,
+        "distractor_start": 1024,
+        "separator_token_id": 3,
+        "query_token_id": 4,
+        "bos_token_id": 2,
+        "sliding_window": config.sliding_window,
+    }
     payload: dict[str, Any] = {
-        "schema_version": 1,
+        "schema_version": matrix.trainer.DIRECT_SUMMARY_SCHEMA_VERSION,
         "experiment_id": matrix.EXPERIMENT_ID,
         "scale": scale,
         "seed": seed,
         **matrix._seed_values(seed),
         "source": env.context.source,
+        "parameters": sum(parameter.numel() for parameter in model.parameters()),
+        "auxiliary_parameters": sum(parameter.numel() for parameter in probe.parameters()),
         "config": matrix.asdict(config),
+        "task_config": task_config,
+        "sequence_lengths": list(matrix.trainer.SEQUENCE_LENGTHS),
+        "training_sequence_lengths": list(matrix.trainer.TRAIN_SEQUENCE_LENGTHS),
+        "num_queries_per_training_sequence": matrix.FROZEN_HYPERPARAMETERS["num_queries"],
+        "batch_size": matrix.FROZEN_HYPERPARAMETERS["batch_size"],
+        "learning_rate": matrix.FROZEN_HYPERPARAMETERS["learning_rate"],
+        "weight_decay": matrix.FROZEN_HYPERPARAMETERS["weight_decay"],
+        "ranking_loss_weight": matrix.FROZEN_HYPERPARAMETERS["ranking_loss_weight"],
+        "read_ranking_loss_weight": matrix.FROZEN_HYPERPARAMETERS["read_ranking_loss_weight"],
+        "value_loss_weight": matrix.FROZEN_HYPERPARAMETERS["value_loss_weight"],
+        "training_topk": matrix.FROZEN_HYPERPARAMETERS["training_topk"],
         "training_hyperparameters": matrix.FROZEN_HYPERPARAMETERS,
         "command": command,
         "steps_completed": matrix.STEPS,
@@ -280,6 +407,16 @@ def _write_valid_summary(
             "path": str(checkpoint_path),
             "sha256": matrix._sha256(checkpoint_path),
             "bytes": checkpoint_path.stat().st_size,
+        },
+        "execution_environment": copy.deepcopy(env.execution_environment),
+        "runtime": {
+            "python": env.execution_environment["python_version"],
+            "torch": env.execution_environment["torch_version"],
+            "device": env.execution_environment["visible_devices"][0]["name"],
+            **matrix.execution_environment.selected_device_context(env.execution_environment),
+            "elapsed_seconds": 123.0,
+            "peak_allocated_bytes": 1024,
+            "peak_reserved_bytes": 2048,
         },
     }
     if authenticated:
@@ -336,6 +473,9 @@ def test_grid_command_and_full_hyperparameters_are_frozen(
         context=env.context,
         launch_nonce=nonce,
         trainer_sha256=env.trainer.sha256,
+        device_routing_identity=matrix.execution_environment.selected_device_routing_identity(
+            env.execution_environment
+        ),
     )
 
     assert matrix.FROZEN_SCALES == ("s55", "s151")
@@ -343,11 +483,35 @@ def test_grid_command_and_full_hyperparameters_are_frozen(
     assert matrix.STEPS == matrix.MINIMUM_STEPS == 1_000
     assert _command_value(command, "--steps") == "1000"
     assert _command_value(command, "--minimum-steps") == "1000"
+    assert _command_value(command, "--device") == "cuda:0"
+    assert json.loads(
+        _command_value(command, "--expected-device-routing-identity-json")
+    ) == matrix.execution_environment.selected_device_routing_identity(env.execution_environment)
     assert "--disable-early-stop" in command
     assert _command_value(command, "--launch-nonce") == nonce
     assert json.loads(_command_value(command, "--direct-hyperparameters-json")) == (
         matrix.FROZEN_HYPERPARAMETERS
     )
+
+
+def test_training_command_routes_to_nonzero_current_logical_device(
+    tmp_path: Path, frozen_environment: FrozenEnvironment
+) -> None:
+    command = matrix.build_training_command(
+        train_script=frozen_environment.train_script,
+        output_root=tmp_path / "training",
+        scale="s55",
+        seed=6071406,
+        context=frozen_environment.context,
+        launch_nonce="a" * 64,
+        trainer_sha256=frozen_environment.trainer.sha256,
+        device_index=1,
+        device_routing_identity=matrix.execution_environment.selected_device_routing_identity(
+            frozen_environment.execution_environment
+        ),
+    )
+
+    assert _command_value(command, "--device") == "cuda:1"
 
 
 def test_external_trust_root_permissions_location_entropy_and_sealed_transport(
@@ -430,6 +594,76 @@ def test_valid_summary_accepts_but_unauthenticated_and_self_rehashed_forgery_fai
     forged["attestation"] = original_envelope
     with pytest.raises(ValueError, match="Attestation payload checksum|MAC"):
         _validate(forged, output_root=output_root, env=env, launch_nonce=nonce)
+
+
+@pytest.mark.parametrize("mutation", ["missing", "extra"])
+def test_training_summary_top_level_schema_is_exact(
+    tmp_path: Path,
+    frozen_environment: FrozenEnvironment,
+    mutation: str,
+) -> None:
+    env = frozen_environment
+    output_root = tmp_path / "training"
+    nonce = "9" * 64
+    _, payload = _write_valid_summary(
+        output_root=output_root,
+        env=env,
+        scale="s55",
+        seed=6071406,
+        launch_nonce=nonce,
+    )
+    semantic = copy.deepcopy(payload)
+    semantic.pop("attestation")
+    semantic.pop("payload_sha256")
+    if mutation == "missing":
+        semantic.pop("task_config")
+    else:
+        semantic["unregistered"] = True
+    mutated = matrix._attested_payload(
+        semantic,
+        trust_root=env.trust_root,
+        purpose=matrix.SUMMARY_ATTESTATION_PURPOSE,
+    )
+
+    with pytest.raises(ValueError, match="top-level schema drifted"):
+        _validate(mutated, output_root=output_root, env=env, launch_nonce=nonce)
+
+
+@pytest.mark.parametrize("mutation", ["missing", "extra", "wrong-device"])
+def test_training_runtime_schema_and_selected_device_semantics_are_exact(
+    tmp_path: Path,
+    frozen_environment: FrozenEnvironment,
+    mutation: str,
+) -> None:
+    env = frozen_environment
+    output_root = tmp_path / "training"
+    nonce = "8" * 64
+    _, payload = _write_valid_summary(
+        output_root=output_root,
+        env=env,
+        scale="s55",
+        seed=6071406,
+        launch_nonce=nonce,
+    )
+    semantic = copy.deepcopy(payload)
+    semantic.pop("attestation")
+    semantic.pop("payload_sha256")
+    runtime = semantic["runtime"]
+    if mutation == "missing":
+        runtime.pop("device")
+    elif mutation == "extra":
+        runtime["unregistered"] = True
+    else:
+        runtime["device"] = "wrong GPU"
+    mutated = matrix._attested_payload(
+        semantic,
+        trust_root=env.trust_root,
+        purpose=matrix.SUMMARY_ATTESTATION_PURPOSE,
+    )
+
+    expected = "runtime schema drifted" if mutation != "wrong-device" else "selected-device"
+    with pytest.raises(ValueError, match=expected):
+        _validate(mutated, output_root=output_root, env=env, launch_nonce=nonce)
 
 
 def test_wrong_key_nonce_trainer_and_checkpoint_substitution_are_rejected(
@@ -571,24 +805,37 @@ def test_trainer_receives_key_only_by_sealed_inherited_fd(
         command: list[str],
         *,
         check: bool,
-        pass_fds: tuple[int, int],
+        pass_fds: tuple[int, ...],
         env: dict[str, str],
     ) -> subprocess.CompletedProcess[str]:
         observed.update(command=command, check=check, pass_fds=pass_fds, env=env)
         return subprocess.CompletedProcess(command, 0)
 
     monkeypatch.setattr(matrix.subprocess, "run", fake_subprocess_run)
+    lease = FakeGPULease(path=Path("/tmp/test-gpu.lock"), events=[])
+    device_guard = FakeGPULease(
+        path=matrix.gpu_lock.canonical_device_guard_path(
+            matrix.execution_environment.selected_device_routing_identity(env.execution_environment)
+        ),
+        events=[],
+        file_descriptor=3,
+    )
     command = [sys.executable, str(env.train_script), "--scale", "s55"]
     result = matrix._run_trainer_from_stable_script(
         command,
         canonical=env.train_script.resolve(),
         expected=env.trainer,
         trust_root=env.trust_root,
+        gpu_lease=lease,
+        device_guard=device_guard,
     )
 
     assert result.returncode == 0
     assert observed["check"] is False
-    assert len(observed["pass_fds"]) == 2
+    assert len(observed["pass_fds"]) == 4
+    assert lease.fileno() in observed["pass_fds"]
+    assert device_guard.fileno() in observed["pass_fds"]
+    assert observed["command"][1:3] == ["-I", "-c"]
     assert attestation.KEY_FD_ENV in observed["env"]
     assert attestation.KEY_PATH_ENV not in observed["env"]
     assert env.trust_root.key.hex() not in " ".join(observed["command"])
@@ -598,6 +845,7 @@ def test_matrix_runs_all_cells_hmac_attests_and_resumes_without_relaunch(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     frozen_environment: FrozenEnvironment,
+    fake_gpu_lease: FakeGPUController,
 ) -> None:
     env = frozen_environment
     output_root = tmp_path / "training"
@@ -610,10 +858,16 @@ def test_matrix_runs_all_cells_hmac_attests_and_resumes_without_relaunch(
         canonical: Path,
         expected: matrix.CanonicalTrainerSnapshot,
         trust_root: attestation.TrustRoot,
+        gpu_lease: FakeGPULease,
+        device_guard: FakeGPULease,
     ) -> subprocess.CompletedProcess[str]:
+        assert fake_gpu_lease.leases
+        assert not fake_gpu_lease.leases[-1].closed
         assert canonical == env.train_script.resolve()
         assert expected == env.trainer
         assert trust_root == env.trust_root
+        gpu_lease.assert_held()
+        device_guard.assert_held()
         commands.append(command)
         scale = _command_value(command, "--scale")
         seed = int(_command_value(command, "--seed"))
@@ -638,7 +892,19 @@ def test_matrix_runs_all_cells_hmac_attests_and_resumes_without_relaunch(
     assert len(commands) == 10
     assert terminal["status"] == "terminal"
     assert terminal["completed_runs"] == terminal["expected_runs"] == 10
+    assert "inode" not in terminal["gpu_lease"]
+    assert terminal["gpu_lease"]["child_nested_lease"] is False
+    assert terminal["gpu_lease"]["selected_device_routing_identity"] == {
+        "identity_type": "uuid",
+        "identity": "GPU-test-0",
+    }
+    assert terminal["gpu_lease"]["device_guard"]["semantics"] == (
+        matrix.gpu_lock.DEVICE_GUARD_SEMANTICS
+    )
     assert len({record["launch_nonce"] for record in terminal["runs"]}) == 10
+    assert len(fake_gpu_lease.leases) == 2
+    assert all(lease.closed for lease in fake_gpu_lease.leases)
+    assert fake_gpu_lease.events[0].startswith("acquire:p2-direct-training-matrix:")
     semantic = dict(terminal)
     envelope = semantic.pop("attestation")
     attestation.verify_attestation(
@@ -657,6 +923,98 @@ def test_matrix_runs_all_cells_hmac_attests_and_resumes_without_relaunch(
     )
     assert resumed == terminal
     assert len(commands) == 10
+    assert len(fake_gpu_lease.leases) == 4
+    assert fake_gpu_lease.leases[-1].closed
+
+    for mutation in ("missing", "extra"):
+        schema_tamper = copy.deepcopy(terminal)
+        schema_tamper.pop("attestation")
+        schema_tamper.pop("payload_sha256")
+        if mutation == "missing":
+            schema_tamper.pop("minimum_steps")
+        else:
+            schema_tamper["unregistered"] = True
+        schema_tamper = matrix._attested_payload(
+            schema_tamper,
+            trust_root=env.trust_root,
+            purpose=matrix.MATRIX_ATTESTATION_PURPOSE,
+        )
+        matrix_summary.write_text(json.dumps(schema_tamper), encoding="utf-8")
+        with pytest.raises(ValueError, match="top-level schema drifted"):
+            matrix.run_matrix(
+                manifest_path=env.manifest_path,
+                output_root=output_root,
+                matrix_summary=matrix_summary,
+                train_script=env.train_script,
+                attestation_key_path=env.key_path,
+            )
+        matrix_summary.write_text(json.dumps(terminal), encoding="utf-8")
+
+    environment_tamper = copy.deepcopy(terminal)
+    environment_tamper.pop("attestation")
+    environment_tamper.pop("payload_sha256")
+    environment_tamper["execution_environment"]["cuda_driver_version"] = "571.00"
+    environment_tamper = matrix._attested_payload(
+        environment_tamper,
+        trust_root=env.trust_root,
+        purpose=matrix.MATRIX_ATTESTATION_PURPOSE,
+    )
+    matrix_summary.write_text(json.dumps(environment_tamper), encoding="utf-8")
+    with pytest.raises(ValueError, match="changed on exact resume"):
+        matrix.run_matrix(
+            manifest_path=env.manifest_path,
+            output_root=output_root,
+            matrix_summary=matrix_summary,
+            train_script=env.train_script,
+            attestation_key_path=env.key_path,
+        )
+    matrix_summary.write_text(json.dumps(terminal), encoding="utf-8")
+
+    rogue = output_root / "unregistered-after-terminal.txt"
+    rogue.write_text("rogue\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="unregistered orphan"):
+        matrix.load_terminal_matrix_record(
+            matrix_summary,
+            context=env.context,
+            trust_root=env.trust_root,
+            trainer_binding=env.trainer.public_binding,
+            scale="s55",
+            seed=6071406,
+        )
+    rogue.unlink()
+
+    lease_semantic_tamper = copy.deepcopy(terminal)
+    lease_semantic_tamper.pop("attestation")
+    lease_semantic_tamper.pop("payload_sha256")
+    lease_semantic_tamper["gpu_lease"]["child_nested_lease"] = True
+    lease_semantic_tamper = matrix._attested_payload(
+        lease_semantic_tamper,
+        trust_root=env.trust_root,
+        purpose=matrix.MATRIX_ATTESTATION_PURPOSE,
+    )
+    matrix_summary.write_text(json.dumps(lease_semantic_tamper), encoding="utf-8")
+    with pytest.raises(ValueError, match="GPU lease semantics drifted"):
+        matrix.run_matrix(
+            manifest_path=env.manifest_path,
+            output_root=output_root,
+            matrix_summary=matrix_summary,
+            train_script=env.train_script,
+            attestation_key_path=env.key_path,
+        )
+    assert fake_gpu_lease.leases[-1].closed
+    matrix_summary.write_text(json.dumps(terminal), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="GPU lease path or semantics drifted"):
+        matrix.run_matrix(
+            manifest_path=env.manifest_path,
+            output_root=output_root,
+            matrix_summary=matrix_summary,
+            train_script=env.train_script,
+            attestation_key_path=env.key_path,
+            gpu_lock_path=tmp_path / "different-device.lock",
+        )
+    assert len(commands) == 10
+    assert fake_gpu_lease.leases[-1].closed
 
     tampered = copy.deepcopy(terminal)
     tampered["steps"] = 999
@@ -672,6 +1030,86 @@ def test_matrix_runs_all_cells_hmac_attests_and_resumes_without_relaunch(
             attestation_key_path=env.key_path,
         )
     assert len(commands) == 10
+
+
+def test_final_training_child_environment_drift_blocks_terminal_promotion(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    frozen_environment: FrozenEnvironment,
+) -> None:
+    env = frozen_environment
+    output_root = tmp_path / "training"
+    matrix_summary = output_root / "training-matrix.summary.json"
+    returned_children = 0
+
+    def fake_run(
+        command: list[str],
+        **_kwargs: Any,
+    ) -> subprocess.CompletedProcess[str]:
+        nonlocal returned_children
+        scale = _command_value(command, "--scale")
+        seed = int(_command_value(command, "--seed"))
+        _write_valid_summary(
+            output_root=output_root,
+            env=env,
+            scale=scale,
+            seed=seed,
+            launch_nonce=_command_value(command, "--launch-nonce"),
+            command=command,
+        )
+        returned_children += 1
+        return subprocess.CompletedProcess(command, 0)
+
+    def assert_exact(_expected: dict[str, Any]) -> None:
+        if returned_children == len(matrix.FROZEN_SCALES) * len(matrix.FROZEN_TRAINING_SEEDS):
+            raise ValueError("Exact execution environment changed after final training child.")
+
+    monkeypatch.setattr(matrix, "_run_trainer_from_stable_script", fake_run)
+    monkeypatch.setattr(
+        matrix.execution_environment,
+        "assert_exact_execution_environment",
+        assert_exact,
+    )
+    with pytest.raises(ValueError, match="changed after final training child"):
+        matrix.run_matrix(
+            manifest_path=env.manifest_path,
+            output_root=output_root,
+            matrix_summary=matrix_summary,
+            train_script=env.train_script,
+            attestation_key_path=env.key_path,
+        )
+
+    ledger = json.loads(matrix_summary.read_text(encoding="utf-8"))
+    assert ledger["status"] == "in_progress"
+    assert ledger["completed_runs"] == 9
+    final_scale = matrix.FROZEN_SCALES[-1]
+    final_seed = matrix.FROZEN_TRAINING_SEEDS[-1]
+    final_output = matrix._run_output_dir(output_root, final_scale, final_seed)
+    assert matrix._training_summary_path(output_root, final_scale, final_seed).is_file()
+    assert (final_output / matrix.CLAIM_NAME).is_file()
+
+
+def test_gpu_lease_closes_when_canonical_path_validation_fails(
+    tmp_path: Path,
+    frozen_environment: FrozenEnvironment,
+    fake_gpu_lease: FakeGPUController,
+) -> None:
+    target = tmp_path / "gpu-device.lock"
+    alias = tmp_path / "gpu-device.alias"
+    alias.symlink_to(target)
+
+    with pytest.raises(ValueError, match="symbolic link"):
+        matrix.run_matrix(
+            manifest_path=frozen_environment.manifest_path,
+            output_root=tmp_path / "training",
+            matrix_summary=tmp_path / "training" / "training-matrix.summary.json",
+            train_script=frozen_environment.train_script,
+            attestation_key_path=frozen_environment.key_path,
+            gpu_lock_path=alias,
+        )
+
+    assert len(fake_gpu_lease.leases) == 2
+    assert all(lease.closed for lease in fake_gpu_lease.leases)
 
 
 def test_arbitrary_trainer_stale_claim_and_concurrent_runner_are_rejected(
@@ -712,3 +1150,98 @@ def test_arbitrary_trainer_stale_claim_and_concurrent_runner_are_rejected(
                 train_script=env.train_script,
                 attestation_key_path=env.key_path,
             )
+
+
+@pytest.mark.parametrize(
+    ("kind", "message"),
+    [
+        ("symlink", "opened safely"),
+        ("hardlink", "link count"),
+        ("unsafe-mode", "mode is unsafe"),
+    ],
+)
+def test_matrix_lock_rejects_unsafe_preexisting_files(
+    tmp_path: Path,
+    kind: str,
+    message: str,
+) -> None:
+    output_root = tmp_path / "training"
+    lock_path = output_root.parent / matrix.LOCK_NAME
+    target = tmp_path / "lock-target"
+    target.write_bytes(b"preexisting\n")
+    target.chmod(0o600)
+    if kind == "symlink":
+        lock_path.symlink_to(target)
+    elif kind == "hardlink":
+        matrix.os.link(target, lock_path)
+    else:
+        lock_path.write_bytes(b"unsafe\n")
+        lock_path.chmod(0o644)
+
+    with pytest.raises(ValueError, match=message):
+        with matrix._matrix_lock(output_root):
+            raise AssertionError("unsafe training lock unexpectedly acquired")
+
+
+@pytest.mark.parametrize("mutation", ["delete", "replace"])
+def test_lock_deletion_or_replacement_during_child_fails_before_prefix_promotion(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    frozen_environment: FrozenEnvironment,
+    mutation: str,
+) -> None:
+    env = frozen_environment
+    output_root = tmp_path / "training"
+    matrix_summary = output_root / "training-matrix.summary.json"
+    lock_path = output_root.parent / matrix.LOCK_NAME
+    replacement_descriptors: list[int] = []
+
+    def tamper_during_child(
+        command: list[str],
+        *,
+        canonical: Path,
+        expected: matrix.CanonicalTrainerSnapshot,
+        trust_root: attestation.TrustRoot,
+        gpu_lease: FakeGPULease,
+        device_guard: FakeGPULease,
+    ) -> subprocess.CompletedProcess[str]:
+        assert canonical == env.train_script.resolve()
+        assert expected == env.trainer
+        assert trust_root == env.trust_root
+        gpu_lease.assert_held()
+        device_guard.assert_held()
+        lock_path.unlink()
+        if mutation == "replace":
+            lock_path.write_bytes(b"replacement-lock\n")
+            lock_path.chmod(0o600)
+            descriptor = matrix.os.open(
+                lock_path,
+                matrix.os.O_RDWR | getattr(matrix.os, "O_CLOEXEC", 0),
+            )
+            matrix.fcntl.flock(
+                descriptor,
+                matrix.fcntl.LOCK_EX | matrix.fcntl.LOCK_NB,
+            )
+            replacement_descriptors.append(descriptor)
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(matrix, "_run_trainer_from_stable_script", tamper_during_child)
+    try:
+        with pytest.raises(ValueError, match="deleted|replaced"):
+            matrix.run_matrix(
+                manifest_path=env.manifest_path,
+                output_root=output_root,
+                matrix_summary=matrix_summary,
+                train_script=env.train_script,
+                attestation_key_path=env.key_path,
+            )
+    finally:
+        for descriptor in replacement_descriptors:
+            matrix.fcntl.flock(descriptor, matrix.fcntl.LOCK_UN)
+            matrix.os.close(descriptor)
+
+    partial = json.loads(matrix_summary.read_text(encoding="utf-8"))
+    assert partial["status"] == "in_progress"
+    assert partial["completed_runs"] == 0
+    assert partial["runs"] == []
+    assert bool(replacement_descriptors) is (mutation == "replace")

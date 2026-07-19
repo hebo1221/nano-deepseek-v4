@@ -18,6 +18,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
+import adaptive_v4_execution_environment as execution_environment
+import adaptive_v4_gpu_lock as gpu_lock
 import calibrate_p2_direct_soft_lag as calibration
 import p2_direct_attestation as attestation
 import p2_direct_controller_contract as contract
@@ -25,7 +27,7 @@ import run_p2_direct_training_matrix as training_matrix
 
 EXPERIMENT_ID = "p2-post-rank-direct-soft-lag-calibration-matrix-v1"
 ARTIFACT_TYPE = "direct-soft-lag-calibration-matrix"
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 5
 
 FROZEN_SCALES = ("s55", "s151")
 FROZEN_TRAINING_SEEDS = (6071406, 6071407, 6071408, 6071409, 6071410)
@@ -39,6 +41,9 @@ MATRIX_SUMMARY = OUTPUT_ROOT / MATRIX_SUMMARY_NAME
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 CALIBRATION_SCRIPT = Path(__file__).resolve().with_name("calibrate_p2_direct_soft_lag.py")
 CALIBRATION_IMPLEMENTATION_PATH = CALIBRATION_SCRIPT.relative_to(REPOSITORY_ROOT).as_posix()
+GPU_LOCK_IMPLEMENTATION_PATH = (
+    Path(gpu_lock.__file__).resolve().relative_to(REPOSITORY_ROOT).as_posix()
+)
 DEVICE = "cuda"
 DTYPE = "bfloat16"
 CALIBRATOR_PUBLICATION_SEMANTICS = "exclusive-atomic-mac-attested-full-external-binding"
@@ -46,11 +51,17 @@ CALIBRATOR_EXECUTION_SEMANTICS = "canonical-manifest-bound-sealed-memfd-v1"
 CALIBRATOR_FD_ENV = "ADAPTIVE_V4_CANONICAL_CALIBRATOR_FD"
 MATRIX_LOCK_SUFFIX = "p2-direct-calibration-matrix.lock"
 MATRIX_LOCK_SEMANTICS = "persistent-sibling-flock-exclusive-process-owner-v1"
+GPU_LEASE_SEMANTICS = "project-persistent-inode-exclusive-whole-matrix-v1"
+GPU_LEASE_SCOPE = "before-preflight-through-terminal-validation"
+GPU_LEASE_ACQUISITION_ORDER = "gpu-lease-before-matrix-lock-before-child-launch"
+GPU_DEVICE_GUARD_SCOPE = "after-exact-environment-capture-through-terminal-validation"
+CELL_CLAIM_NAME = ".p2-direct-calibration-cell.claim"
+CELL_CLAIM_SEMANTICS = "exclusive-create-coordinate-nonce-preserve-on-failure-v2"
 MATRIX_ATTESTATION_PURPOSE = "p2-direct-soft-lag-calibration-matrix-v1"
 CRASH_RECOVERY_BOUNDARY = (
-    "fail-closed: an exclusively published calibration artifact that is not present in the "
-    "digest-bound completed matrix prefix is never auto-promoted; recovery requires an "
-    "independently MAC-attested per-cell journal or explicit operator quarantine and rerun"
+    "fail-closed: a coordinate claim is preserved until a terminal artifact is validated; "
+    "a surviving claim or an artifact outside the digest-bound completed matrix prefix is "
+    "never auto-promoted and requires explicit operator quarantine"
 )
 CALIBRATOR_FD_BOOTSTRAP = (
     "import os,sys;"
@@ -70,6 +81,40 @@ QUALITY_EVALUATION_STARTED = False
 QUALITY_GATE = (
     "forbidden: this calibration runner never launches held-out quality evaluation, "
     "including after a terminal all-GO matrix"
+)
+CALIBRATION_MATRIX_FIELDS = frozenset(
+    {
+        "schema_version",
+        "experiment_id",
+        "artifact_type",
+        "status",
+        "terminal_decision",
+        "source",
+        "manifest",
+        "attestation_contract",
+        "scales",
+        "frozen_training_seeds",
+        "frozen_calibration_seeds",
+        "coordinates",
+        "device",
+        "dtype",
+        "calibration_script",
+        "calibrator_publication_semantics",
+        "calibrator_execution_semantics",
+        "matrix_lock",
+        "cell_claim_semantics",
+        "gpu_lease",
+        "execution_environment",
+        "crash_recovery_boundary",
+        "expected_cells",
+        "completed_cells",
+        "cell_decisions",
+        "cells",
+        "quality_evaluation_started",
+        "quality_gate",
+        "payload_sha256",
+        "attestation",
+    }
 )
 
 
@@ -102,6 +147,52 @@ class MatrixLayout:
     lock_path: Path
 
 
+@dataclass(frozen=True)
+class _MatrixLockLease(Mapping[str, Any]):
+    path: Path
+    file_descriptor: int
+    device: int
+    inode: int
+    owner: dict[str, Any]
+
+    def __getitem__(self, key: str) -> Any:
+        return self.owner[key]
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self.owner)
+
+    def __len__(self) -> int:
+        return len(self.owner)
+
+    def assert_held(self) -> None:
+        try:
+            opened = os.fstat(self.file_descriptor)
+            current = os.stat(self.path, follow_symlinks=False)
+        except OSError as error:
+            raise ValueError(
+                "Calibration matrix lock path was deleted or became inaccessible while held."
+            ) from error
+        _require(
+            stat.S_ISREG(opened.st_mode),
+            "Calibration matrix lock descriptor is no longer a regular file.",
+        )
+        _require(
+            (opened.st_dev, opened.st_ino) == (self.device, self.inode),
+            "Calibration matrix lock descriptor identity changed while held.",
+        )
+        _require(
+            stat.S_ISREG(current.st_mode)
+            and (current.st_dev, current.st_ino) == (self.device, self.inode),
+            "Calibration matrix lock path was replaced while held.",
+        )
+        _require(
+            opened.st_uid == current.st_uid == os.getuid()
+            and opened.st_nlink == current.st_nlink == 1
+            and stat.S_IMODE(opened.st_mode) == stat.S_IMODE(current.st_mode) == 0o600,
+            "Calibration matrix lock ownership, link count, or mode is unsafe.",
+        )
+
+
 _ACTIVE_MATRIX_LOCKS: set[str] = set()
 _ACTIVE_MATRIX_LOCKS_GUARD = threading.Lock()
 
@@ -127,6 +218,150 @@ def _exact_resolved_non_symlink_path(path: Path, *, label: str) -> Path:
         f"{label} must use its exact resolved non-symlink path.",
     )
     return absolute
+
+
+def _canonical_gpu_lock_path(path: Path) -> Path:
+    absolute = _absolute_path(path)
+    _require(not absolute.is_symlink(), "Calibration GPU lease path may not be a symbolic link.")
+    try:
+        resolved = absolute.resolve(strict=False)
+    except OSError as error:
+        raise ValueError("Calibration GPU lease path cannot be resolved safely.") from error
+    _require(
+        resolved == absolute,
+        "Calibration GPU lease path must use its exact resolved non-symlink path.",
+    )
+    return absolute
+
+
+def _device_guard_binding(
+    device_guard: gpu_lock.GPULockLease,
+    *,
+    routing_identity: Mapping[str, Any],
+) -> dict[str, Any]:
+    device_guard.assert_held()
+    expected_path = gpu_lock.canonical_device_guard_path(routing_identity)
+    _require(
+        device_guard.path == expected_path,
+        "Calibration physical-device guard path does not match the selected GPU.",
+    )
+    return {
+        "path": str(expected_path),
+        "semantics": gpu_lock.DEVICE_GUARD_SEMANTICS,
+        "scope": GPU_DEVICE_GUARD_SCOPE,
+        "implementation_path": GPU_LOCK_IMPLEMENTATION_PATH,
+        "nonblocking": True,
+        "persistent_inode": True,
+        "device": device_guard.device,
+        "inode": device_guard.inode,
+    }
+
+
+def _gpu_lease_binding(
+    path: Path,
+    *,
+    frozen_execution_environment: Mapping[str, Any],
+    device_guard: gpu_lock.GPULockLease,
+) -> dict[str, Any]:
+    routing_identity = execution_environment.selected_device_routing_identity(
+        frozen_execution_environment
+    )
+    return {
+        "path": str(_canonical_gpu_lock_path(path)),
+        "semantics": GPU_LEASE_SEMANTICS,
+        "scope": GPU_LEASE_SCOPE,
+        "acquisition_order": GPU_LEASE_ACQUISITION_ORDER,
+        "child_nested_lease": False,
+        "portable_identity": "canonical-path-only-inode-excluded",
+        "selected_device_class": execution_environment.selected_device_class(
+            frozen_execution_environment
+        ),
+        "selected_device_routing_identity": routing_identity,
+        "device_guard": _device_guard_binding(
+            device_guard,
+            routing_identity=routing_identity,
+        ),
+    }
+
+
+def _validate_gpu_lease_binding(
+    value: Any,
+    *,
+    expected: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    _require(isinstance(value, Mapping), "Calibration matrix GPU lease binding is missing.")
+    raw = cast(Mapping[str, Any], value)
+    _require(
+        set(raw)
+        == {
+            "path",
+            "semantics",
+            "scope",
+            "acquisition_order",
+            "child_nested_lease",
+            "portable_identity",
+            "selected_device_class",
+            "selected_device_routing_identity",
+            "device_guard",
+        }
+        and isinstance(raw.get("path"), str)
+        and bool(raw["path"]),
+        "Calibration matrix GPU lease binding schema drifted.",
+    )
+    _require(
+        raw.get("path") == str(_canonical_gpu_lock_path(Path(cast(str, raw["path"]))))
+        and raw.get("semantics") == GPU_LEASE_SEMANTICS
+        and raw.get("scope") == GPU_LEASE_SCOPE
+        and raw.get("acquisition_order") == GPU_LEASE_ACQUISITION_ORDER
+        and raw.get("child_nested_lease") is False
+        and raw.get("portable_identity") == "canonical-path-only-inode-excluded",
+        "Calibration matrix GPU lease semantics drifted.",
+    )
+    selected_class = raw.get("selected_device_class")
+    routing_identity = raw.get("selected_device_routing_identity")
+    guard = raw.get("device_guard")
+    _require(
+        isinstance(selected_class, Mapping)
+        and set(selected_class) == execution_environment.SELECTED_DEVICE_CLASS_FIELDS
+        and isinstance(routing_identity, Mapping)
+        and set(routing_identity) == execution_environment.SELECTED_DEVICE_ROUTING_IDENTITY_FIELDS
+        and isinstance(guard, Mapping),
+        "Calibration matrix selected-device lease binding schema drifted.",
+    )
+    routing_identity = cast(Mapping[str, Any], routing_identity)
+    guard = cast(Mapping[str, Any], guard)
+    expected_guard_path = gpu_lock.canonical_device_guard_path(routing_identity)
+    _require(
+        set(guard)
+        == {
+            "path",
+            "semantics",
+            "scope",
+            "implementation_path",
+            "nonblocking",
+            "persistent_inode",
+            "device",
+            "inode",
+        }
+        and guard.get("path") == str(expected_guard_path)
+        and guard.get("semantics") == gpu_lock.DEVICE_GUARD_SEMANTICS
+        and guard.get("scope") == GPU_DEVICE_GUARD_SCOPE
+        and guard.get("implementation_path") == GPU_LOCK_IMPLEMENTATION_PATH
+        and guard.get("nonblocking") is True
+        and guard.get("persistent_inode") is True
+        and type(guard.get("device")) is int
+        and cast(int, guard["device"]) >= 0
+        and type(guard.get("inode")) is int
+        and cast(int, guard["inode"]) > 0,
+        "Calibration matrix physical-device guard binding drifted.",
+    )
+    replayed = dict(raw)
+    if expected is not None:
+        _require(
+            dict(raw) == dict(expected),
+            "Calibration matrix GPU lease path or semantics drifted on resume.",
+        )
+    return replayed
 
 
 def _paths_overlap(left: Path, right: Path) -> bool:
@@ -248,7 +483,7 @@ def _matrix_lock_binding(lock_path: Path) -> dict[str, Any]:
 
 
 @contextmanager
-def _exclusive_matrix_lock(lock_path: Path, *, matrix_summary: Path) -> Iterator[dict[str, Any]]:
+def _exclusive_matrix_lock(lock_path: Path, *, matrix_summary: Path) -> Iterator[_MatrixLockLease]:
     """Hold one persistent-inode flock; never unlink it and split the lock domain.
 
     The kernel releases the lock on close or process death. Metadata is diagnostic: a SIGKILL can
@@ -300,27 +535,35 @@ def _exclusive_matrix_lock(lock_path: Path, *, matrix_summary: Path) -> Iterator
             and stat.S_IMODE(opened.st_mode) == 0o600,
             "Calibration matrix lock ownership, link count, or mode is unsafe.",
         )
+        lease = _MatrixLockLease(
+            path=lock_path,
+            file_descriptor=file_descriptor,
+            device=opened.st_dev,
+            inode=opened.st_ino,
+            owner=owner,
+        )
+        lease.assert_held()
         fcntl.flock(file_descriptor, fcntl.LOCK_EX)
         acquired = True
-        current = os.stat(lock_path, follow_symlinks=False)
-        _require(
-            (opened.st_dev, opened.st_ino) == (current.st_dev, current.st_ino),
-            "Calibration matrix lock path was replaced before ownership.",
-        )
+        lease.assert_held()
         _write_lock_metadata(file_descriptor, owner)
+        lease.assert_held()
         try:
-            yield dict(owner)
+            yield lease
         except BaseException:
             outcome = "released-after-error"
             raise
         finally:
+            lease.assert_held()
             released = {
                 **owner,
                 "state": outcome,
                 "released_time_ns": time.time_ns(),
             }
             try:
+                lease.assert_held()
                 _write_lock_metadata(file_descriptor, released)
+                lease.assert_held()
             finally:
                 fcntl.flock(file_descriptor, fcntl.LOCK_UN)
                 acquired = False
@@ -331,6 +574,114 @@ def _exclusive_matrix_lock(lock_path: Path, *, matrix_summary: Path) -> Iterator
             os.close(file_descriptor)
         with _ACTIVE_MATRIX_LOCKS_GUARD:
             _ACTIVE_MATRIX_LOCKS.discard(key)
+
+
+def _assert_cell_claim_identity(
+    descriptor: int,
+    claim_path: Path,
+    *,
+    expected_device: int,
+    expected_inode: int,
+) -> None:
+    opened = os.fstat(descriptor)
+    try:
+        current = os.stat(claim_path, follow_symlinks=False)
+    except FileNotFoundError as error:
+        raise ValueError("Calibration cell claim disappeared while held.") from error
+    _require(
+        (opened.st_dev, opened.st_ino)
+        == (current.st_dev, current.st_ino)
+        == (expected_device, expected_inode),
+        "Calibration cell claim path was replaced while held.",
+    )
+    _require(
+        stat.S_ISREG(opened.st_mode)
+        and stat.S_ISREG(current.st_mode)
+        and opened.st_uid == current.st_uid == os.getuid()
+        and opened.st_nlink == current.st_nlink == 1
+        and stat.S_IMODE(opened.st_mode) == stat.S_IMODE(current.st_mode) == 0o600,
+        "Calibration cell claim ownership, links, or mode changed while held.",
+    )
+
+
+@contextmanager
+def _exclusive_cell_claim(
+    output_dir: Path,
+    *,
+    scale: str,
+    training_seed: int,
+    calibration_seed: int,
+    evaluation_seed: int,
+    launch_nonce: str,
+) -> Iterator[dict[str, Any]]:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    claim_path = output_dir / CELL_CLAIM_NAME
+    no_follow = getattr(os, "O_NOFOLLOW", None)
+    _require(no_follow is not None, "Calibration cell claims require O_NOFOLLOW.")
+    flags = (
+        os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_CLOEXEC", 0) | cast(int, no_follow)
+    )
+    try:
+        descriptor = os.open(claim_path, flags, 0o600)
+    except FileExistsError as error:
+        raise ValueError(
+            f"Calibration cell has an orphan or active claim: {scale}/{training_seed}."
+        ) from error
+    metadata = os.fstat(descriptor)
+    release_claim = False
+    try:
+        _require(
+            stat.S_ISREG(metadata.st_mode)
+            and metadata.st_uid == os.getuid()
+            and metadata.st_nlink == 1
+            and stat.S_IMODE(metadata.st_mode) == 0o600,
+            "Calibration cell claim metadata is unsafe.",
+        )
+        _write_lock_metadata(
+            descriptor,
+            {
+                "schema_version": 1,
+                "semantics": CELL_CLAIM_SEMANTICS,
+                "coordinate": {
+                    "scale": scale,
+                    "training_seed": training_seed,
+                    "calibration_seed": calibration_seed,
+                    "evaluation_seed_reserved": evaluation_seed,
+                },
+                "launch_nonce": launch_nonce,
+                "pid": os.getpid(),
+                "created_time_ns": time.time_ns(),
+            },
+        )
+        _assert_cell_claim_identity(
+            descriptor,
+            claim_path,
+            expected_device=metadata.st_dev,
+            expected_inode=metadata.st_ino,
+        )
+        yield {
+            "path": str(claim_path),
+            "semantics": CELL_CLAIM_SEMANTICS,
+            "device": metadata.st_dev,
+            "inode": metadata.st_ino,
+        }
+        release_claim = True
+    finally:
+        try:
+            _assert_cell_claim_identity(
+                descriptor,
+                claim_path,
+                expected_device=metadata.st_dev,
+                expected_inode=metadata.st_ino,
+            )
+            if release_claim:
+                claim_path.unlink()
+                _require(
+                    os.fstat(descriptor).st_nlink == 0 and not os.path.lexists(claim_path),
+                    "Calibration cell claim release did not remove the held path.",
+                )
+        finally:
+            os.close(descriptor)
 
 
 def _sha256(path: Path) -> str:
@@ -497,7 +848,11 @@ def _run_calibrator_from_stable_script(
     canonical: Path,
     expected: CanonicalScriptSnapshot,
     trust_root: attestation.TrustRoot,
+    gpu_lease: gpu_lock.GPULockLease,
+    device_guard: gpu_lock.GPULockLease,
 ) -> subprocess.CompletedProcess[Any]:
+    gpu_lease.assert_held()
+    device_guard.assert_held()
     file_descriptor, snapshot = _open_canonical_script(canonical, expected=expected)
     sealed_descriptor: int | None = None
     key_descriptor: int | None = None
@@ -511,9 +866,16 @@ def _run_calibrator_from_stable_script(
         result = subprocess.run(
             list(command),
             check=False,
-            pass_fds=(sealed_descriptor, key_descriptor),
+            pass_fds=(
+                sealed_descriptor,
+                key_descriptor,
+                gpu_lease.fileno(),
+                device_guard.fileno(),
+            ),
             env=environment,
         )
+        gpu_lease.assert_held()
+        device_guard.assert_held()
         _validate_open_script(file_descriptor, expected=snapshot)
         return result
     finally:
@@ -591,6 +953,17 @@ def _atomic_write_json(path: Path, payload: Mapping[str, Any]) -> None:
     finally:
         if temporary is not None:
             temporary.unlink(missing_ok=True)
+
+
+def _publish_matrix_ledger(
+    path: Path,
+    payload: Mapping[str, Any],
+    *,
+    matrix_lock: _MatrixLockLease,
+) -> None:
+    matrix_lock.assert_held()
+    _atomic_write_json(path, payload)
+    matrix_lock.assert_held()
 
 
 def _coordinates() -> tuple[tuple[str, int, int, int], ...]:
@@ -673,12 +1046,22 @@ def build_calibration_command(
     checkpoint_path: Path,
     scale: str,
     training_seed: int,
+    device_index: int = 0,
+    device_routing_identity: Mapping[str, Any],
 ) -> list[str]:
     _require(scale in FROZEN_SCALES, "Calibration command scale is not frozen.")
     _require(training_seed in FROZEN_TRAINING_SEEDS, "Calibration command seed is not frozen.")
+    _require(
+        type(device_index) is int and device_index >= 0,
+        "Calibration command device index is invalid.",
+    )
+    routing_identity = execution_environment.validate_device_routing_identity(
+        device_routing_identity
+    )
     canonical = _canonical_calibration_script(calibration_script)
     return [
         sys.executable,
+        "-I",
         "-c",
         CALIBRATOR_FD_BOOTSTRAP,
         str(canonical),
@@ -697,7 +1080,9 @@ def build_calibration_command(
         "--training-matrix-summary",
         str(training_matrix_summary_path.resolve()),
         "--device",
-        DEVICE,
+        f"cuda:{device_index}",
+        "--expected-device-routing-identity-json",
+        json.dumps(routing_identity, sort_keys=True, separators=(",", ":")),
         "--dtype",
         DTYPE,
     ]
@@ -864,6 +1249,8 @@ def _matrix_payload(
     context: training_matrix.FrozenContext,
     calibration_script_binding: Mapping[str, Any],
     matrix_lock_binding: Mapping[str, Any],
+    gpu_lease_binding: Mapping[str, Any],
+    execution_environment_binding: Mapping[str, Any],
     trust_root: attestation.TrustRoot,
 ) -> dict[str, Any]:
     coordinates = _coordinates()
@@ -898,12 +1285,17 @@ def _matrix_payload(
             }
             for scale, training_seed, calibration_seed, evaluation_seed in coordinates
         ],
-        "device": DEVICE,
+        "device": execution_environment.explicit_cuda_device_spec(execution_environment_binding),
         "dtype": DTYPE,
         "calibration_script": dict(calibration_script_binding),
         "calibrator_publication_semantics": CALIBRATOR_PUBLICATION_SEMANTICS,
         "calibrator_execution_semantics": CALIBRATOR_EXECUTION_SEMANTICS,
         "matrix_lock": dict(matrix_lock_binding),
+        "cell_claim_semantics": CELL_CLAIM_SEMANTICS,
+        "gpu_lease": dict(gpu_lease_binding),
+        "execution_environment": execution_environment.validate_execution_environment(
+            execution_environment_binding
+        ),
         "crash_recovery_boundary": CRASH_RECOVERY_BOUNDARY,
         "expected_cells": len(coordinates),
         "completed_cells": len(cells),
@@ -923,6 +1315,8 @@ def validate_matrix_summary(
     calibration_script: Path,
     calibration_script_binding: Mapping[str, Any],
     matrix_lock_binding: Mapping[str, Any],
+    expected_gpu_lease: Mapping[str, Any] | None = None,
+    expected_execution_environment: Mapping[str, Any] | None = None,
     context: training_matrix.FrozenContext,
     trust_root: attestation.TrustRoot,
     training_matrix_summary_path: Path,
@@ -930,6 +1324,10 @@ def validate_matrix_summary(
     trainer_binding: Mapping[str, Any],
     ledger_records: Mapping[tuple[str, int], Mapping[str, Any]],
 ) -> list[dict[str, Any]]:
+    _require(
+        set(payload) == CALIBRATION_MATRIX_FIELDS,
+        "Calibration matrix top-level schema drifted.",
+    )
     _validate_payload_digest(payload)
     raw_envelope = payload.get("attestation")
     _require(isinstance(raw_envelope, Mapping), "Calibration matrix attestation is missing.")
@@ -974,7 +1372,6 @@ def validate_matrix_summary(
         payload.get("coordinates") == expected_coordinate_payload,
         "Calibration coordinate inventory drifted.",
     )
-    _require(payload.get("device") == DEVICE, "Calibration matrix is not CUDA-bound.")
     _require(payload.get("dtype") == DTYPE, "Calibration matrix is not bfloat16-bound.")
     _require(
         payload.get("calibration_script") == dict(calibration_script_binding),
@@ -992,6 +1389,40 @@ def validate_matrix_summary(
         payload.get("matrix_lock") == dict(matrix_lock_binding),
         "Calibration matrix process-lock binding drifted.",
     )
+    _require(
+        payload.get("cell_claim_semantics") == CELL_CLAIM_SEMANTICS,
+        "Calibration cell-claim semantics drifted.",
+    )
+    validated_gpu_lease = _validate_gpu_lease_binding(
+        payload.get("gpu_lease"),
+        expected=expected_gpu_lease,
+    )
+    raw_environment = payload.get("execution_environment")
+    _require(
+        isinstance(raw_environment, Mapping),
+        "Calibration matrix execution environment is missing.",
+    )
+    frozen_environment = execution_environment.validate_execution_environment(
+        cast(Mapping[str, Any], raw_environment)
+    )
+    _require(
+        payload.get("device")
+        == execution_environment.explicit_cuda_device_spec(frozen_environment),
+        "Calibration matrix logical CUDA route drifted.",
+    )
+    _require(
+        validated_gpu_lease["selected_device_class"]
+        == execution_environment.selected_device_class(frozen_environment)
+        and validated_gpu_lease["selected_device_routing_identity"]
+        == execution_environment.selected_device_routing_identity(frozen_environment),
+        "Calibration matrix GPU lease is not bound to its exact selected device.",
+    )
+    if expected_execution_environment is not None:
+        _require(
+            frozen_environment
+            == execution_environment.validate_execution_environment(expected_execution_environment),
+            "Calibration matrix execution environment changed on exact resume.",
+        )
     _require(
         payload.get("crash_recovery_boundary") == CRASH_RECOVERY_BOUNDARY,
         "Calibration crash-recovery boundary drifted.",
@@ -1037,6 +1468,10 @@ def validate_matrix_summary(
             checkpoint_path=checkpoint_path,
             scale=scale,
             training_seed=training_seed,
+            device_index=cast(int, frozen_environment["current_device_index"]),
+            device_routing_identity=(
+                execution_environment.selected_device_routing_identity(frozen_environment)
+            ),
         )
         artifact = load_and_validate_calibration_artifact(
             artifact_path,
@@ -1053,6 +1488,10 @@ def validate_matrix_summary(
             training_matrix_summary_path=training_matrix_summary_path,
             training_matrix_payload=training_matrix_payload,
             ledger_record=ledger_records[(scale, training_seed)],
+        )
+        _require(
+            artifact.get("environment") == frozen_environment,
+            f"Calibration execution environment drifted: {scale}/{training_seed}.",
         )
         expected_record = _cell_record(artifact, artifact_path=artifact_path, command=command)
         _require(
@@ -1074,11 +1513,26 @@ def validate_matrix_summary(
         payload.get("terminal_decision") == expected_terminal_decision,
         "Calibration matrix terminal decision drifted.",
     )
+    matrix_summary_path = Path(os.path.abspath(output_root)) / MATRIX_SUMMARY_NAME
+    on_disk = _load_json(matrix_summary_path, label="calibration matrix ledger")
+    _require(
+        attestation.canonical_json(on_disk) == attestation.canonical_json(dict(payload)),
+        "Calibration matrix ledger bytes do not match the supplied payload.",
+    )
+    _preflight_output_tree(
+        output_root=output_root,
+        matrix_summary=matrix_summary_path,
+        completed_cells=len(validated),
+    )
     return validated
 
 
 def _assert_empty_cell_output(output_dir: Path) -> None:
     if output_dir.exists():
+        _require(
+            not os.path.lexists(output_dir / CELL_CLAIM_NAME),
+            f"Refusing orphan calibration cell claim: {output_dir}",
+        )
         _require(
             not any(output_dir.iterdir()),
             f"Refusing orphaned or stale calibration output: {output_dir}",
@@ -1192,6 +1646,7 @@ def _preflight_output_tree(
         scale_dir = root / scale
         output_dir = scale_dir / f"seed-{training_seed}"
         artifact_path = output_dir / f"{scale}-calibration.json"
+        claim_path = output_dir / CELL_CLAIM_NAME
         allowed.update((scale_dir, output_dir))
         if index < completed_cells:
             allowed.add(artifact_path)
@@ -1202,6 +1657,10 @@ def _preflight_output_tree(
             _require(
                 artifact_path.is_file() and not artifact_path.is_symlink(),
                 f"Previously completed calibration artifact disappeared: {scale}/{training_seed}.",
+            )
+            _require(
+                not os.path.lexists(claim_path),
+                f"Completed calibration cell retained a claim: {scale}/{training_seed}.",
             )
         elif output_dir.exists():
             _require(
@@ -1252,9 +1711,23 @@ def _run_matrix_locked(
     matrix_summary: Path = MATRIX_SUMMARY,
     calibration_script: Path = CALIBRATION_SCRIPT,
     matrix_lock_binding: Mapping[str, Any],
+    matrix_lock: _MatrixLockLease,
+    gpu_lease: gpu_lock.GPULockLease,
+    device_guard: gpu_lock.GPULockLease,
+    gpu_lease_binding: Mapping[str, Any],
+    frozen_execution_environment: Mapping[str, Any],
     attestation_key_path: Path | None,
 ) -> dict[str, Any]:
+    matrix_lock.assert_held()
+    gpu_lease.assert_held()
+    device_guard.assert_held()
+    gpu_lease.assert_held()
+    device_guard.assert_held()
     lock_path = str(matrix_lock_binding.get("path"))
+    _require(
+        str(matrix_lock.path) == lock_path,
+        "Calibration matrix lock lease does not match its public binding.",
+    )
     with _ACTIVE_MATRIX_LOCKS_GUARD:
         lock_owned = lock_path in _ACTIVE_MATRIX_LOCKS
     _require(lock_owned, "Calibration matrix execution requires the exclusive process lock.")
@@ -1298,6 +1771,7 @@ def _run_matrix_locked(
 
     completed: list[dict[str, Any]] = []
     if matrix_summary.exists():
+        gpu_lease.assert_held()
         completed = validate_matrix_summary(
             _load_json(matrix_summary, label="calibration matrix"),
             output_root=output_root,
@@ -1305,6 +1779,8 @@ def _run_matrix_locked(
             calibration_script=canonical_script,
             calibration_script_binding=script_binding,
             matrix_lock_binding=matrix_lock_binding,
+            expected_gpu_lease=gpu_lease_binding,
+            expected_execution_environment=frozen_execution_environment,
             context=context,
             trust_root=trust_root,
             training_matrix_summary_path=training_matrix_summary_path,
@@ -1312,6 +1788,7 @@ def _run_matrix_locked(
             trainer_binding=trainer_binding,
             ledger_records=ledger_records,
         )
+        matrix_lock.assert_held()
 
     _preflight_output_tree(
         output_root=output_root,
@@ -1328,23 +1805,33 @@ def _run_matrix_locked(
     training_matrix.assert_environment_unchanged(context)
     verification_fd, _ = _open_canonical_script(canonical_script, expected=script_snapshot)
     os.close(verification_fd)
+    matrix_lock.assert_held()
 
     if not matrix_summary.exists():
-        _atomic_write_json(
+        gpu_lease.assert_held()
+        _publish_matrix_ledger(
             matrix_summary,
             _matrix_payload(
                 completed,
                 context=context,
                 calibration_script_binding=script_binding,
                 matrix_lock_binding=matrix_lock_binding,
+                gpu_lease_binding=gpu_lease_binding,
+                execution_environment_binding=frozen_execution_environment,
                 trust_root=trust_root,
             ),
+            matrix_lock=matrix_lock,
         )
+        gpu_lease.assert_held()
 
     for index, (scale, training_seed, calibration_seed, evaluation_seed) in enumerate(
         _coordinates()
     ):
+        matrix_lock.assert_held()
+        gpu_lease.assert_held()
         training_matrix.assert_environment_unchanged(context)
+        execution_environment.assert_exact_execution_environment(frozen_execution_environment)
+        gpu_lease.assert_held()
         summary_path, summary, checkpoint = training_inputs[(scale, training_seed)]
         artifact_path = _artifact_path(output_root, scale, training_seed)
         checkpoint_path = Path(cast(str, checkpoint["path"]))
@@ -1357,8 +1844,13 @@ def _run_matrix_locked(
             checkpoint_path=checkpoint_path,
             scale=scale,
             training_seed=training_seed,
+            device_index=cast(int, frozen_execution_environment["current_device_index"]),
+            device_routing_identity=(
+                execution_environment.selected_device_routing_identity(frozen_execution_environment)
+            ),
         )
 
+        new_record: dict[str, Any] | None = None
         if artifact_path.exists():
             _require(
                 index < len(completed),
@@ -1405,49 +1897,95 @@ def _run_matrix_locked(
                 checkpoint_path=checkpoint_path,
                 scale=scale,
                 training_seed=training_seed,
+                device_index=cast(int, frozen_execution_environment["current_device_index"]),
+                device_routing_identity=(
+                    execution_environment.selected_device_routing_identity(
+                        frozen_execution_environment
+                    )
+                ),
             )
-            result = _run_calibrator_from_stable_script(
-                command,
-                canonical=canonical_script,
-                expected=script_snapshot,
-                trust_root=trust_root,
-            )
-            training_matrix.assert_environment_unchanged(context)
-            if not artifact_path.is_file():
-                if result.returncode not in {0, 2}:
-                    raise subprocess.CalledProcessError(result.returncode, command)
-                raise ValueError(
-                    f"Calibrator did not publish its exclusive artifact: {scale}/{training_seed}."
-                )
-            published_sha256 = _sha256(artifact_path)
-            published_bytes = artifact_path.stat().st_size
-            artifact = load_and_validate_calibration_artifact(
-                artifact_path,
+            launch_nonce = secrets.token_hex(32)
+            with _exclusive_cell_claim(
+                _cell_output_dir(output_root, scale, training_seed),
                 scale=scale,
                 training_seed=training_seed,
                 calibration_seed=calibration_seed,
                 evaluation_seed=evaluation_seed,
-                context=context,
-                summary_path=summary_path,
-                summary=summary,
-                checkpoint=checkpoint,
-                command=command,
-                trust_root=trust_root,
-                training_matrix_summary_path=training_matrix_summary_path,
-                training_matrix_payload=training_matrix_payload,
-                ledger_record=ledger_records[(scale, training_seed)],
-            )
-            _require(
-                _sha256(artifact_path) == published_sha256
-                and artifact_path.stat().st_size == published_bytes,
-                "Exclusive calibration artifact changed during validation.",
-            )
-            _require(
-                result.returncode == _expected_exit_code(cast(str, artifact["terminal_decision"])),
-                "Calibrator exit code does not match its MAC-attested terminal decision.",
-            )
+                launch_nonce=launch_nonce,
+            ):
+                _require(
+                    not os.path.lexists(artifact_path),
+                    f"Refusing calibration artifact created before child launch: "
+                    f"{scale}/{training_seed}.",
+                )
+                gpu_lease.assert_held()
+                device_guard.assert_held()
+                result = _run_calibrator_from_stable_script(
+                    command,
+                    canonical=canonical_script,
+                    expected=script_snapshot,
+                    trust_root=trust_root,
+                    gpu_lease=gpu_lease,
+                    device_guard=device_guard,
+                )
+                matrix_lock.assert_held()
+                gpu_lease.assert_held()
+                device_guard.assert_held()
+                execution_environment.assert_exact_execution_environment(
+                    frozen_execution_environment
+                )
+                training_matrix.assert_environment_unchanged(context)
+                if not artifact_path.is_file():
+                    if result.returncode not in {0, 2}:
+                        raise subprocess.CalledProcessError(result.returncode, command)
+                    raise ValueError(
+                        f"Calibrator did not publish its exclusive artifact: "
+                        f"{scale}/{training_seed}."
+                    )
+                published_sha256 = _sha256(artifact_path)
+                published_bytes = artifact_path.stat().st_size
+                artifact = load_and_validate_calibration_artifact(
+                    artifact_path,
+                    scale=scale,
+                    training_seed=training_seed,
+                    calibration_seed=calibration_seed,
+                    evaluation_seed=evaluation_seed,
+                    context=context,
+                    summary_path=summary_path,
+                    summary=summary,
+                    checkpoint=checkpoint,
+                    command=command,
+                    trust_root=trust_root,
+                    training_matrix_summary_path=training_matrix_summary_path,
+                    training_matrix_payload=training_matrix_payload,
+                    ledger_record=ledger_records[(scale, training_seed)],
+                )
+                matrix_lock.assert_held()
+                _require(
+                    _sha256(artifact_path) == published_sha256
+                    and artifact_path.stat().st_size == published_bytes,
+                    "Exclusive calibration artifact changed during validation.",
+                )
+                _require(
+                    result.returncode
+                    == _expected_exit_code(cast(str, artifact["terminal_decision"])),
+                    "Calibrator exit code does not match its MAC-attested terminal decision.",
+                )
+                _require(
+                    artifact.get("environment") == frozen_execution_environment,
+                    f"Calibration child execution environment drifted: {scale}/{training_seed}.",
+                )
+                new_record = _cell_record(artifact, artifact_path=artifact_path, command=command)
 
-        record = _cell_record(artifact, artifact_path=artifact_path, command=command)
+        if new_record is None:
+            _require(
+                artifact.get("environment") == frozen_execution_environment,
+                f"Calibration child execution environment drifted: {scale}/{training_seed}.",
+            )
+            record = _cell_record(artifact, artifact_path=artifact_path, command=command)
+        else:
+            record = new_record
+        matrix_lock.assert_held()
         if index < len(completed):
             _require(
                 completed[index] == record,
@@ -1455,26 +1993,36 @@ def _run_matrix_locked(
             )
         else:
             completed.append(record)
-            _atomic_write_json(
+            gpu_lease.assert_held()
+            _publish_matrix_ledger(
                 matrix_summary,
                 _matrix_payload(
                     completed,
                     context=context,
                     calibration_script_binding=script_binding,
                     matrix_lock_binding=matrix_lock_binding,
+                    gpu_lease_binding=gpu_lease_binding,
+                    execution_environment_binding=frozen_execution_environment,
                     trust_root=trust_root,
                 ),
+                matrix_lock=matrix_lock,
             )
+            gpu_lease.assert_held()
 
+    gpu_lease.assert_held()
     training_matrix.assert_environment_unchanged(context)
     terminal = _matrix_payload(
         completed,
         context=context,
         calibration_script_binding=script_binding,
         matrix_lock_binding=matrix_lock_binding,
+        gpu_lease_binding=gpu_lease_binding,
+        execution_environment_binding=frozen_execution_environment,
         trust_root=trust_root,
     )
-    _atomic_write_json(matrix_summary, terminal)
+    gpu_lease.assert_held()
+    _publish_matrix_ledger(matrix_summary, terminal, matrix_lock=matrix_lock)
+    gpu_lease.assert_held()
     validate_matrix_summary(
         terminal,
         output_root=output_root,
@@ -1482,6 +2030,8 @@ def _run_matrix_locked(
         calibration_script=canonical_script,
         calibration_script_binding=script_binding,
         matrix_lock_binding=matrix_lock_binding,
+        expected_gpu_lease=gpu_lease_binding,
+        expected_execution_environment=frozen_execution_environment,
         context=context,
         trust_root=trust_root,
         training_matrix_summary_path=training_matrix_summary_path,
@@ -1489,10 +2039,13 @@ def _run_matrix_locked(
         trainer_binding=trainer_binding,
         ledger_records=ledger_records,
     )
+    matrix_lock.assert_held()
+    gpu_lease.assert_held()
+    device_guard.assert_held()
     return terminal
 
 
-def run_matrix(
+def _run_matrix_under_gpu_lease(
     *,
     manifest_path: Path = contract.MANIFEST_PATH,
     training_output_root: Path = TRAINING_OUTPUT_ROOT,
@@ -1500,7 +2053,22 @@ def run_matrix(
     matrix_summary: Path | None = None,
     calibration_script: Path = CALIBRATION_SCRIPT,
     attestation_key_path: Path | None = None,
+    gpu_lease: gpu_lock.GPULockLease,
+    device_guard: gpu_lock.GPULockLease,
+    gpu_lease_binding: Mapping[str, Any],
+    frozen_execution_environment: Mapping[str, Any],
 ) -> dict[str, Any]:
+    gpu_lease.assert_held()
+    device_guard.assert_held()
+    _require(
+        dict(gpu_lease_binding)
+        == _gpu_lease_binding(
+            gpu_lease.path,
+            frozen_execution_environment=frozen_execution_environment,
+            device_guard=device_guard,
+        ),
+        "Calibration GPU lease binding does not match the held lease.",
+    )
     _assert_frozen_contract()
     key_path_for_layout = attestation_key_path
     if key_path_for_layout is None:
@@ -1518,7 +2086,12 @@ def run_matrix(
     )
     canonical_script = _canonical_calibration_script(calibration_script)
     lock_binding = _matrix_lock_binding(layout.lock_path)
-    with _exclusive_matrix_lock(layout.lock_path, matrix_summary=layout.matrix_summary):
+    with _exclusive_matrix_lock(
+        layout.lock_path, matrix_summary=layout.matrix_summary
+    ) as matrix_lock:
+        matrix_lock.assert_held()
+        gpu_lease.assert_held()
+        device_guard.assert_held()
         return _run_matrix_locked(
             manifest_path=manifest_path,
             training_output_root=layout.training_output_root,
@@ -1526,8 +2099,66 @@ def run_matrix(
             matrix_summary=layout.matrix_summary,
             calibration_script=canonical_script,
             matrix_lock_binding=lock_binding,
+            matrix_lock=matrix_lock,
+            gpu_lease=gpu_lease,
+            device_guard=device_guard,
+            gpu_lease_binding=gpu_lease_binding,
+            frozen_execution_environment=frozen_execution_environment,
             attestation_key_path=attestation_key_path,
         )
+
+
+def run_matrix(
+    *,
+    manifest_path: Path = contract.MANIFEST_PATH,
+    training_output_root: Path = TRAINING_OUTPUT_ROOT,
+    output_root: Path = OUTPUT_ROOT,
+    matrix_summary: Path | None = None,
+    calibration_script: Path = CALIBRATION_SCRIPT,
+    attestation_key_path: Path | None = None,
+    gpu_lock_path: Path | None = None,
+) -> dict[str, Any]:
+    """Run the complete CUDA calibration matrix under one project-wide GPU lease."""
+
+    requested_gpu_lock = gpu_lock.DEFAULT_LOCK_PATH if gpu_lock_path is None else gpu_lock_path
+    lease = gpu_lock.acquire_gpu_lock(
+        "p2-direct-calibration-matrix",
+        path=requested_gpu_lock,
+    )
+    device_guard: gpu_lock.GPULockLease | None = None
+    try:
+        lease.assert_held()
+        frozen_execution_environment = execution_environment.capture_execution_environment()
+        lease.assert_held()
+        routing_identity = execution_environment.selected_device_routing_identity(
+            frozen_execution_environment
+        )
+        device_guard = gpu_lock.acquire_device_guard(
+            "p2-direct-calibration-matrix",
+            routing_identity,
+        )
+        device_guard.assert_held()
+        lease_binding = _gpu_lease_binding(
+            lease.path,
+            frozen_execution_environment=frozen_execution_environment,
+            device_guard=device_guard,
+        )
+        return _run_matrix_under_gpu_lease(
+            manifest_path=manifest_path,
+            training_output_root=training_output_root,
+            output_root=output_root,
+            matrix_summary=matrix_summary,
+            calibration_script=calibration_script,
+            attestation_key_path=attestation_key_path,
+            gpu_lease=lease,
+            device_guard=device_guard,
+            gpu_lease_binding=lease_binding,
+            frozen_execution_environment=frozen_execution_environment,
+        )
+    finally:
+        if device_guard is not None:
+            device_guard.close()
+        lease.close()
 
 
 def main() -> int:
@@ -1538,6 +2169,7 @@ def main() -> int:
     parser.add_argument("--training-output-root", type=Path, default=TRAINING_OUTPUT_ROOT)
     parser.add_argument("--output-root", type=Path, default=OUTPUT_ROOT)
     parser.add_argument("--matrix-summary", type=Path)
+    parser.add_argument("--gpu-lock-path", type=Path)
     args = parser.parse_args()
     result = run_matrix(
         manifest_path=args.manifest,
@@ -1549,6 +2181,7 @@ def main() -> int:
             else args.matrix_summary
         ),
         calibration_script=CALIBRATION_SCRIPT,
+        gpu_lock_path=args.gpu_lock_path,
     )
     print(
         json.dumps(

@@ -1,15 +1,18 @@
 # Paper-grade expansion protocol
 
-Protocol version: 2.4 (post-localization structural-feasibility amendment 2.4-P2)
+Protocol version: 2.5 (prospective direct-controller amendment 2.5-P2)
 Frozen: 2026-07-14  
 Amended: 2026-07-18, after the terminal core audit and observed path-equivalence
 blocker, but before any new path-split or targeted-contrast result; amended
 again 2026-07-19 after localization and a 707-only feasibility audit, but before
-any prospective path run or 807-series targeted input, target, or prediction
-Status: P2 core and path localization terminal; the original 9,000-coordinate,
-16-arm causal factorial remains paused; the current calibrated-versus-shuffled
-Stage A and its 9,000-run prospective prerequisite are structurally blocked and
-unexecuted; only outcome-independent calibration redesign is eligible
+any prospective path run or 807-series targeted input, target, or prediction;
+amended once more before the fresh 6071406--6071410 training cohort, 7071406--
+7071410 calibration cohort, or 10071406--10071410 evaluation cohort existed
+Status: P2 core and path localization terminal; the old 16-arm factorial and
+calibrated-versus-shuffled Stage A remain paused and structurally blocked. The
+new 19-arm direct-controller cohort is preregistered and unexecuted; its
+implementation, attestation, storage, and distributed-runner gates must be
+terminal before any held-out shard starts.
 
 Post-core execution amendment 2.3-P1 pauses, but does not alter or erase, the
 frozen full causal factorial. The pause is grounded in the exogenous July-17
@@ -170,6 +173,73 @@ completion, and registered statistical-audit fields. This closes the remaining
 complete-but-unaudited core path; no P2 arm, sample, threshold, or outcome was
 changed, and no P3 dataset, prediction, or result cell existed at amendment time.
 
+Version 2.5 creates the prospective direct-controller study rather than
+relabeling the structurally blocked Stage A. Its sole contract is
+`manifests/p2-post-rank-direct-controller-v1.json`. The cohort uses five fresh
+training, calibration, and evaluation seeds; S55 and S151; 2x and 4x budgets;
+nine families; five contexts; ten 20-example replicates; and exactly 1,000
+examples per seed-scale-family. The budget-expanded grid is 9,000 shards,
+45,000 distinct generated conversations shared across scales, 90,000
+scale-specific conversation evaluations, 180,000 budget-expanded conversation
+evaluations, 3,420,000 arm-conversations, and 154,280,000 decode-token rows in a
+zero-failure run.
+
+All 19 arms execute through the literal sequential tiered path. The original
+central contrast `calibrated+pins - fixed+pins` is restored unchanged and is
+evaluated independently from two direct Hsoft contrasts:
+`hierarchical-soft-lag+pins - fixed+pins` and
+`hierarchical-soft-lag+pins - hierarchical-balanced-fixed+pins`. None may be
+selected, pooled, or dropped using outcomes. The primary verdict is GO only if
+all three contrasts pass every scale-budget cell with positive pooled and all
+five seed effects, positive paired 95% and seed-cluster 95% lower bounds,
+positive Bonferroni four-cell 98.75% seed-cluster lower bounds, zero technical
+failures, and exact paired physical hot-byte parity. With five seeds the exact
+two-sided sign-flip p-value floor is 0.0625; it is reported but cannot be a
+0.05 success gate or a population-significance claim.
+
+The two fixed top-p arms are descriptive only. Before held-out quality, a
+separate 40-cell calibration matrix (2 scales x 5 seeds x 2 budgets x 2
+thresholds) must match mean actual hot-resident bytes within 1%. Fifteen
+preregistered diagnostic contrasts then separate pins, static adaptive quota,
+quota identity, local versus hierarchical control, score/temporal/cross-layer/
+refresh signals, permutation, and resident-only fallback. Technical failures
+remain in the intent-to-treat estimand with quality zero and independently make
+a confirmatory verdict NO-GO.
+
+Every raw bundle, prefix ledger, terminal ledger, integrity artifact, and
+summary is HMAC-attested under one external 0600 trust root. Training,
+calibration, physical top-p matching, and quality execution hold both a
+scheduler lease and a selected-physical-device guard; source, manifest,
+implementation-tree, environment, matrix, and raw sidecar bindings are replayed
+before publication. Summary analysis consumes
+outcome, token, and failure streams once, retains lossless paired-difference
+sufficient statistics, and deterministically replays every interval, p-value,
+joint training-seed/family/context slice aggregation, physical parity row, and
+final decision. It uses 20,000 resamples, an explicit NumPy PCG64 generator, and
+the linear NumPy quantile method. `pyproject.toml` is implementation-bound and
+the terminal summary records and validates the exact Python and NumPy versions;
+because the repository has no exact environment lock, this is an honestly
+bounded dependency specification rather than a claim of fully locked packages.
+The current distributed runner is deliberately single-host/shared-filesystem;
+multi-host execution is not claimed by this amendment.
+
+The prerequisite chain has a stricter execution boundary than the distributed
+controller compatibility rule. Direct training and calibration freeze the full
+CUDA routing and software/platform environment once per matrix, require that
+exact binding in every checkpoint/artifact and on resume, and validate runtime
+counter schemas separately. Canonical children execute sealed bytes under
+Python `-I`, receive the attestation key through a sealed descriptor, and inherit
+the runner's scheduler-lease and UUID/PCI-derived physical-device-guard
+descriptors so kernel exclusion survives runner death until the child exits.
+Exact artifact and ledger schemas plus closed-world output inventories are
+rechecked both at terminal publication and by downstream consumers. For
+controller-compatible sharding, the relaxed hardware projection uses the
+actually selected device class; UUID, PCI address, logical routing, visible
+count, and `CUDA_VISIBLE_DEVICES` may differ only when selected class and
+software/platform bindings remain equal. The local logical index remains an
+explicit `cuda:N` execution argument and must resolve to the bound routing
+identity inside every child.
+
 ## 1. Primary questions
 
 1. Can a causal same-token controller beat the strongest memory-matched fixed
@@ -272,7 +342,7 @@ from P4 latency and throughput claims.
 
 Tier-S scales: S55 and S151.
 
-Independent training seeds:
+Legacy core/factorial training seeds:
 
 ```text
 6071401, 6071402, 6071403, 6071404, 6071405
@@ -307,6 +377,20 @@ tested only when 2x or 4x capacity leaves room above that floor.
 The score-derived uncertainty allowance is fixed to
 `minimum_per_layer * (budget_multiplier - 1)`, so 1x, 2x, and 4x cannot collapse
 to the same effective method merely because of a constant request cap.
+
+The version-2.5 direct-controller cohort is disjoint from those observed legacy
+cohorts and uses these index-paired namespaces:
+
+```text
+training:    6071406, 6071407, 6071408, 6071409, 6071410
+calibration: 7071406, 7071407, 7071408, 7071409, 7071410
+evaluation: 10071406, 10071407, 10071408, 10071409, 10071410
+```
+
+No legacy training checkpoint, 707-series calibration row, or 807-series
+quality outcome may replace a missing direct-cohort member. A structurally
+valid technical failure is retained; only an integrity or infrastructure fault
+may be retried under the same coordinate and documented nonce rules.
 
 ## 4. Tier-S workloads and sample size
 
@@ -364,7 +448,7 @@ Primary quality metrics are exact match, per-turn exact match, and worst-family
 absolute regression against native. Memory and runtime are evaluated only at
 quality-qualified operating points.
 
-For every policy difference:
+For every legacy policy difference unless a later amendment states otherwise:
 
 - report seed-level values and the mean, standard deviation, and range;
 - compute conversation-paired 95% intervals with 10,000 resamples as
@@ -374,6 +458,13 @@ For every policy difference:
 - apply Holm-Bonferroni correction across primary workload families;
 - report the worst context-length and worst seed slice; and
 - retain failures and timeouts in an explicit accounting table.
+
+The version-2.5 direct-controller cohort is the explicit exception: its
+conversation-paired interval pools equal-sized conversations across the five
+observed fitted-model seeds, is labelled conditional on that observed cohort,
+and uses 20,000 resamples. Population generalization remains based only on the
+five training-checkpoint seed means. It also reports the full joint
+training-seed x family x context quality grid and its worst slice.
 
 A controller passes the primary quality gate only if its mean regression from
 native is at most 1 percentage point, no primary family regresses by more than
@@ -393,7 +484,8 @@ reported as a failed or bounded causal claim rather than averaged away. Every
 clause is required separately at both 2x and 4x; one budget cannot rescue the
 other. The four primary scale-by-budget cells use a Bonferroni-corrected 98.75%
 training-seed-cluster bootstrap interval over the five independent seed means;
-conversation-paired intervals remain descriptive within a seed. Family slices
+legacy conversation-paired intervals remain descriptive within a seed; the
+version-2.5 direct interval follows the pooled conditional scope above. Family slices
 use Holm-Bonferroni separately within each contrast, scale, and budget, and the
 15 pooled preregistered contrasts form a second Holm family within each scale
 and budget. The
@@ -547,6 +639,12 @@ an integrity/provenance violation fails closed and is reported as incomplete;
 neither permits an outcome-dependent subset to pass a gate. Natural-language and
 systems controller arms follow their own frozen, outcome-independent execution
 contracts, while native and the strongest fixed/tiered baseline remain mandatory.
+Version 2.5 registers resumable storage-headroom pause/drain but no whole-process
+child retry schedule. Caught controller-arm errors and signed prerequisite
+NO-GO artifacts become terminal evidence; an unexpected trainer, calibrator,
+top-p validator, or evaluator exit without its terminal artifact preserves the
+coordinate claim as orphan evidence and remains incomplete pending a recorded
+manual quarantine.
 
 ## 11. Claim boundary
 

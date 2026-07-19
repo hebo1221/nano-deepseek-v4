@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import multiprocessing
+import os
 import subprocess
 import sys
 import time
@@ -15,6 +16,93 @@ SCRIPTS = Path(__file__).resolve().parents[1] / "research/adaptive_v4_memory/scr
 sys.path.insert(0, str(SCRIPTS))
 
 import run_p2_direct_calibration_matrix as matrix  # noqa: E402
+
+
+def _execution_environment() -> dict[str, Any]:
+    return {
+        "schema_version": matrix.execution_environment.SCHEMA_VERSION,
+        "python_implementation": "CPython",
+        "python_version": "3.12.0",
+        "python_executable": str(Path(sys.executable).resolve()),
+        "torch_version": "2.7.0+cu128",
+        "cuda_runtime_version": "12.8",
+        "cuda_driver_version": "570.00",
+        "cuda_visible_devices": "0",
+        "platform_system": "Linux",
+        "platform_release": "test-kernel",
+        "platform_machine": "x86_64",
+        "platform_string": "Linux-test-x86_64",
+        "current_device_index": 0,
+        "visible_device_count": 1,
+        "visible_devices": [
+            {
+                "logical_index": 0,
+                "name": "Test CUDA GPU",
+                "uuid": "GPU-test-0",
+                "pci_bus_id": "0000:01:00.0",
+                "compute_capability": [9, 0],
+                "total_memory_bytes": 80 * 1024**3,
+            }
+        ],
+    }
+
+
+@dataclass
+class FakeGPULease:
+    path: Path
+    events: list[str]
+    file_descriptor: int = 2
+    device: int = 1
+    inode: int = 2
+    closed: bool = False
+
+    def assert_held(self) -> None:
+        assert not self.closed
+        self.events.append("assert-held")
+
+    def fileno(self) -> int:
+        self.assert_held()
+        return self.file_descriptor
+
+    def close(self) -> None:
+        assert not self.closed
+        self.events.append("close")
+        self.closed = True
+
+
+@dataclass
+class FakeGPUController:
+    events: list[str]
+    leases: list[FakeGPULease]
+
+
+@pytest.fixture(autouse=True)
+def fake_gpu_lease(monkeypatch: pytest.MonkeyPatch) -> FakeGPUController:
+    controller = FakeGPUController(events=[], leases=[])
+
+    def acquire(label: str, *, path: Path) -> FakeGPULease:
+        controller.events.append(f"acquire:{label}:{path}")
+        lease = FakeGPULease(
+            path=Path(path),
+            events=controller.events,
+            file_descriptor=2,
+        )
+        controller.leases.append(lease)
+        return lease
+
+    def acquire_device_guard(
+        label: str,
+        routing_identity: dict[str, Any],
+    ) -> FakeGPULease:
+        path = matrix.gpu_lock.canonical_device_guard_path(routing_identity)
+        controller.events.append(f"acquire-device:{label}:{path}")
+        lease = FakeGPULease(path=path, events=controller.events, file_descriptor=3)
+        controller.leases.append(lease)
+        return lease
+
+    monkeypatch.setattr(matrix.gpu_lock, "acquire_gpu_lock", acquire)
+    monkeypatch.setattr(matrix.gpu_lock, "acquire_device_guard", acquire_device_guard)
+    return controller
 
 
 @dataclass
@@ -31,6 +119,7 @@ class MatrixHarness:
     trainer_binding: dict[str, Any]
     ledger_records: dict[tuple[str, int], dict[str, Any]]
     validator_calls: list[bool]
+    execution_environment: dict[str, Any]
 
 
 def _command_value(command: list[str], option: str) -> str:
@@ -46,6 +135,12 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
 
 @pytest.fixture
 def harness(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> MatrixHarness:
+    stable_environment = _execution_environment()
+    monkeypatch.setattr(
+        matrix.execution_environment,
+        "capture_execution_environment",
+        lambda: json.loads(json.dumps(stable_environment)),
+    )
     manifest_path = tmp_path / "direct-controller.manifest.json"
     manifest_path.write_text('{"frozen":true}\n', encoding="utf-8")
     calibration_script = matrix.CALIBRATION_SCRIPT
@@ -111,6 +206,7 @@ def harness(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> MatrixHarness:
             "seed": training_seed,
             "checkpoint": checkpoint,
             "direct_training_contract": {"test_fixture": "fully-bound"},
+            "execution_environment": stable_environment,
         }
         summary = matrix._digest_bound_payload(summary_payload)
         summary["attestation"] = {
@@ -131,13 +227,14 @@ def harness(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> MatrixHarness:
     training_matrix_summary = training_root / matrix.training_matrix.MATRIX_SUMMARY.name
     training_matrix_payload = matrix._digest_bound_payload(
         {
-            "schema_version": 1,
+            "schema_version": matrix.training_matrix.SCHEMA_VERSION,
             "experiment_id": matrix.training_matrix.EXPERIMENT_ID,
             "artifact_type": matrix.training_matrix.ARTIFACT_TYPE,
             "status": "terminal",
             "expected_runs": matrix.EXPECTED_CELLS,
             "completed_runs": matrix.EXPECTED_CELLS,
             "runs": list(ledger_records.values()),
+            "execution_environment": stable_environment,
         }
     )
     training_matrix_payload["attestation"] = {
@@ -257,6 +354,7 @@ def harness(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> MatrixHarness:
         trainer_binding=trainer_binding,
         ledger_records=ledger_records,
         validator_calls=validator_calls,
+        execution_environment=stable_environment,
     )
 
 
@@ -320,6 +418,10 @@ def _artifact_from_command(
                 "status": training_matrix_payload["status"],
             },
         },
+        "environment": json.loads(json.dumps(harness.execution_environment)),
+        "device_context": matrix.execution_environment.selected_device_context(
+            harness.execution_environment
+        ),
     }
     digest_bound = matrix._digest_bound_payload(payload)
     digest_bound["attestation"] = {
@@ -335,6 +437,7 @@ def _install_calibrator(
     no_go_coordinates: set[tuple[str, int]] | None = None,
     fail_coordinate: tuple[str, int] | None = None,
     return_code_override: int | None = None,
+    gpu_controller: FakeGPUController | None = None,
 ) -> list[list[str]]:
     calls: list[list[str]] = []
     no_go_coordinates = set() if no_go_coordinates is None else no_go_coordinates
@@ -346,11 +449,16 @@ def _install_calibrator(
         pass_fds: tuple[int, ...],
         env: dict[str, str],
     ) -> subprocess.CompletedProcess[str]:
+        if gpu_controller is not None:
+            assert len(gpu_controller.leases) == 2
+            assert all(not lease.closed for lease in gpu_controller.leases)
         assert check is False
-        assert len(pass_fds) == 2
+        assert len(pass_fds) == 4
         assert matrix.attestation.KEY_PATH_ENV not in env
         assert env[matrix.CALIBRATOR_FD_ENV] == str(pass_fds[0])
         assert env[matrix.attestation.KEY_FD_ENV] == str(pass_fds[1])
+        assert pass_fds[2] == 2
+        assert pass_fds[3] == 3
         assert matrix._sha256_fd(pass_fds[0]) == matrix._sha256(harness.calibration_script)
         assert matrix.attestation.checksum_fd(pass_fds[1]) == (
             matrix.attestation.checksum_bytes(harness.trust_root.key)
@@ -378,13 +486,21 @@ def _install_calibrator(
     return calls
 
 
-def _run(harness: MatrixHarness) -> dict[str, Any]:
+def _run(
+    harness: MatrixHarness,
+    *,
+    gpu_lock_path: Path | None = None,
+) -> dict[str, Any]:
+    kwargs: dict[str, Any] = {}
+    if gpu_lock_path is not None:
+        kwargs["gpu_lock_path"] = gpu_lock_path
     return matrix.run_matrix(
         manifest_path=harness.manifest_path,
         training_output_root=harness.training_root,
         output_root=harness.output_root,
         matrix_summary=harness.matrix_summary,
         calibration_script=harness.calibration_script,
+        **kwargs,
     )
 
 
@@ -411,24 +527,63 @@ def test_frozen_ten_cell_inventory_and_strict_cuda_bfloat16_command(
         checkpoint_path=Path(summary["checkpoint"]["path"]),
         scale=scale,
         training_seed=training_seed,
+        device_routing_identity=matrix.execution_environment.selected_device_routing_identity(
+            harness.execution_environment
+        ),
     )
 
-    assert command[:3] == [sys.executable, "-c", matrix.CALIBRATOR_FD_BOOTSTRAP]
-    assert command[3] == str(harness.calibration_script.resolve())
+    assert command[:4] == [sys.executable, "-I", "-c", matrix.CALIBRATOR_FD_BOOTSTRAP]
+    assert command[4] == str(harness.calibration_script.resolve())
     assert _command_value(command, "--scale") == "s151"
     assert _command_value(command, "--training-seed") == "6071410"
-    assert _command_value(command, "--device") == "cuda"
+    assert _command_value(command, "--device") == "cuda:0"
+    assert json.loads(
+        _command_value(command, "--expected-device-routing-identity-json")
+    ) == matrix.execution_environment.selected_device_routing_identity(
+        harness.execution_environment
+    )
     assert _command_value(command, "--dtype") == "bfloat16"
     assert "quality" not in " ".join(command).lower()
     assert "evaluation" not in " ".join(command).lower()
 
 
+def test_calibration_command_routes_to_nonzero_current_logical_device(
+    harness: MatrixHarness,
+) -> None:
+    scale, training_seed, _, _ = matrix._coordinates()[0]
+    summary_path = matrix._training_summary_path(harness.training_root, scale, training_seed)
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+
+    command = matrix.build_calibration_command(
+        calibration_script=harness.calibration_script,
+        artifact_path=matrix._artifact_path(harness.output_root, scale, training_seed),
+        manifest_path=harness.manifest_path,
+        training_summary_path=summary_path,
+        training_matrix_summary_path=harness.training_matrix_summary,
+        checkpoint_path=Path(summary["checkpoint"]["path"]),
+        scale=scale,
+        training_seed=training_seed,
+        device_index=1,
+        device_routing_identity=matrix.execution_environment.selected_device_routing_identity(
+            harness.execution_environment
+        ),
+    )
+
+    assert _command_value(command, "--device") == "cuda:1"
+
+
 def test_full_matrix_preserves_explicit_no_go_without_launching_quality(
     harness: MatrixHarness,
     monkeypatch: pytest.MonkeyPatch,
+    fake_gpu_lease: FakeGPUController,
 ) -> None:
     no_go = {("s151", 6071408)}
-    calls = _install_calibrator(monkeypatch, harness, no_go_coordinates=no_go)
+    calls = _install_calibrator(
+        monkeypatch,
+        harness,
+        no_go_coordinates=no_go,
+        gpu_controller=fake_gpu_lease,
+    )
 
     result = _run(harness)
 
@@ -438,7 +593,17 @@ def test_full_matrix_preserves_explicit_no_go_without_launching_quality(
     assert result["quality_evaluation_started"] is False
     assert result["quality_gate"] == matrix.QUALITY_GATE
     assert result["crash_recovery_boundary"] == matrix.CRASH_RECOVERY_BOUNDARY
+    assert result["cell_claim_semantics"] == matrix.CELL_CLAIM_SEMANTICS
     assert result["matrix_lock"]["semantics"] == matrix.MATRIX_LOCK_SEMANTICS
+    assert "inode" not in result["gpu_lease"]
+    assert result["gpu_lease"]["child_nested_lease"] is False
+    assert result["gpu_lease"]["selected_device_routing_identity"] == {
+        "identity_type": "uuid",
+        "identity": "GPU-test-0",
+    }
+    assert result["gpu_lease"]["device_guard"]["semantics"] == (
+        matrix.gpu_lock.DEVICE_GUARD_SEMANTICS
+    )
     lock_path = Path(result["matrix_lock"]["path"])
     assert lock_path == matrix._matrix_lock_path(harness.output_root)
     assert not lock_path.is_relative_to(harness.output_root)
@@ -446,7 +611,10 @@ def test_full_matrix_preserves_explicit_no_go_without_launching_quality(
     assert lock_metadata["state"] == "released"
     assert lock_metadata["owner_nonce"]
     assert len(calls) == 10
-    assert all(_command_value(command, "--device") == "cuda" for command in calls)
+    assert len(fake_gpu_lease.leases) == 2
+    assert all(lease.closed for lease in fake_gpu_lease.leases)
+    assert fake_gpu_lease.events[0].startswith("acquire:p2-direct-calibration-matrix:")
+    assert all(_command_value(command, "--device") == "cuda:0" for command in calls)
     assert all(_command_value(command, "--dtype") == "bfloat16" for command in calls)
     no_go_record = next(
         cell for cell in result["cells"] if (cell["scale"], cell["training_seed"]) in no_go
@@ -458,6 +626,65 @@ def test_full_matrix_preserves_explicit_no_go_without_launching_quality(
     assert harness.validator_calls and all(harness.validator_calls)
     stored = json.loads(harness.matrix_summary.read_text(encoding="utf-8"))
     matrix._validate_payload_digest(stored)
+    assert not list(harness.output_root.rglob(matrix.CELL_CLAIM_NAME))
+
+    for mutation in ("missing", "extra"):
+        schema_tamper = json.loads(json.dumps(result))
+        schema_tamper.pop("attestation")
+        schema_tamper.pop("payload_sha256")
+        if mutation == "missing":
+            schema_tamper.pop("dtype")
+        else:
+            schema_tamper["unregistered"] = True
+        schema_tamper = matrix._attested_payload(
+            schema_tamper,
+            trust_root=harness.trust_root,
+        )
+        _write_json(harness.matrix_summary, schema_tamper)
+        with pytest.raises(ValueError, match="top-level schema drifted"):
+            _run(harness)
+        _write_json(harness.matrix_summary, result)
+
+    environment_tamper = json.loads(json.dumps(result))
+    environment_tamper.pop("attestation")
+    environment_tamper.pop("payload_sha256")
+    environment_tamper["execution_environment"]["cuda_driver_version"] = "571.00"
+    environment_tamper = matrix._attested_payload(
+        environment_tamper,
+        trust_root=harness.trust_root,
+    )
+    _write_json(harness.matrix_summary, environment_tamper)
+    with pytest.raises(ValueError, match="changed on exact resume"):
+        _run(harness)
+    _write_json(harness.matrix_summary, result)
+
+    rogue = harness.output_root / "unregistered-after-terminal.txt"
+    rogue.write_text("rogue\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="unregistered orphan"):
+        _run(harness)
+    rogue.unlink()
+
+    lease_semantic_tamper = json.loads(json.dumps(result))
+    lease_semantic_tamper.pop("attestation")
+    lease_semantic_tamper.pop("payload_sha256")
+    lease_semantic_tamper["gpu_lease"]["child_nested_lease"] = True
+    lease_semantic_tamper = matrix._attested_payload(
+        lease_semantic_tamper,
+        trust_root=harness.trust_root,
+    )
+    _write_json(harness.matrix_summary, lease_semantic_tamper)
+    with pytest.raises(ValueError, match="GPU lease semantics drifted"):
+        _run(harness)
+    assert fake_gpu_lease.leases[-1].closed
+    _write_json(harness.matrix_summary, result)
+
+    with pytest.raises(ValueError, match="GPU lease path or semantics drifted"):
+        _run(
+            harness,
+            gpu_lock_path=harness.output_root.parent / "different-device.lock",
+        )
+    assert len(calls) == 10
+    assert fake_gpu_lease.leases[-1].closed
 
 
 def test_calibration_child_uses_fd_only_key_transport_without_path_disclosure(
@@ -580,6 +807,97 @@ def test_process_lock_reentry_fails_without_deadlock_and_metadata_is_persistent(
     assert not layout.output_root.exists()
 
 
+@pytest.mark.parametrize(
+    ("kind", "message"),
+    [
+        ("symlink", "opened safely"),
+        ("hardlink", "link count"),
+        ("unsafe-mode", "mode is unsafe"),
+    ],
+)
+def test_matrix_lock_rejects_unsafe_preexisting_files(
+    harness: MatrixHarness,
+    kind: str,
+    message: str,
+) -> None:
+    lock_path = matrix._matrix_lock_path(harness.output_root)
+    target = lock_path.parent / "calibration-lock-target"
+    target.write_bytes(b"preexisting\n")
+    target.chmod(0o600)
+    if kind == "symlink":
+        lock_path.symlink_to(target)
+    elif kind == "hardlink":
+        matrix.os.link(target, lock_path)
+    else:
+        lock_path.write_bytes(b"unsafe\n")
+        lock_path.chmod(0o644)
+
+    with pytest.raises(ValueError, match=message):
+        with matrix._exclusive_matrix_lock(
+            lock_path,
+            matrix_summary=harness.matrix_summary,
+        ):
+            raise AssertionError("unsafe calibration lock unexpectedly acquired")
+
+
+@pytest.mark.parametrize("mutation", ["delete", "replace"])
+def test_lock_deletion_or_replacement_during_child_fails_before_prefix_promotion(
+    harness: MatrixHarness,
+    monkeypatch: pytest.MonkeyPatch,
+    mutation: str,
+) -> None:
+    lock_path = matrix._matrix_lock_path(harness.output_root)
+    replacement_descriptors: list[int] = []
+
+    def tamper_during_child(
+        command: list[str],
+        *,
+        canonical: Path,
+        expected: matrix.CanonicalScriptSnapshot,
+        trust_root: matrix.attestation.TrustRoot,
+        gpu_lease: FakeGPULease,
+        device_guard: FakeGPULease,
+    ) -> subprocess.CompletedProcess[str]:
+        assert canonical == harness.calibration_script.resolve()
+        assert expected.sha256 == matrix._sha256(harness.calibration_script)
+        assert trust_root == harness.trust_root
+        gpu_lease.assert_held()
+        device_guard.assert_held()
+        _write_json(
+            Path(_command_value(command, "--output")),
+            _artifact_from_command(command, harness=harness, decision="GO"),
+        )
+        lock_path.unlink()
+        if mutation == "replace":
+            lock_path.write_bytes(b"replacement-lock\n")
+            lock_path.chmod(0o600)
+            descriptor = matrix.os.open(
+                lock_path,
+                matrix.os.O_RDWR | getattr(matrix.os, "O_CLOEXEC", 0),
+            )
+            matrix.fcntl.flock(
+                descriptor,
+                matrix.fcntl.LOCK_EX | matrix.fcntl.LOCK_NB,
+            )
+            replacement_descriptors.append(descriptor)
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(matrix, "_run_calibrator_from_stable_script", tamper_during_child)
+    try:
+        with pytest.raises(ValueError, match="deleted|replaced"):
+            _run(harness)
+    finally:
+        for descriptor in replacement_descriptors:
+            matrix.fcntl.flock(descriptor, matrix.fcntl.LOCK_UN)
+            matrix.os.close(descriptor)
+
+    partial = json.loads(harness.matrix_summary.read_text(encoding="utf-8"))
+    assert partial["status"] == "in_progress"
+    assert partial["completed_cells"] == 0
+    assert partial["cells"] == []
+    assert bool(replacement_descriptors) is (mutation == "replace")
+
+
 def test_two_process_runners_serialize_without_duplicate_children_or_prefix_rollback(
     harness: MatrixHarness,
     monkeypatch: pytest.MonkeyPatch,
@@ -597,10 +915,14 @@ def test_two_process_runners_serialize_without_duplicate_children_or_prefix_roll
         canonical: Path,
         expected: matrix.CanonicalScriptSnapshot,
         trust_root: matrix.attestation.TrustRoot,
+        gpu_lease: FakeGPULease,
+        device_guard: FakeGPULease,
     ) -> subprocess.CompletedProcess[str]:
         assert canonical == harness.calibration_script.resolve()
         assert expected.sha256 == matrix._sha256(harness.calibration_script)
         assert trust_root == harness.trust_root
+        gpu_lease.assert_held()
+        device_guard.assert_held()
         with child_count.get_lock():
             child_count.value += 1
             ordinal = child_count.value
@@ -641,9 +963,10 @@ def test_two_process_runners_serialize_without_duplicate_children_or_prefix_roll
     assert len(list(harness.output_root.glob("*/*/*-calibration.json"))) == (matrix.EXPECTED_CELLS)
 
 
-def test_partial_execution_resumes_only_after_the_authenticated_completed_prefix(
+def test_failed_child_claim_blocks_resume_until_manual_quarantine(
     harness: MatrixHarness,
     monkeypatch: pytest.MonkeyPatch,
+    fake_gpu_lease: FakeGPUController,
 ) -> None:
     failed_coordinate = ("s55", 6071409)
     first_calls = _install_calibrator(
@@ -653,6 +976,7 @@ def test_partial_execution_resumes_only_after_the_authenticated_completed_prefix
     )
     with pytest.raises(subprocess.CalledProcessError):
         _run(harness)
+    assert fake_gpu_lease.leases[-1].closed
 
     partial = json.loads(harness.matrix_summary.read_text(encoding="utf-8"))
     assert partial["status"] == "in_progress"
@@ -660,8 +984,26 @@ def test_partial_execution_resumes_only_after_the_authenticated_completed_prefix
     assert partial["terminal_decision"] is None
     assert len(first_calls) == 4
     matrix._validate_payload_digest(partial)
+    claim_path = (
+        matrix._cell_output_dir(harness.output_root, *failed_coordinate) / matrix.CELL_CLAIM_NAME
+    )
+    assert claim_path.is_file()
+    claim = json.loads(claim_path.read_text(encoding="utf-8"))
+    assert claim["semantics"] == matrix.CELL_CLAIM_SEMANTICS
+    _, calibration_seed, evaluation_seed = matrix.contract.seed_triplet(failed_coordinate[1])
+    assert claim["coordinate"] == {
+        "scale": failed_coordinate[0],
+        "training_seed": failed_coordinate[1],
+        "calibration_seed": calibration_seed,
+        "evaluation_seed_reserved": evaluation_seed,
+    }
 
     resumed_calls = _install_calibrator(monkeypatch, harness)
+    with pytest.raises(ValueError, match="orphaned or stale calibration output"):
+        _run(harness)
+    assert resumed_calls == []
+
+    claim_path.unlink()
     result = _run(harness)
 
     assert result["status"] == "terminal"
@@ -671,6 +1013,125 @@ def test_partial_execution_resumes_only_after_the_authenticated_completed_prefix
         (_command_value(command, "--scale"), int(_command_value(command, "--training-seed")))
         for command in resumed_calls
     ][0] == failed_coordinate
+    assert fake_gpu_lease.leases[-1].closed
+
+
+@pytest.mark.parametrize("mutation", ["delete", "replace", "hardlink"])
+def test_calibration_claim_tamper_blocks_promotion_and_resume(
+    harness: MatrixHarness,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    mutation: str,
+) -> None:
+    _install_calibrator(monkeypatch, harness)
+    original_run = matrix._run_calibrator_from_stable_script
+
+    def tamper_claim(command: list[str], **kwargs: Any) -> Any:
+        result = original_run(command, **kwargs)
+        artifact_path = Path(_command_value(command, "--output"))
+        claim_path = artifact_path.parent / matrix.CELL_CLAIM_NAME
+        if mutation == "delete":
+            claim_path.unlink()
+        elif mutation == "replace":
+            claim_path.unlink()
+            claim_path.write_text("replacement\n", encoding="utf-8")
+            claim_path.chmod(0o600)
+        else:
+            os.link(claim_path, tmp_path / "claim-alias")
+        return result
+
+    monkeypatch.setattr(matrix, "_run_calibrator_from_stable_script", tamper_claim)
+    message = {
+        "delete": "claim disappeared",
+        "replace": "claim path was replaced",
+        "hardlink": "claim ownership, links, or mode changed",
+    }[mutation]
+    with pytest.raises(ValueError, match=message):
+        _run(harness)
+
+    ledger = json.loads(harness.matrix_summary.read_text(encoding="utf-8"))
+    assert ledger["completed_cells"] == 0
+    first_scale, first_seed, _, _ = matrix._coordinates()[0]
+    assert matrix._artifact_path(harness.output_root, first_scale, first_seed).is_file()
+    with pytest.raises(ValueError, match="orphaned or stale calibration output"):
+        _run(harness)
+
+
+def test_calibration_commit_failure_after_claim_release_leaves_orphan_evidence(
+    harness: MatrixHarness,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_calibrator(monkeypatch, harness)
+    original_publish = matrix._publish_matrix_ledger
+
+    def fail_first_commit(path: Path, payload: dict[str, Any], **kwargs: Any) -> None:
+        if payload.get("completed_cells") == 1:
+            raise RuntimeError("injected calibration ledger commit failure")
+        original_publish(path, payload, **kwargs)
+
+    monkeypatch.setattr(matrix, "_publish_matrix_ledger", fail_first_commit)
+    with pytest.raises(RuntimeError, match="ledger commit failure"):
+        _run(harness)
+
+    first_scale, first_seed, _, _ = matrix._coordinates()[0]
+    output_dir = matrix._cell_output_dir(harness.output_root, first_scale, first_seed)
+    assert matrix._artifact_path(harness.output_root, first_scale, first_seed).is_file()
+    assert not (output_dir / matrix.CELL_CLAIM_NAME).exists()
+    ledger = json.loads(harness.matrix_summary.read_text(encoding="utf-8"))
+    assert ledger["completed_cells"] == 0
+    with pytest.raises(ValueError, match="orphaned or stale calibration output"):
+        _run(harness)
+
+
+def test_final_calibration_child_environment_drift_blocks_terminal_promotion(
+    harness: MatrixHarness,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_calibrator(monkeypatch, harness)
+    original_run = matrix._run_calibrator_from_stable_script
+    returned_children = 0
+
+    def run_then_drift(command: list[str], **kwargs: Any) -> Any:
+        nonlocal returned_children
+        result = original_run(command, **kwargs)
+        returned_children += 1
+        return result
+
+    def assert_exact(_expected: dict[str, Any]) -> None:
+        if returned_children == matrix.EXPECTED_CELLS:
+            raise ValueError("Exact execution environment changed after final child.")
+
+    monkeypatch.setattr(matrix, "_run_calibrator_from_stable_script", run_then_drift)
+    monkeypatch.setattr(
+        matrix.execution_environment,
+        "assert_exact_execution_environment",
+        assert_exact,
+    )
+    with pytest.raises(ValueError, match="changed after final child"):
+        _run(harness)
+
+    ledger = json.loads(harness.matrix_summary.read_text(encoding="utf-8"))
+    assert ledger["status"] == "in_progress"
+    assert ledger["completed_cells"] == matrix.EXPECTED_CELLS - 1
+    scale, seed, _, _ = matrix._coordinates()[-1]
+    output_dir = matrix._cell_output_dir(harness.output_root, scale, seed)
+    assert matrix._artifact_path(harness.output_root, scale, seed).is_file()
+    assert (output_dir / matrix.CELL_CLAIM_NAME).is_file()
+
+
+def test_gpu_lease_closes_when_canonical_path_validation_fails(
+    harness: MatrixHarness,
+    fake_gpu_lease: FakeGPUController,
+) -> None:
+    target = harness.output_root.parent / "gpu-device.lock"
+    alias = harness.output_root.parent / "gpu-device.alias"
+    alias.symlink_to(target)
+
+    with pytest.raises(ValueError, match="symbolic link"):
+        _run(harness, gpu_lock_path=alias)
+
+    assert len(fake_gpu_lease.leases) == 2
+    assert all(lease.closed for lease in fake_gpu_lease.leases)
 
 
 def test_orphaned_unauthenticated_artifact_is_never_adopted_or_overwritten(
@@ -708,6 +1169,9 @@ def test_digest_bound_next_artifact_without_matrix_journal_is_not_auto_promoted(
         checkpoint_path=Path(summary["checkpoint"]["path"]),
         scale=scale,
         training_seed=training_seed,
+        device_routing_identity=matrix.execution_environment.selected_device_routing_identity(
+            harness.execution_environment
+        ),
     )
     _write_json(
         artifact_path,
@@ -749,6 +1213,11 @@ def test_late_coordinate_contamination_fails_before_any_launch_or_summary_mutati
             checkpoint_path=Path(summary["checkpoint"]["path"]),
             scale=wrong_scale,
             training_seed=wrong_seed,
+            device_routing_identity=(
+                matrix.execution_environment.selected_device_routing_identity(
+                    harness.execution_environment
+                )
+            ),
         )
         _write_json(
             artifact_path,
@@ -833,12 +1302,20 @@ def test_manifest_binding_and_sealed_snapshot_close_script_toc_tou(
         return subprocess.CompletedProcess(command, 0)
 
     monkeypatch.setattr(matrix.subprocess, "run", replace_during_launch)
+    gpu_lease = FakeGPULease(path=tmp_path / "gpu.lock", events=[])
+    device_guard = FakeGPULease(
+        path=tmp_path / "device-guard.lock",
+        events=[],
+        file_descriptor=3,
+    )
     with pytest.raises(ValueError, match="changed during execution"):
         matrix._run_calibrator_from_stable_script(
             [sys.executable, "-c", "pass"],
             canonical=canonical,
             expected=snapshot,
             trust_root=harness.trust_root,
+            gpu_lease=gpu_lease,
+            device_guard=device_guard,
         )
     assert observed == [original]
     assert canonical.read_bytes() == replacement
@@ -866,13 +1343,30 @@ def test_sealed_bootstrap_executes_verified_bytes_with_normal_arguments(tmp_path
         key=key,
         key_id=matrix.attestation.derive_key_id(key),
     )
-
-    result = matrix._run_calibrator_from_stable_script(
-        command,
-        canonical=canonical,
-        expected=snapshot,
-        trust_root=trust_root,
+    scheduler_descriptor = matrix.os.open(matrix.os.devnull, matrix.os.O_RDONLY)
+    guard_descriptor = matrix.os.open(matrix.os.devnull, matrix.os.O_RDONLY)
+    gpu_lease = FakeGPULease(
+        path=tmp_path / "gpu.lock",
+        events=[],
+        file_descriptor=scheduler_descriptor,
     )
+    device_guard = FakeGPULease(
+        path=tmp_path / "device-guard.lock",
+        events=[],
+        file_descriptor=guard_descriptor,
+    )
+    try:
+        result = matrix._run_calibrator_from_stable_script(
+            command,
+            canonical=canonical,
+            expected=snapshot,
+            trust_root=trust_root,
+            gpu_lease=gpu_lease,
+            device_guard=device_guard,
+        )
+    finally:
+        matrix.os.close(guard_descriptor)
+        matrix.os.close(scheduler_descriptor)
 
     assert result.returncode == 0
     assert json.loads(output.read_text(encoding="utf-8")) == [
@@ -917,7 +1411,7 @@ def test_tampered_cell_or_matrix_fails_closed_before_any_overwrite(
     _write_json(harness.matrix_summary, matrix_payload)
     partial_before = harness.matrix_summary.read_bytes()
 
-    with pytest.raises(ValueError, match="may not start quality evaluation"):
+    with pytest.raises(ValueError, match="top-level schema drifted"):
         _run(harness)
     assert harness.matrix_summary.read_bytes() == partial_before
     assert calls == []
