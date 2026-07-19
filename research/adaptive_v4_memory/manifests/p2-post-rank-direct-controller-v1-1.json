@@ -1,0 +1,1014 @@
+{
+  "adaptation_disclosure": {
+    "post_707_rank_no_go": true,
+    "preheldout_validator_amendment": {
+      "admission_and_ledger_snapshots_held_across_new_training_child": true,
+      "admission_commit_rule": "fsynced-staging-hard-link-no-replace-v1",
+      "admission_creation_requires_exclusive_matrix_gpu_and_device_leases": true,
+      "admission_public_binding_uses_single_verified_inode": true,
+      "amended_ledger_validated_before_new_training_child": true,
+      "calibration_results_observed": false,
+      "controller_arms_or_estimands_changed": false,
+      "corrected_predicate": "always-gradient-step-equals-1000-and-routed-expert-pairs-share-finite-integral-step-in-1-through-1000-v1",
+      "existing_artifact_bytes_may_change": false,
+      "existing_claim_may_be_deleted_or_moved": false,
+      "failed_coordinate": {
+        "scale": "s55",
+        "training_seed": 6071406
+      },
+      "frozen_artifact_sha256": {
+        "checkpoint": "dfaa5da812e4a4301d8744ccacb5871dffcc19491a9fd2af4815cc24d0ca2f7f",
+        "claim": "60724fc6226380bc8b457cc3e4518c5060beda037fb4878f21b14614bb204309",
+        "matrix_ledger": "dc469a9c22ef295ed61022042fd6f1c4ddbd8544adb144986d590fc0f7b2ef7f",
+        "training_summary": "9e3225442e621e6a957a2f3e53138686be7a37f2495552804be9d133d92dd8cf"
+      },
+      "held_out_controller_quality_observed": false,
+      "incident_report": {
+        "path": "research/adaptive_v4_memory/reports/2026-07-19-p2-direct-training-validator-amendment.md",
+        "sha256": "371080e0e7f34534165afb2c0325b6d6ef4d698a198db9b42e60367a05663820"
+      },
+      "one_shot_exact_byte_admission_required": true,
+      "read_only_git_provenance_commands_within_admission_creation": [
+        "git ls-tree",
+        "git merge-base --is-ancestor"
+      ],
+      "reason": "sparse-adamw-parameter-local-step-validator-false-negative-v1",
+      "scientific_subprocess_reexecution_for_admission": false,
+      "seed_grid_changed": false,
+      "stage": "first-training-prerequisite-before-calibration-top-p-or-held-out-quality",
+      "superseded_manifest": {
+        "attempt_source_commit": "f48e69e3cf4c52621095365cf60cf2d4a4f8476b",
+        "implementation_source_commit": "d2bc60fecb573170e1bf175713ad9f4320f881a5",
+        "implementation_tree_digest": "96dc5cd28bb113d0c659f8b0deab17f612170584c4187aa1ef211bd4bb139734",
+        "path": "research/adaptive_v4_memory/manifests/p2-post-rank-direct-controller-v1.json",
+        "sha256": "d8d969b480d692e7ffa17b94504a7b25b75be602e1ce5c8d1821f9f2937384a7"
+      },
+      "top_p_results_observed": false,
+      "training_diagnostics_observed": true,
+      "training_hyperparameters_changed": false
+    },
+    "prior_p2_quality_results_observed": true
+  },
+  "attestation": {
+    "key_compromise_in_scope": false,
+    "key_id": "67f433c02a291f9b1c9e65218171b6da46ef019567ee24406b4738c2ddf765bf",
+    "key_storage_rule": "raw high-entropy key outside repository and artifact roots, owned by the invoking user, regular non-symlink file, mode 0600; key bytes never enter commands, artifacts, or logs",
+    "key_transport": "runner-to-child inherited sealed memfd",
+    "scheme": "hmac-sha256-v1",
+    "threat_model": "authenticates artifacts produced by the trusted canonical runner and detects forged, concurrently substituted, or binding-mismatched stale files; compromise of the user-owned key, ptrace or memory inspection by the same user, a hostile process already holding the key, and whole-set rollback of an otherwise valid identically bound experiment are out of scope"
+  },
+  "cohort": {
+    "calibration_seeds": [
+      7071406,
+      7071407,
+      7071408,
+      7071409,
+      7071410
+    ],
+    "evaluation_seeds": [
+      10071406,
+      10071407,
+      10071408,
+      10071409,
+      10071410
+    ],
+    "fresh_evaluation_namespace": true,
+    "seed_namespaces_pairwise_disjoint": true,
+    "training_seeds": [
+      6071406,
+      6071407,
+      6071408,
+      6071409,
+      6071410
+    ]
+  },
+  "confirmatory_success_gate": {
+    "all_three_contrasts_evaluated_independently": true,
+    "conditions_per_comparator_scale_budget": [
+      "pooled paired intent-to-treat mean strictly positive",
+      "all five training-seed mean differences strictly positive",
+      "paired conversation bootstrap 95 percent lower bound strictly positive",
+      "training-seed-cluster bootstrap 95 percent lower bound strictly positive",
+      "Bonferroni four-cell 98.75 percent seed-cluster lower bound strictly positive",
+      "zero candidate or comparator technical failures",
+      "exact paired physical hot-resident-byte parity for all five seeds"
+    ],
+    "diagnostic_ablation_eligible_for_arm_selection": false,
+    "direct_hsoft_candidate": "hierarchical-soft-lag+pins",
+    "direct_hsoft_comparators": [
+      "fixed+pins",
+      "hierarchical-balanced-fixed+pins"
+    ],
+    "exact_seed_p_value_used_as_success_gate": false,
+    "fail_label": "NO-GO-CONFIRMATORY",
+    "original_central_and_both_hsoft_comparators_must_pass_every_cell": true,
+    "original_central_causal_contrast": {
+      "candidate": "calibrated+pins",
+      "comparator": "fixed+pins",
+      "name": "calibrated_pins_vs_fixed_pins"
+    },
+    "pass_label": "GO-OBSERVED-COHORT-BOUNDED",
+    "population_significance_reported_separately": true,
+    "primary_metric": "accuracy",
+    "required_budgets": [
+      "2x",
+      "4x"
+    ],
+    "required_scales": [
+      "s55",
+      "s151"
+    ],
+    "required_seed_effects_per_scale_budget": 5,
+    "top_p_eligible_for_primary_gate": false
+  },
+  "execution_contract": {
+    "actual_hot_tensor_bytes_recorded_per_token": true,
+    "balanced_feasible_control_rule": "at every token, fixed+pins and hierarchical-balanced-fixed+pins receive the exact same candidate_caps, pin_floors, active layer set, and feasible B_t as Hsoft, but allocate with signal-blind uniform weights and deterministic capped water-filling plus Hamilton rounding",
+    "batch_size": 1,
+    "chunked_equivalence_required": false,
+    "configured_caps_are_physical_evidence": false,
+    "cuda_peak_allocated_and_reserved_recorded": true,
+    "decode_tokens_per_step": 1,
+    "direct_arm_semantics_authoritative": true,
+    "exact_fill_arms": [
+      "hierarchical-soft-lag+pins",
+      "fixed+pins",
+      "hierarchical-balanced-fixed+pins",
+      "fixed",
+      "calibrated-no-pins",
+      "calibrated+pins",
+      "shuffled-quota",
+      "shuffled-quota+pins",
+      "local-no-pins",
+      "local+pins",
+      "hierarchical-soft-lag-no-pins",
+      "hierarchical-soft-lag+pins-no-score",
+      "hierarchical-soft-lag+pins-no-temporal",
+      "hierarchical-soft-lag+pins-no-cross-layer",
+      "hierarchical-soft-lag+pins-no-refresh",
+      "hierarchical-soft-lag+pins-permuted-quota",
+      "hierarchical-soft-lag+pins+fallback"
+    ],
+    "exact_fill_rule": "every exact-fill arm must select and physically materialize exactly feasible B_t blocks after pins, where B_t=min(frozen global B, summed candidate caps); pins are charged inside B_t, every active CSA layer keeps a one-block floor, zero-cap stores are forbidden, and per-layer hot capacities must sum exactly to B_t",
+    "fallback_boundary": "fallback may reorder/recover only blocks already resident inside the arm's unchanged per-layer quota; it may not add a block, resize a tier, transfer an extra block, or change B_t",
+    "fallback_preserves_exact_b": true,
+    "legacy_configs_are_scaffolds_only": true,
+    "literal_model_path": "sequential-tiered",
+    "outcome_dependent_early_stopping": false,
+    "per_layer_hot_floor": 1,
+    "phase_b_runs_regardless_of_phase_a_outcomes": true,
+    "physical_audit_rule": "at every decoded token, bind allocator pin IDs/counts to store protected blocks, resize all CSA stores, materialize the selected exact-fill set, synchronize CUDA, and record actual hot tensor bytes plus CUDA peak allocated and reserved bytes; configured caps alone are not evidence of physical memory matching",
+    "pin_ids_and_counts_bound_before_resize": true,
+    "same_literal_path_for_every_arm": true,
+    "signal_diagnostic_rule": "for every decoded token and CSA layer record each raw controller component, its robust standardized value before clipping, the post-clip value, clip/saturation indicator, requested and allocated blocks, and whether controller history is cold-start or steady-state; report clipping and quota-movement rates by seed, scale, budget, family, context, and regime",
+    "signal_weight_rule": {
+      "by_arm": {
+        "calibrated+pins": {
+          "cross_layer": 0.2,
+          "entropy": 0.35,
+          "margin": 0.2,
+          "temporal": 0.25
+        },
+        "calibrated-no-pins": {
+          "cross_layer": 0.2,
+          "entropy": 0.35,
+          "margin": 0.2,
+          "temporal": 0.25
+        },
+        "fixed": {
+          "cross_layer": 0.2,
+          "entropy": 0.35,
+          "margin": 0.2,
+          "temporal": 0.25
+        },
+        "fixed+pins": {
+          "cross_layer": 0.2,
+          "entropy": 0.35,
+          "margin": 0.2,
+          "temporal": 0.25
+        },
+        "fixed-top-p-0.5+pins": {
+          "cross_layer": 0.2,
+          "entropy": 0.35,
+          "margin": 0.2,
+          "temporal": 0.25
+        },
+        "fixed-top-p-0.8+pins": {
+          "cross_layer": 0.2,
+          "entropy": 0.35,
+          "margin": 0.2,
+          "temporal": 0.25
+        },
+        "hierarchical-balanced-fixed+pins": {
+          "cross_layer": 0.2,
+          "entropy": 0.35,
+          "margin": 0.2,
+          "temporal": 0.25
+        },
+        "hierarchical-soft-lag+pins": {
+          "cross_layer": 0.2,
+          "entropy": 0.35,
+          "margin": 0.2,
+          "temporal": 0.25
+        },
+        "hierarchical-soft-lag+pins+fallback": {
+          "cross_layer": 0.2,
+          "entropy": 0.35,
+          "margin": 0.2,
+          "temporal": 0.25
+        },
+        "hierarchical-soft-lag+pins-no-cross-layer": {
+          "cross_layer": 0.0,
+          "entropy": 0.4375,
+          "margin": 0.25,
+          "temporal": 0.3125
+        },
+        "hierarchical-soft-lag+pins-no-refresh": {
+          "cross_layer": 0.2,
+          "entropy": 0.35,
+          "margin": 0.2,
+          "temporal": 0.25
+        },
+        "hierarchical-soft-lag+pins-no-score": {
+          "cross_layer": 0.4444444444444444,
+          "entropy": 0.0,
+          "margin": 0.0,
+          "temporal": 0.5555555555555556
+        },
+        "hierarchical-soft-lag+pins-no-temporal": {
+          "cross_layer": 0.26666666666666666,
+          "entropy": 0.4666666666666667,
+          "margin": 0.26666666666666666,
+          "temporal": 0.0
+        },
+        "hierarchical-soft-lag+pins-permuted-quota": {
+          "cross_layer": 0.2,
+          "entropy": 0.35,
+          "margin": 0.2,
+          "temporal": 0.25
+        },
+        "hierarchical-soft-lag-no-pins": {
+          "cross_layer": 0.2,
+          "entropy": 0.35,
+          "margin": 0.2,
+          "temporal": 0.25
+        },
+        "local+pins": {
+          "cross_layer": 0.2,
+          "entropy": 0.35,
+          "margin": 0.2,
+          "temporal": 0.25
+        },
+        "local-no-pins": {
+          "cross_layer": 0.2,
+          "entropy": 0.35,
+          "margin": 0.2,
+          "temporal": 0.25
+        },
+        "shuffled-quota": {
+          "cross_layer": 0.2,
+          "entropy": 0.35,
+          "margin": 0.2,
+          "temporal": 0.25
+        },
+        "shuffled-quota+pins": {
+          "cross_layer": 0.2,
+          "entropy": 0.35,
+          "margin": 0.2,
+          "temporal": 0.25
+        }
+      },
+      "component_order": [
+        "entropy",
+        "margin",
+        "temporal",
+        "cross_layer"
+      ],
+      "description": "default entropy/margin/temporal/cross-layer weights are .35/.20/.25/.20; each signal ablation sets every removed demand component to zero and preregisteredly renormalizes the remaining enabled components to sum exactly one"
+    },
+    "single_token_decode": true,
+    "soft_lag_signal_rule": "token t quotas use only token t-1 ControllerLayerSignal values, target-free calibration, pin/candidate bounds, and a deterministic control key; same-token signals, labels, answers, correctness, and evaluation outcomes are forbidden inputs",
+    "variable_fill_sensitivity_arms": [
+      "fixed-top-p-0.5+pins",
+      "fixed-top-p-0.8+pins"
+    ],
+    "zero_cap_tier_stores_forbidden": true
+  },
+  "experiment_id": "p2-post-rank-direct-controller-v1.1",
+  "grid": {
+    "budgets": [
+      "2x",
+      "4x"
+    ],
+    "cardinalities": {
+      "all_arm_conversations": 3420000,
+      "budget_expanded_conversation_evaluations_total": 180000,
+      "budget_shards_total": 9000,
+      "budgets": 2,
+      "contexts": 5,
+      "distinct_generated_conversations_total": 45000,
+      "examples_per_seed_scale_family": 1000,
+      "examples_per_shard": 20,
+      "families": 9,
+      "phase_a_arm_conversations": 900000,
+      "phase_b_additional_arm_conversations": 2520000,
+      "raw_token_rows_without_technical_failures": 154280000,
+      "replicates_per_context": 10,
+      "scale_specific_conversation_evaluations_total": 90000,
+      "scales": 2,
+      "seeds": 5,
+      "unique_shards_per_seed_scale": 450,
+      "unique_shards_total": 4500
+    },
+    "contexts": [
+      80,
+      128,
+      256,
+      512,
+      1024
+    ],
+    "examples_per_shard": 20,
+    "families": [
+      "single-remote-retrieval",
+      "multiple-independent-needles",
+      "associative-recall",
+      "multi-turn-query-shift",
+      "dense-global-aggregation",
+      "irrelevant-context-local-only",
+      "instruction-persistence",
+      "adversarial-lexical-distractors",
+      "long-generation-changing-evidence"
+    ],
+    "generation_seed_rule": "evaluation_seed*100000 + family_index*1000 + context_index*10 + replicate",
+    "paired_across_scales_budgets_and_arms": true,
+    "replicates": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9
+    ],
+    "scales": [
+      "s55",
+      "s151"
+    ]
+  },
+  "implementation": {
+    "paths": [
+      "pyproject.toml",
+      "nano_deepseek_v4",
+      "research/adaptive_v4_memory/reports/2026-07-19-p2-direct-training-validator-amendment.md",
+      "research/adaptive_v4_memory/scripts/adaptive_v4_execution_environment.py",
+      "research/adaptive_v4_memory/scripts/adaptive_v4_gpu_lock.py",
+      "research/adaptive_v4_memory/scripts/freeze_p2_causal_factorial_arms.py",
+      "research/adaptive_v4_memory/scripts/p2_direct_attestation.py",
+      "research/adaptive_v4_memory/scripts/train_m1_associative_recall.py",
+      "research/adaptive_v4_memory/scripts/p2_direct_controller_contract.py",
+      "research/adaptive_v4_memory/scripts/run_p2_direct_training_matrix.py",
+      "research/adaptive_v4_memory/scripts/calibrate_p2_direct_soft_lag.py",
+      "research/adaptive_v4_memory/scripts/run_p2_direct_calibration_matrix.py",
+      "research/adaptive_v4_memory/scripts/validate_p2_direct_top_p_physical_match.py",
+      "research/adaptive_v4_memory/scripts/run_p2_direct_top_p_physical_matrix.py",
+      "research/adaptive_v4_memory/scripts/evaluate_p2_direct_controller_shard.py",
+      "research/adaptive_v4_memory/scripts/run_p2_direct_controller_matrix.py",
+      "research/adaptive_v4_memory/scripts/audit_p2_direct_controller_integrity.py",
+      "research/adaptive_v4_memory/scripts/summarize_p2_direct_controller.py"
+    ],
+    "source_commit": "80ef62672ea1f625acd0481e2ae34aa7c4a3f4a3",
+    "tree_digest": "8dff0fbda776a81d2b4e2a1eacf12d01a6d8c6bad9df5376e1ed5193638ca5c9"
+  },
+  "phases": {
+    "all_arms": [
+      "hierarchical-soft-lag+pins",
+      "fixed+pins",
+      "hierarchical-balanced-fixed+pins",
+      "fixed-top-p-0.5+pins",
+      "fixed-top-p-0.8+pins",
+      "fixed",
+      "calibrated-no-pins",
+      "calibrated+pins",
+      "shuffled-quota",
+      "shuffled-quota+pins",
+      "local-no-pins",
+      "local+pins",
+      "hierarchical-soft-lag-no-pins",
+      "hierarchical-soft-lag+pins-no-score",
+      "hierarchical-soft-lag+pins-no-temporal",
+      "hierarchical-soft-lag+pins-no-cross-layer",
+      "hierarchical-soft-lag+pins-no-refresh",
+      "hierarchical-soft-lag+pins-permuted-quota",
+      "hierarchical-soft-lag+pins+fallback"
+    ],
+    "arm_features": {
+      "calibrated+pins": {
+        "analysis_role": "central-confirmatory-and-causal-diagnostic",
+        "cross_layer_signal": false,
+        "fallback_mode": "disabled",
+        "fill_mode": "exact-feasible-B",
+        "lag_tokens": 0,
+        "name": "calibrated+pins",
+        "permute_quota": false,
+        "protected_pins": true,
+        "quota_runtime": "calibrated-static",
+        "refresh_reuse": false,
+        "scaffold_name": "calibrated+pins",
+        "score_concentration": false,
+        "signal_weights": [
+          0.35,
+          0.2,
+          0.25,
+          0.2
+        ],
+        "temporal_reuse": false,
+        "top_p": null
+      },
+      "calibrated-no-pins": {
+        "analysis_role": "causal-diagnostic",
+        "cross_layer_signal": false,
+        "fallback_mode": "disabled",
+        "fill_mode": "exact-feasible-B",
+        "lag_tokens": 0,
+        "name": "calibrated-no-pins",
+        "permute_quota": false,
+        "protected_pins": false,
+        "quota_runtime": "calibrated-static",
+        "refresh_reuse": false,
+        "scaffold_name": "calibrated-no-pins",
+        "score_concentration": false,
+        "signal_weights": [
+          0.35,
+          0.2,
+          0.25,
+          0.2
+        ],
+        "temporal_reuse": false,
+        "top_p": null
+      },
+      "fixed": {
+        "analysis_role": "causal-diagnostic",
+        "cross_layer_signal": false,
+        "fallback_mode": "disabled",
+        "fill_mode": "exact-feasible-B",
+        "lag_tokens": 0,
+        "name": "fixed",
+        "permute_quota": false,
+        "protected_pins": false,
+        "quota_runtime": "balanced-feasible",
+        "refresh_reuse": false,
+        "scaffold_name": "fixed",
+        "score_concentration": false,
+        "signal_weights": [
+          0.35,
+          0.2,
+          0.25,
+          0.2
+        ],
+        "temporal_reuse": false,
+        "top_p": null
+      },
+      "fixed+pins": {
+        "analysis_role": "primary-comparator",
+        "cross_layer_signal": false,
+        "fallback_mode": "disabled",
+        "fill_mode": "exact-feasible-B",
+        "lag_tokens": 0,
+        "name": "fixed+pins",
+        "permute_quota": false,
+        "protected_pins": true,
+        "quota_runtime": "balanced-feasible",
+        "refresh_reuse": false,
+        "scaffold_name": "fixed+pins",
+        "score_concentration": false,
+        "signal_weights": [
+          0.35,
+          0.2,
+          0.25,
+          0.2
+        ],
+        "temporal_reuse": false,
+        "top_p": null
+      },
+      "fixed-top-p-0.5+pins": {
+        "analysis_role": "pareto-sensitivity",
+        "cross_layer_signal": false,
+        "fallback_mode": "disabled",
+        "fill_mode": "variable-top-p",
+        "lag_tokens": 0,
+        "name": "fixed-top-p-0.5+pins",
+        "permute_quota": false,
+        "protected_pins": true,
+        "quota_runtime": "fixed-top-p-variable",
+        "refresh_reuse": false,
+        "scaffold_name": "fixed-top-p-0.5",
+        "score_concentration": true,
+        "signal_weights": [
+          0.35,
+          0.2,
+          0.25,
+          0.2
+        ],
+        "temporal_reuse": false,
+        "top_p": 0.5
+      },
+      "fixed-top-p-0.8+pins": {
+        "analysis_role": "pareto-sensitivity",
+        "cross_layer_signal": false,
+        "fallback_mode": "disabled",
+        "fill_mode": "variable-top-p",
+        "lag_tokens": 0,
+        "name": "fixed-top-p-0.8+pins",
+        "permute_quota": false,
+        "protected_pins": true,
+        "quota_runtime": "fixed-top-p-variable",
+        "refresh_reuse": false,
+        "scaffold_name": "fixed-top-p-0.8",
+        "score_concentration": true,
+        "signal_weights": [
+          0.35,
+          0.2,
+          0.25,
+          0.2
+        ],
+        "temporal_reuse": false,
+        "top_p": 0.8
+      },
+      "hierarchical-balanced-fixed+pins": {
+        "analysis_role": "primary-comparator",
+        "cross_layer_signal": true,
+        "fallback_mode": "disabled",
+        "fill_mode": "exact-feasible-B",
+        "lag_tokens": 0,
+        "name": "hierarchical-balanced-fixed+pins",
+        "permute_quota": false,
+        "protected_pins": true,
+        "quota_runtime": "balanced-feasible",
+        "refresh_reuse": true,
+        "scaffold_name": "hierarchical+pins",
+        "score_concentration": true,
+        "signal_weights": [
+          0.35,
+          0.2,
+          0.25,
+          0.2
+        ],
+        "temporal_reuse": true,
+        "top_p": null
+      },
+      "hierarchical-soft-lag+pins": {
+        "analysis_role": "primary-treatment",
+        "cross_layer_signal": true,
+        "fallback_mode": "disabled",
+        "fill_mode": "exact-feasible-B",
+        "lag_tokens": 1,
+        "name": "hierarchical-soft-lag+pins",
+        "permute_quota": false,
+        "protected_pins": true,
+        "quota_runtime": "soft-lag",
+        "refresh_reuse": true,
+        "scaffold_name": "hierarchical+pins",
+        "score_concentration": true,
+        "signal_weights": [
+          0.35,
+          0.2,
+          0.25,
+          0.2
+        ],
+        "temporal_reuse": true,
+        "top_p": null
+      },
+      "hierarchical-soft-lag+pins+fallback": {
+        "analysis_role": "causal-diagnostic",
+        "cross_layer_signal": true,
+        "fallback_mode": "same-quota-resident-only-dense-recovery",
+        "fill_mode": "exact-feasible-B",
+        "lag_tokens": 1,
+        "name": "hierarchical-soft-lag+pins+fallback",
+        "permute_quota": false,
+        "protected_pins": true,
+        "quota_runtime": "soft-lag",
+        "refresh_reuse": true,
+        "scaffold_name": "hierarchical+pins+fallback",
+        "score_concentration": true,
+        "signal_weights": [
+          0.35,
+          0.2,
+          0.25,
+          0.2
+        ],
+        "temporal_reuse": true,
+        "top_p": null
+      },
+      "hierarchical-soft-lag+pins-no-cross-layer": {
+        "analysis_role": "causal-diagnostic",
+        "cross_layer_signal": false,
+        "fallback_mode": "disabled",
+        "fill_mode": "exact-feasible-B",
+        "lag_tokens": 1,
+        "name": "hierarchical-soft-lag+pins-no-cross-layer",
+        "permute_quota": false,
+        "protected_pins": true,
+        "quota_runtime": "soft-lag",
+        "refresh_reuse": true,
+        "scaffold_name": "local+pins",
+        "score_concentration": true,
+        "signal_weights": [
+          0.4375,
+          0.25,
+          0.3125,
+          0.0
+        ],
+        "temporal_reuse": true,
+        "top_p": null
+      },
+      "hierarchical-soft-lag+pins-no-refresh": {
+        "analysis_role": "causal-diagnostic",
+        "cross_layer_signal": true,
+        "fallback_mode": "disabled",
+        "fill_mode": "exact-feasible-B",
+        "lag_tokens": 1,
+        "name": "hierarchical-soft-lag+pins-no-refresh",
+        "permute_quota": false,
+        "protected_pins": true,
+        "quota_runtime": "soft-lag",
+        "refresh_reuse": false,
+        "scaffold_name": "hierarchical+pins-no-refresh",
+        "score_concentration": true,
+        "signal_weights": [
+          0.35,
+          0.2,
+          0.25,
+          0.2
+        ],
+        "temporal_reuse": true,
+        "top_p": null
+      },
+      "hierarchical-soft-lag+pins-no-score": {
+        "analysis_role": "causal-diagnostic",
+        "cross_layer_signal": true,
+        "fallback_mode": "disabled",
+        "fill_mode": "exact-feasible-B",
+        "lag_tokens": 1,
+        "name": "hierarchical-soft-lag+pins-no-score",
+        "permute_quota": false,
+        "protected_pins": true,
+        "quota_runtime": "soft-lag",
+        "refresh_reuse": true,
+        "scaffold_name": "hierarchical+pins-no-score",
+        "score_concentration": false,
+        "signal_weights": [
+          0.0,
+          0.0,
+          0.5555555555555556,
+          0.4444444444444444
+        ],
+        "temporal_reuse": true,
+        "top_p": null
+      },
+      "hierarchical-soft-lag+pins-no-temporal": {
+        "analysis_role": "causal-diagnostic",
+        "cross_layer_signal": true,
+        "fallback_mode": "disabled",
+        "fill_mode": "exact-feasible-B",
+        "lag_tokens": 1,
+        "name": "hierarchical-soft-lag+pins-no-temporal",
+        "permute_quota": false,
+        "protected_pins": true,
+        "quota_runtime": "soft-lag",
+        "refresh_reuse": true,
+        "scaffold_name": "hierarchical+pins-no-temporal",
+        "score_concentration": true,
+        "signal_weights": [
+          0.4666666666666667,
+          0.26666666666666666,
+          0.0,
+          0.26666666666666666
+        ],
+        "temporal_reuse": false,
+        "top_p": null
+      },
+      "hierarchical-soft-lag+pins-permuted-quota": {
+        "analysis_role": "causal-diagnostic",
+        "cross_layer_signal": true,
+        "fallback_mode": "disabled",
+        "fill_mode": "exact-feasible-B",
+        "lag_tokens": 1,
+        "name": "hierarchical-soft-lag+pins-permuted-quota",
+        "permute_quota": true,
+        "protected_pins": true,
+        "quota_runtime": "soft-lag-permuted",
+        "refresh_reuse": true,
+        "scaffold_name": "hierarchical+pins",
+        "score_concentration": true,
+        "signal_weights": [
+          0.35,
+          0.2,
+          0.25,
+          0.2
+        ],
+        "temporal_reuse": true,
+        "top_p": null
+      },
+      "hierarchical-soft-lag-no-pins": {
+        "analysis_role": "causal-diagnostic",
+        "cross_layer_signal": true,
+        "fallback_mode": "disabled",
+        "fill_mode": "exact-feasible-B",
+        "lag_tokens": 1,
+        "name": "hierarchical-soft-lag-no-pins",
+        "permute_quota": false,
+        "protected_pins": false,
+        "quota_runtime": "soft-lag",
+        "refresh_reuse": true,
+        "scaffold_name": "hierarchical-no-pins",
+        "score_concentration": true,
+        "signal_weights": [
+          0.35,
+          0.2,
+          0.25,
+          0.2
+        ],
+        "temporal_reuse": true,
+        "top_p": null
+      },
+      "local+pins": {
+        "analysis_role": "causal-diagnostic",
+        "cross_layer_signal": false,
+        "fallback_mode": "disabled",
+        "fill_mode": "exact-feasible-B",
+        "lag_tokens": 0,
+        "name": "local+pins",
+        "permute_quota": false,
+        "protected_pins": true,
+        "quota_runtime": "local-static-quota",
+        "refresh_reuse": true,
+        "scaffold_name": "local+pins",
+        "score_concentration": true,
+        "signal_weights": [
+          0.35,
+          0.2,
+          0.25,
+          0.2
+        ],
+        "temporal_reuse": true,
+        "top_p": null
+      },
+      "local-no-pins": {
+        "analysis_role": "causal-diagnostic",
+        "cross_layer_signal": false,
+        "fallback_mode": "disabled",
+        "fill_mode": "exact-feasible-B",
+        "lag_tokens": 0,
+        "name": "local-no-pins",
+        "permute_quota": false,
+        "protected_pins": false,
+        "quota_runtime": "local-static-quota",
+        "refresh_reuse": true,
+        "scaffold_name": "local-no-pins",
+        "score_concentration": true,
+        "signal_weights": [
+          0.35,
+          0.2,
+          0.25,
+          0.2
+        ],
+        "temporal_reuse": true,
+        "top_p": null
+      },
+      "shuffled-quota": {
+        "analysis_role": "causal-diagnostic",
+        "cross_layer_signal": false,
+        "fallback_mode": "disabled",
+        "fill_mode": "exact-feasible-B",
+        "lag_tokens": 0,
+        "name": "shuffled-quota",
+        "permute_quota": false,
+        "protected_pins": false,
+        "quota_runtime": "calibration-shuffled-static",
+        "refresh_reuse": false,
+        "scaffold_name": "shuffled-quota",
+        "score_concentration": false,
+        "signal_weights": [
+          0.35,
+          0.2,
+          0.25,
+          0.2
+        ],
+        "temporal_reuse": false,
+        "top_p": null
+      },
+      "shuffled-quota+pins": {
+        "analysis_role": "causal-diagnostic",
+        "cross_layer_signal": false,
+        "fallback_mode": "disabled",
+        "fill_mode": "exact-feasible-B",
+        "lag_tokens": 0,
+        "name": "shuffled-quota+pins",
+        "permute_quota": false,
+        "protected_pins": true,
+        "quota_runtime": "calibration-shuffled-static",
+        "refresh_reuse": false,
+        "scaffold_name": "shuffled-quota+pins",
+        "score_concentration": false,
+        "signal_weights": [
+          0.35,
+          0.2,
+          0.25,
+          0.2
+        ],
+        "temporal_reuse": false,
+        "top_p": null
+      }
+    },
+    "original_central_causal_set": [
+      "calibrated+pins",
+      "fixed+pins"
+    ],
+    "phase_a_all": [
+      "hierarchical-soft-lag+pins",
+      "fixed+pins",
+      "hierarchical-balanced-fixed+pins",
+      "fixed-top-p-0.5+pins",
+      "fixed-top-p-0.8+pins"
+    ],
+    "phase_a_confirmatory_set": [
+      "hierarchical-soft-lag+pins",
+      "fixed+pins",
+      "hierarchical-balanced-fixed+pins"
+    ],
+    "phase_a_pareto_sensitivities": [
+      "fixed-top-p-0.5+pins",
+      "fixed-top-p-0.8+pins"
+    ],
+    "phase_b_diagnostic": [
+      "fixed",
+      "calibrated-no-pins",
+      "calibrated+pins",
+      "shuffled-quota",
+      "shuffled-quota+pins",
+      "local-no-pins",
+      "local+pins",
+      "hierarchical-soft-lag-no-pins",
+      "hierarchical-soft-lag+pins-no-score",
+      "hierarchical-soft-lag+pins-no-temporal",
+      "hierarchical-soft-lag+pins-no-cross-layer",
+      "hierarchical-soft-lag+pins-no-refresh",
+      "hierarchical-soft-lag+pins-permuted-quota",
+      "hierarchical-soft-lag+pins+fallback"
+    ]
+  },
+  "primary_estimand": {
+    "adaptive_arm": "hierarchical-soft-lag+pins",
+    "comparator_selection_from_outcomes": false,
+    "confirmatory_comparators": [
+      "fixed+pins",
+      "hierarchical-balanced-fixed+pins"
+    ],
+    "confirmatory_decision_rule": "report and gate Hsoft independently against both frozen confirmatory comparators in every required seed-scale-budget cell; neither comparison may be dropped, pooled, maximized, or selected using evaluation outcomes",
+    "confirmatory_estimands": {
+      "fixed+pins": "total Hsoft controller-bundle effect versus a conventional signal-blind balanced feasible exact-B selector with protected pins and adaptive selector features disabled",
+      "hierarchical-balanced-fixed+pins": "soft-lag signal-weighted allocator effect versus a signal-blind balanced feasible allocator, holding candidate caps, pin floors, selector/reuse bundle, protected pins, exact-fill rule, and global B_t fixed"
+    },
+    "memory_match_target_metric": "hot_resident_bytes",
+    "pareto_sensitivity_comparators": [
+      "fixed-top-p-0.5+pins",
+      "fixed-top-p-0.8+pins"
+    ],
+    "primary_exact_fill_required": true,
+    "strongest_fixed_comparator_rule": "fixed+pins is the predeclared conventional comparator and hierarchical-balanced-fixed+pins is the mandatory clean allocator control; both use the same target-free balanced feasible bound rule and must be tested separately, with no evaluation-outcome max, replacement, selection, or pooling across comparators",
+    "top_p_calibration_only_mean_hot_byte_matching": true,
+    "top_p_eligible_for_primary_comparison": false,
+    "top_p_sensitivity_rule": "top-p remains variable-cardinality and is matched only on calibration-only mean hot bytes; it is never exact-filled, never converted to top-k, and never eligible for the primary strongest-fixed comparison"
+  },
+  "schema_version": 1,
+  "statistical_analysis": {
+    "causal_diagnostic_contrast_count": 15,
+    "causal_diagnostic_contrasts": [
+      {
+        "candidate": "calibrated-no-pins",
+        "comparator": "fixed",
+        "name": "adaptive_quota_without_pins"
+      },
+      {
+        "candidate": "fixed+pins",
+        "comparator": "fixed",
+        "name": "pin_fixed"
+      },
+      {
+        "candidate": "calibrated+pins",
+        "comparator": "calibrated-no-pins",
+        "name": "pin_calibrated"
+      },
+      {
+        "candidate": "shuffled-quota+pins",
+        "comparator": "shuffled-quota",
+        "name": "pin_shuffled_quota"
+      },
+      {
+        "candidate": "local+pins",
+        "comparator": "local-no-pins",
+        "name": "pin_local"
+      },
+      {
+        "candidate": "hierarchical-soft-lag+pins",
+        "comparator": "hierarchical-soft-lag-no-pins",
+        "name": "pin_hsoft"
+      },
+      {
+        "candidate": "calibrated+pins",
+        "comparator": "shuffled-quota+pins",
+        "name": "calibrated_quota_vs_shuffled"
+      },
+      {
+        "candidate": "hierarchical-soft-lag+pins",
+        "comparator": "calibrated+pins",
+        "name": "dynamic_hsoft_vs_calibrated_static"
+      },
+      {
+        "candidate": "hierarchical-soft-lag+pins",
+        "comparator": "local+pins",
+        "name": "hierarchical_hsoft_vs_local"
+      },
+      {
+        "candidate": "hierarchical-soft-lag+pins",
+        "comparator": "hierarchical-soft-lag+pins-no-score",
+        "name": "score_signal"
+      },
+      {
+        "candidate": "hierarchical-soft-lag+pins",
+        "comparator": "hierarchical-soft-lag+pins-no-temporal",
+        "name": "temporal_signal"
+      },
+      {
+        "candidate": "hierarchical-soft-lag+pins",
+        "comparator": "hierarchical-soft-lag+pins-no-cross-layer",
+        "name": "cross_layer_signal"
+      },
+      {
+        "candidate": "hierarchical-soft-lag+pins",
+        "comparator": "hierarchical-soft-lag+pins-no-refresh",
+        "name": "refresh_reuse"
+      },
+      {
+        "candidate": "hierarchical-soft-lag+pins",
+        "comparator": "hierarchical-soft-lag+pins-permuted-quota",
+        "name": "quota_identity_vs_permuted"
+      },
+      {
+        "candidate": "hierarchical-soft-lag+pins+fallback",
+        "comparator": "hierarchical-soft-lag+pins",
+        "name": "resident_fallback_increment"
+      }
+    ],
+    "confirmatory_comparators_pooled_selected_or_dropped": false,
+    "dependency_boundary": "the tracked pyproject.toml constrains project dependencies but is not an exact environment lock; terminal summaries must record and validate the exact Python and NumPy versions used",
+    "diagnostic_contrast_correction": "Holm-Bonferroni over all 15 preregistered causal diagnostic contrasts separately within each scale, budget, and quality metric",
+    "exact_dependency_lock_bound": false,
+    "exact_seed_sign_flip_assignments": 32,
+    "family_correction": "Holm-Bonferroni over all 9 workload families separately within each contrast, scale, budget, and quality metric",
+    "independent_cluster": "training checkpoint seed",
+    "independent_seed_clusters_per_scale_budget": 5,
+    "minimum_attainable_two_sided_seed_p": 0.0625,
+    "numpy_quantile_method": "linear",
+    "numpy_rng": "numpy.random.Generator(numpy.random.PCG64)",
+    "paired_bootstrap_resamples": 20000,
+    "paired_conversation_confidence_level": 0.95,
+    "paired_conversation_scope": "conditional-on-observed-fitted-model-cohort",
+    "population_generalization_from_conversation_count": false,
+    "primary_four_cell_confidence_level": 0.9875,
+    "primary_four_cell_correction": "Bonferroni over 2 scales x 2 budgets, separately for each frozen confirmatory comparator, using five independent training-seed means",
+    "primary_quality_metric": "accuracy",
+    "project_dependency_spec_bound": true,
+    "required_joint_quality_slice": [
+      "scale",
+      "budget",
+      "training_seed",
+      "family",
+      "context"
+    ],
+    "required_slices": [
+      "scale",
+      "budget",
+      "training_seed",
+      "family",
+      "context"
+    ],
+    "secondary_quality_metrics": [
+      "all_queries_correct"
+    ],
+    "seed_cluster_bootstrap_resamples": 20000,
+    "seed_cluster_confidence_level": 0.95,
+    "seed_exact_test_alpha": 0.05,
+    "seed_p_value_used_as_success_gate": false,
+    "technical_failure_policy": "intent-to-treat-zero-and-confirmatory-no-go",
+    "technical_failure_quality_score": 0.0,
+    "top_p_sensitivity_in_confirmatory_multiplicity": false,
+    "worst_family_context_slice_reported": true,
+    "worst_joint_training_seed_family_context_slice_reported": true
+  },
+  "status": "amended_after_training_validator_false_negative_before_calibration_or_held_out_quality"
+}
