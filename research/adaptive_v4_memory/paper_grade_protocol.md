@@ -10,9 +10,10 @@ amended once more before the fresh 6071406--6071410 training cohort, 7071406--
 7071410 calibration cohort, or 10071406--10071410 evaluation cohort existed
 Status: P2 core and path localization terminal; the old 16-arm factorial and
 calibrated-versus-shuffled Stage A remain paused and structurally blocked. The
-new 19-arm direct-controller cohort is preregistered and unexecuted; its
-implementation, attestation, storage, and distributed-runner gates must be
-terminal before any held-out shard starts.
+terminal v1.1 training ledger reused by v1.2 and the revision-1.2 calibration
+prerequisite are terminal, but its 40-cell protected-pinned fixed-top-p
+physical-match prerequisite is terminal NO-GO. The held-out 19-arm
+controller-quality matrix remains unexecuted.
 
 Post-core execution amendment 2.3-P1 pauses, but does not alter or erase, the
 frozen full causal factorial. The pause is grounded in the exogenous July-17
@@ -198,7 +199,8 @@ failures, and exact paired physical hot-byte parity. With five seeds the exact
 two-sided sign-flip p-value floor is 0.0625; it is reported but cannot be a
 0.05 success gate or a population-significance claim.
 
-The two fixed top-p arms are descriptive only. Before held-out quality, a
+The two fixed top-p arms, both with protected pins, are descriptive only.
+Before held-out quality, a
 separate 40-cell calibration matrix (2 scales x 5 seeds x 2 budgets x 2
 thresholds) must match mean actual hot-resident bytes within 1%. Fifteen
 preregistered diagnostic contrasts then separate pins, static adaptive quota,
@@ -206,6 +208,22 @@ quota identity, local versus hierarchical control, score/temporal/cross-layer/
 refresh signals, permutation, and resident-only fallback. Technical failures
 remain in the intent-to-treat estimand with quality zero and independently make
 a confirmatory verdict NO-GO.
+
+### Post-execution outcome note (not a protocol amendment)
+
+On 2026-07-20 the terminal v1.1 training ledger reused by v1.2 was validated
+10/10 and the disjoint revision-1.2 calibration matrix was terminal 10/10 GO.
+The complete top-p physical-match matrix then ran all 40 coordinates and
+reached terminal 0 GO / 40 NO-GO under the unchanged 1% threshold. Its closest
+cell differed by 5.1778%. The canonical controller output and worker-ledger
+roots remained absent, and every physical-match artifact recorded
+calibration-only generation with no evaluation-seed access. Therefore held-out
+controller quality, the three confirmatory contrasts, and the diagnostic
+ablations are unrun; they did not receive a quality NO-GO. This note records
+the observed outcome and changes no v1.2 arm, threshold, seed, gate, or
+artifact. The authenticated hashes, cell-level results, interpretation, and
+claim boundary are in
+[`2026-07-20-p2-direct-top-p-physical-match-no-go.md`](reports/2026-07-20-p2-direct-top-p-physical-match-no-go.md).
 
 Every raw bundle, prefix ledger, terminal ledger, integrity artifact, and
 summary is HMAC-attested under one external 0600 trust root. Training,

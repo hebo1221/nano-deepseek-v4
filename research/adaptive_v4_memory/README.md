@@ -32,7 +32,7 @@ resident on the accelerator.
 
 ## Current status
 
-Status: **legacy Stage A structurally blocked; prospective 19-arm direct cohort in preflight**
+Status: **legacy Stage A structurally blocked; direct v1.2 top-p prerequisite terminal NO-GO**
 
 The July 19
 [`path-localization and identifiability report`](reports/2026-07-19-p2-path-localization-and-stage-a-identifiability.md)
@@ -46,14 +46,17 @@ are therefore unexecuted and fail before GPU allocation. The binding
 [`post-localization amendment`](manifests/p2-post-localization-stage-a-execution-v1.json)
 permits only 707-only calibration redesign until a new contrast is frozen.
 
-Protocol 2.5 now freezes that redesign as a separate prospective cohort rather
-than reviving the non-identifiable panel. It uses five fresh training,
-calibration, and evaluation seeds, 19 direct sequential-tier arms, 9,000
-budget shards, 3.42 million arm-conversations, and 154.28 million expected raw
-decode-token rows. The original `calibrated+pins > fixed+pins` question remains
-the central causal contrast; two Hsoft comparisons are required independently,
-not substituted for it. The implementation/attestation/storage/concurrency
-preflight is active, and no fresh held-out quality shard has been launched.
+Protocol 2.5 froze that redesign as a separate prospective cohort rather than
+reviving the non-identifiable panel. Revision 1.2 reused and authenticated the
+terminal v1.1 direct-training prerequisite (10/10 cells), and its target-free
+revision-1.2 calibration completed 10/10 GO. The subsequent 40-cell
+protected-pinned fixed-top-p physical-match prerequisite completed 0 GO / 40
+NO-GO: the closest variable-cardinality comparator remained 5.18% away from
+the exact-fill target under a frozen 1% boundary. The held-out 19-arm controller
+matrix was therefore not launched, and no fresh evaluation seed was accessed.
+This is a comparator-feasibility failure, not a controller-quality result. See
+the checked
+[`terminal top-p report`](reports/2026-07-20-p2-direct-top-p-physical-match-no-go.md).
 
 No performance or systems claim has been made. M1 adds deterministic baselines,
 an exhaustive Tier-T oracle, differentiable CSA training probes, and two
@@ -456,5 +459,15 @@ execution environment, and the quarantine inventory is rescanned around every ch
 No top-p or held-out controller-quality
 result was observed before this second amendment. The complete rule is in
 [`2026-07-19-p2-direct-calibration-path-binding-amendment.md`](reports/2026-07-19-p2-direct-calibration-path-binding-amendment.md).
+The amended calibration matrix subsequently completed 10/10 GO. Its dependent
+top-p matrix then completed all 40 registered cells without outcome-dependent
+stopping and reached terminal NO-GO: every `fixed-top-p-0.5+pins` and
+`fixed-top-p-0.8+pins` comparator missed the exact-fill Hsoft hot-byte target
+by more than 1%. The canonical controller and worker-ledger roots remain
+absent, so controller quality and all 19-arm causal contrasts are unrun rather
+than negative. Revision 1.2 remains immutable; any quality follow-up requires
+a separately versioned prospective protocol that permanently discloses this
+feasibility result. See
+[`2026-07-20-p2-direct-top-p-physical-match-no-go.md`](reports/2026-07-20-p2-direct-top-p-physical-match-no-go.md).
 See [`paper_grade_protocol.md`](paper_grade_protocol.md) and
 [`reproduction.md`](reproduction.md) for the exact gate and commands.

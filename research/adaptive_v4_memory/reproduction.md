@@ -67,11 +67,17 @@ sequential-tier equivalence for every seed, scale, budget, family, context, and 
 ## P2 prospective direct-controller cohort
 
 The version-2.5 cohort is separate from the legacy factorial above. It uses the
-checked-in `p2-post-rank-direct-controller-v1-2.json` amendment manifest, fresh 6071406--
-6071410/7071406--7071410/10071406--10071410 seed namespaces, 19 arms, 9,000
-budget shards, and exactly 154,280,000 decode-token rows when no technical
-failure occurs. Run only from the clean implementation commit bound by that
-manifest.
+checked-in `p2-post-rank-direct-controller-v1-2.json` amendment manifest, fresh
+6071406--6071410/7071406--7071410/10071406--10071410 seed namespaces, 19 arms,
+9,000 budget shards, and exactly 154,280,000 decode-token rows when no technical
+failure occurs. The checked run and authoritative replay require the exact
+clean result-source commit
+`8c88464d3de39dd98a119ec98cef99a5f7a8c0f5`, which contains the v1.2 manifest.
+That manifest separately authenticates implementation source commit
+`ce04646b09051e8ad13783eb794f4d92f728fd85` and implementation digest
+`2978634d0c6da3e45d8a97a494f5a319778653ebd7c9a774f44ff72cee238b96`.
+Use an exact checkout or detached worktree for v1.2 replay; a later
+documentation commit is not the frozen current-source context.
 
 Revision 1.2 must reuse the already-provisioned cohort trust root outside the
 repository and every artifact root. Never regenerate, overwrite, move, or copy
@@ -119,11 +125,28 @@ in-flight drain; it is nonterminal evidence and never a quality-gate pass.
   --gpu-lock-path /tmp/adaptive-v4-direct-gpu0.lock
 .venv/bin/python research/adaptive_v4_memory/scripts/run_p2_direct_top_p_physical_matrix.py \
   --gpu-lock-path /tmp/adaptive-v4-direct-gpu0.lock
+```
+
+Stop at this boundary unless the authenticated top-p ledger is terminal 40/40
+GO. Exit code 2 means terminal NO-GO and is evidence, not permission to rerun,
+relax the 1% threshold, or continue to quality. The checked revision-1.2 ledger
+is terminal 0 GO / 40 NO-GO with file SHA-256
+`ad4b5d2dcdcbc50ccd5008a0927cfb1a3265f904740e22f6ebab23c2b8f40c41`.
+Consequently the following quality commands were **not run** for revision 1.2
+and must not be run against that terminal evidence:
+
+```bash
 .venv/bin/python research/adaptive_v4_memory/scripts/run_p2_direct_controller_matrix.py \
   --gpu-lock-path /tmp/adaptive-v4-direct-gpu0.lock
 .venv/bin/python research/adaptive_v4_memory/scripts/audit_p2_direct_controller_integrity.py
 .venv/bin/python research/adaptive_v4_memory/scripts/summarize_p2_direct_controller.py
 ```
+
+The result is documented in
+[`2026-07-20-p2-direct-top-p-physical-match-no-go.md`](reports/2026-07-20-p2-direct-top-p-physical-match-no-go.md).
+It blocks only the v1.2 quality launch: it is not a controller-quality result
+and does not authorize an in-place protocol repair. Any follow-up must use a
+new manifest, experiment ID, attestation purposes, and output root.
 
 Revision 1.2 does not rerun training. The calibration preflight authenticates the
 already-terminal revision 1.1 ten-cell training ledger, summaries, and checkpoints
