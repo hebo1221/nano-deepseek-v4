@@ -2054,11 +2054,10 @@ def _load_cache_manifest(cache_dir: Path, config: DeepSeekV4Config) -> dict[str,
     return manifest
 
 
-def _restore_cache_tensor(
+def _parse_cache_tensor_key(
     cache: DeepSeekV4Cache,
     key: str,
-    tensor: torch.Tensor,
-) -> None:
+) -> tuple[int, str, str | None]:
     parts = key.split(".")
     if len(parts) not in {3, 4} or parts[0] != "layers":
         raise ValueError(f"Unexpected cache tensor key: {key}")
@@ -2068,16 +2067,27 @@ def _restore_cache_tensor(
         raise ValueError(f"Invalid cache layer index in tensor key: {key}") from exc
     if str(layer_idx) != parts[1] or not 0 <= layer_idx < len(cache.layers):
         raise ValueError(f"Cache tensor layer index is out of range: {key}")
-    layer = cache.layers[layer_idx]
     attribute = parts[2]
     if len(parts) == 3:
         if attribute not in _CACHE_TENSOR_ATTRIBUTES:
             raise ValueError(f"Unexpected cache tensor attribute: {key}")
-        setattr(layer, attribute, tensor)
-        return
+        return layer_idx, attribute, None
     if attribute not in _CACHE_DICT_ATTRIBUTES or not parts[3]:
         raise ValueError(f"Unexpected cache tensor attribute: {key}")
-    getattr(layer, attribute)[parts[3]] = tensor
+    return layer_idx, attribute, parts[3]
+
+
+def _restore_cache_tensor(
+    cache: DeepSeekV4Cache,
+    key: str,
+    tensor: torch.Tensor,
+) -> None:
+    layer_idx, attribute, item = _parse_cache_tensor_key(cache, key)
+    layer = cache.layers[layer_idx]
+    if item is None:
+        setattr(layer, attribute, tensor)
+    else:
+        getattr(layer, attribute)[item] = tensor
 
 
 def _strict_index_tuple(value: Any, name: str) -> tuple[int, ...]:
@@ -2306,9 +2316,13 @@ def load_deepseek_v4_cache(
     cache.seen_tokens = int(manifest["seen_tokens"])
     cache_format_version = int(manifest["format_version"])
     tiered_layers = manifest.get("tiered_layers", {})
+    tensor_path = cache_dir / "cache.safetensors"
+    with safe_open(tensor_path, framework="pt", device="cpu") as handle:
+        for key in handle.keys():
+            _parse_cache_tensor_key(cache, key)
     tiered_inventory = _validate_cache_runtime_binding(
         manifest,
-        cache_dir / "cache.safetensors",
+        tensor_path,
         config,
     )
     if not isinstance(tiered_layers, dict):  # Proven by the runtime-binding preflight.
@@ -2332,7 +2346,7 @@ def load_deepseek_v4_cache(
         for layer in tiered_inventory
         for kind in ("kv", "positions")
     }
-    tensors = load_file(cache_dir / "cache.safetensors")
+    tensors = load_file(tensor_path)
     for key, tensor in tensors.items():
         if device is not None and key not in tiered_cold_keys:
             tensor = tensor.to(device)
