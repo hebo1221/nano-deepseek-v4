@@ -29,6 +29,9 @@ from .causal_memory_controller import (
     SameTokenLayerAction,
     SameTokenLayerQuotaCalibration,
     SameTokenTrainingFreeController,
+    SoftLagBudgetTelemetry,
+    SoftLagPhysicalSnapshot,
+    SoftLagQuotaTransition,
     calibrate_same_token_layer_quotas,
 )
 from .checkpoint import (
@@ -60,6 +63,12 @@ from .evaluation import (
     evaluate_language_model,
     evaluate_multiple_choice,
     score_choice_loglikelihood,
+)
+from .hierarchical_memory_controller import (
+    LayerTargetFreeCalibration,
+    SoftLagQuotaPlan,
+    SoftLagQuotaPolicy,
+    allocate_soft_lag_quotas,
 )
 from .learned_lookahead import (
     LearnedLookaheadPolicy,
@@ -186,6 +195,9 @@ __all__ = [
     "SameTokenLayerQuotaCalibration",
     "SameTokenLayerAction",
     "SameTokenTrainingFreeController",
+    "SoftLagBudgetTelemetry",
+    "SoftLagPhysicalSnapshot",
+    "SoftLagQuotaTransition",
     "calibrate_same_token_layer_quotas",
     # Adaptive V4 Memory M0 trace
     "MEMORY_TRACE_SCHEMA_VERSION",
@@ -235,6 +247,10 @@ __all__ = [
     "CSASelectionPlan",
     "build_csa_selection_plan",
     "compute_controller_layer_signal",
+    "LayerTargetFreeCalibration",
+    "SoftLagQuotaPlan",
+    "SoftLagQuotaPolicy",
+    "allocate_soft_lag_quotas",
     "OnlineControllerStats",
     "OnlineTrainingFreeController",
     # Adaptive V4 Memory online learned lookahead

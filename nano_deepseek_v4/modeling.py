@@ -529,19 +529,328 @@ class DeepSeekV4Cache:
     def _attach_same_token_controller(
         self, controller: SameTokenTrainingFreeController | None
     ) -> None:
+        previous = getattr(self, "same_token_memory_controller", None)
+        previous_layers = tuple(layer.same_token_memory_controller for layer in self.layers)
         self.same_token_memory_controller = controller
         for layer in self.layers:
             layer.same_token_memory_controller = controller
+        try:
+            if controller is not None and controller.soft_lag_enabled:
+                self._validate_soft_lag_tier_alignment()
+        except Exception:
+            self.same_token_memory_controller = previous
+            for layer, prior in zip(self.layers, previous_layers, strict=True):
+                layer.same_token_memory_controller = prior
+            raise
+
+    def _csa_layer_indices(self) -> tuple[int, ...]:
+        layer_types = self.config.layer_types
+        if layer_types is None:
+            raise RuntimeError("config.layer_types was not initialized.")
+        return tuple(
+            index
+            for index, layer_type in enumerate(layer_types)
+            if layer_type == "compressed_sparse_attention"
+        )
+
+    def _soft_lag_prefix_state(
+        self, controller: SameTokenTrainingFreeController
+    ) -> tuple[dict[int, int], dict[int, tuple[int, ...]]]:
+        candidates: dict[int, int] = {}
+        pins: dict[int, tuple[int, ...]] = {}
+        protected = (
+            set(controller.protected_end_positions)
+            if controller.config.enable_protected_pins
+            else set()
+        )
+        for layer_index in self._csa_layer_indices():
+            layer = self.layers[layer_index]
+            store = layer.tiered_compressor
+            positions = (
+                store.host_positions
+                if store is not None
+                else layer.compressed_positions.get("compressor")
+            )
+            if positions is None or positions.ndim != 2 or positions.shape[0] != 1:
+                raise ValueError(
+                    "Soft-lag controller requires a batch-one prefix with CSA candidates."
+                )
+            ends = tuple(int(value) for value in positions[0].detach().cpu().tolist())
+            candidates[layer_index] = len(ends)
+            pins[layer_index] = tuple(sorted(protected.intersection(ends)))
+        return candidates, pins
+
+    def _soft_lag_tier_stores(self) -> dict[int, TieredBlockStore]:
+        stores = {
+            layer_index: self.layers[layer_index].tiered_compressor
+            for layer_index in self._csa_layer_indices()
+        }
+        active = {layer: store for layer, store in stores.items() if store is not None}
+        if active and len(active) != len(stores):
+            raise RuntimeError("Soft-lag tier reallocation requires every CSA layer to be tiered.")
+        return {layer: store for layer, store in active.items() if store is not None}
+
+    def _validate_soft_lag_tier_alignment(self) -> None:
+        controller = self.same_token_memory_controller
+        if controller is None or not controller.soft_lag_enabled:
+            return
+        stores = self._soft_lag_tier_stores()
+        if not stores:
+            return
+        plan = controller.active_soft_lag_plan
+        if plan is None:
+            raise RuntimeError("Tiered soft-lag cache has no active quota plan.")
+        quotas = dict(plan.quotas)
+        pending_actions = controller.pending_soft_lag_actions()
+        candidate_caps = (
+            {action.layer_index: action.signal.candidate_blocks for action in pending_actions}
+            if pending_actions
+            else dict(plan.candidate_caps)
+        )
+        pin_floors = dict(plan.pin_floors)
+        expected_pin_positions = dict(controller.soft_lag_transitions[-1].pinned_end_positions)
+        for layer_index, store in stores.items():
+            if store.hot_budget_blocks != quotas[layer_index]:
+                raise ValueError(
+                    "Tier hot-budget capacity does not match the active soft-lag plan."
+                )
+            if store.num_blocks < candidate_caps[layer_index]:
+                raise ValueError(
+                    "Tier logical blocks cannot cover the soft-lag eligible candidates."
+                )
+            actual_pin_positions = tuple(
+                sorted(
+                    int(store.host_positions[0, block_index])
+                    for block_index in store.protected_blocks
+                )
+            )
+            if actual_pin_positions != expected_pin_positions[layer_index]:
+                raise ValueError("Tier protected block identities do not match the soft-lag plan.")
+            if len(store.protected_blocks) != pin_floors[layer_index]:
+                raise ValueError("Tier protected count does not match soft-lag pin floors.")
+            if len(store.hot_indices) != quotas[layer_index]:
+                raise ValueError(
+                    "Tier materialized hot-block count does not match the active soft-lag plan."
+                )
+
+    def _soft_lag_expected_hot_indices(self) -> dict[int, tuple[int, ...]]:
+        """Replay the deterministic post-action rebalance at the active boundary."""
+
+        controller = self.same_token_memory_controller
+        if controller is None or not controller.soft_lag_enabled:
+            return {}
+        stores = self._soft_lag_tier_stores()
+        if not stores:
+            return {}
+        plan = controller.active_soft_lag_plan
+        if plan is None:
+            raise RuntimeError("Tiered soft-lag cache has no active quota plan.")
+        seeds = {
+            action.layer_index: action.selected_end_positions
+            for action in controller.latest_finalized_soft_lag_actions()
+        }
+        quotas = dict(plan.quotas)
+        expected: dict[int, tuple[int, ...]] = {}
+        for layer_index, store in stores.items():
+            if store.batch_size != 1:
+                raise ValueError("Soft-lag resident replay requires a batch-one tier store.")
+            position_to_index: dict[int, int] = {}
+            for block_index, raw_position in enumerate(store.host_positions[0].tolist()):
+                position = int(raw_position)
+                if position in position_to_index:
+                    raise ValueError("Soft-lag tier positions must be unique within a layer.")
+                position_to_index[position] = block_index
+            seed_indices: list[int] = []
+            for position in seeds.get(layer_index, ()):
+                if position not in position_to_index:
+                    raise ValueError("Finalized soft-lag resident seed is absent after cache crop.")
+                seed_indices.append(position_to_index[position])
+            quota = quotas[layer_index]
+            retained = list(store.protected_blocks)
+            retained_set = set(retained)
+            for block_index in sorted(seed_indices):
+                if len(retained) == quota:
+                    break
+                if block_index not in retained_set:
+                    retained.append(block_index)
+                    retained_set.add(block_index)
+            for block_index in range(store.num_blocks):
+                if len(retained) == quota:
+                    break
+                if block_index not in retained_set:
+                    retained.append(block_index)
+                    retained_set.add(block_index)
+            if len(retained) != quota:
+                raise RuntimeError("Logical tier candidates cannot exact-fill the active quota.")
+            expected[layer_index] = tuple(sorted(retained))
+        return expected
+
+    def _validate_soft_lag_boundary_residents(self) -> None:
+        controller = self.same_token_memory_controller
+        if controller is None or not controller.soft_lag_enabled:
+            return
+        if controller.pending_soft_lag_actions():
+            raise RuntimeError("A soft-lag boundary cannot contain pending actions.")
+        stores = self._soft_lag_tier_stores()
+        expected = self._soft_lag_expected_hot_indices()
+        for layer_index, store in stores.items():
+            if store.hot_indices != expected[layer_index]:
+                raise ValueError(
+                    "Tier hot resident identities do not match the controller boundary replay."
+                )
+
+    def _soft_lag_expected_resident_end_positions(
+        self,
+    ) -> dict[int, tuple[int, ...]]:
+        stores = self._soft_lag_tier_stores()
+        return {
+            layer: tuple(int(store.host_positions[0, block_index]) for block_index in indices)
+            for layer, indices in self._soft_lag_expected_hot_indices().items()
+            for store in (stores[layer],)
+        }
+
+    def _record_soft_lag_pre_resize_snapshot(self) -> None:
+        controller = self.same_token_memory_controller
+        if controller is None or not controller.soft_lag_enabled:
+            return
+        stores = self._soft_lag_tier_stores()
+        if not stores:
+            return
+        self._validate_soft_lag_tier_alignment()
+        for store in stores.values():
+            store.synchronize()
+        stats = {layer: store.stats() for layer, store in stores.items()}
+        cuda_devices = {store.device for store in stores.values() if store.device.type == "cuda"}
+        cuda_peak_allocated = sum(
+            int(torch.cuda.max_memory_allocated(device)) for device in cuda_devices
+        )
+        cuda_peak_reserved = sum(
+            int(torch.cuda.max_memory_reserved(device)) for device in cuda_devices
+        )
+
+        def device_name(store: TieredBlockStore) -> str:
+            if store.device.type != "cuda":
+                return str(store.device)
+            index = store.device.index
+            if index is None:
+                index = torch.cuda.current_device()
+            return f"cuda:{index}"
+
+        controller.record_soft_lag_physical_snapshot(
+            layer_capacity_blocks={
+                layer: store.hot_budget_blocks for layer, store in stores.items()
+            },
+            layer_hot_blocks={layer: item.hot_blocks for layer, item in stats.items()},
+            layer_hot_end_positions={
+                layer: store.hot_end_positions() for layer, store in stores.items()
+            },
+            layer_hot_bytes={layer: item.hot_bytes for layer, item in stats.items()},
+            layer_hot_devices={layer: device_name(store) for layer, store in stores.items()},
+            layer_protected_blocks={layer: item.protected_blocks for layer, item in stats.items()},
+            layer_protected_end_positions={
+                layer: tuple(
+                    sorted(
+                        int(store.host_positions[0, block_index])
+                        for block_index in store.protected_blocks
+                    )
+                )
+                for layer, store in stores.items()
+            },
+            layer_h2d_bytes={layer: item.h2d_bytes for layer, item in stats.items()},
+            layer_d2h_bytes={layer: item.d2h_bytes for layer, item in stats.items()},
+            cuda_peak_allocated_bytes=cuda_peak_allocated,
+            cuda_peak_reserved_bytes=cuda_peak_reserved,
+        )
+
+    def _apply_active_soft_lag_tier_plan(self) -> list[TieredMemoryStats]:
+        controller = self.same_token_memory_controller
+        if controller is None or not controller.soft_lag_enabled:
+            return []
+        stores = self._soft_lag_tier_stores()
+        if not stores:
+            return []
+        plan = controller.active_soft_lag_plan
+        if plan is None:
+            raise RuntimeError("Tiered soft-lag cache has no active quota plan.")
+        quotas = dict(plan.quotas)
+        if any(value <= 0 for value in quotas.values()):
+            raise ValueError("Soft-lag tier capacities must remain strictly positive.")
+        if sum(quotas.values()) != plan.effective_budget:
+            raise ValueError("Soft-lag tier capacities do not sum to the effective budget.")
+        self.resize_csa_tier_budgets(
+            quotas,
+            expected_total_hot_budget_blocks=plan.effective_budget,
+        )
+        expected = self._soft_lag_expected_hot_indices()
+        for layer, store in stores.items():
+            store.prefetch(expected[layer])
+        for store in stores.values():
+            store.synchronize()
+        self._validate_soft_lag_tier_alignment()
+        self._validate_soft_lag_boundary_residents()
+        return [stores[layer].stats() for layer in self._csa_layer_indices()]
+
+    def _complete_soft_lag_physical_token(self) -> None:
+        controller = self.same_token_memory_controller
+        if controller is None or not controller.soft_lag_enabled:
+            return
+        stores = self._soft_lag_tier_stores()
+        if not stores:
+            return
+        for store in stores.values():
+            store.synchronize()
+        stats = {layer: store.stats() for layer, store in stores.items()}
+        cuda_devices = {store.device for store in stores.values() if store.device.type == "cuda"}
+        controller.complete_soft_lag_physical_token(
+            layer_h2d_bytes={layer: item.h2d_bytes for layer, item in stats.items()},
+            layer_d2h_bytes={layer: item.d2h_bytes for layer, item in stats.items()},
+            cuda_peak_allocated_bytes=sum(
+                int(torch.cuda.max_memory_allocated(device)) for device in cuda_devices
+            ),
+            cuda_peak_reserved_bytes=sum(
+                int(torch.cuda.max_memory_reserved(device)) for device in cuda_devices
+            ),
+        )
+
+    def validate_controller_forward(self, *, batch_size: int, tokens: int) -> None:
+        controller = self.same_token_memory_controller
+        if controller is None or not controller.soft_lag_enabled:
+            return
+        if self.seen_tokens <= 0:
+            raise ValueError("Soft-lag controller requires a non-empty frozen prefix.")
+        controller.validate_soft_lag_decode(batch_size=batch_size, tokens=tokens)
+        self._validate_soft_lag_tier_alignment()
+        self._validate_soft_lag_boundary_residents()
+        stores = self._soft_lag_tier_stores()
+        for store in stores.values():
+            store.synchronize()
+        stats = {layer: store.stats() for layer, store in stores.items()}
+        if stores:
+            controller.begin_soft_lag_physical_token(
+                layer_h2d_bytes={layer: item.h2d_bytes for layer, item in stats.items()},
+                layer_d2h_bytes={layer: item.d2h_bytes for layer, item in stats.items()},
+            )
+        for device in {store.device for store in stores.values() if store.device.type == "cuda"}:
+            torch.cuda.reset_peak_memory_stats(device)
 
     def get_seq_length(self) -> int:
         return self.seen_tokens
 
     def advance(self, tokens: int) -> None:
         seen_tokens_before = self.seen_tokens
+        controller = self.same_token_memory_controller
+        if controller is not None and controller.soft_lag_enabled:
+            if seen_tokens_before <= 0:
+                raise ValueError("Soft-lag controller requires a non-empty frozen prefix.")
+            controller.validate_soft_lag_decode(batch_size=1, tokens=tokens)
+            self._record_soft_lag_pre_resize_snapshot()
         if self.online_memory_controller is not None:
             self.online_memory_controller.finalize()
-        if self.same_token_memory_controller is not None:
-            self.same_token_memory_controller.finalize()
+        if controller is not None:
+            controller.finalize()
+            if controller.soft_lag_enabled:
+                self._apply_active_soft_lag_tier_plan()
+                self._complete_soft_lag_physical_token()
         self.seen_tokens += tokens
         if self.memory_trace is not None:
             self.memory_trace.record_cache_advance(self, tokens, seen_tokens_before)
@@ -644,6 +953,16 @@ class DeepSeekV4Cache:
             self.online_memory_controller.crop(max_length)
         if self.same_token_memory_controller is not None:
             self.same_token_memory_controller.crop(max_length)
+            controller = self.same_token_memory_controller
+            if controller.soft_lag_enabled:
+                if controller.stats().finalized_control_points == 0:
+                    candidates, pins = self._soft_lag_prefix_state(controller)
+                    controller.rebind_initial_soft_lag_state(
+                        apply_query_position=max_length,
+                        candidate_caps=candidates,
+                        pinned_end_positions=pins,
+                    )
+                self._apply_active_soft_lag_tier_plan()
         self.seen_tokens = max_length
 
     def enable_online_memory_controller(
@@ -742,14 +1061,23 @@ class DeepSeekV4Cache:
         )
         if config.csa_layer_indices != csa_layers:
             raise ValueError("Same-token layer quotas do not match the model's CSA layer schedule.")
-        self._attach_same_token_controller(
-            SameTokenTrainingFreeController(
-                config,
-                trace_id=trace_id,
-                request_id=request_id,
-                protected_end_positions=protected_end_positions,
-            )
+        controller = SameTokenTrainingFreeController(
+            config,
+            trace_id=trace_id,
+            request_id=request_id,
+            protected_end_positions=protected_end_positions,
+            initial_query_position=self.seen_tokens if config.soft_lag_policy is not None else None,
         )
+        if controller.soft_lag_enabled:
+            if self.seen_tokens <= 0:
+                raise ValueError("Soft-lag controller must be enabled after a non-empty prefix.")
+            candidates, pins = self._soft_lag_prefix_state(controller)
+            controller.bind_initial_soft_lag_state(
+                apply_query_position=self.seen_tokens,
+                candidate_caps=candidates,
+                pinned_end_positions=pins,
+            )
+        self._attach_same_token_controller(controller)
 
     def same_token_controller_stats(self) -> SameTokenControllerStats | None:
         if self.same_token_memory_controller is None:
@@ -797,8 +1125,14 @@ class DeepSeekV4Cache:
             layer_hot_budgets = {index: hot_budget_blocks for index in csa_layers}
         if not isinstance(inherit_controller_pins, bool):
             raise ValueError("inherit_controller_pins must be boolean.")
-        inherited_end_positions: set[int] = set()
         same_token = self.same_token_memory_controller
+        if same_token is not None and same_token.soft_lag_enabled:
+            active = same_token.active_layer_budgets
+            if active is None or layer_hot_budgets != dict(active):
+                raise ValueError(
+                    "Initial tier budgets must exactly match the active soft-lag plan."
+                )
+        inherited_end_positions: set[int] = set()
         if (
             inherit_controller_pins
             and not protected_blocks
@@ -842,6 +1176,17 @@ class DeepSeekV4Cache:
                 initial_hot_blocks=layer_protected_blocks,
             )
             stats.append(layer.tiered_compressor.stats())
+        if same_token is not None and same_token.soft_lag_enabled:
+            for store in self._soft_lag_tier_stores().values():
+                store.fill_hot_budget()
+            for store in self._soft_lag_tier_stores().values():
+                store.synchronize()
+            self._validate_soft_lag_tier_alignment()
+            self._validate_soft_lag_boundary_residents()
+            stats = [
+                self.layers[layer_index].tiered_compressor.stats()  # type: ignore[union-attr]
+                for layer_index in csa_layers
+            ]
         return stats
 
     def disable_csa_tiering(self) -> None:
@@ -854,6 +1199,77 @@ class DeepSeekV4Cache:
             layer.compressed_kv["compressor"] = store.host_values.to(store.device)
             layer.compressed_positions["compressor"] = store.host_positions.to(store.device)
             layer.tiered_compressor = None
+
+    def resize_csa_tier_budgets(
+        self,
+        layer_hot_budgets: Mapping[int, int],
+        *,
+        expected_total_hot_budget_blocks: int | None = None,
+    ) -> list[TieredMemoryStats]:
+        """Prevalidate and apply exact per-CSA-layer hot capacities.
+
+        Validation covers the complete CSA layer schedule before any store is
+        changed. Capacity decreases are applied before increases, preventing a
+        rebalance from temporarily promoting the global configured capacity.
+        """
+
+        layer_types = self.config.layer_types
+        if layer_types is None:
+            raise RuntimeError("config.layer_types was not initialized.")
+        csa_layers = tuple(
+            index
+            for index, layer_type in enumerate(layer_types)
+            if layer_type == "compressed_sparse_attention"
+        )
+        if not isinstance(layer_hot_budgets, Mapping):
+            raise ValueError("Layer hot budgets must be a mapping.")
+        budgets = dict(layer_hot_budgets)
+        if any(isinstance(layer, bool) or not isinstance(layer, int) for layer in budgets):
+            raise ValueError("Layer hot-budget keys must be integer layer indices.")
+        if set(budgets) != set(csa_layers):
+            raise ValueError("Layer hot budgets must exactly match the CSA layer schedule.")
+        if any(
+            isinstance(value, bool) or not isinstance(value, int) or value <= 0
+            for value in budgets.values()
+        ):
+            raise ValueError("Every layer hot budget must be a positive integer.")
+
+        total_hot_budget_blocks = sum(budgets.values())
+        if expected_total_hot_budget_blocks is not None:
+            if (
+                isinstance(expected_total_hot_budget_blocks, bool)
+                or not isinstance(expected_total_hot_budget_blocks, int)
+                or expected_total_hot_budget_blocks < 0
+            ):
+                raise ValueError("expected_total_hot_budget_blocks must be a non-negative integer.")
+            if total_hot_budget_blocks != expected_total_hot_budget_blocks:
+                raise ValueError(
+                    "Layer hot budgets do not sum to expected_total_hot_budget_blocks."
+                )
+
+        stores: dict[int, TieredBlockStore] = {}
+        for layer_index in csa_layers:
+            store = self.layers[layer_index].tiered_compressor
+            if store is None:
+                raise RuntimeError("Every CSA layer must have tiering enabled before resizing.")
+            if budgets[layer_index] < len(store.protected_blocks):
+                raise ValueError(
+                    f"Layer {layer_index} protected blocks exceed its requested hot budget."
+                )
+            stores[layer_index] = store
+
+        changes = tuple(
+            (layer_index, stores[layer_index], budgets[layer_index])
+            for layer_index in csa_layers
+            if budgets[layer_index] != stores[layer_index].hot_budget_blocks
+        )
+        for _layer_index, store, budget in changes:
+            if budget < store.hot_budget_blocks:
+                store.resize_hot_budget(budget)
+        for _layer_index, store, budget in changes:
+            if budget > store.hot_budget_blocks:
+                store.resize_hot_budget(budget)
+        return [stores[layer_index].stats() for layer_index in csa_layers]
 
     def tiered_memory_stats(self) -> list[TieredMemoryStats]:
         return [
@@ -1031,6 +1447,14 @@ class CSAIndexer(nn.Module):
                     scores=empty_scores,
                     native_mask=torch.zeros_like(empty_scores, dtype=torch.bool),
                     block_bytes=measure_csa_block_bytes(cache, end_positions.shape[1]),
+                    resident_end_positions=(
+                        tuple(
+                            cache.tiered_compressor.hot_end_positions(batch_index)
+                            for batch_index in range(cache.tiered_compressor.batch_size)
+                        )
+                        if cache.tiered_compressor is not None
+                        else None
+                    ),
                 )
             elif cache is not None and cache.online_memory_controller is not None:
                 empty_scores = hidden_states.new_empty(
@@ -1108,6 +1532,14 @@ class CSAIndexer(nn.Module):
                 scores=scores,
                 native_mask=traced_mask,
                 block_bytes=measure_csa_block_bytes(cache, end_positions.shape[1]),
+                resident_end_positions=(
+                    tuple(
+                        cache.tiered_compressor.hot_end_positions(batch_index)
+                        for batch_index in range(cache.tiered_compressor.batch_size)
+                    )
+                    if cache.tiered_compressor is not None
+                    else None
+                ),
             )
         elif cache is not None and cache.online_memory_controller is not None:
             sparse_mask = cache.online_memory_controller.apply(
@@ -1658,6 +2090,11 @@ class DeepSeekV4Model(nn.Module):
                 active_cache.memory_trace = memory_trace
             elif active_cache.memory_trace is not memory_trace:
                 raise ValueError("memory_trace does not match the cache's trace collector.")
+        if active_cache is not None:
+            active_cache.validate_controller_forward(
+                batch_size=int(input_ids.shape[0]),
+                tokens=int(input_ids.shape[1]),
+            )
         past_seen = active_cache.get_seq_length() if active_cache is not None else 0
         if attention_mask is not None:
             expected_mask_length = past_seen + input_ids.shape[1]

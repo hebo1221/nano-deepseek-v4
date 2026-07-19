@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
 
@@ -15,6 +16,7 @@ from nano_deepseek_v4 import (
     ReplayQuery,
     SameTokenControllerConfig,
     SameTokenTrainingFreeController,
+    SoftLagQuotaPolicy,
     TrainingFreeControllerConfig,
     calibrate_same_token_layer_quotas,
     load_deepseek_v4_cache,
@@ -56,12 +58,14 @@ def _select_layer(
     controller: SameTokenTrainingFreeController,
     layer: int,
     scores: torch.Tensor | None = None,
+    *,
+    query_position: int = 15,
 ) -> torch.Tensor:
     if scores is None:
         scores = torch.tensor([[[8.0, 2.0, 1.0, 0.5]]])
     return controller.select(
         layer_index=layer,
-        query_positions=torch.tensor([[15]]),
+        query_positions=torch.tensor([[query_position]]),
         block_end_positions=torch.tensor([[3, 7, 11, 15]]),
         scores=scores,
         native_mask=torch.tensor([[[True, True, False, False]]]),
@@ -173,6 +177,156 @@ def _model_config() -> SameTokenControllerConfig:
     )
 
 
+def _soft_lag_config(
+    layers: tuple[int, ...] = (2, 5),
+    *,
+    global_budget: int = 4,
+) -> SameTokenControllerConfig:
+    signal = _signal_config(
+        global_budget=global_budget,
+        dense_budget=global_budget,
+        fallback=False,
+    )
+    static = tuple((layer, max(1, global_budget // len(layers))) for layer in layers)
+    return SameTokenControllerConfig(
+        signal=signal,
+        layer_budgets=static,
+        dense_layer_budgets=static,
+        enable_dense_fallback=False,
+        soft_lag_policy=SoftLagQuotaPolicy(
+            global_budget=global_budget,
+            per_layer_floor=1,
+            temperature=0.1,
+            max_reallocation_fraction=1.0,
+            permutation_offset=1,
+            rounding_namespace="test-soft-lag-controller-v1",
+        ),
+    )
+
+
+def _bound_soft_lag_controller(
+    *, protected_end_positions: tuple[int, ...] = ()
+) -> SameTokenTrainingFreeController:
+    controller = SameTokenTrainingFreeController(
+        _soft_lag_config(),
+        protected_end_positions=protected_end_positions,
+        initial_query_position=15,
+    )
+    controller.bind_initial_soft_lag_state(
+        apply_query_position=15,
+        candidate_caps={2: 4, 5: 4},
+        pinned_end_positions={
+            2: protected_end_positions,
+            5: protected_end_positions,
+        },
+    )
+    return controller
+
+
+def test_soft_lag_uses_token_t_signals_only_for_t_plus_one_and_exact_fills() -> None:
+    controller = _bound_soft_lag_controller(protected_end_positions=(3,))
+    initial = controller.active_soft_lag_plan
+    assert initial is not None
+    assert initial.quotas == ((2, 2), (5, 2))
+
+    concentrated = torch.tensor([[[8.0, 0.0, 0.0, 0.0]]])
+    uniform = torch.tensor([[[1.0, 1.0, 1.0, 1.0]]])
+    assert int(_select_layer(controller, 2, concentrated).sum()) == 2
+    assert int(_select_layer(controller, 5, uniform).sum()) == 2
+    controller.finalize()
+
+    transition = controller.soft_lag_transitions[-1]
+    assert transition.source_query_position == 15
+    assert transition.apply_query_position == 16
+    assert transition.plan.quotas != initial.quotas
+    assert transition.plan.effective_budget == transition.plan.requested_global_budget == 4
+    assert len(transition.source_actions_digest or "") == 64
+
+    _select_layer(controller, 2, concentrated, query_position=16)
+    _select_layer(controller, 5, uniform, query_position=16)
+    assert tuple(
+        (action.layer_index, action.budget_limit, action.selected_blocks)
+        for actions in controller._pending.values()
+        for action in sorted(actions, key=lambda item: item.layer_index)
+    ) == tuple((layer, quota, quota) for layer, quota in transition.plan.quotas)
+
+
+def test_soft_lag_serialization_replay_and_lifecycle_are_deterministic() -> None:
+    controller = _bound_soft_lag_controller()
+    _select_layer(controller, 2, torch.tensor([[[8.0, 0.0, 0.0, 0.0]]]))
+    _select_layer(controller, 5, torch.ones(1, 1, 4))
+    controller.finalize()
+
+    payload = json.loads(json.dumps(controller.to_dict()))
+    restored = SameTokenTrainingFreeController.from_dict(payload)
+    assert restored.to_dict() == controller.to_dict()
+    assert restored.soft_lag_transitions == controller.soft_lag_transitions
+
+    corrupted = json.loads(json.dumps(payload))
+    corrupted["soft_lag_transitions"][-1]["apply_query_position"] += 1
+    with pytest.raises(ValueError, match="transition digest"):
+        SameTokenTrainingFreeController.from_dict(corrupted)
+
+    selected = controller.select_batch(0)
+    stacked = SameTokenTrainingFreeController.stack([selected, selected.clone()])
+    assert stacked.soft_lag_transitions == controller.soft_lag_transitions
+    with pytest.raises(ValueError, match="batch=1"):
+        stacked.validate_soft_lag_decode(batch_size=2, tokens=1)
+
+    cropped = controller.clone()
+    cropped.crop(15)
+    assert cropped.stats().finalized_control_points == 0
+    assert cropped.active_soft_lag_plan is not None
+    assert cropped.soft_lag_transitions[0].apply_query_position == 15
+
+
+def test_soft_lag_policy_requires_positive_physical_floor() -> None:
+    with pytest.raises(ValueError, match="positive floor"):
+        SameTokenControllerConfig(
+            signal=_signal_config(global_budget=2, dense_budget=2),
+            layer_budgets=((2, 1), (5, 1)),
+            dense_layer_budgets=((2, 1), (5, 1)),
+            soft_lag_policy=SoftLagQuotaPolicy(
+                global_budget=2,
+                per_layer_floor=0,
+                temperature=1.0,
+                max_reallocation_fraction=1.0,
+                permutation_offset=1,
+                rounding_namespace="invalid-zero-floor",
+            ),
+        )
+
+
+def test_exact_fill_fallback_reuses_resident_identity_without_increasing_budget() -> None:
+    signal = _signal_config(global_budget=2, dense_budget=4, fallback=True)
+    common = SameTokenControllerConfig(
+        signal=signal,
+        layer_budgets=((2, 2),),
+        dense_layer_budgets=((2, 4),),
+        enable_exact_fill=True,
+    )
+    fallback = SameTokenTrainingFreeController(common)
+    ranked = SameTokenTrainingFreeController(replace(common, enable_dense_fallback=False))
+
+    first_scores = torch.tensor([[[8.0, 7.0, 1.0, 0.0]]])
+    changed_scores = torch.tensor([[[0.0, 0.0, 8.0, 7.0]]])
+    for controller in (fallback, ranked):
+        _select_layer(controller, 2, first_scores)
+        controller.finalize()
+        _select_layer(controller, 2, changed_scores, query_position=16)
+        controller.finalize()
+
+    fallback_action = fallback.last_actions[0]
+    ranked_action = ranked.last_actions[0]
+    assert fallback_action.fallback_reason is not None
+    assert fallback_action.selected_end_positions == (3, 7)
+    assert fallback_action.refreshed is False
+    assert ranked_action.selected_end_positions == (11, 15)
+    assert ranked_action.refreshed is True
+    assert fallback_action.budget_limit == ranked_action.budget_limit == 2
+    assert fallback_action.selected_blocks == ranked_action.selected_blocks == 2
+
+
 def _same_token_model_state() -> tuple[DeepSeekV4ForCausalLM, DeepSeekV4Cache]:
     torch.manual_seed(31)
     config = DeepSeekV4Config(num_nextn_predict_layers=0)
@@ -182,6 +336,167 @@ def _same_token_model_state() -> tuple[DeepSeekV4ForCausalLM, DeepSeekV4Cache]:
     assert cache is not None
     cache.enable_same_token_memory_controller(_model_config())
     return model, cache
+
+
+def _soft_lag_model_state() -> tuple[
+    DeepSeekV4ForCausalLM,
+    DeepSeekV4Cache,
+    DeepSeekV4Cache,
+]:
+    torch.manual_seed(131)
+    config = DeepSeekV4Config(
+        num_nextn_predict_layers=0,
+        layer_types=[
+            "sliding_attention",
+            "compressed_sparse_attention",
+            "compressed_sparse_attention",
+            "heavily_compressed_attention",
+        ],
+    )
+    model = DeepSeekV4ForCausalLM(config).eval()
+    prompt = torch.randint(0, config.vocab_size, (1, 32))
+    prefix = model(prompt, use_cache=True).past_key_values
+    assert prefix is not None
+    resident = prefix.clone()
+    tiered = prefix.clone()
+    controller_config = _soft_lag_config((1, 2))
+    resident.enable_same_token_memory_controller(
+        controller_config,
+        protected_end_positions=(3,),
+    )
+    tiered.enable_same_token_memory_controller(
+        controller_config,
+        protected_end_positions=(3,),
+    )
+    controller = tiered.same_token_memory_controller
+    assert controller is not None and controller.active_layer_budgets is not None
+    tiered.enable_csa_tiering(
+        dict(controller.active_layer_budgets),
+        async_transfer=False,
+    )
+    return model, resident, tiered
+
+
+def test_soft_lag_tiny_model_matches_resident_and_records_pre_resize_hbm(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    model, resident, tiered = _soft_lag_model_state()
+    synchronized: list[int] = []
+    for layer_index in (1, 2):
+        store = tiered.layers[layer_index].tiered_compressor
+        assert store is not None
+        original = store.synchronize
+
+        def traced_synchronize(
+            *,
+            layer: int = layer_index,
+            synchronize: Callable[[], None] = original,
+        ) -> None:
+            synchronized.append(layer)
+            synchronize()
+
+        monkeypatch.setattr(store, "synchronize", traced_synchronize)
+
+    for token in (torch.tensor([[41]]), torch.tensor([[43]])):
+        expected = model(token, past_key_values=resident, use_cache=True).logits
+        actual = model(token, past_key_values=tiered, use_cache=True).logits
+        assert torch.allclose(actual, expected, atol=1e-6, rtol=1e-6)
+
+        resident_controller = resident.same_token_memory_controller
+        tiered_controller = tiered.same_token_memory_controller
+        assert resident_controller is not None and tiered_controller is not None
+        assert sum(action.selected_blocks for action in tiered_controller.last_actions) == 4
+        snapshot = tiered_controller.soft_lag_physical_snapshots[-1]
+        assert snapshot.total_hot_blocks == 4
+        assert snapshot.total_hot_bytes > 0
+        assert dict(snapshot.layer_selected_blocks) == dict(snapshot.layer_capacity_blocks)
+        assert dict(snapshot.layer_hot_blocks) == dict(snapshot.layer_capacity_blocks)
+        assert dict(snapshot.layer_selected_end_positions) == dict(snapshot.layer_hot_end_positions)
+        assert dict(snapshot.layer_protected_blocks) == {1: 1, 2: 1}
+        assert dict(snapshot.layer_protected_end_positions) == {1: (3,), 2: (3,)}
+        assert dict(snapshot.layer_hot_devices) == {1: "cpu", 2: "cpu"}
+        assert snapshot.is_cuda_hbm_evidence is False
+        assert snapshot.cuda_peak_allocated_bytes == 0
+        assert snapshot.cuda_peak_reserved_bytes == 0
+        assert snapshot.total_h2d_bytes == sum(dict(snapshot.layer_h2d_bytes).values())
+        assert snapshot.total_d2h_bytes == sum(dict(snapshot.layer_d2h_bytes).values())
+        assert snapshot.total_h2d_delta_bytes == sum(dict(snapshot.layer_h2d_delta_bytes).values())
+        assert snapshot.total_d2h_delta_bytes == sum(dict(snapshot.layer_d2h_delta_bytes).values())
+        telemetry = tiered_controller.soft_lag_budget_telemetry()
+        assert telemetry is not None and telemetry.all_requested_budgets_exact
+
+    # Every token synchronizes before peak reset, at the authoritative
+    # pre-resize snapshot, after exact-fill materialization of t+1, and while
+    # closing the post-rebalance transfer-accounting window.
+    assert synchronized == [1, 2] * 8
+
+    for layer_index in (1, 2):
+        store = tiered.layers[layer_index].tiered_compressor
+        assert store is not None
+        assert store.protected_blocks == (0,)
+        assert int(store.host_positions[0, 0]) == 3
+
+
+def test_soft_lag_model_guard_rejects_chunk_batch_and_empty_prefix() -> None:
+    model, resident, _tiered = _soft_lag_model_state()
+    seen_before = resident.seen_tokens
+
+    with pytest.raises(ValueError, match="single-token decode"):
+        model(torch.tensor([[1, 2]]), past_key_values=resident, use_cache=True)
+    with pytest.raises(ValueError, match="batch=1"):
+        model(torch.tensor([[1], [1]]), past_key_values=resident, use_cache=True)
+    assert resident.seen_tokens == seen_before
+    controller = resident.same_token_memory_controller
+    assert controller is not None and controller.stats().selected_queries == 0
+
+    empty = DeepSeekV4Cache(model.config)
+    with pytest.raises(ValueError, match="after a non-empty prefix"):
+        empty.enable_same_token_memory_controller(_soft_lag_config((1, 2)))
+
+
+def test_soft_lag_cache_load_rejects_tier_budget_tampering(tmp_path: Path) -> None:
+    model, _resident, tiered = _soft_lag_model_state()
+    model(torch.tensor([[47]]), past_key_values=tiered, use_cache=True)
+    cache_dir = tmp_path / "soft-lag-cache"
+    save_deepseek_v4_cache(tiered, cache_dir)
+
+    manifest_path = cache_dir / "cache.json"
+    manifest = json.loads(manifest_path.read_text())
+    layer = sorted(manifest["tiered_layers"])[0]
+    manifest["tiered_layers"][layer]["hot_budget_blocks"] += 1
+    manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+
+    with pytest.raises(ValueError, match="active soft-lag plan"):
+        load_deepseek_v4_cache(model.config, cache_dir)
+
+
+def test_soft_lag_cache_clone_select_stack_and_crop_preserve_bound_state() -> None:
+    model, _resident, tiered = _soft_lag_model_state()
+    model(torch.tensor([[53]]), past_key_values=tiered, use_cache=True)
+
+    cloned = tiered.clone()
+    selected = tiered.select_batch(0)
+    stacked = DeepSeekV4Cache.stack([selected, selected.clone()])
+    assert cloned.same_token_memory_controller is not None
+    assert selected.same_token_memory_controller is not None
+    assert stacked.same_token_memory_controller is not None
+    assert (
+        cloned.same_token_memory_controller.active_layer_budgets
+        == selected.same_token_memory_controller.active_layer_budgets
+        == stacked.same_token_memory_controller.active_layer_budgets
+    )
+    with pytest.raises(ValueError, match="batch=1"):
+        model(torch.tensor([[1], [1]]), past_key_values=stacked, use_cache=True)
+
+    cropped = tiered.clone()
+    cropped.crop(32, model.config)
+    controller = cropped.same_token_memory_controller
+    assert controller is not None
+    assert controller.stats().finalized_control_points == 0
+    assert controller.soft_lag_physical_snapshots == ()
+    assert controller.soft_lag_transitions[0].apply_query_position == 32
+    output = model(torch.tensor([[59]]), past_key_values=cropped, use_cache=True)
+    assert output.logits.shape[:2] == (1, 1)
 
 
 def test_same_token_controller_drives_current_tier_fetch():

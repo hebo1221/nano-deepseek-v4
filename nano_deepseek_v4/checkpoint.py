@@ -18,9 +18,26 @@ from .config import DeepSeekV4Config
 
 if TYPE_CHECKING:
     from .modeling import DeepSeekV4Cache, DeepSeekV4LayerCache
+    from .tiered_memory import TieredBlockStore
 
 
-_CACHE_FORMAT_VERSION = 1
+_CACHE_FORMAT_VERSION = 2
+_CACHE_SUPPORTED_FORMAT_VERSIONS = frozenset({1, _CACHE_FORMAT_VERSION})
+_CACHE_RUNTIME_BINDING_SCHEMA_VERSION = 1
+_CACHE_RUNTIME_METADATA_KEY = "nano_deepseek_v4_cache_runtime"
+_TIERED_RESIDENT_STATE_VERSION = 2
+_TIERED_TRANSFER_COUNTERS = frozenset(
+    {
+        "h2d_bytes",
+        "d2h_bytes",
+        "h2d_count",
+        "d2h_count",
+        "useful_h2d_bytes",
+        "late_misses",
+        "prefetches",
+        "evictions",
+    }
+)
 _CACHE_TENSOR_ATTRIBUTES = {"local_kv", "local_positions"}
 _CACHE_DICT_ATTRIBUTES = {
     "buffer_kv",
@@ -229,7 +246,9 @@ def _target_moe_prefix(layer: int) -> str:
     return f"model.layers.{layer}.moe"
 
 
-def _map_block_simple_key(rest: str, layer_prefix: str, attn_prefix: str, moe_prefix: str) -> str | None:
+def _map_block_simple_key(
+    rest: str, layer_prefix: str, attn_prefix: str, moe_prefix: str
+) -> str | None:
     if rest == "hc_attn_fn":
         return f"{layer_prefix}.attn_hc.fn"
     if rest == "hc_attn_base":
@@ -345,7 +364,12 @@ def _is_official_complex_key(key: str) -> bool:
     if len(parts) >= 6 and parts[2] == "ffn":
         if parts[3] == "shared_experts" and parts[4] in {"w1", "w2", "w3"} and parts[5] == "weight":
             return True
-        if parts[3] == "experts" and len(parts) >= 7 and parts[5] in {"w1", "w2", "w3"} and parts[6] == "weight":
+        if (
+            parts[3] == "experts"
+            and len(parts) >= 7
+            and parts[5] in {"w1", "w2", "w3"}
+            and parts[6] == "weight"
+        ):
             return True
     return False
 
@@ -394,9 +418,7 @@ def _safetensors_payload_size(path: Path) -> int:
             raise ValueError(f"{path} is not a valid safetensors file: missing header length")
         header_length = struct.unpack("<Q", header_length_bytes)[0]
         if header_length > file_size - 8:
-            raise ValueError(
-                f"{path} is not a valid safetensors file: header exceeds file size"
-            )
+            raise ValueError(f"{path} is not a valid safetensors file: header exceeds file size")
         header_bytes = handle.read(header_length)
         if len(header_bytes) != header_length:
             raise ValueError(f"{path} is not a valid safetensors file: truncated header")
@@ -714,7 +736,9 @@ def verify_deepseek_checkpoint_snapshot(
             try:
                 total_tensor_bytes += _safetensors_payload_size(shard_path)
             except Exception as exc:
-                index_metadata_errors.append(f"{shard}: safetensors payload size check failed: {exc}")
+                index_metadata_errors.append(
+                    f"{shard}: safetensors payload size check failed: {exc}"
+                )
         else:
             missing_shards.append(shard)
     if index_total_size_bytes is not None and total_tensor_bytes != index_total_size_bytes:
@@ -855,7 +879,9 @@ def _expand_scale(scale: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
     except RuntimeError:
         pass
     if scale.ndim != target.ndim:
-        raise ValueError(f"Cannot broadcast scale shape {tuple(scale.shape)} to target {tuple(target.shape)}.")
+        raise ValueError(
+            f"Cannot broadcast scale shape {tuple(scale.shape)} to target {tuple(target.shape)}."
+        )
     expanded = scale
     for dim, (scale_size, target_size) in enumerate(zip(scale.shape, target.shape, strict=True)):
         if scale_size == target_size:
@@ -914,8 +940,10 @@ def dequantize_with_scale(
             raise ValueError(f"Unsupported uint8 quantization format: {uint8_format}")
     else:
         value = tensor.float()
-        if target_shape is not None and tuple(value.shape) != tuple(target_shape) and value.numel() == int(
-            torch.tensor(tuple(target_shape)).prod().item()
+        if (
+            target_shape is not None
+            and tuple(value.shape) != tuple(target_shape)
+            and value.numel() == int(torch.tensor(tuple(target_shape)).prod().item())
         ):
             value = value.reshape(tuple(target_shape))
     expanded_scale = _expand_scale(scale, value)
@@ -983,7 +1011,11 @@ def convert_deepseek_official_state_dict(
             if target_key in target_shapes:
                 tensor = scaled_tensor(key)
                 target_shape = target_shapes[target_key]
-                candidate = tensor.reshape(target_shape) if tensor.numel() == target_shape.numel() else tensor
+                candidate = (
+                    tensor.reshape(target_shape)
+                    if tensor.numel() == target_shape.numel()
+                    else tensor
+                )
                 if _copy_if_shape_matches(converted, target_shapes, target_key, candidate):
                     handled_sources.add(key)
                 else:
@@ -1059,8 +1091,12 @@ def convert_deepseek_official_state_dict(
             part_shape = None
             if target_shape is not None:
                 part_shape = (target_shape[0] // 2, *target_shape[1:])
-            w1 = dequantize_with_scale(w1, official_state_dict.get(f"{source_prefix}.w1.scale"), part_shape)
-            w3 = dequantize_with_scale(w3, official_state_dict.get(f"{source_prefix}.w3.scale"), part_shape)
+            w1 = dequantize_with_scale(
+                w1, official_state_dict.get(f"{source_prefix}.w1.scale"), part_shape
+            )
+            w3 = dequantize_with_scale(
+                w3, official_state_dict.get(f"{source_prefix}.w3.scale"), part_shape
+            )
             handled_sources.add(f"{source_prefix}.w1.scale")
             handled_sources.add(f"{source_prefix}.w3.scale")
             gate_up = torch.cat([w1, w3], dim=0)
@@ -1297,7 +1333,9 @@ def build_deepseek_official_checkpoint_streaming_load_report(
         errors.extend(f"missing shard {item}" for item in snapshot.missing_shards)
         errors.extend(f"missing expected key {item}" for item in snapshot.missing_expected_keys)
         errors.extend(f"missing tensor key {item}" for item in snapshot.missing_keys_in_shards)
-        errors.extend(f"unexpected tensor key {item}" for item in snapshot.unexpected_keys_in_shards)
+        errors.extend(
+            f"unexpected tensor key {item}" for item in snapshot.unexpected_keys_in_shards
+        )
         errors.extend(f"shape mismatch {item}" for item in snapshot.shape_mismatches)
         errors.extend(f"unrecognized key {item}" for item in snapshot.coverage.unrecognized_keys)
     errors.extend(f"shape mismatch {item}" for item in shape_mismatches)
@@ -1352,6 +1390,365 @@ def _cache_config_sha256(config: DeepSeekV4Config) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
+def _canonical_json_sha256(payload: dict[str, Any]) -> str:
+    encoded = json.dumps(
+        payload,
+        allow_nan=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _strict_json_integer(value: Any, name: str, *, minimum: int = 0) -> int:
+    """Validate an integer-valued wire field without JSON numeric coercion."""
+
+    if isinstance(value, bool) or not isinstance(value, int) or value < minimum:
+        raise ValueError(f"{name} must be an integer >= {minimum}.")
+    return value
+
+
+def _strict_json_integer_list(
+    value: Any,
+    name: str,
+    *,
+    minimum: int = 0,
+) -> tuple[int, ...]:
+    if not isinstance(value, list):
+        raise ValueError(f"{name} must be a list of integers.")
+    return tuple(
+        _strict_json_integer(item, f"{name}[{index}]", minimum=minimum)
+        for index, item in enumerate(value)
+    )
+
+
+def _cache_controller_mode(manifest: dict[str, Any]) -> str:
+    online = manifest.get("online_memory_controller")
+    same_token = manifest.get("same_token_memory_controller")
+    if online is not None and same_token is not None:
+        raise ValueError("Cache manifest contains multiple memory controllers.")
+    if online is not None:
+        if not isinstance(online, dict):
+            raise ValueError("Cache manifest online_memory_controller must be an object.")
+        return "online"
+    if same_token is None:
+        return "none"
+    if not isinstance(same_token, dict):
+        raise ValueError("Cache manifest same_token_memory_controller must be an object.")
+    config = same_token.get("config")
+    if not isinstance(config, dict):
+        raise ValueError("Cache manifest same-token controller config must be an object.")
+    return (
+        "same_token_soft_lag" if config.get("soft_lag_policy") is not None else "same_token_static"
+    )
+
+
+def _cache_runtime_binding_payload(manifest: dict[str, Any]) -> dict[str, Any]:
+    raw_layers = manifest.get("tiered_layers")
+    if not isinstance(raw_layers, dict):
+        raise ValueError("Cache manifest tiered_layers must be an object.")
+    inventory = sorted(int(raw_layer) for raw_layer in raw_layers)
+    return {
+        "schema_version": _CACHE_RUNTIME_BINDING_SCHEMA_VERSION,
+        "cache_format_version": manifest["format_version"],
+        "tiering_mode": "tiered" if inventory else "none",
+        "tiered_layer_inventory": inventory,
+        "controller_mode": _cache_controller_mode(manifest),
+    }
+
+
+def _bind_cache_runtime_manifest(manifest: dict[str, Any]) -> tuple[dict[str, Any], str]:
+    payload = _cache_runtime_binding_payload(manifest)
+    manifest["tiering_mode"] = payload["tiering_mode"]
+    manifest["tiered_layer_inventory"] = payload["tiered_layer_inventory"]
+    manifest["controller_mode"] = payload["controller_mode"]
+    manifest["runtime_state_binding_sha256"] = _canonical_json_sha256(payload)
+    encoded = json.dumps(
+        payload,
+        allow_nan=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+    return payload, encoded
+
+
+def _canonical_tiered_layer_inventory(
+    manifest: dict[str, Any],
+    config: DeepSeekV4Config,
+) -> tuple[int, ...]:
+    raw_layers = manifest.get("tiered_layers")
+    if not isinstance(raw_layers, dict):
+        raise ValueError("Cache manifest tiered_layers must be an object.")
+    inventory: list[int] = []
+    seen: set[int] = set()
+    for raw_layer, settings in raw_layers.items():
+        if not isinstance(raw_layer, str) or not raw_layer.isascii() or not raw_layer.isdecimal():
+            raise ValueError("Cache manifest tiered layer keys must be ASCII decimal strings.")
+        layer = int(raw_layer)
+        if raw_layer != str(layer):
+            raise ValueError("Cache manifest tiered layer keys must use canonical decimal form.")
+        if layer in seen:
+            raise ValueError("Cache manifest contains duplicate tiered layer indices.")
+        if not 0 <= layer < config.num_hidden_layers:
+            raise ValueError("Cache manifest contains a tiered layer index outside the model.")
+        if not isinstance(settings, dict):
+            raise ValueError("Cache manifest contains invalid tiered layer settings.")
+        allowed_settings = {
+            "hot_budget_blocks",
+            "protected_blocks",
+            "async_transfer",
+            "resident_state",
+        }
+        if not set(settings).issubset(allowed_settings):
+            raise ValueError("Cache manifest tiered layer settings contain unknown fields.")
+        budget = settings.get("hot_budget_blocks")
+        protected = settings.get("protected_blocks", [])
+        async_transfer = settings.get("async_transfer", True)
+        if isinstance(budget, bool) or not isinstance(budget, int) or budget <= 0:
+            raise ValueError("Tiered cache hot_budget_blocks is invalid.")
+        if not isinstance(protected, list) or not all(
+            isinstance(index, int) and not isinstance(index, bool) for index in protected
+        ):
+            raise ValueError("Tiered cache protected_blocks is invalid.")
+        if tuple(protected) != tuple(sorted(set(protected))) or any(
+            index < 0 for index in protected
+        ):
+            raise ValueError(
+                "Tiered cache protected_blocks must be sorted unique and non-negative."
+            )
+        if not isinstance(async_transfer, bool):
+            raise ValueError("Tiered cache async_transfer is invalid.")
+        if manifest["format_version"] >= 2 and settings.get("resident_state") is None:
+            raise ValueError("Tiered cache resident state is missing from a v2 manifest.")
+        inventory.append(layer)
+        seen.add(layer)
+
+    layer_types = config.layer_types
+    if layer_types is None:
+        raise RuntimeError("config.layer_types was not initialized.")
+    csa_layers = tuple(
+        layer
+        for layer, layer_type in enumerate(layer_types)
+        if layer_type == "compressed_sparse_attention"
+    )
+    ordered_inventory = tuple(sorted(inventory))
+    if not set(ordered_inventory).issubset(csa_layers):
+        raise ValueError("Tiered cache layers must be a subset of the model CSA schedule.")
+    controller_mode = _cache_controller_mode(manifest)
+    if (
+        controller_mode == "same_token_soft_lag"
+        and ordered_inventory
+        and ordered_inventory != csa_layers
+    ):
+        raise ValueError("Tiered soft-lag cache must cover the exact model CSA schedule.")
+    return ordered_inventory
+
+
+def _validate_cache_runtime_binding(
+    manifest: dict[str, Any],
+    tensor_path: Path,
+    config: DeepSeekV4Config,
+) -> tuple[int, ...]:
+    inventory = _canonical_tiered_layer_inventory(manifest, config)
+    format_version = int(manifest["format_version"])
+    with safe_open(tensor_path, framework="pt", device="cpu") as handle:
+        metadata = handle.metadata() or {}
+    encoded = metadata.get(_CACHE_RUNTIME_METADATA_KEY)
+    if format_version == 1:
+        if encoded is not None:
+            raise ValueError("Legacy cache format v1 cannot contain a v2 runtime-state binding.")
+        return inventory
+    if not isinstance(encoded, str):
+        raise ValueError("Cache format v2 is missing its tensor-side runtime-state binding.")
+    try:
+        tensor_payload = json.loads(encoded)
+    except json.JSONDecodeError as exc:
+        raise ValueError("Cache tensor runtime-state binding is not valid JSON.") from exc
+    if not isinstance(tensor_payload, dict):
+        raise ValueError("Cache tensor runtime-state binding must be an object.")
+    expected_keys = {
+        "schema_version",
+        "cache_format_version",
+        "tiering_mode",
+        "tiered_layer_inventory",
+        "controller_mode",
+    }
+    if set(tensor_payload) != expected_keys:
+        raise ValueError("Cache tensor runtime-state binding has an invalid schema.")
+    _strict_json_integer(
+        tensor_payload["schema_version"],
+        "Cache tensor runtime-state binding schema_version",
+        minimum=1,
+    )
+    _strict_json_integer(
+        tensor_payload["cache_format_version"],
+        "Cache tensor runtime-state binding cache_format_version",
+        minimum=1,
+    )
+    tensor_inventory = _strict_json_integer_list(
+        tensor_payload["tiered_layer_inventory"],
+        "Cache tensor runtime-state binding tiered_layer_inventory",
+    )
+    if not isinstance(tensor_payload["tiering_mode"], str) or not isinstance(
+        tensor_payload["controller_mode"], str
+    ):
+        raise ValueError("Cache tensor runtime-state binding modes must be strings.")
+    expected_payload = {
+        "schema_version": _CACHE_RUNTIME_BINDING_SCHEMA_VERSION,
+        "cache_format_version": format_version,
+        "tiering_mode": "tiered" if inventory else "none",
+        "tiered_layer_inventory": list(inventory),
+        "controller_mode": _cache_controller_mode(manifest),
+    }
+    if tensor_inventory != inventory or tensor_payload != expected_payload:
+        raise ValueError("Cache tensor and manifest runtime states do not match.")
+    if manifest.get("tiering_mode") != expected_payload["tiering_mode"]:
+        raise ValueError("Cache manifest tiering_mode does not match its tier inventory.")
+    manifest_inventory = _strict_json_integer_list(
+        manifest.get("tiered_layer_inventory"),
+        "Cache manifest tiered_layer_inventory",
+    )
+    if manifest_inventory != inventory:
+        raise ValueError("Cache manifest tiered_layer_inventory does not match its tier settings.")
+    if manifest.get("controller_mode") != expected_payload["controller_mode"]:
+        raise ValueError("Cache manifest controller_mode does not match its controller payload.")
+    if manifest.get("runtime_state_binding_sha256") != _canonical_json_sha256(expected_payload):
+        raise ValueError("Cache manifest runtime-state binding digest does not match.")
+    return inventory
+
+
+def _tiered_resident_binding_payload(
+    *,
+    layer_index: int,
+    hot_budget_blocks: int,
+    protected_blocks: tuple[int, ...],
+    hot_indices: tuple[int, ...],
+    hot_end_positions: tuple[tuple[int, ...], ...],
+    device: str,
+    async_transfer: bool,
+    transfer_state: dict[str, int],
+    controller_binding: dict[str, Any] | None,
+    tensor_sha256: str,
+) -> dict[str, Any]:
+    return {
+        "resident_state_version": _TIERED_RESIDENT_STATE_VERSION,
+        "layer_index": layer_index,
+        "hot_budget_blocks": hot_budget_blocks,
+        "protected_blocks": list(protected_blocks),
+        "hot_indices": list(hot_indices),
+        "hot_end_positions": [list(batch) for batch in hot_end_positions],
+        "device_mode": {
+            "device": device,
+            "async_transfer": async_transfer,
+        },
+        "transfer_state": transfer_state,
+        "controller_binding": controller_binding,
+        "tensor_sha256": tensor_sha256,
+    }
+
+
+def _validate_tiered_resident_indices(
+    *,
+    hot_indices: tuple[int, ...],
+    protected_blocks: tuple[int, ...],
+    hot_budget_blocks: int,
+    num_blocks: int,
+    prefix: str,
+) -> None:
+    if hot_indices != tuple(sorted(set(hot_indices))):
+        raise ValueError(f"{prefix} hot_indices must be sorted and unique.")
+    if protected_blocks != tuple(sorted(set(protected_blocks))):
+        raise ValueError(f"{prefix} protected_blocks must be sorted and unique.")
+    if any(index < 0 or index >= num_blocks for index in hot_indices):
+        raise ValueError(f"{prefix} hot_indices contain an out-of-range block index.")
+    if any(index < 0 or index >= num_blocks for index in protected_blocks):
+        raise ValueError(
+            f"{prefix} protected block identities contain an out-of-range block index."
+        )
+    if not set(protected_blocks).issubset(hot_indices):
+        raise ValueError(f"{prefix} protected block identities must be a subset of hot_indices.")
+    if len(hot_indices) > hot_budget_blocks:
+        raise ValueError(f"{prefix} hot_indices exceed the hot-budget capacity.")
+
+
+def _serialize_tiered_resident_state(
+    layer_index: int,
+    store: TieredBlockStore,
+    controller_binding: dict[str, Any] | None,
+) -> dict[str, Any]:
+    store.synchronize()
+    hot_indices = tuple(store.hot_indices)
+    protected_blocks = tuple(store.protected_blocks)
+    prefix = f"layers.{layer_index}.tiered_compressor"
+    _validate_tiered_resident_indices(
+        hot_indices=hot_indices,
+        protected_blocks=protected_blocks,
+        hot_budget_blocks=store.hot_budget_blocks,
+        num_blocks=store.num_blocks,
+        prefix=prefix,
+    )
+    hot_end_positions = tuple(
+        store.hot_end_positions(batch_index) for batch_index in range(store.batch_size)
+    )
+    return {
+        "format_version": _TIERED_RESIDENT_STATE_VERSION,
+        "hot_indices": list(hot_indices),
+        "hot_end_positions": [list(batch) for batch in hot_end_positions],
+        "device_mode": {
+            "device": str(store.device),
+            "async_transfer": store.async_transfer,
+        },
+        "transfer_state": store.transfer_state(),
+        "controller_binding": controller_binding,
+        "binding_sha256": None,
+    }
+
+
+def _soft_lag_resident_controller_binding(
+    cache: DeepSeekV4Cache,
+    layer_index: int,
+) -> dict[str, Any] | None:
+    controller = cache.same_token_memory_controller
+    if controller is None or not controller.soft_lag_enabled:
+        return None
+    transition = controller.active_soft_lag_transition
+    if transition is None:
+        raise RuntimeError("Soft-lag resident binding requires an active transition.")
+    expected = cache._soft_lag_expected_resident_end_positions()
+    if layer_index not in expected:
+        raise RuntimeError("Soft-lag resident binding is missing a tiered CSA layer.")
+    return {
+        "seen_tokens": cache.seen_tokens,
+        "active_apply_query_position": transition.apply_query_position,
+        "active_plan_audit_digest": transition.plan.audit_digest,
+        "controller_replay_digest": controller.stats().replay_digest,
+        "expected_resident_end_positions": list(expected[layer_index]),
+    }
+
+
+def _finalize_tiered_resident_bindings(
+    manifest: dict[str, Any],
+    tensor_sha256: str,
+) -> None:
+    for raw_layer, settings in manifest["tiered_layers"].items():
+        layer_index = int(raw_layer)
+        state = settings["resident_state"]
+        device_mode = state["device_mode"]
+        payload = _tiered_resident_binding_payload(
+            layer_index=layer_index,
+            hot_budget_blocks=settings["hot_budget_blocks"],
+            protected_blocks=tuple(settings["protected_blocks"]),
+            hot_indices=tuple(state["hot_indices"]),
+            hot_end_positions=tuple(tuple(batch) for batch in state["hot_end_positions"]),
+            device=device_mode["device"],
+            async_transfer=device_mode["async_transfer"],
+            transfer_state=dict(state["transfer_state"]),
+            controller_binding=state["controller_binding"],
+            tensor_sha256=tensor_sha256,
+        )
+        state["binding_sha256"] = _canonical_json_sha256(payload)
+
+
 def _put_tensor(tensors: dict[str, torch.Tensor], key: str, tensor: torch.Tensor | None) -> None:
     if tensor is not None:
         # Cache buffers can be overlapping views of the same storage. Safetensors
@@ -1393,7 +1790,10 @@ def _validate_cache_layer(
         local_positions = layer.local_positions
         if local_kv.ndim != 4 or local_positions.ndim != 2:
             raise ValueError(f"{prefix} local cache tensors have invalid ranks.")
-        if local_kv.shape[0] != local_positions.shape[0] or local_kv.shape[2] != local_positions.shape[1]:
+        if (
+            local_kv.shape[0] != local_positions.shape[0]
+            or local_kv.shape[2] != local_positions.shape[1]
+        ):
             raise ValueError(f"{prefix} local cache tensor shapes are inconsistent.")
         if local_positions.shape[1] != seen_tokens:
             raise ValueError(
@@ -1443,6 +1843,13 @@ def _validate_cache_layer(
             raise ValueError(f"{prefix} contains duplicate resident and tiered compressor state.")
         if tiered.host_values.shape[:2] != tiered.host_positions.shape:
             raise ValueError(f"{prefix}.tiered_compressor tensor shapes are inconsistent.")
+        _validate_tiered_resident_indices(
+            hot_indices=tuple(tiered.hot_indices),
+            protected_blocks=tuple(tiered.protected_blocks),
+            hot_budget_blocks=tiered.hot_budget_blocks,
+            num_blocks=tiered.num_blocks,
+            prefix=f"{prefix}.tiered_compressor",
+        )
         _validate_position_tensor(
             tiered.host_positions,
             f"{prefix}.tiered_compressor.positions",
@@ -1490,6 +1897,7 @@ def _write_cache_files_atomically(
     tensor_temp: Path | None = None
     manifest_temp: Path | None = None
     try:
+        _runtime_payload, runtime_metadata = _bind_cache_runtime_manifest(manifest)
         with tempfile.NamedTemporaryFile(
             dir=cache_dir,
             prefix=".cache-",
@@ -1497,8 +1905,13 @@ def _write_cache_files_atomically(
             delete=False,
         ) as handle:
             tensor_temp = Path(handle.name)
-        save_file(tensors, tensor_temp)
+        save_file(
+            tensors,
+            tensor_temp,
+            metadata={_CACHE_RUNTIME_METADATA_KEY: runtime_metadata},
+        )
         manifest["tensor_sha256"] = _sha256_file(tensor_temp)
+        _finalize_tiered_resident_bindings(manifest, manifest["tensor_sha256"])
 
         with tempfile.NamedTemporaryFile(
             mode="w",
@@ -1528,6 +1941,10 @@ def _write_cache_files_atomically(
 def save_deepseek_v4_cache(cache: DeepSeekV4Cache, cache_dir: str | Path) -> None:
     """Persist a DeepSeekV4Cache to disk for serving/offload workflows."""
 
+    same_token = cache.same_token_memory_controller
+    if same_token is not None and same_token.soft_lag_enabled:
+        cache._validate_soft_lag_tier_alignment()
+        cache._validate_soft_lag_boundary_residents()
     _validate_cache_structure(cache)
     cache_dir = Path(cache_dir)
     cache_dir.mkdir(parents=True, exist_ok=True)
@@ -1569,6 +1986,11 @@ def save_deepseek_v4_cache(cache: DeepSeekV4Cache, cache_dir: str | Path) -> Non
                 "hot_budget_blocks": store.hot_budget_blocks,
                 "protected_blocks": list(store.protected_blocks),
                 "async_transfer": store.async_transfer,
+                "resident_state": _serialize_tiered_resident_state(
+                    layer_idx,
+                    store,
+                    _soft_lag_resident_controller_binding(cache, layer_idx),
+                ),
             }
         for attr in (
             "buffer_kv",
@@ -1600,10 +2022,13 @@ def _load_cache_manifest(cache_dir: Path, config: DeepSeekV4Config) -> dict[str,
         raise ValueError(f"Cache manifest is not valid JSON: {manifest_path}") from exc
     if not isinstance(manifest, dict):
         raise ValueError("Cache manifest must be a JSON object.")
-    if manifest.get("format_version") != _CACHE_FORMAT_VERSION:
-        raise ValueError(
-            f"Unsupported cache format version: {manifest.get('format_version')!r}."
-        )
+    format_version = manifest.get("format_version")
+    if (
+        isinstance(format_version, bool)
+        or not isinstance(format_version, int)
+        or format_version not in _CACHE_SUPPORTED_FORMAT_VERSIONS
+    ):
+        raise ValueError(f"Unsupported cache format version: {format_version!r}.")
     seen_tokens = manifest.get("seen_tokens")
     num_layers = manifest.get("num_layers")
     if isinstance(seen_tokens, bool) or not isinstance(seen_tokens, int) or seen_tokens < 0:
@@ -1655,6 +2080,217 @@ def _restore_cache_tensor(
     getattr(layer, attribute)[parts[3]] = tensor
 
 
+def _strict_index_tuple(value: Any, name: str) -> tuple[int, ...]:
+    return _strict_json_integer_list(value, name)
+
+
+def _parse_tiered_controller_binding(value: Any, prefix: str) -> dict[str, Any] | None:
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise ValueError(f"{prefix} controller_binding is invalid.")
+    expected_keys = {
+        "seen_tokens",
+        "active_apply_query_position",
+        "active_plan_audit_digest",
+        "controller_replay_digest",
+        "expected_resident_end_positions",
+    }
+    if set(value) != expected_keys:
+        raise ValueError(f"{prefix} controller_binding has an invalid schema.")
+    seen_tokens = _strict_json_integer(
+        value["seen_tokens"],
+        f"{prefix} controller_binding.seen_tokens",
+    )
+    apply_position = _strict_json_integer(
+        value["active_apply_query_position"],
+        f"{prefix} controller_binding.active_apply_query_position",
+    )
+    plan_digest = value["active_plan_audit_digest"]
+    replay_digest = value["controller_replay_digest"]
+    for digest, name in (
+        (plan_digest, "active_plan_audit_digest"),
+        (replay_digest, "controller_replay_digest"),
+    ):
+        if digest is None and name == "controller_replay_digest":
+            continue
+        if not isinstance(digest, str) or len(digest) != 64:
+            raise ValueError(f"{prefix} controller_binding.{name} is invalid.")
+        try:
+            int(digest, 16)
+        except ValueError as exc:
+            raise ValueError(f"{prefix} controller_binding.{name} is invalid.") from exc
+    resident_positions = _strict_json_integer_list(
+        value["expected_resident_end_positions"],
+        f"{prefix} controller_binding.expected_resident_end_positions",
+    )
+    return {
+        "seen_tokens": seen_tokens,
+        "active_apply_query_position": apply_position,
+        "active_plan_audit_digest": plan_digest,
+        "controller_replay_digest": replay_digest,
+        "expected_resident_end_positions": list(resident_positions),
+    }
+
+
+def _parse_tiered_resident_state(
+    *,
+    layer_index: int,
+    raw_state: Any,
+    hot_budget_blocks: int,
+    protected_blocks: tuple[int, ...],
+    async_transfer: bool,
+    positions: torch.Tensor,
+    tensor_sha256: str,
+) -> tuple[tuple[int, ...], dict[str, int], dict[str, Any] | None]:
+    prefix = f"layers.{layer_index}.tiered_compressor resident state"
+    if not isinstance(raw_state, dict):
+        raise ValueError(f"{prefix} must be an object.")
+    expected_keys = {
+        "format_version",
+        "hot_indices",
+        "hot_end_positions",
+        "device_mode",
+        "transfer_state",
+        "controller_binding",
+        "binding_sha256",
+    }
+    if set(raw_state) != expected_keys:
+        raise ValueError(f"{prefix} has an invalid schema.")
+    state_version = _strict_json_integer(
+        raw_state.get("format_version"),
+        f"{prefix} format_version",
+        minimum=1,
+    )
+    if state_version != _TIERED_RESIDENT_STATE_VERSION:
+        raise ValueError(f"{prefix} has an unsupported format version.")
+
+    hot_indices = _strict_index_tuple(raw_state.get("hot_indices"), f"{prefix} hot_indices")
+    _validate_tiered_resident_indices(
+        hot_indices=hot_indices,
+        protected_blocks=protected_blocks,
+        hot_budget_blocks=hot_budget_blocks,
+        num_blocks=int(positions.shape[1]),
+        prefix=prefix,
+    )
+
+    raw_end_positions = raw_state.get("hot_end_positions")
+    if not isinstance(raw_end_positions, list) or len(raw_end_positions) != int(positions.shape[0]):
+        raise ValueError(f"{prefix} hot_end_positions has an invalid batch dimension.")
+    hot_end_positions: list[tuple[int, ...]] = []
+    for batch_index, raw_batch in enumerate(raw_end_positions):
+        batch = _strict_index_tuple(
+            raw_batch,
+            f"{prefix} hot_end_positions[{batch_index}]",
+        )
+        if len(batch) != len(hot_indices):
+            raise ValueError(f"{prefix} hot_end_positions has an invalid resident dimension.")
+        hot_end_positions.append(batch)
+    expected_end_positions = tuple(
+        tuple(int(positions[batch_index, block_index]) for block_index in hot_indices)
+        for batch_index in range(int(positions.shape[0]))
+    )
+    if tuple(hot_end_positions) != expected_end_positions:
+        raise ValueError(f"{prefix} hot end-position identities do not match the tensor payload.")
+
+    device_mode = raw_state.get("device_mode")
+    if not isinstance(device_mode, dict) or set(device_mode) != {"device", "async_transfer"}:
+        raise ValueError(f"{prefix} device_mode is invalid.")
+    saved_device = device_mode.get("device")
+    saved_async_transfer = device_mode.get("async_transfer")
+    if not isinstance(saved_device, str) or not saved_device:
+        raise ValueError(f"{prefix} device_mode.device is invalid.")
+    try:
+        normalized_device = str(torch.device(saved_device))
+    except (RuntimeError, TypeError) as exc:
+        raise ValueError(f"{prefix} device_mode.device is invalid.") from exc
+    if normalized_device != saved_device:
+        raise ValueError(f"{prefix} device_mode.device is not canonical.")
+    if not isinstance(saved_async_transfer, bool):
+        raise ValueError(f"{prefix} device_mode.async_transfer is invalid.")
+    if saved_async_transfer != async_transfer:
+        raise ValueError(f"{prefix} device mode conflicts with tier settings.")
+
+    raw_transfer_state = raw_state.get("transfer_state")
+    if not isinstance(raw_transfer_state, dict) or set(raw_transfer_state) != set(
+        _TIERED_TRANSFER_COUNTERS
+    ):
+        raise ValueError(f"{prefix} transfer_state is invalid.")
+    if any(
+        isinstance(value, bool) or not isinstance(value, int) or value < 0
+        for value in raw_transfer_state.values()
+    ):
+        raise ValueError(f"{prefix} transfer counters must be non-negative integers.")
+    transfer_state = {name: int(raw_transfer_state[name]) for name in _TIERED_TRANSFER_COUNTERS}
+    if transfer_state["useful_h2d_bytes"] > transfer_state["h2d_bytes"]:
+        raise ValueError(f"{prefix} useful H2D bytes exceed total H2D bytes.")
+    controller_binding = _parse_tiered_controller_binding(
+        raw_state.get("controller_binding"),
+        prefix,
+    )
+
+    expected_binding = raw_state.get("binding_sha256")
+    if not isinstance(expected_binding, str) or len(expected_binding) != 64:
+        raise ValueError(f"{prefix} binding_sha256 is invalid.")
+    try:
+        int(expected_binding, 16)
+    except ValueError as exc:
+        raise ValueError(f"{prefix} binding_sha256 is invalid.") from exc
+    payload = _tiered_resident_binding_payload(
+        layer_index=layer_index,
+        hot_budget_blocks=hot_budget_blocks,
+        protected_blocks=protected_blocks,
+        hot_indices=hot_indices,
+        hot_end_positions=tuple(hot_end_positions),
+        device=saved_device,
+        async_transfer=saved_async_transfer,
+        transfer_state=transfer_state,
+        controller_binding=controller_binding,
+        tensor_sha256=tensor_sha256,
+    )
+    if expected_binding != _canonical_json_sha256(payload):
+        raise ValueError(
+            f"{prefix} integrity binding does not match the active soft-lag plan or resident state."
+        )
+    return hot_indices, transfer_state, controller_binding
+
+
+def _validate_soft_lag_transfer_continuity(
+    cache: DeepSeekV4Cache,
+    resident_transfer_states: dict[int, dict[str, int]],
+) -> None:
+    controller = cache.same_token_memory_controller
+    if controller is None or not controller.soft_lag_enabled or not resident_transfer_states:
+        return
+    snapshots = controller.soft_lag_physical_snapshots
+    if not snapshots:
+        return
+    latest = snapshots[-1]
+    minimum_h2d = dict(latest.layer_h2d_bytes)
+    minimum_d2h = dict(latest.layer_d2h_bytes)
+    expected_layers = set(controller.config.csa_layer_indices)
+    if set(resident_transfer_states) != expected_layers:
+        raise ValueError(
+            "Tiered soft-lag resident transfer state does not cover the exact CSA schedule."
+        )
+    for layer_index in controller.config.csa_layer_indices:
+        saved = resident_transfer_states[layer_index]
+        layer = cache.layers[layer_index]
+        store = layer.tiered_compressor
+        if store is None:
+            raise ValueError("Tiered soft-lag transfer continuity is missing a CSA store.")
+        restored = store.transfer_state()
+        if (
+            saved["h2d_bytes"] < minimum_h2d[layer_index]
+            or saved["d2h_bytes"] < minimum_d2h[layer_index]
+            or restored["h2d_bytes"] < minimum_h2d[layer_index]
+            or restored["d2h_bytes"] < minimum_d2h[layer_index]
+        ):
+            raise ValueError(
+                "Tiered soft-lag resident transfer counters precede the latest physical snapshot."
+            )
+
+
 def load_deepseek_v4_cache(
     config: DeepSeekV4Config,
     cache_dir: str | Path,
@@ -1668,23 +2304,48 @@ def load_deepseek_v4_cache(
     manifest = _load_cache_manifest(cache_dir, config)
     cache = DeepSeekV4Cache(config)
     cache.seen_tokens = int(manifest["seen_tokens"])
+    cache_format_version = int(manifest["format_version"])
+    tiered_layers = manifest.get("tiered_layers", {})
+    tiered_inventory = _validate_cache_runtime_binding(
+        manifest,
+        cache_dir / "cache.safetensors",
+        config,
+    )
+    if not isinstance(tiered_layers, dict):  # Proven by the runtime-binding preflight.
+        raise AssertionError("Tiered layer preflight returned a non-object inventory.")
+    raw_same_token_payload = manifest.get("same_token_memory_controller")
+    raw_same_token_config = (
+        raw_same_token_payload.get("config") if isinstance(raw_same_token_payload, dict) else None
+    )
+    if (
+        cache_format_version < 2
+        and tiered_layers
+        and isinstance(raw_same_token_config, dict)
+        and raw_same_token_config.get("soft_lag_policy") is not None
+    ):
+        raise ValueError(
+            "Cache format v1 cannot continue a tiered soft-lag controller; "
+            "format v2 resident state and controller bindings are required."
+        )
+    tiered_cold_keys = {
+        f"layers.{layer}.compressed_{kind}.compressor"
+        for layer in tiered_inventory
+        for kind in ("kv", "positions")
+    }
     tensors = load_file(cache_dir / "cache.safetensors")
     for key, tensor in tensors.items():
-        if device is not None:
+        if device is not None and key not in tiered_cold_keys:
             tensor = tensor.to(device)
         _restore_cache_tensor(cache, key, tensor)
-    tiered_layers = manifest.get("tiered_layers", {})
-    if not isinstance(tiered_layers, dict):
-        raise ValueError("Cache manifest tiered_layers must be an object.")
+    resident_controller_bindings: list[tuple[int, dict[str, Any] | None]] = []
+    resident_transfer_states: dict[int, dict[str, int]] = {}
     if tiered_layers:
         from .tiered_memory import TieredBlockStore
 
-        for raw_layer_idx, raw_settings in tiered_layers.items():
-            if not isinstance(raw_layer_idx, str) or not raw_layer_idx.isdigit():
-                raise ValueError("Cache manifest contains an invalid tiered layer index.")
-            layer_idx = int(raw_layer_idx)
-            if not 0 <= layer_idx < len(cache.layers) or not isinstance(raw_settings, dict):
-                raise ValueError("Cache manifest contains invalid tiered layer settings.")
+        for layer_idx in tiered_inventory:
+            raw_settings = tiered_layers[str(layer_idx)]
+            if not isinstance(raw_settings, dict):  # Proven by preflight.
+                raise AssertionError("Tiered layer preflight returned invalid settings.")
             layer = cache.layers[layer_idx]
             values = layer.compressed_kv.pop("compressor", None)
             positions = layer.compressed_positions.pop("compressor", None)
@@ -1701,7 +2362,28 @@ def load_deepseek_v4_cache(
                 raise ValueError("Tiered cache protected_blocks is invalid.")
             if not isinstance(async_transfer, bool):
                 raise ValueError("Tiered cache async_transfer is invalid.")
-            target_device = values.device if device is not None else torch.device("cpu")
+            raw_resident_state = raw_settings.get("resident_state")
+            if raw_resident_state is None and cache_format_version >= 2:
+                raise ValueError("Tiered cache resident state is missing from a v2 manifest.")
+            initial_hot_blocks = tuple(protected)
+            prior_transfer_state: dict[str, int] | None = None
+            if raw_resident_state is not None:
+                (
+                    initial_hot_blocks,
+                    prior_transfer_state,
+                    resident_controller_binding,
+                ) = _parse_tiered_resident_state(
+                    layer_index=layer_idx,
+                    raw_state=raw_resident_state,
+                    hot_budget_blocks=budget,
+                    protected_blocks=tuple(protected),
+                    async_transfer=async_transfer,
+                    positions=positions,
+                    tensor_sha256=manifest["tensor_sha256"],
+                )
+                resident_controller_bindings.append((layer_idx, resident_controller_binding))
+                resident_transfer_states[layer_idx] = prior_transfer_state
+            target_device = torch.device(device) if device is not None else torch.device("cpu")
             layer.tiered_compressor = TieredBlockStore.from_device_tensors(
                 values,
                 positions,
@@ -1709,8 +2391,10 @@ def load_deepseek_v4_cache(
                 device=target_device,
                 protected_blocks=protected,
                 async_transfer=async_transfer,
-                initial_hot_blocks=protected,
+                initial_hot_blocks=initial_hot_blocks,
             )
+            if prior_transfer_state is not None:
+                layer.tiered_compressor.continue_transfer_state(prior_transfer_state)
     controller_payload = manifest.get("online_memory_controller")
     if controller_payload is not None:
         if not isinstance(controller_payload, dict):
@@ -1731,12 +2415,20 @@ def load_deepseek_v4_cache(
         from .causal_memory_controller import SameTokenTrainingFreeController
 
         try:
-            same_token_controller = SameTokenTrainingFreeController.from_dict(
-                same_token_payload
-            )
+            same_token_controller = SameTokenTrainingFreeController.from_dict(same_token_payload)
         except (KeyError, TypeError, ValueError) as exc:
             raise ValueError("Cache manifest same-token controller is invalid.") from exc
         cache._attach_same_token_controller(same_token_controller)
+    for layer_idx, saved_binding in resident_controller_bindings:
+        actual_binding = _soft_lag_resident_controller_binding(cache, layer_idx)
+        if saved_binding != actual_binding:
+            raise ValueError(
+                f"Tiered resident/controller binding does not match for layer {layer_idx}."
+            )
+    _validate_soft_lag_transfer_continuity(cache, resident_transfer_states)
+    same_token = cache.same_token_memory_controller
+    if same_token is not None and same_token.soft_lag_enabled:
+        cache._validate_soft_lag_boundary_residents()
     _validate_cache_structure(cache)
     return cache
 
@@ -1759,11 +2451,15 @@ def save_sharded_safetensors(
     for shard_idx, start in enumerate(range(0, len(items), max_tensors_per_shard), start=1):
         shard_items = items[start : start + max_tensors_per_shard]
         shard_name = f"model-{shard_idx:05d}-of-{((len(items) - 1) // max_tensors_per_shard) + 1:05d}.safetensors"
-        save_file({key: value.detach().cpu() for key, value in shard_items}, checkpoint_dir / shard_name)
+        save_file(
+            {key: value.detach().cpu() for key, value in shard_items}, checkpoint_dir / shard_name
+        )
         for key, _ in shard_items:
             weight_map[key] = shard_name
     total_size = 0
     for shard_name in sorted(set(weight_map.values())):
         total_size += _safetensors_payload_size(checkpoint_dir / shard_name)
     index = {"metadata": {"format": "pt", "total_size": total_size}, "weight_map": weight_map}
-    (checkpoint_dir / "model.safetensors.index.json").write_text(json.dumps(index, indent=2, sort_keys=True))
+    (checkpoint_dir / "model.safetensors.index.json").write_text(
+        json.dumps(index, indent=2, sort_keys=True)
+    )
