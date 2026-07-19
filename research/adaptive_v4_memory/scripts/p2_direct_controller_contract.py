@@ -17,17 +17,18 @@ from freeze_p2_causal_factorial_arms import (
 
 from nano_deepseek_v4 import PAPER_GRADE_WORKLOAD_FAMILIES, TrainingFreeControllerConfig
 
-EXPERIMENT_ID = "p2-post-rank-direct-controller-v1.1"
+EXPERIMENT_ID = "p2-post-rank-direct-controller-v1.2"
 DIRECT_CALIBRATION_EXPERIMENT_ID = "p2-post-rank-direct-soft-lag-calibration-v1"
 DIRECT_TOP_P_MATCH_EXPERIMENT_ID = "p2-post-rank-direct-top-p-physical-match-v1"
 TOP_P_MATCH_ATTESTATION_PURPOSE = "p2-direct-top-p-physical-match-v1"
 LEGACY_CALIBRATION_SCAFFOLD_ID = "p1-layer-quota-calibration-pilot-v1"
 MANIFEST_PATH = Path(
-    "research/adaptive_v4_memory/manifests/p2-post-rank-direct-controller-v1-1.json"
+    "research/adaptive_v4_memory/manifests/p2-post-rank-direct-controller-v1-2.json"
 )
 MANIFEST_STATUS = (
-    "amended_after_training_validator_false_negative_before_calibration_or_held_out_quality"
+    "amended_after_calibration_path_binding_false_negative_before_top_p_or_held_out_quality"
 )
+DIRECT_GPU_SCHEDULER_LOCK_PATH = Path("/tmp/adaptive-v4-direct-gpu0.lock")
 SUPERSEDED_MANIFEST_PATH = (
     "research/adaptive_v4_memory/manifests/p2-post-rank-direct-controller-v1.json"
 )
@@ -48,6 +49,45 @@ VALIDATOR_AMENDMENT_REPORT_PATH = (
 )
 VALIDATOR_AMENDMENT_REPORT_SHA256 = (
     "371080e0e7f34534165afb2c0325b6d6ef4d698a198db9b42e60367a05663820"
+)
+
+# Revision 1.1 is the exact completed training prerequisite and the failed
+# first calibration attempt admitted only through the revision 1.2 retry gate.
+V1_1_MANIFEST_PATH = (
+    "research/adaptive_v4_memory/manifests/p2-post-rank-direct-controller-v1-1.json"
+)
+V1_1_MANIFEST_SHA256 = "1d059f83ca73945b9df5dbee20752fbf3f99c0a24794c533be9c52a4230b4c0b"
+V1_1_IMPLEMENTATION_SOURCE_COMMIT = "80ef62672ea1f625acd0481e2ae34aa7c4a3f4a3"
+V1_1_IMPLEMENTATION_TREE_DIGEST = (
+    "8dff0fbda776a81d2b4e2a1eacf12d01a6d8c6bad9df5376e1ed5193638ca5c9"
+)
+V1_1_ATTEMPT_SOURCE_COMMIT = "95339f4dd5b9757c1b513fc6be391fea206b2bc9"
+V1_1_TRAINING_MATRIX_SHA256 = (
+    "786669b8feb74eef5a4aa1e57dccc3ffada10596a8ae995d78e931daeef06cb5"
+)
+V1_1_CALIBRATION_MATRIX_SHA256 = (
+    "f0dccaa9861e095b297c22a17735b3a379d4f9ed8db628e0bcf222b12da5e426"
+)
+V1_1_CALIBRATION_CLAIM_SHA256 = (
+    "462793153ad22a19223398ef30c2e4624ae247d179a8c29cb250dca1b3bca2cb"
+)
+V1_1_CALIBRATION_ARTIFACT_SHA256 = (
+    "f805d70cb1379cc71c6d6abbe34d579880bd8cec35b72ea816ce9cbc7775d25b"
+)
+V1_1_CALIBRATION_ARTIFACT_PAYLOAD_SHA256 = (
+    "b177648d267b44960e9c0dc2bf8953c5149e76a3854cc0dca3155c0d21130e45"
+)
+V1_1_CALIBRATION_ARTIFACT_ATTESTATION_MAC = (
+    "b0271103f2f8d3d8b53f85cced550cbf62f53d084280a35827f3efb9db27aae1"
+)
+V1_1_CALIBRATION_LAUNCH_NONCE = (
+    "0f16510c0b662fe099ecaafd7671fa0db9de608e9e4a31fd3d56f7a1a01c7e37"
+)
+CALIBRATION_PATH_AMENDMENT_REPORT_PATH = (
+    "research/adaptive_v4_memory/reports/2026-07-19-p2-direct-calibration-path-binding-amendment.md"
+)
+CALIBRATION_PATH_AMENDMENT_REPORT_SHA256 = (
+    "fe9ae183278522261430a084574678028d1d7c7aad17d4f410efcb3df0552698"
 )
 
 SCALES = ("s55", "s151")
@@ -444,7 +484,11 @@ def expected_confirmatory_success_gate() -> dict[str, Any]:
 # freezing.
 PACKAGE_IMPLEMENTATION_ROOT = "nano_deepseek_v4"
 PROJECT_DEPENDENCY_SPEC_PATH = "pyproject.toml"
-PROTOCOL_FREEZE_PATHS = (VALIDATOR_AMENDMENT_REPORT_PATH,)
+V1_1_PROTOCOL_FREEZE_PATHS = (VALIDATOR_AMENDMENT_REPORT_PATH,)
+PROTOCOL_FREEZE_PATHS = (
+    *V1_1_PROTOCOL_FREEZE_PATHS,
+    CALIBRATION_PATH_AMENDMENT_REPORT_PATH,
+)
 DIRECT_RESEARCH_IMPLEMENTATION_PATHS = (
     "research/adaptive_v4_memory/scripts/adaptive_v4_execution_environment.py",
     "research/adaptive_v4_memory/scripts/adaptive_v4_gpu_lock.py",
@@ -465,6 +509,12 @@ DIRECT_RESEARCH_IMPLEMENTATION_PATHS = (
 SUPERSEDED_V1_IMPLEMENTATION_PATHS = (
     PROJECT_DEPENDENCY_SPEC_PATH,
     PACKAGE_IMPLEMENTATION_ROOT,
+    *DIRECT_RESEARCH_IMPLEMENTATION_PATHS,
+)
+V1_1_IMPLEMENTATION_PATHS = (
+    PROJECT_DEPENDENCY_SPEC_PATH,
+    PACKAGE_IMPLEMENTATION_ROOT,
+    *V1_1_PROTOCOL_FREEZE_PATHS,
     *DIRECT_RESEARCH_IMPLEMENTATION_PATHS,
 )
 IMPLEMENTATION_PATHS = (
@@ -1036,6 +1086,57 @@ def superseded_v1_implementation_tree_digest_at_commit() -> str:
         SUPERSEDED_V1_IMPLEMENTATION_PATHS,
         canonical_entries,
     )
+
+
+def v1_1_implementation_tree_digest_at_commit() -> str:
+    """Recompute the exact revision 1.1 tree used by the calibration retry gate."""
+
+    tracked_tree = subprocess.run(
+        [
+            "git",
+            "ls-tree",
+            "-r",
+            "--full-tree",
+            V1_1_IMPLEMENTATION_SOURCE_COMMIT,
+            "--",
+            *V1_1_IMPLEMENTATION_PATHS,
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    parsed_entries: list[tuple[str, str]] = []
+    for entry in (line for line in tracked_tree.splitlines() if line):
+        metadata, separator, path = entry.partition("\t")
+        fields = metadata.split()
+        if separator != "\t" or len(fields) != 3 or not path:
+            raise RuntimeError("Revision 1.1 implementation commit-tree entry is malformed.")
+        mode, object_type, object_id = fields
+        if object_type != "blob" or mode not in {"100644", "100755"} or not is_git_oid(
+            object_id
+        ):
+            raise RuntimeError(
+                "Revision 1.1 implementation tree contains an invalid, symlink, or non-blob "
+                "entry."
+            )
+        parsed_entries.append((path, f"{mode} {object_id} 0\t{path}"))
+    paths = [path for path, _entry in parsed_entries]
+    _require(len(paths) == len(set(paths)), "Revision 1.1 implementation inventory is duplicated.")
+    canonical_entries = tuple(entry for _path, entry in sorted(parsed_entries))
+    _require(
+        tuple(entry for _path, entry in parsed_entries) == canonical_entries,
+        "Revision 1.1 implementation Git entries are not canonical.",
+    )
+    tracked_paths = set(paths)
+    package_prefix = PACKAGE_IMPLEMENTATION_ROOT.rstrip("/") + "/"
+    _require(
+        PROJECT_DEPENDENCY_SPEC_PATH in tracked_paths
+        and any(path.startswith(package_prefix) for path in tracked_paths)
+        and all(path in tracked_paths for path in DIRECT_RESEARCH_IMPLEMENTATION_PATHS)
+        and all(path in tracked_paths for path in V1_1_PROTOCOL_FREEZE_PATHS),
+        "Revision 1.1 implementation inventory is incomplete.",
+    )
+    return _implementation_index_digest(V1_1_IMPLEMENTATION_PATHS, canonical_entries)
 
 
 def seed_triplet(training_seed: int) -> tuple[int, int, int]:
@@ -2531,7 +2632,7 @@ def validate_arm_semantics(arms: Mapping[str, BuiltCausalArm]) -> None:
 
 
 def expected_adaptation_disclosure() -> dict[str, Any]:
-    """Return the exact pre-held-out amendment disclosure for revision 1.1.
+    """Return the exact pre-held-out amendment disclosures through revision 1.2.
 
     The first prerequisite trainer completed normally, but the frozen runner rejected a
     legitimate sparse-AdamW checkpoint because it treated every parameter-local optimizer
@@ -2587,6 +2688,78 @@ def expected_adaptation_disclosure() -> dict[str, Any]:
             ),
             "seed_grid_changed": False,
             "training_hyperparameters_changed": False,
+            "controller_arms_or_estimands_changed": False,
+        },
+        "preheldout_calibration_retry_amendment": {
+            "reason": "checkpoint-path-spelling-parent-validator-false-negative-v1",
+            "stage": "first-calibration-prerequisite-before-top-p-or-held-out-quality",
+            "training_diagnostics_observed": True,
+            "calibration_results_observed": True,
+            "observed_calibration_terminal_decision": "GO",
+            "top_p_results_observed": False,
+            "held_out_controller_quality_observed": False,
+            "failed_coordinate": {
+                "scale": "s55",
+                "training_seed": 6071406,
+                "calibration_seed": 7071406,
+                "evaluation_seed_reserved": 10071406,
+            },
+            "superseded_manifest": {
+                "path": V1_1_MANIFEST_PATH,
+                "sha256": V1_1_MANIFEST_SHA256,
+                "implementation_source_commit": V1_1_IMPLEMENTATION_SOURCE_COMMIT,
+                "implementation_tree_digest": V1_1_IMPLEMENTATION_TREE_DIGEST,
+                "attempt_source_commit": V1_1_ATTEMPT_SOURCE_COMMIT,
+            },
+            "incident_report": {
+                "path": CALIBRATION_PATH_AMENDMENT_REPORT_PATH,
+                "sha256": CALIBRATION_PATH_AMENDMENT_REPORT_SHA256,
+            },
+            "frozen_artifact_sha256": {
+                "training_matrix_ledger": V1_1_TRAINING_MATRIX_SHA256,
+                "calibration_matrix_ledger": V1_1_CALIBRATION_MATRIX_SHA256,
+                "claim": V1_1_CALIBRATION_CLAIM_SHA256,
+                "calibration_artifact": V1_1_CALIBRATION_ARTIFACT_SHA256,
+                "checkpoint": SUPERSEDED_CHECKPOINT_SHA256,
+            },
+            "frozen_calibration_artifact_payload_sha256": (
+                V1_1_CALIBRATION_ARTIFACT_PAYLOAD_SHA256
+            ),
+            "frozen_calibration_artifact_attestation_mac": (
+                V1_1_CALIBRATION_ARTIFACT_ATTESTATION_MAC
+            ),
+            "frozen_launch_nonce": V1_1_CALIBRATION_LAUNCH_NONCE,
+            "superseded_output_root": (
+                "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/calibration"
+            ),
+            "amended_output_root": (
+                "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/calibration-v1-2"
+            ),
+            "superseded_root_is_immutable_quarantine": True,
+            "superseded_artifact_is_admitted_as_scientific_result": False,
+            "scientific_subprocesses_during_admission_creation": 0,
+            "one_shot_retry_coordinate_count": 1,
+            "retry_authorization_registered_after_result_disclosure": True,
+            "retry_authorization_basis": (
+                "parent-only-checkpoint-path-representation-false-negative"
+            ),
+            "counterfactual_outcome_independence_claimed": False,
+            "retry_consumed_at_admission_commit": True,
+            "first_launch_requires_same_process_that_created_admission": True,
+            "frozen_scheduler_gpu_lock_path": str(DIRECT_GPU_SCHEDULER_LOCK_PATH),
+            "read_only_preflight_completed_before_admission_commit": True,
+            "restart_before_first_ledger_promotion": "terminal-fail-closed-no-retry",
+            "owner_controlled_deletion_or_filesystem_rollback": (
+                "outside-threat-model-and-invalidates-evidence"
+            ),
+            "quarantine_inventory_revalidated_around_each_child": True,
+            "general_retry_policy_created": False,
+            "corrected_predicate": (
+                "exact-authenticated-upstream-path-spelling-plus-separate-resolved-"
+                "referent-sha256-and-bytes-v1"
+            ),
+            "seed_grid_changed": False,
+            "calibration_workload_or_threshold_changed": False,
             "controller_arms_or_estimands_changed": False,
         },
     }

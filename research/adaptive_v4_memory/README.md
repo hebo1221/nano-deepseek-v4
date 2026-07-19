@@ -427,8 +427,8 @@ generation seeds. Its dependency order is training, direct SoftLag calibration,
 one-pass integrity audit, and deterministic statistical replay. All artifacts
 are bound to one external HMAC trust root and the clean implementation tree.
 The original v1 runner stopped after its first child because it incorrectly
-treated sparse-expert AdamW update counters as global steps. No calibration,
-physical match, or held-out result had run. The v1 bytes and claim remain
+treated sparse-expert AdamW update counters as global steps. At that amendment
+point no calibration, physical match, or held-out result had run. The v1 bytes and claim remain
 preserved; the v1.1 manifest permits only a signed admission with zero
 scientific or experimental subprocesses for that exact checkpoint. Within the
 one-shot admission-creation subroutine its only child processes are frozen
@@ -442,5 +442,19 @@ incident and the fact that first-cell training diagnostics were visible are
 recorded in the checked
 [`2026-07-19-p2-direct-training-validator-amendment.md`](reports/2026-07-19-p2-direct-training-validator-amendment.md)
 report.
+The resulting ten-cell training matrix is now terminal. The first v1.1
+calibration child then produced a terminal `GO` artifact, but the parent runner
+failed before promotion because it compared an absolute checkpoint spelling
+with the authenticated repository-relative spelling. That failed
+`calibration/` root remains byte-exact quarantine and its observed result is
+disclosed but not adopted. Revision 1.2 writes only to `calibration-v1-2/` and
+authorizes one fixed retry of the same first coordinate after a signed,
+zero-scientific-subprocess admission. Admission commit consumes that retry, and
+only the same creating process may launch it; a pre-promotion restart fails closed.
+The pre-commit gate also requires the failed attempt's exact scheduler path and
+execution environment, and the quarantine inventory is rescanned around every child.
+No top-p or held-out controller-quality
+result was observed before this second amendment. The complete rule is in
+[`2026-07-19-p2-direct-calibration-path-binding-amendment.md`](reports/2026-07-19-p2-direct-calibration-path-binding-amendment.md).
 See [`paper_grade_protocol.md`](paper_grade_protocol.md) and
 [`reproduction.md`](reproduction.md) for the exact gate and commands.

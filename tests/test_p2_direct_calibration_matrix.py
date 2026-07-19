@@ -79,6 +79,7 @@ class FakeGPUController:
 @pytest.fixture(autouse=True)
 def fake_gpu_lease(monkeypatch: pytest.MonkeyPatch) -> FakeGPUController:
     monkeypatch.setattr(matrix.training_matrix, "REQUIRE_PREHELDOUT_ADMISSION", False)
+    monkeypatch.setattr(matrix, "REQUIRE_RETRY_ADMISSION", False)
     controller = FakeGPUController(events=[], leases=[])
 
     def acquire(label: str, *, path: Path) -> FakeGPULease:
@@ -149,7 +150,7 @@ def harness(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> MatrixHarness:
     training_script.write_text("# frozen test trainer\n", encoding="utf-8")
     training_root = tmp_path / "training"
     output_root = tmp_path / "calibration"
-    matrix_summary = output_root / "calibration-matrix.summary.json"
+    matrix_summary = output_root / matrix.MATRIX_SUMMARY_NAME
     trust_key = b"matrix-test-attestation-key-material-v1"
     trust_root = matrix.attestation.TrustRoot(
         key=trust_key,
@@ -628,6 +629,14 @@ def test_full_matrix_preserves_explicit_no_go_without_launching_quality(
     stored = json.loads(harness.matrix_summary.read_text(encoding="utf-8"))
     matrix._validate_payload_digest(stored)
     assert not list(harness.output_root.rglob(matrix.CELL_CLAIM_NAME))
+
+    harness.matrix_summary.write_text(
+        json.dumps(result, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="exact canonical published byte encoding"):
+        _run(harness)
+    _write_json(harness.matrix_summary, result)
 
     for mutation in ("missing", "extra"):
         schema_tamper = json.loads(json.dumps(result))

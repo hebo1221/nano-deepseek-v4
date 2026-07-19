@@ -175,7 +175,8 @@ changed, and no P3 dataset, prediction, or result cell existed at amendment time
 
 Version 2.5 creates the prospective direct-controller study rather than
 relabeling the structurally blocked Stage A. Its sole contract is
-`manifests/p2-post-rank-direct-controller-v1-1.json`. The cohort uses five fresh
+`manifests/p2-post-rank-direct-controller-v1-2.json`; revision 1.1 remains the
+immutable terminal-training prerequisite and calibration-incident evidence. The cohort uses five fresh
 training, calibration, and evaluation seeds; S55 and S151; 2x and 4x budgets;
 nine families; five contexts; ten 20-example replicates; and exactly 1,000
 examples per seed-scale-family. The budget-expanded grid is 9,000 shards,
@@ -665,6 +666,24 @@ incident plus observed training-diagnostic boundary must be disclosed in the
 paper. See the checked
 [`2026-07-19-p2-direct-training-validator-amendment.md`](reports/2026-07-19-p2-direct-training-validator-amendment.md)
 report for the complete recovery gate.
+
+The first revision 1.1 calibration child later completed and published a
+MAC-attested terminal `GO` artifact, but its parent rejected promotion because
+only the parent resolved the authenticated repository-relative checkpoint path
+before exact dictionary comparison. Revision 1.2 discloses that observed
+calibration result and does not admit it. Instead, the complete failed
+`calibration/` tree remains immutable quarantine, while a signed zero-scientific-
+subprocess admission authorizes one result-disclosed, cause-based retry of the same first
+coordinate in a disjoint `calibration-v1-2/` root. The retry consumes the only
+new exception when its admission is committed; only that same process can launch
+the first child, and a restart before its first promotion fails closed permanently.
+All read-only evidence, exact-environment, and failed-attempt scheduler-lock checks
+precede that commit, and the quarantine inventory is rescanned around each child.
+Every later failure retains the original no-silent-retry rule.
+Seeds, workloads, budgets, thresholds, arms, estimands, and early stopping are
+unchanged, and top-p or held-out quality remained unobserved at the amendment
+freeze. The authorization is not claimed to be counterfactually outcome-independent. See
+[`2026-07-19-p2-direct-calibration-path-binding-amendment.md`](reports/2026-07-19-p2-direct-calibration-path-binding-amendment.md).
 
 ## 11. Claim boundary
 

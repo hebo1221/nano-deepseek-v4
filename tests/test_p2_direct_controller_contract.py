@@ -1096,9 +1096,9 @@ def test_manifest_contract_accepts_only_same_path_outcome_independent_design() -
     assert contract.validate_manifest_payload(round_tripped) is round_tripped
 
 
-def test_manifest_binds_exact_preheldout_validator_amendment() -> None:
+def test_manifest_binds_exact_preheldout_validator_and_calibration_amendments() -> None:
     payload = _manifest()
-    assert payload["experiment_id"] == "p2-post-rank-direct-controller-v1.1"
+    assert payload["experiment_id"] == "p2-post-rank-direct-controller-v1.2"
     assert payload["adaptation_disclosure"] == contract.expected_adaptation_disclosure()
     amendment = payload["adaptation_disclosure"]["preheldout_validator_amendment"]
     assert amendment["one_shot_exact_byte_admission_required"] is True
@@ -1109,6 +1109,37 @@ def test_manifest_binds_exact_preheldout_validator_amendment() -> None:
     assert amendment["incident_report"] == {
         "path": contract.VALIDATOR_AMENDMENT_REPORT_PATH,
         "sha256": contract.VALIDATOR_AMENDMENT_REPORT_SHA256,
+    }
+    retry = payload["adaptation_disclosure"]["preheldout_calibration_retry_amendment"]
+    assert retry["calibration_results_observed"] is True
+    assert retry["observed_calibration_terminal_decision"] == "GO"
+    assert retry["held_out_controller_quality_observed"] is False
+    assert retry["superseded_root_is_immutable_quarantine"] is True
+    assert retry["superseded_artifact_is_admitted_as_scientific_result"] is False
+    assert retry["one_shot_retry_coordinate_count"] == 1
+    assert retry["retry_authorization_registered_after_result_disclosure"] is True
+    assert retry["retry_authorization_basis"] == (
+        "parent-only-checkpoint-path-representation-false-negative"
+    )
+    assert retry["counterfactual_outcome_independence_claimed"] is False
+    assert retry["retry_consumed_at_admission_commit"] is True
+    assert retry["first_launch_requires_same_process_that_created_admission"] is True
+    assert retry["frozen_scheduler_gpu_lock_path"] == str(
+        contract.DIRECT_GPU_SCHEDULER_LOCK_PATH
+    )
+    assert retry["read_only_preflight_completed_before_admission_commit"] is True
+    assert retry["restart_before_first_ledger_promotion"] == "terminal-fail-closed-no-retry"
+    assert retry["owner_controlled_deletion_or_filesystem_rollback"] == (
+        "outside-threat-model-and-invalidates-evidence"
+    )
+    assert retry["quarantine_inventory_revalidated_around_each_child"] is True
+    assert retry["general_retry_policy_created"] is False
+    assert retry["frozen_artifact_sha256"] == {
+        "training_matrix_ledger": contract.V1_1_TRAINING_MATRIX_SHA256,
+        "calibration_matrix_ledger": contract.V1_1_CALIBRATION_MATRIX_SHA256,
+        "claim": contract.V1_1_CALIBRATION_CLAIM_SHA256,
+        "calibration_artifact": contract.V1_1_CALIBRATION_ARTIFACT_SHA256,
+        "checkpoint": contract.SUPERSEDED_CHECKPOINT_SHA256,
     }
 
     for field in (

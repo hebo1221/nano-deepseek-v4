@@ -804,6 +804,90 @@ def assert_environment_unchanged(context: FrozenContext) -> None:
     )
 
 
+def _v1_1_manifest_path() -> Path:
+    candidate = Path(contract.V1_1_MANIFEST_PATH)
+    return candidate if candidate.is_absolute() else REPOSITORY_ROOT / candidate
+
+
+def load_v1_1_frozen_context(*, trust_root: attestation.TrustRoot) -> FrozenContext:
+    """Authenticate the exact historical context that produced the terminal training cohort.
+
+    This deliberately validates the registered commit tree instead of comparing the current
+    v1.2 worktree with the v1.1 digest.  It is a read-only prerequisite context and must never be
+    used as the source/manifest binding for a newly produced v1.2 result.
+    """
+
+    path = _v1_1_manifest_path().resolve()
+    opened = attestation.open_regular_nofollow(path)
+    try:
+        _require(
+            opened.sha256 == contract.V1_1_MANIFEST_SHA256,
+            "Revision 1.1 manifest bytes drifted from the calibration-retry amendment.",
+        )
+        try:
+            payload = json.loads(opened.read_bytes().decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise ValueError("Revision 1.1 manifest is invalid JSON.") from error
+        _require(isinstance(payload, dict), "Revision 1.1 manifest must be a JSON object.")
+        _require(
+            set(payload) == contract.MANIFEST_TOP_LEVEL_FIELDS
+            and payload.get("schema_version") == 1
+            and payload.get("experiment_id") == "p2-post-rank-direct-controller-v1.1"
+            and payload.get("status")
+            == (
+                "amended_after_training_validator_false_negative_before_calibration_or_"
+                "held_out_quality"
+            ),
+            "Revision 1.1 manifest identity or schema drifted.",
+        )
+        implementation = payload.get("implementation")
+        _require(
+            isinstance(implementation, Mapping)
+            and set(implementation) == contract.MANIFEST_IMPLEMENTATION_FIELDS,
+            "Revision 1.1 implementation binding is invalid.",
+        )
+        implementation = cast(Mapping[str, Any], implementation)
+        _require(
+            tuple(implementation.get("paths", ())) == contract.V1_1_IMPLEMENTATION_PATHS
+            and implementation.get("source_commit")
+            == contract.V1_1_IMPLEMENTATION_SOURCE_COMMIT
+            and implementation.get("tree_digest") == contract.V1_1_IMPLEMENTATION_TREE_DIGEST
+            and contract.v1_1_implementation_tree_digest_at_commit()
+            == contract.V1_1_IMPLEMENTATION_TREE_DIGEST
+            and _superseded_attempt_is_ancestor_of_head(contract.V1_1_ATTEMPT_SOURCE_COMMIT),
+            "Revision 1.1 implementation tree is not the frozen retry parent.",
+        )
+        binding = _manifest_binding(path, payload, manifest_sha256=opened.sha256)
+        _require(
+            binding["attestation"]["key_id"] == trust_root.key_id,
+            "Revision 1.1 and current manifests use different trust roots.",
+        )
+        opened.assert_unchanged()
+    finally:
+        opened.close()
+    return FrozenContext(
+        manifest_path=path,
+        manifest_binding=binding,
+        source={"commit": contract.V1_1_ATTEMPT_SOURCE_COMMIT, "dirty": False},
+    )
+
+
+def assert_frozen_context_reference_unchanged(
+    context: FrozenContext,
+    *,
+    trust_root: attestation.TrustRoot,
+) -> None:
+    """Recheck either a live current context or the exact registered v1.1 prerequisite."""
+
+    if context.manifest_binding.get("experiment_id") == "p2-post-rank-direct-controller-v1.1":
+        _require(
+            context == load_v1_1_frozen_context(trust_root=trust_root),
+            "Revision 1.1 frozen prerequisite context drifted.",
+        )
+        return
+    assert_environment_unchanged(context)
+
+
 def _superseded_manifest_path() -> Path:
     candidate = Path(contract.SUPERSEDED_MANIFEST_PATH)
     return candidate if candidate.is_absolute() else REPOSITORY_ROOT / candidate

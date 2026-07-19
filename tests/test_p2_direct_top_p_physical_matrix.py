@@ -551,6 +551,33 @@ def test_matrix_hmac_and_exact_schema_reject_tampering(
         )
 
 
+def test_archived_validation_rejects_semantically_equal_compact_ledger_bytes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    harness = _harness(tmp_path, monkeypatch, cells=1)
+    _install_fake_generator(harness, monkeypatch)
+    result = _run(harness)
+    opened, snapshot = matrix._open_generator(matrix.GENERATOR_SCRIPT.resolve())
+    opened.close()
+    lock_binding = matrix._matrix_lock_binding(matrix._matrix_lock_path(harness.output_root))
+
+    harness.summary_path.write_text(
+        json.dumps(result, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    harness.summary_path.chmod(matrix.SAFE_FILE_MODE)
+
+    with pytest.raises(ValueError, match="exact canonical published byte encoding"):
+        matrix.validate_matrix_summary_archived(
+            result,
+            output_root=harness.output_root,
+            prerequisites=harness.prerequisites,
+            generator_script=matrix.GENERATOR_SCRIPT,
+            generator_binding=snapshot.public_binding,
+            matrix_lock_binding=lock_binding,
+        )
+
+
 def test_execution_environment_is_attested_and_resume_requires_exact_replay(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

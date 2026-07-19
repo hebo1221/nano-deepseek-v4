@@ -25,7 +25,6 @@ import run_p2_direct_calibration_matrix as calibration_matrix
 import run_p2_direct_training_matrix as training_matrix
 import validate_p2_direct_top_p_physical_match as physical_match
 from adaptive_v4_gpu_lock import (
-    DEFAULT_LOCK_PATH,
     DEVICE_GUARD_SEMANTICS,
     GPULockLease,
     acquire_device_guard,
@@ -585,6 +584,16 @@ def _validate_matrix_layout(
     )
     training_root = _exact_resolved_path(training_output_root, label="Training input root")
     calibration_root = _exact_resolved_path(calibration_output_root, label="Calibration input root")
+    superseded_calibration_root = _absolute(
+        calibration_matrix.SUPERSEDED_OUTPUT_ROOT
+    ).resolve(strict=False)
+    _require(
+        all(
+            not _paths_overlap(item, superseded_calibration_root)
+            for item in (root, training_root, calibration_root)
+        ),
+        "Top-p paths may not overlap the immutable revision 1.1 calibration quarantine.",
+    )
     _require(
         not _paths_overlap(training_root, calibration_root),
         "Training and calibration input roots must be disjoint.",
@@ -599,6 +608,10 @@ def _validate_matrix_layout(
         and not _paths_overlap(lock_path, training_root)
         and not _paths_overlap(lock_path, calibration_root),
         "Top-p matrix lock must be a disjoint sibling path.",
+    )
+    _require(
+        not _paths_overlap(lock_path, superseded_calibration_root),
+        "Top-p matrix lock may not overlap the immutable calibration quarantine.",
     )
     if attestation_key_path is not None:
         key = _exact_resolved_path(attestation_key_path, label="Attestation key")
@@ -900,6 +913,28 @@ def _load_json_nofollow(path: Path, *, label: str) -> dict[str, Any]:
         opened.close()
 
 
+def _assert_exact_json_payload_file(
+    path: Path,
+    payload: Mapping[str, Any],
+    *,
+    label: str,
+) -> None:
+    opened = attestation.open_regular_nofollow(path)
+    try:
+        _assert_opened_file_security(opened, label=label)
+        expected = (
+            json.dumps(dict(payload), indent=2, sort_keys=True, allow_nan=False) + "\n"
+        ).encode()
+        _require(
+            opened.read_bytes() == expected,
+            f"{label} is not the exact canonical published byte encoding.",
+        )
+        opened.assert_unchanged()
+        _assert_opened_file_security(opened, label=label)
+    finally:
+        opened.close()
+
+
 def _file_binding(path: Path, payload: Mapping[str, Any]) -> dict[str, Any]:
     opened = attestation.open_regular_nofollow(path)
     try:
@@ -1182,10 +1217,15 @@ def load_and_validate_prerequisites(
             expected_key_id=cast(str, expected_key_id),
         )
 
+    training_context = (
+        calibration_matrix._load_v1_1_context(trust_root=trust_root)
+        if calibration_matrix.REQUIRE_RETRY_ADMISSION
+        else context
+    )
     training_ledger_path, training_ledger, trainer_binding, ledger_records = (
         calibration_matrix._load_terminal_training_ledger(
             training_output_root=training_output_root,
-            context=context,
+            context=training_context,
             trust_root=trust_root,
         )
     )
@@ -1201,6 +1241,16 @@ def load_and_validate_prerequisites(
     calibration_ledger = _load_json_nofollow(
         calibration_ledger_path, label="calibration matrix ledger"
     )
+    retry_admission = calibration_matrix.load_retry_admission_for_downstream(
+        output_root=calibration_output_root,
+        context=context,
+        training_context=training_context,
+        trust_root=trust_root,
+        training_matrix_summary_path=training_ledger_path,
+        training_matrix_payload=training_ledger,
+        trainer_binding=trainer_binding,
+        ledger_records=ledger_records,
+    )
     calibration_records = calibration_matrix.validate_matrix_summary(
         calibration_ledger,
         output_root=calibration_output_root,
@@ -1211,11 +1261,15 @@ def load_and_validate_prerequisites(
             calibration_matrix._matrix_lock_path(calibration_output_root)
         ),
         context=context,
+        training_context=training_context,
         trust_root=trust_root,
         training_matrix_summary_path=training_ledger_path,
         training_matrix_payload=training_ledger,
         trainer_binding=trainer_binding,
         ledger_records=ledger_records,
+        retry_admission=(
+            None if retry_admission is None else retry_admission.public_binding
+        ),
     )
     expected_calibration_cells = len(FROZEN_SCALES) * len(FROZEN_TRAINING_SEEDS)
     _require(
@@ -1584,10 +1638,10 @@ def _validate_matrix_summary_common(
     _verify_attested_payload(payload, trust_root=prerequisites.trust_root)
     if verify_artifacts:
         ledger_path = _absolute(output_root) / MATRIX_SUMMARY_NAME
-        on_disk = _load_json_nofollow(ledger_path, label="top-p matrix ledger")
-        _require(
-            attestation.canonical_json(on_disk) == attestation.canonical_json(dict(payload)),
-            "Top-p matrix ledger bytes do not match the supplied payload.",
+        _assert_exact_json_payload_file(
+            ledger_path,
+            payload,
+            label="Top-p matrix ledger",
         )
     _require(payload.get("schema_version") == SCHEMA_VERSION, "Top-p matrix version drifted.")
     _require(payload.get("experiment_id") == EXPERIMENT_ID, "Wrong top-p matrix ID.")
@@ -1824,7 +1878,18 @@ def validate_matrix_summary(
     owned_device_guard: GPULockLease | None = None
     lease = gpu_lease
     if lease is None:
-        requested_path = DEFAULT_LOCK_PATH if gpu_lock_path is None else gpu_lock_path
+        requested_path = (
+            contract.DIRECT_GPU_SCHEDULER_LOCK_PATH
+            if gpu_lock_path is None
+            else gpu_lock_path
+        )
+        _require(
+            not _paths_overlap(
+                _absolute(requested_path).resolve(strict=False),
+                _absolute(calibration_matrix.SUPERSEDED_OUTPUT_ROOT).resolve(strict=False),
+            ),
+            "Top-p validation GPU lock may not overlap the immutable calibration quarantine.",
+        )
         owned_lease = acquire_gpu_lock(
             "p2-direct-top-p-physical-matrix-public-validation",
             path=requested_path,
@@ -1841,6 +1906,14 @@ def validate_matrix_summary(
                 requested_path == lease.path,
                 "Borrowed top-p GPU lease does not match gpu_lock_path.",
             )
+
+    _require(
+        not _paths_overlap(
+            _absolute(lease.path).resolve(strict=False),
+            _absolute(calibration_matrix.SUPERSEDED_OUTPUT_ROOT).resolve(strict=False),
+        ),
+        "Top-p GPU lease may not overlap the immutable calibration quarantine.",
+    )
 
     try:
         current_execution_environment = _capture_execution_environment_under_lease(lease)
@@ -2295,7 +2368,18 @@ def run_matrix(
 ) -> dict[str, Any]:
     """Run the CUDA matrix while one process owns the project-wide GPU lease."""
 
-    requested_gpu_lock = DEFAULT_LOCK_PATH if gpu_lock_path is None else gpu_lock_path
+    requested_gpu_lock = (
+        contract.DIRECT_GPU_SCHEDULER_LOCK_PATH
+        if gpu_lock_path is None
+        else gpu_lock_path
+    )
+    _require(
+        not _paths_overlap(
+            _absolute(requested_gpu_lock).resolve(strict=False),
+            _absolute(calibration_matrix.SUPERSEDED_OUTPUT_ROOT).resolve(strict=False),
+        ),
+        "Top-p GPU lock may not overlap the immutable calibration quarantine.",
+    )
     gpu_lease = acquire_gpu_lock(
         "p2-direct-top-p-physical-matrix",
         path=requested_gpu_lock,

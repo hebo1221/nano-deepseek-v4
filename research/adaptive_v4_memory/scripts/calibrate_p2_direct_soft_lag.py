@@ -34,7 +34,8 @@ from nano_deepseek_v4 import (
 
 EXPERIMENT_ID = "p2-post-rank-direct-soft-lag-calibration-v1"
 ARTIFACT_TYPE = "direct-soft-lag-calibration"
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
+LEGACY_SCHEMA_VERSION = 3
 ATTESTATION_PURPOSE = "p2-direct-soft-lag-calibration-v1"
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 
@@ -1275,12 +1276,32 @@ def _manifest_binding(manifest_path: Path, manifest: Mapping[str, Any]) -> dict[
     }
 
 
+def _frozen_context_for_manifest(
+    manifest_path: Path,
+    *,
+    trust_root: attestation.TrustRoot,
+) -> training_matrix.FrozenContext:
+    """Load either the live v1.2 result context or the exact v1.1 training context."""
+
+    absolute = Path(os.path.abspath(manifest_path)).resolve()
+    if absolute == training_matrix._v1_1_manifest_path().resolve():
+        context = training_matrix.load_v1_1_frozen_context(trust_root=trust_root)
+    else:
+        context = training_matrix.establish_frozen_context(absolute)
+    _require(
+        context.manifest_binding["attestation"]["key_id"] == trust_root.key_id,
+        "Calibration manifest context uses a different attestation trust root.",
+    )
+    return context
+
+
 def establish_provenance(
     checkpoint_path: Path,
     *,
     scale: str,
     training_seed: int,
     manifest_path: Path = contract.MANIFEST_PATH,
+    training_manifest_path: Path | None = None,
     training_summary_path: Path | None = None,
     training_matrix_summary_path: Path | None = None,
     trust_root: attestation.TrustRoot,
@@ -1291,7 +1312,11 @@ def establish_provenance(
     dict[str, Any],
     Mapping[str, Any],
 ]:
-    context = training_matrix.establish_frozen_context(manifest_path)
+    context = _frozen_context_for_manifest(manifest_path, trust_root=trust_root)
+    training_context = _frozen_context_for_manifest(
+        manifest_path if training_manifest_path is None else training_manifest_path,
+        trust_root=trust_root,
+    )
     source = context.source
     manifest_binding = context.manifest_binding
     checkpoint_path = Path(os.path.abspath(checkpoint_path))
@@ -1316,7 +1341,7 @@ def establish_provenance(
         opened_trainer.close()
     ledger, ledger_record = training_matrix.load_terminal_matrix_record(
         ledger_path,
-        context=context,
+        context=training_context,
         trust_root=trust_root,
         trainer_binding=trainer_snapshot.public_binding,
         scale=scale,
@@ -1333,7 +1358,7 @@ def establish_provenance(
         training_matrix.load_validated_training_bundle_for_ledger_record(
             summary_path,
             output_root=output_root,
-            context=context,
+            context=training_context,
             scale=scale,
             seed=training_seed,
             trust_root=trust_root,
@@ -1393,6 +1418,8 @@ def establish_provenance(
         "canonical_trainer_sha256": trainer_sha256,
         "terminal_matrix_ledger": ledger_binding,
     }
+    if training_context.manifest_binding != manifest_binding:
+        training_binding["training_manifest"] = training_context.manifest_binding
     return dict(source), manifest_binding, checkpoint, training_binding, raw_checkpoint
 
 
@@ -1550,12 +1577,27 @@ def _validate_external_bindings(
     ledger = training_summary.get("terminal_matrix_ledger")
     _require(isinstance(ledger, Mapping), "Bound terminal training ledger is missing.")
     ledger = cast(Mapping[str, Any], ledger)
+    training_manifest = training_summary.get("training_manifest")
+    if training_manifest is None:
+        training_manifest_path = manifest_path
+    else:
+        _require(
+            isinstance(training_manifest, Mapping),
+            "Bound training manifest is invalid.",
+        )
+        training_manifest_path_value = cast(Mapping[str, Any], training_manifest).get("path")
+        _require(
+            isinstance(training_manifest_path_value, str) and bool(training_manifest_path_value),
+            "Bound training-manifest path is invalid.",
+        )
+        training_manifest_path = Path(cast(str, training_manifest_path_value))
     expected_source, expected_manifest, expected_checkpoint, expected_training, _ = (
         establish_provenance(
             checkpoint_path,
             scale=scale,
             training_seed=training_seed,
             manifest_path=manifest_path,
+            training_manifest_path=training_manifest_path,
             training_summary_path=training_summary_path,
             training_matrix_summary_path=Path(cast(str, ledger["path"])),
             trust_root=trust_root,
@@ -1578,14 +1620,28 @@ def validate_calibration_artifact(
     *,
     verify_bindings: bool = False,
     trust_root: attestation.TrustRoot | None = None,
+    expected_manifest_experiment_id: str = contract.EXPERIMENT_ID,
 ) -> dict[str, Any]:
+    _require(
+        expected_manifest_experiment_id
+        in {contract.EXPERIMENT_ID, "p2-post-rank-direct-controller-v1.1"},
+        "Calibration validator manifest profile is not registered.",
+    )
     _require(
         set(payload) == CALIBRATION_ARTIFACT_FIELDS,
         "Calibration artifact top-level schema drifted.",
     )
     assert_no_supervision_fields(payload)
     _validate_payload_digest(payload)
-    _require(payload.get("schema_version") == SCHEMA_VERSION, "Calibration schema drifted.")
+    expected_schema_version = (
+        SCHEMA_VERSION
+        if expected_manifest_experiment_id == contract.EXPERIMENT_ID
+        else LEGACY_SCHEMA_VERSION
+    )
+    _require(
+        payload.get("schema_version") == expected_schema_version,
+        "Calibration schema drifted.",
+    )
     _require(payload.get("experiment_id") == EXPERIMENT_ID, "Wrong calibration artifact.")
     _require(payload.get("artifact_type") == ARTIFACT_TYPE, "Calibration type drifted.")
     _require(payload.get("status") == "terminal", "Calibration is not terminal.")
@@ -1627,7 +1683,10 @@ def validate_calibration_artifact(
     _require(contract.is_git_oid(source.get("commit")), "Calibration source commit is invalid.")
     _require(isinstance(manifest, Mapping), "Calibration manifest binding is missing.")
     manifest = cast(Mapping[str, Any], manifest)
-    _require(manifest.get("experiment_id") == contract.EXPERIMENT_ID, "Manifest ID drifted.")
+    _require(
+        manifest.get("experiment_id") == expected_manifest_experiment_id,
+        "Manifest ID drifted.",
+    )
     _require(contract.is_sha256(manifest.get("sha256")), "Manifest SHA-256 is invalid.")
     _require(
         contract.is_sha256(manifest.get("implementation_digest")),
@@ -1690,6 +1749,42 @@ def validate_calibration_artifact(
         type(training_summary.get("bytes")) is int and training_summary["bytes"] > 0,
         "Training-summary byte binding is invalid.",
     )
+    training_manifest = training_summary.get("training_manifest")
+    if expected_manifest_experiment_id == contract.EXPERIMENT_ID:
+        _require(
+            isinstance(training_manifest, Mapping),
+            "Revision 1.2 calibration requires an explicit revision 1.1 training manifest.",
+        )
+    else:
+        _require(
+            training_manifest is None,
+            "Revision 1.1 calibration may not contain an amended training-manifest binding.",
+        )
+    if training_manifest is not None:
+        _require(isinstance(training_manifest, Mapping), "Training-manifest binding is invalid.")
+        training_manifest = cast(Mapping[str, Any], training_manifest)
+        _require(
+            set(training_manifest)
+            == {
+                "path",
+                "sha256",
+                "experiment_id",
+                "implementation_digest",
+                "implementation_source_commit",
+                "attestation",
+            }
+            and isinstance(training_manifest.get("path"), str)
+            and bool(training_manifest.get("path"))
+            and contract.is_sha256(training_manifest.get("sha256"))
+            and training_manifest.get("experiment_id")
+            == "p2-post-rank-direct-controller-v1.1"
+            and training_manifest.get("implementation_digest")
+            == contract.V1_1_IMPLEMENTATION_TREE_DIGEST
+            and training_manifest.get("implementation_source_commit")
+            == contract.V1_1_IMPLEMENTATION_SOURCE_COMMIT
+            and training_manifest.get("attestation") == dict(manifest_attestation),
+            "Training-manifest provenance binding drifted.",
+        )
     ledger_binding = training_summary.get("terminal_matrix_ledger")
     _require(isinstance(ledger_binding, Mapping), "Terminal training ledger binding is missing.")
     ledger_binding = cast(Mapping[str, Any], ledger_binding)
@@ -2029,6 +2124,7 @@ def main() -> None:
     parser.add_argument("--training-seed", type=int, choices=FROZEN_TRAINING_SEEDS, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--manifest", type=Path, default=contract.MANIFEST_PATH)
+    parser.add_argument("--training-manifest", type=Path)
     parser.add_argument("--training-summary", type=Path)
     parser.add_argument("--training-matrix-summary", type=Path)
     parser.add_argument("--device", default="cuda:0")
@@ -2058,6 +2154,7 @@ def main() -> None:
         scale=args.scale,
         training_seed=args.training_seed,
         manifest_path=args.manifest,
+        training_manifest_path=args.training_manifest,
         training_summary_path=args.training_summary,
         training_matrix_summary_path=args.training_matrix_summary,
         trust_root=trust_root,

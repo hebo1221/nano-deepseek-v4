@@ -1137,11 +1137,28 @@ def establish_evaluator_inputs(
             calibration.get("training_seed") == training_seed,
             "Calibration/evaluator training seed drifted.",
         )
+        calibration_training = calibration.get("training_summary")
+        _require(
+            isinstance(calibration_training, Mapping),
+            "Calibration training-summary binding is missing.",
+        )
+        calibration_training_manifest = cast(Mapping[str, Any], calibration_training).get(
+            "training_manifest"
+        )
+        _require(
+            isinstance(calibration_training_manifest, Mapping)
+            and isinstance(calibration_training_manifest.get("path"), str),
+            "Calibration training-manifest binding is missing.",
+        )
+        calibration_training_manifest = cast(
+            Mapping[str, Any], calibration_training_manifest
+        )
         source, manifest, checkpoint, training_summary, raw_checkpoint = establish_provenance(
             checkpoint_path,
             scale=scale,
             training_seed=training_seed,
             manifest_path=manifest_path,
+            training_manifest_path=Path(cast(str, calibration_training_manifest["path"])),
             training_summary_path=training_summary_path,
             training_matrix_summary_path=training_matrix_summary_path,
             trust_root=trust_root,

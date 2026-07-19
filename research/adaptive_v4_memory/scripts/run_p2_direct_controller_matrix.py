@@ -25,7 +25,6 @@ import p2_direct_controller_contract as contract
 import run_p2_direct_calibration_matrix as calibration_matrix
 import run_p2_direct_top_p_physical_matrix as top_p_matrix
 import run_p2_direct_training_matrix as training_matrix
-from adaptive_v4_gpu_lock import DEFAULT_LOCK_PATH as DEFAULT_GPU_LOCK_PATH
 from adaptive_v4_gpu_lock import (
     DEVICE_GUARD_SEMANTICS,
     GPULockLease,
@@ -34,6 +33,8 @@ from adaptive_v4_gpu_lock import (
     canonical_device_guard_path,
 )
 from adaptive_v4_gpu_lock import SAFE_LOCK_MODE as GPU_LOCK_MODE
+
+DEFAULT_GPU_LOCK_PATH = contract.DIRECT_GPU_SCHEDULER_LOCK_PATH
 
 EXPERIMENT_ID = "p2-post-rank-direct-controller-matrix-v1"
 ARTIFACT_TYPE = "direct-controller-quality-matrix"
@@ -526,6 +527,16 @@ def _validate_matrix_layout(
             (top_p_output_root, "Top-p input root"),
         )
     )
+    superseded_calibration_root = _absolute(
+        calibration_matrix.SUPERSEDED_OUTPUT_ROOT
+    ).resolve(strict=False)
+    _require(
+        all(
+            not _paths_overlap(item, superseded_calibration_root)
+            for item in (root, *input_roots, _worker_ledger_root(root))
+        ),
+        "Controller paths may not overlap the immutable revision 1.1 calibration quarantine.",
+    )
     _require(
         all(
             not _paths_overlap(left, right)
@@ -545,6 +556,10 @@ def _validate_matrix_layout(
     _require(
         all(not _paths_overlap(lock_path, item) for item in input_roots),
         "Controller lock may not overlap prerequisite roots.",
+    )
+    _require(
+        not _paths_overlap(lock_path, superseded_calibration_root),
+        "Controller lock may not overlap the immutable calibration quarantine.",
     )
     if attestation_key_path is not None:
         key = _exact_resolved_path(attestation_key_path, label="Attestation key")
@@ -1421,10 +1436,15 @@ def load_and_validate_prerequisites(
             expected_key_id=cast(str, expected_key_id),
         )
 
+    training_context = (
+        calibration_matrix._load_v1_1_context(trust_root=trust_root)
+        if calibration_matrix.REQUIRE_RETRY_ADMISSION
+        else context
+    )
     training_ledger_path, training_ledger, trainer_binding, ledger_records = (
         calibration_matrix._load_terminal_training_ledger(
             training_output_root=training_output_root,
-            context=context,
+            context=training_context,
             trust_root=trust_root,
         )
     )
@@ -1440,6 +1460,16 @@ def load_and_validate_prerequisites(
     calibration_ledger = _load_json_nofollow(
         calibration_ledger_path, label="calibration matrix ledger"
     )
+    retry_admission = calibration_matrix.load_retry_admission_for_downstream(
+        output_root=calibration_output_root,
+        context=context,
+        training_context=training_context,
+        trust_root=trust_root,
+        training_matrix_summary_path=training_ledger_path,
+        training_matrix_payload=training_ledger,
+        trainer_binding=trainer_binding,
+        ledger_records=ledger_records,
+    )
     calibration_records = calibration_matrix.validate_matrix_summary(
         calibration_ledger,
         output_root=calibration_output_root,
@@ -1450,11 +1480,15 @@ def load_and_validate_prerequisites(
             calibration_matrix._matrix_lock_path(calibration_output_root)
         ),
         context=context,
+        training_context=training_context,
         trust_root=trust_root,
         training_matrix_summary_path=training_ledger_path,
         training_matrix_payload=training_ledger,
         trainer_binding=trainer_binding,
         ledger_records=ledger_records,
+        retry_admission=(
+            None if retry_admission is None else retry_admission.public_binding
+        ),
     )
     _require(
         calibration_ledger.get("status") == "terminal"
@@ -4656,6 +4690,13 @@ def run_matrix(
         calibration_output_root=calibration_output_root,
         top_p_output_root=top_p_output_root,
         attestation_key_path=key_path_for_layout,
+    )
+    _require(
+        not _paths_overlap(
+            _absolute(gpu_lock_path).resolve(strict=False),
+            _absolute(calibration_matrix.SUPERSEDED_OUTPUT_ROOT).resolve(strict=False),
+        ),
+        "Controller GPU lock may not overlap the immutable calibration quarantine.",
     )
     _require(
         type(worker_count) is int and worker_count >= 1,

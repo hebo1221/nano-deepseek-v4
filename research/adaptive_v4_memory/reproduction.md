@@ -67,21 +67,21 @@ sequential-tier equivalence for every seed, scale, budget, family, context, and 
 ## P2 prospective direct-controller cohort
 
 The version-2.5 cohort is separate from the legacy factorial above. It uses the
-checked-in `p2-post-rank-direct-controller-v1-1.json` amendment manifest, fresh 6071406--
+checked-in `p2-post-rank-direct-controller-v1-2.json` amendment manifest, fresh 6071406--
 6071410/7071406--7071410/10071406--10071410 seed namespaces, 19 arms, 9,000
 budget shards, and exactly 154,280,000 decode-token rows when no technical
 failure occurs. Run only from the clean implementation commit bound by that
 manifest.
 
-Create one high-entropy trust root outside the repository and every artifact
-root. Keep the same file for the entire cohort; never copy its bytes into a
-command, log, manifest, or artifact:
+Revision 1.2 must reuse the already-provisioned cohort trust root outside the
+repository and every artifact root. Never regenerate, overwrite, move, or copy
+its bytes into a command, log, manifest, or artifact; changing it would make the
+terminal revision 1.1 training ledger and quarantined evidence unverifiable.
+Verify and export the existing file only:
 
 ```bash
-install -d -m 700 "$HOME/.adaptive-v4"
-umask 077
-openssl rand 64 > "$HOME/.adaptive-v4/direct-controller-attestation.key"
-chmod 600 "$HOME/.adaptive-v4/direct-controller-attestation.key"
+test -s "$HOME/.adaptive-v4/direct-controller-attestation.key"
+test "$(stat -c '%a' "$HOME/.adaptive-v4/direct-controller-attestation.key")" = 600
 export ADAPTIVE_V4_ATTESTATION_KEY_PATH="$HOME/.adaptive-v4/direct-controller-attestation.key"
 test -z "$(git status --porcelain)"
 ```
@@ -100,6 +100,11 @@ manifest/source preflight outside that subroutine may use other frozen
 read-only Git probes. The runner atomically commits the admission, reloads and
 validates it together with the amended ledger, then launches only the remaining
 nine training coordinates.
+The failed revision 1.1 `calibration/` root is likewise immutable, but its
+observed `GO` artifact is not admitted. The first revision 1.2 calibration
+invocation creates a signed zero-scientific-subprocess retry admission in the
+new `calibration-v1-2/` root, validates an empty amended ledger, and then runs
+the complete ten-cell grid. Only its first coordinate is the registered retry.
 Exit code 2 from a terminal calibration, physical-match, or controller artifact
 means a recorded NO-GO, not permission to delete and rerun it.
 Controller exit code 3 reports a fully validated `draining_infrastructure` or
@@ -110,8 +115,6 @@ Controller exit code 3 is a retryable, HMAC-attested infrastructure pause or
 in-flight drain; it is nonterminal evidence and never a quality-gate pass.
 
 ```bash
-.venv/bin/python research/adaptive_v4_memory/scripts/run_p2_direct_training_matrix.py \
-  --gpu-lock-path /tmp/adaptive-v4-direct-gpu0.lock
 .venv/bin/python research/adaptive_v4_memory/scripts/run_p2_direct_calibration_matrix.py \
   --gpu-lock-path /tmp/adaptive-v4-direct-gpu0.lock
 .venv/bin/python research/adaptive_v4_memory/scripts/run_p2_direct_top_p_physical_matrix.py \
@@ -121,6 +124,14 @@ in-flight drain; it is nonterminal evidence and never a quality-gate pass.
 .venv/bin/python research/adaptive_v4_memory/scripts/audit_p2_direct_controller_integrity.py
 .venv/bin/python research/adaptive_v4_memory/scripts/summarize_p2_direct_controller.py
 ```
+
+Revision 1.2 does not rerun training. The calibration preflight authenticates the
+already-terminal revision 1.1 ten-cell training ledger, summaries, and checkpoints
+under their historical manifest/commit-tree context while separately requiring the
+clean current v1.2 result context. All three single-GPU runners use the scheduler
+path already authenticated by the failed attempt,
+`/tmp/adaptive-v4-direct-gpu0.lock`; the one-shot calibration retry rejects every
+other path before creating its admission.
 
 Training and calibration freeze one exact CUDA execution environment before
 their first cell and require byte-for-byte semantic equality for every child
@@ -156,6 +167,33 @@ unexpected exit, or missing/invalid artifact preserves the claim as fail-closed
 evidence; a crash after claim release but before ledger commit instead leaves an
 orphan artifact. Both states block resume pending an explicit recorded operator
 quarantine, because no whole-process retry policy was frozen.
+
+Revision 1.2 records one narrow exception after the first direct calibration
+child exposed a parent-only checkpoint-path spelling bug. The complete failed
+`calibration/` root, including its 0/10 ledger, preserved claim, and observed
+terminal `GO` artifact, remains byte-exact quarantine at its original path and
+is never adopted into the amended cohort. A signed admission under the matrix,
+scheduler, and physical-device leases authorizes exactly one result-disclosed,
+cause-based retry of S55/6071406 in the disjoint `calibration-v1-2/` root. This is
+not presented as counterfactual outcome-independent authorization. Admission creation
+starts zero scientific subprocesses and consumes the exception at commit: only
+the same creating process may launch the first child, so a restart before first
+promotion is terminal fail-closed rather than permission to retry. The corrected parent compares the exact
+authenticated relative path spelling while checking its resolved regular-file
+referent, digest, and size separately. No other failed calibration, top-p, or
+quality coordinate gains a retry from this amendment. See the checked
+[`2026-07-19-p2-direct-calibration-path-binding-amendment.md`](reports/2026-07-19-p2-direct-calibration-path-binding-amendment.md).
+
+All read-only checks of the frozen GPU scheduler path, exact CUDA execution
+environment, manifest, training prerequisite, quarantine inventory, and incident
+report complete before the final admission link can commit and consume the
+exception. A staging-only interrupted creation may be completed by the process
+that commits and validates the final admission; a crash during or after that
+commit, including before the empty-prefix ledger or first promotion is durable,
+is an availability-terminal fail-closed event. Owner-controlled deletion,
+filesystem snapshot rollback, or restoration of an earlier amended root is
+outside the process-level threat model and invalidates the evidence; it is never
+a registered way to replay the retry.
 
 The controller runner computes an observed component-wise high-water planning
 estimate from fixed sidecar bytes, actual envelope bytes, and bytes per

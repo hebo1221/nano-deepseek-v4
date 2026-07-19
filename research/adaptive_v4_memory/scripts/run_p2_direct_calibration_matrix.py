@@ -25,9 +25,9 @@ import p2_direct_attestation as attestation
 import p2_direct_controller_contract as contract
 import run_p2_direct_training_matrix as training_matrix
 
-EXPERIMENT_ID = "p2-post-rank-direct-soft-lag-calibration-matrix-v1"
+EXPERIMENT_ID = "p2-post-rank-direct-soft-lag-calibration-matrix-v1.2"
 ARTIFACT_TYPE = "direct-soft-lag-calibration-matrix"
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 FROZEN_SCALES = ("s55", "s151")
 FROZEN_TRAINING_SEEDS = (6071406, 6071407, 6071408, 6071409, 6071410)
@@ -35,9 +35,20 @@ FROZEN_CALIBRATION_SEEDS = (7071406, 7071407, 7071408, 7071409, 7071410)
 EXPECTED_CELLS = len(FROZEN_SCALES) * len(FROZEN_TRAINING_SEEDS)
 
 TRAINING_OUTPUT_ROOT = training_matrix.OUTPUT_ROOT
-OUTPUT_ROOT = Path("artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/calibration")
-MATRIX_SUMMARY_NAME = "calibration-matrix.summary.json"
+OUTPUT_ROOT = Path("artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/calibration-v1-2")
+MATRIX_SUMMARY_NAME = "calibration-matrix-v1-2.summary.json"
 MATRIX_SUMMARY = OUTPUT_ROOT / MATRIX_SUMMARY_NAME
+SUPERSEDED_OUTPUT_ROOT = Path(
+    "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/calibration"
+)
+SUPERSEDED_MATRIX_SUMMARY_NAME = "calibration-matrix.summary.json"
+RETRY_ADMISSION_NAME = "calibration-v1-2-retry-admission.json"
+RETRY_ADMISSION_STAGING_NAME = ".p2-direct-calibration-v1-2-admission.pending"
+RETRY_ADMISSION_ID = "p2-direct-calibration-one-shot-retry-admission-v1.2"
+RETRY_ADMISSION_REASON = "checkpoint-path-spelling-parent-validator-false-negative-v1"
+RETRY_COORDINATE = ("s55", 6071406, 7071406, 10071406)
+REQUIRE_RETRY_ADMISSION = True
+RETRY_GPU_LOCK_PATH = contract.DIRECT_GPU_SCHEDULER_LOCK_PATH
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 CALIBRATION_SCRIPT = Path(__file__).resolve().with_name("calibrate_p2_direct_soft_lag.py")
 CALIBRATION_IMPLEMENTATION_PATH = CALIBRATION_SCRIPT.relative_to(REPOSITORY_ROOT).as_posix()
@@ -57,7 +68,8 @@ GPU_LEASE_ACQUISITION_ORDER = "gpu-lease-before-matrix-lock-before-child-launch"
 GPU_DEVICE_GUARD_SCOPE = "after-exact-environment-capture-through-terminal-validation"
 CELL_CLAIM_NAME = ".p2-direct-calibration-cell.claim"
 CELL_CLAIM_SEMANTICS = "exclusive-create-coordinate-nonce-preserve-on-failure-v2"
-MATRIX_ATTESTATION_PURPOSE = "p2-direct-soft-lag-calibration-matrix-v1"
+MATRIX_ATTESTATION_PURPOSE = "p2-direct-soft-lag-calibration-matrix-v1.2"
+RETRY_ADMISSION_ATTESTATION_PURPOSE = "p2-direct-calibration-one-shot-retry-admission-v1.2"
 CRASH_RECOVERY_BOUNDARY = (
     "fail-closed: a coordinate claim is preserved until a terminal artifact is validated; "
     "a surviving claim or an artifact outside the digest-bound completed matrix prefix is "
@@ -112,10 +124,52 @@ CALIBRATION_MATRIX_FIELDS = frozenset(
         "cells",
         "quality_evaluation_started",
         "quality_gate",
+        "retry_admission",
         "payload_sha256",
         "attestation",
     }
 )
+
+RETRY_ADMISSION_FIELDS = frozenset(
+    {
+        "schema_version",
+        "admission_id",
+        "status",
+        "reason",
+        "coordinate",
+        "observed_terminal_decision",
+        "superseded_manifest",
+        "superseded_matrix_ledger",
+        "preserved_claim",
+        "preserved_calibration_artifact",
+        "terminal_training_matrix_ledger",
+        "checkpoint",
+        "execution_environment",
+        "current_manifest",
+        "current_source",
+        "incident_report",
+        "quarantine_rule",
+        "retry_rule",
+        "scientific_subprocesses_started_at_creation",
+        "payload_sha256",
+        "attestation",
+    }
+)
+
+RETRY_ADMISSION_BINDING_FIELDS = frozenset(
+    {
+        "path",
+        "sha256",
+        "bytes",
+        "payload_sha256",
+        "attestation_mac",
+        "admission_id",
+        "coordinate",
+        "preserved_claim_sha256",
+        "preserved_artifact_sha256",
+    }
+)
+SUPERSEDED_CALIBRATION_MATRIX_FIELDS = CALIBRATION_MATRIX_FIELDS - {"retry_admission"}
 
 
 @dataclass(frozen=True)
@@ -145,6 +199,28 @@ class MatrixLayout:
     matrix_summary: Path
     training_output_root: Path
     lock_path: Path
+
+
+@dataclass(frozen=True)
+class ValidatedQuarantineEvidence:
+    legacy_context: training_matrix.FrozenContext
+    legacy_manifest_file_binding: dict[str, Any]
+    matrix_ledger: dict[str, Any]
+    matrix_ledger_binding: dict[str, Any]
+    claim: dict[str, Any]
+    claim_binding: dict[str, Any]
+    artifact: dict[str, Any]
+    artifact_binding: dict[str, Any]
+    training_matrix_binding: dict[str, Any]
+    checkpoint_binding: dict[str, Any]
+    execution_environment: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class ValidatedRetryAdmission:
+    payload: dict[str, Any]
+    public_binding: dict[str, Any]
+    evidence: ValidatedQuarantineEvidence
 
 
 @dataclass(frozen=True)
@@ -401,6 +477,21 @@ def _validate_matrix_layout(
     )
 
     training_root = _absolute_path(training_output_root).resolve(strict=False)
+    superseded_root = _absolute_path(SUPERSEDED_OUTPUT_ROOT).resolve(strict=False)
+    _require(
+        not _paths_overlap(root, superseded_root)
+        and not _paths_overlap(training_root, superseded_root),
+        "Revision 1.2 writable/input roots may not overlap the immutable calibration quarantine.",
+    )
+    if REQUIRE_RETRY_ADMISSION:
+        canonical_root = _absolute_path(OUTPUT_ROOT).resolve(strict=False)
+        canonical_training_root = _absolute_path(TRAINING_OUTPUT_ROOT).resolve(strict=False)
+        _require(
+            root == canonical_root
+            and summary == canonical_root / MATRIX_SUMMARY_NAME
+            and training_root == canonical_training_root,
+            "Revision 1.2 retry requires the canonical output, summary, and training roots.",
+        )
     _require(
         not _paths_overlap(root, training_root),
         "Calibration and training output roots must be disjoint.",
@@ -416,6 +507,10 @@ def _validate_matrix_layout(
     _require(
         not _paths_overlap(lock_path, training_root),
         "Calibration matrix lock may not overlap the training input tree.",
+    )
+    _require(
+        not _paths_overlap(lock_path, superseded_root),
+        "Calibration matrix lock may not overlap the immutable calibration quarantine.",
     )
     _require(summary != lock_path, "Calibration summary and lock paths collided.")
     if attestation_key_path is not None:
@@ -614,7 +709,8 @@ def _exclusive_cell_claim(
     evaluation_seed: int,
     launch_nonce: str,
 ) -> Iterator[dict[str, Any]]:
-    output_dir.mkdir(parents=True, exist_ok=True)
+    _durable_mkdir(output_dir.parent)
+    _durable_mkdir(output_dir)
     claim_path = output_dir / CELL_CLAIM_NAME
     no_follow = getattr(os, "O_NOFOLLOW", None)
     _require(no_follow is not None, "Calibration cell claims require O_NOFOLLOW.")
@@ -653,6 +749,7 @@ def _exclusive_cell_claim(
                 "created_time_ns": time.time_ns(),
             },
         )
+        _fsync_directory(output_dir)
         _assert_cell_claim_identity(
             descriptor,
             claim_path,
@@ -676,6 +773,7 @@ def _exclusive_cell_claim(
             )
             if release_claim:
                 claim_path.unlink()
+                _fsync_directory(output_dir)
                 _require(
                     os.fstat(descriptor).st_nlink == 0 and not os.path.lexists(claim_path),
                     "Calibration cell claim release did not remove the held path.",
@@ -904,13 +1002,16 @@ def _digest_bound_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _attested_payload(
-    payload: Mapping[str, Any], *, trust_root: attestation.TrustRoot
+    payload: Mapping[str, Any],
+    *,
+    trust_root: attestation.TrustRoot,
+    purpose: str = MATRIX_ATTESTATION_PURPOSE,
 ) -> dict[str, Any]:
     digest_bound = _digest_bound_payload(payload)
     digest_bound["attestation"] = attestation.attest_payload(
         digest_bound,
         trust_root=trust_root,
-        purpose=MATRIX_ATTESTATION_PURPOSE,
+        purpose=purpose,
     )
     return digest_bound
 
@@ -960,10 +1061,37 @@ def _publish_matrix_ledger(
     payload: Mapping[str, Any],
     *,
     matrix_lock: _MatrixLockLease,
+    trust_root: attestation.TrustRoot,
 ) -> None:
     matrix_lock.assert_held()
     _atomic_write_json(path, payload)
     matrix_lock.assert_held()
+    opened = attestation.open_regular_nofollow(path)
+    try:
+        metadata = os.fstat(opened.file_descriptor)
+        _require(
+            metadata.st_uid == os.getuid()
+            and metadata.st_nlink == 1
+            and stat.S_IMODE(metadata.st_mode) == 0o600,
+            "Published calibration matrix ownership, link count, or mode is unsafe.",
+        )
+        raw = opened.read_bytes()
+        expected = (json.dumps(payload, indent=2, sort_keys=True, allow_nan=False) + "\n").encode()
+        _require(raw == expected, "Published calibration matrix bytes drifted.")
+        _validate_payload_digest(payload)
+        envelope = payload.get("attestation")
+        _require(isinstance(envelope, Mapping), "Published matrix attestation is missing.")
+        semantic = dict(payload)
+        semantic.pop("attestation")
+        attestation.verify_attestation(
+            semantic,
+            cast(Mapping[str, Any], envelope),
+            trust_root=trust_root,
+            purpose=MATRIX_ATTESTATION_PURPOSE,
+        )
+        opened.assert_unchanged()
+    finally:
+        opened.close()
 
 
 def _coordinates() -> tuple[tuple[str, int, int, int], ...]:
@@ -1040,6 +1168,7 @@ def build_calibration_command(
     calibration_script: Path,
     artifact_path: Path,
     manifest_path: Path,
+    training_manifest_path: Path | None = None,
     training_summary_path: Path,
     training_matrix_summary_path: Path,
     checkpoint_path: Path,
@@ -1074,6 +1203,10 @@ def build_calibration_command(
         str(artifact_path),
         "--manifest",
         str(manifest_path.resolve()),
+        "--training-manifest",
+        str(
+            (manifest_path if training_manifest_path is None else training_manifest_path).resolve()
+        ),
         "--training-summary",
         str(training_summary_path.resolve()),
         "--training-matrix-summary",
@@ -1097,8 +1230,10 @@ def _expected_training_binding(
     training_matrix_summary_path: Path,
     training_matrix_payload: Mapping[str, Any],
     ledger_record: Mapping[str, Any],
+    result_context: training_matrix.FrozenContext,
+    training_context: training_matrix.FrozenContext,
 ) -> dict[str, Any]:
-    return {
+    binding = {
         "path": str(summary_path.resolve()),
         "sha256": _sha256(summary_path),
         "bytes": summary_path.stat().st_size,
@@ -1119,6 +1254,9 @@ def _expected_training_binding(
             "status": training_matrix_payload.get("status"),
         },
     }
+    if training_context.manifest_binding != result_context.manifest_binding:
+        binding["training_manifest"] = training_context.manifest_binding
+    return binding
 
 
 def _expected_checkpoint_binding(checkpoint: Mapping[str, Any]) -> dict[str, Any]:
@@ -1126,7 +1264,10 @@ def _expected_checkpoint_binding(checkpoint: Mapping[str, Any]) -> dict[str, Any
     if not isinstance(path, str):
         raise ValueError("Validated checkpoint path is invalid.")
     return {
-        "path": str(Path(path).resolve()),
+        # Preserve the exact authenticated upstream spelling.  Referent,
+        # digest, size, and no-symlink checks are performed separately by the
+        # terminal training-bundle validator and the calibrator CLI boundary.
+        "path": path,
         "sha256": checkpoint.get("sha256"),
         "bytes": checkpoint.get("bytes"),
     }
@@ -1145,6 +1286,7 @@ def load_and_validate_calibration_artifact(
     calibration_seed: int,
     evaluation_seed: int,
     context: training_matrix.FrozenContext,
+    training_context: training_matrix.FrozenContext,
     summary_path: Path,
     summary: Mapping[str, Any],
     checkpoint: Mapping[str, Any],
@@ -1192,6 +1334,8 @@ def load_and_validate_calibration_artifact(
             training_matrix_summary_path=training_matrix_summary_path,
             training_matrix_payload=training_matrix_payload,
             ledger_record=ledger_record,
+            result_context=context,
+            training_context=training_context,
         ),
         "Calibration training-summary binding drifted.",
     )
@@ -1251,6 +1395,7 @@ def _matrix_payload(
     gpu_lease_binding: Mapping[str, Any],
     execution_environment_binding: Mapping[str, Any],
     trust_root: attestation.TrustRoot,
+    retry_admission: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     coordinates = _coordinates()
     terminal = len(cells) == len(coordinates)
@@ -1302,6 +1447,7 @@ def _matrix_payload(
         "cells": list(cells),
         "quality_evaluation_started": QUALITY_EVALUATION_STARTED,
         "quality_gate": QUALITY_GATE,
+        "retry_admission": None if retry_admission is None else dict(retry_admission),
     }
     return _attested_payload(payload, trust_root=trust_root)
 
@@ -1317,12 +1463,15 @@ def validate_matrix_summary(
     expected_gpu_lease: Mapping[str, Any] | None = None,
     expected_execution_environment: Mapping[str, Any] | None = None,
     context: training_matrix.FrozenContext,
+    training_context: training_matrix.FrozenContext | None = None,
     trust_root: attestation.TrustRoot,
     training_matrix_summary_path: Path,
     training_matrix_payload: Mapping[str, Any],
     trainer_binding: Mapping[str, Any],
     ledger_records: Mapping[tuple[str, int], Mapping[str, Any]],
+    retry_admission: Mapping[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
+    validated_training_context = context if training_context is None else training_context
     _require(
         set(payload) == CALIBRATION_MATRIX_FIELDS,
         "Calibration matrix top-level schema drifted.",
@@ -1442,6 +1591,13 @@ def validate_matrix_summary(
         and payload.get("quality_gate") == QUALITY_GATE,
         "Calibration runner may not start quality evaluation.",
     )
+    _require(
+        payload.get("retry_admission")
+        == (None if retry_admission is None else dict(retry_admission)),
+        "Calibration retry-admission binding drifted.",
+    )
+    if retry_admission is not None:
+        _assert_retry_admission_file_binding(retry_admission)
 
     validated: list[dict[str, Any]] = []
     decisions: dict[str, str] = {}
@@ -1451,7 +1607,7 @@ def validate_matrix_summary(
             training_output_root=training_output_root,
             scale=scale,
             training_seed=training_seed,
-            context=context,
+            context=validated_training_context,
             trust_root=trust_root,
             trainer_binding=trainer_binding,
             ledger_record=ledger_records[(scale, training_seed)],
@@ -1462,6 +1618,7 @@ def validate_matrix_summary(
             calibration_script=calibration_script,
             artifact_path=artifact_path,
             manifest_path=context.manifest_path,
+            training_manifest_path=validated_training_context.manifest_path,
             training_summary_path=summary_path,
             training_matrix_summary_path=training_matrix_summary_path,
             checkpoint_path=checkpoint_path,
@@ -1479,6 +1636,7 @@ def validate_matrix_summary(
             calibration_seed=calibration_seed,
             evaluation_seed=evaluation_seed,
             context=context,
+            training_context=validated_training_context,
             summary_path=summary_path,
             summary=summary,
             checkpoint=checkpoint,
@@ -1513,15 +1671,34 @@ def validate_matrix_summary(
         "Calibration matrix terminal decision drifted.",
     )
     matrix_summary_path = Path(os.path.abspath(output_root)) / MATRIX_SUMMARY_NAME
-    on_disk = _load_json(matrix_summary_path, label="calibration matrix ledger")
-    _require(
-        attestation.canonical_json(on_disk) == attestation.canonical_json(dict(payload)),
-        "Calibration matrix ledger bytes do not match the supplied payload.",
-    )
+    opened_matrix = attestation.open_regular_nofollow(matrix_summary_path)
+    try:
+        metadata = os.fstat(opened_matrix.file_descriptor)
+        _require(
+            metadata.st_uid == os.getuid()
+            and metadata.st_nlink == 1
+            and stat.S_IMODE(metadata.st_mode) == 0o600,
+            "Calibration matrix ledger ownership, link count, or mode is unsafe.",
+        )
+        expected_matrix_bytes = (
+            json.dumps(dict(payload), indent=2, sort_keys=True, allow_nan=False) + "\n"
+        ).encode()
+        _require(
+            opened_matrix.read_bytes() == expected_matrix_bytes,
+            "Calibration matrix ledger is not the exact canonical published byte encoding.",
+        )
+        opened_matrix.assert_unchanged()
+    finally:
+        opened_matrix.close()
     _preflight_output_tree(
         output_root=output_root,
         matrix_summary=matrix_summary_path,
         completed_cells=len(validated),
+        retry_admission_path=(
+            None
+            if retry_admission is None
+            else Path(cast(str, retry_admission["path"]))
+        ),
     )
     return validated
 
@@ -1557,6 +1734,876 @@ def _assert_frozen_contract() -> None:
     _require(
         tuple(calibration.FROZEN_CALIBRATION_SEEDS) == FROZEN_CALIBRATION_SEEDS,
         "Calibration implementation seed grid drifted.",
+    )
+
+
+def _v1_1_manifest_path() -> Path:
+    candidate = Path(contract.V1_1_MANIFEST_PATH)
+    return candidate if candidate.is_absolute() else REPOSITORY_ROOT / candidate
+
+
+def _load_v1_1_context(
+    *, trust_root: attestation.TrustRoot
+) -> training_matrix.FrozenContext:
+    """Load the exact revision 1.1 context for immutable prerequisite validation."""
+
+    context = training_matrix.load_v1_1_frozen_context(trust_root=trust_root)
+    _require(
+        context.manifest_path == _v1_1_manifest_path().resolve(),
+        "Revision 1.1 manifest path drifted from the retry amendment.",
+    )
+    return context
+
+
+def _assert_safe_quarantine_file(
+    opened: attestation.OpenedRegularFile,
+    *,
+    expected_sha256: str,
+    expected_bytes: int,
+    label: str,
+) -> None:
+    file_stat = os.fstat(opened.file_descriptor)
+    _require(
+        opened.sha256 == expected_sha256 and opened.bytes == expected_bytes,
+        f"{label} exact bytes drifted from the retry amendment.",
+    )
+    _require(
+        file_stat.st_uid == os.getuid()
+        and file_stat.st_nlink == 1
+        and stat.S_IMODE(file_stat.st_mode) == 0o600,
+        f"{label} ownership, link count, or mode is unsafe.",
+    )
+
+
+def _opened_public_binding(
+    opened: attestation.OpenedRegularFile,
+    payload: Mapping[str, Any],
+) -> dict[str, Any]:
+    envelope = payload.get("attestation")
+    _require(isinstance(envelope, Mapping), "Attested evidence envelope is missing.")
+    envelope = cast(Mapping[str, Any], envelope)
+    return {
+        "path": str(opened.path),
+        "sha256": opened.sha256,
+        "bytes": opened.bytes,
+        "payload_sha256": payload.get("payload_sha256"),
+        "attestation_mac": envelope.get("mac"),
+    }
+
+
+def _assert_exact_quarantine_inventory() -> None:
+    root = Path(os.path.abspath(SUPERSEDED_OUTPUT_ROOT))
+    _require(root.is_dir() and not root.is_symlink(), "Quarantined calibration root is unsafe.")
+    expected = {
+        root / SUPERSEDED_MATRIX_SUMMARY_NAME,
+        root / "s55",
+        root / "s55" / "seed-6071406",
+        root / "s55" / "seed-6071406" / CELL_CLAIM_NAME,
+        root / "s55" / "seed-6071406" / "s55-calibration.json",
+    }
+    observed: set[Path] = set()
+    for item in root.rglob("*"):
+        _require(not item.is_symlink(), f"Quarantined calibration tree contains a symlink: {item}")
+        observed.add(Path(os.path.abspath(item)))
+    _require(
+        observed == expected,
+        "Quarantined calibration tree contains missing or extra evidence.",
+    )
+
+
+def _validate_quarantine_evidence(
+    *,
+    legacy_context: training_matrix.FrozenContext,
+    trust_root: attestation.TrustRoot,
+    training_matrix_summary_path: Path,
+    training_matrix_payload: Mapping[str, Any],
+    trainer_binding: Mapping[str, Any],
+    ledger_records: Mapping[tuple[str, int], Mapping[str, Any]],
+) -> ValidatedQuarantineEvidence:
+    _assert_exact_quarantine_inventory()
+    root = Path(os.path.abspath(SUPERSEDED_OUTPUT_ROOT))
+    matrix_path = root / SUPERSEDED_MATRIX_SUMMARY_NAME
+    claim_path = root / "s55" / "seed-6071406" / CELL_CLAIM_NAME
+    artifact_path = root / "s55" / "seed-6071406" / "s55-calibration.json"
+    opened_matrix = attestation.open_regular_nofollow(matrix_path)
+    opened_claim = attestation.open_regular_nofollow(claim_path)
+    opened_artifact = attestation.open_regular_nofollow(artifact_path)
+    opened_training_matrix = attestation.open_regular_nofollow(training_matrix_summary_path)
+    opened_legacy_manifest = attestation.open_regular_nofollow(legacy_context.manifest_path)
+    opened_checkpoint: attestation.OpenedRegularFile | None = None
+    try:
+        _require(
+            opened_legacy_manifest.path == legacy_context.manifest_path
+            and opened_legacy_manifest.sha256 == contract.V1_1_MANIFEST_SHA256
+            and opened_legacy_manifest.sha256 == legacy_context.manifest_binding["sha256"],
+            "Revision 1.1 manifest file binding drifted during quarantine validation.",
+        )
+        _assert_safe_quarantine_file(
+            opened_matrix,
+            expected_sha256=contract.V1_1_CALIBRATION_MATRIX_SHA256,
+            expected_bytes=8290,
+            label="Quarantined calibration matrix ledger",
+        )
+        _assert_safe_quarantine_file(
+            opened_claim,
+            expected_sha256=contract.V1_1_CALIBRATION_CLAIM_SHA256,
+            expected_bytes=360,
+            label="Quarantined calibration claim",
+        )
+        _assert_safe_quarantine_file(
+            opened_artifact,
+            expected_sha256=contract.V1_1_CALIBRATION_ARTIFACT_SHA256,
+            expected_bytes=16_484_030,
+            label="Quarantined calibration artifact",
+        )
+        _assert_safe_quarantine_file(
+            opened_training_matrix,
+            expected_sha256=contract.V1_1_TRAINING_MATRIX_SHA256,
+            expected_bytes=18_032,
+            label="Terminal revision 1.1 training matrix ledger",
+        )
+        try:
+            matrix_payload = json.loads(opened_matrix.read_bytes().decode("utf-8"))
+            claim_payload = json.loads(opened_claim.read_bytes().decode("utf-8"))
+            artifact_payload = json.loads(opened_artifact.read_bytes().decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise ValueError("Quarantined calibration evidence contains invalid JSON.") from error
+        _require(
+            isinstance(matrix_payload, dict)
+            and isinstance(claim_payload, dict)
+            and isinstance(artifact_payload, dict),
+            "Quarantined calibration evidence must contain JSON objects.",
+        )
+        _require(
+            set(matrix_payload) == SUPERSEDED_CALIBRATION_MATRIX_FIELDS,
+            "Quarantined calibration matrix schema drifted.",
+        )
+        _validate_payload_digest(matrix_payload)
+        matrix_envelope = matrix_payload.get("attestation")
+        _require(isinstance(matrix_envelope, Mapping), "Quarantined matrix attestation is missing.")
+        matrix_semantic = dict(matrix_payload)
+        matrix_semantic.pop("attestation")
+        attestation.verify_attestation(
+            matrix_semantic,
+            cast(Mapping[str, Any], matrix_envelope),
+            trust_root=trust_root,
+            purpose="p2-direct-soft-lag-calibration-matrix-v1",
+        )
+        _require(
+            matrix_payload.get("schema_version") == 5
+            and matrix_payload.get("experiment_id")
+            == "p2-post-rank-direct-soft-lag-calibration-matrix-v1"
+            and matrix_payload.get("status") == "in_progress"
+            and matrix_payload.get("completed_cells") == 0
+            and matrix_payload.get("expected_cells") == EXPECTED_CELLS
+            and matrix_payload.get("cells") == []
+            and matrix_payload.get("cell_decisions") == {}
+            and matrix_payload.get("terminal_decision") is None
+            and matrix_payload.get("source") == legacy_context.source
+            and matrix_payload.get("manifest") == legacy_context.manifest_binding,
+            "Quarantined calibration matrix is not the exact failed empty prefix.",
+        )
+        _require(
+            matrix_payload.get("execution_environment")
+            == execution_environment.validate_execution_environment(
+                cast(Mapping[str, Any], matrix_payload["execution_environment"])
+            ),
+            "Quarantined calibration execution environment is invalid.",
+        )
+        legacy_gpu_lease = _validate_gpu_lease_binding(matrix_payload.get("gpu_lease"))
+        _require(
+            legacy_gpu_lease["path"] == str(_canonical_gpu_lock_path(RETRY_GPU_LOCK_PATH))
+            and legacy_gpu_lease["selected_device_class"]
+            == execution_environment.selected_device_class(
+                cast(Mapping[str, Any], matrix_payload["execution_environment"])
+            )
+            and legacy_gpu_lease["selected_device_routing_identity"]
+            == execution_environment.selected_device_routing_identity(
+                cast(Mapping[str, Any], matrix_payload["execution_environment"])
+            ),
+            "Quarantined calibration GPU scheduler lease drifted from the registered retry.",
+        )
+        _require(
+            set(claim_payload)
+            == {
+                "schema_version",
+                "semantics",
+                "coordinate",
+                "launch_nonce",
+                "pid",
+                "created_time_ns",
+            }
+            and claim_payload.get("schema_version") == 1
+            and claim_payload.get("semantics") == CELL_CLAIM_SEMANTICS
+            and claim_payload.get("coordinate")
+            == {
+                "scale": "s55",
+                "training_seed": 6071406,
+                "calibration_seed": 7071406,
+                "evaluation_seed_reserved": 10071406,
+            }
+            and claim_payload.get("launch_nonce") == contract.V1_1_CALIBRATION_LAUNCH_NONCE
+            and type(claim_payload.get("pid")) is int
+            and cast(int, claim_payload["pid"]) > 0
+            and type(claim_payload.get("created_time_ns")) is int
+            and cast(int, claim_payload["created_time_ns"]) > 0,
+            "Quarantined calibration claim schema or coordinate drifted.",
+        )
+        scale, training_seed, calibration_seed, evaluation_seed = RETRY_COORDINATE
+        summary_path, summary, checkpoint = _validate_training_input(
+            training_output_root=TRAINING_OUTPUT_ROOT,
+            scale=scale,
+            training_seed=training_seed,
+            context=legacy_context,
+            trust_root=trust_root,
+            trainer_binding=trainer_binding,
+            ledger_record=ledger_records[(scale, training_seed)],
+        )
+        checkpoint_path = Path(cast(str, checkpoint["path"]))
+        opened_checkpoint = attestation.open_regular_nofollow(checkpoint_path)
+        _assert_safe_quarantine_file(
+            opened_checkpoint,
+            expected_sha256=contract.SUPERSEDED_CHECKPOINT_SHA256,
+            expected_bytes=626_727_758,
+            label="Retry-coordinate checkpoint",
+        )
+        calibration.validate_calibration_artifact(
+            artifact_payload,
+            verify_bindings=True,
+            trust_root=trust_root,
+            expected_manifest_experiment_id="p2-post-rank-direct-controller-v1.1",
+        )
+        _require(
+            artifact_payload.get("scale") == scale
+            and artifact_payload.get("training_seed") == training_seed
+            and artifact_payload.get("calibration_seed") == calibration_seed
+            and artifact_payload.get("evaluation_seed_reserved") == evaluation_seed
+            and artifact_payload.get("source") == legacy_context.source
+            and artifact_payload.get("manifest") == legacy_context.manifest_binding
+            and artifact_payload.get("checkpoint") == _expected_checkpoint_binding(checkpoint)
+            and artifact_payload.get("training_summary")
+            == _expected_training_binding(
+                summary_path=summary_path,
+                summary=summary,
+                checkpoint=checkpoint,
+                scale=scale,
+                training_seed=training_seed,
+                training_matrix_summary_path=training_matrix_summary_path,
+                training_matrix_payload=training_matrix_payload,
+                ledger_record=ledger_records[(scale, training_seed)],
+                result_context=legacy_context,
+                training_context=legacy_context,
+            )
+            and artifact_payload.get("environment") == matrix_payload.get("execution_environment")
+            and artifact_payload.get("terminal_decision") == "GO"
+            and artifact_payload.get("payload_sha256")
+            == contract.V1_1_CALIBRATION_ARTIFACT_PAYLOAD_SHA256
+            and cast(Mapping[str, Any], artifact_payload.get("attestation", {})).get("mac")
+            == contract.V1_1_CALIBRATION_ARTIFACT_ATTESTATION_MAC,
+            "Quarantined calibration artifact binding drifted beyond the registered path bug.",
+        )
+        opened_matrix.assert_unchanged()
+        opened_claim.assert_unchanged()
+        opened_artifact.assert_unchanged()
+        opened_training_matrix.assert_unchanged()
+        opened_legacy_manifest.assert_unchanged()
+        opened_checkpoint.assert_unchanged()
+        matrix_binding = _opened_public_binding(opened_matrix, matrix_payload)
+        claim_binding = {
+            "path": str(opened_claim.path),
+            "sha256": opened_claim.sha256,
+            "bytes": opened_claim.bytes,
+            "launch_nonce": claim_payload["launch_nonce"],
+            "coordinate": claim_payload["coordinate"],
+        }
+        artifact_binding = _opened_public_binding(opened_artifact, artifact_payload)
+        artifact_binding["terminal_decision"] = artifact_payload["terminal_decision"]
+        training_binding = _opened_public_binding(
+            opened_training_matrix,
+            training_matrix_payload,
+        )
+        checkpoint_binding = {
+            "path": str(opened_checkpoint.path),
+            "sha256": opened_checkpoint.sha256,
+            "bytes": opened_checkpoint.bytes,
+            "authenticated_path_spelling": checkpoint["path"],
+        }
+        return ValidatedQuarantineEvidence(
+            legacy_context=legacy_context,
+            legacy_manifest_file_binding={
+                "path": str(opened_legacy_manifest.path),
+                "sha256": opened_legacy_manifest.sha256,
+                "bytes": opened_legacy_manifest.bytes,
+            },
+            matrix_ledger=matrix_payload,
+            matrix_ledger_binding=matrix_binding,
+            claim=claim_payload,
+            claim_binding=claim_binding,
+            artifact=artifact_payload,
+            artifact_binding=artifact_binding,
+            training_matrix_binding=training_binding,
+            checkpoint_binding=checkpoint_binding,
+            execution_environment=execution_environment.validate_execution_environment(
+                cast(Mapping[str, Any], matrix_payload["execution_environment"])
+            ),
+        )
+    finally:
+        if opened_checkpoint is not None:
+            opened_checkpoint.close()
+        opened_legacy_manifest.close()
+        opened_training_matrix.close()
+        opened_artifact.close()
+        opened_claim.close()
+        opened_matrix.close()
+
+
+def _retry_admission_semantic_payload(
+    *,
+    output_root: Path,
+    context: training_matrix.FrozenContext,
+    evidence: ValidatedQuarantineEvidence,
+    incident_report_binding: Mapping[str, Any],
+) -> dict[str, Any]:
+    scale, training_seed, calibration_seed, evaluation_seed = RETRY_COORDINATE
+    opened_current_manifest = attestation.open_regular_nofollow(context.manifest_path)
+    try:
+        _require(
+            opened_current_manifest.sha256 == context.manifest_binding["sha256"],
+            "Current manifest bytes drifted while building the retry admission.",
+        )
+        current_manifest_binding = {
+            **context.manifest_binding,
+            "bytes": opened_current_manifest.bytes,
+        }
+        opened_current_manifest.assert_unchanged()
+    finally:
+        opened_current_manifest.close()
+    return {
+        "schema_version": 1,
+        "admission_id": RETRY_ADMISSION_ID,
+        "status": "terminal",
+        "reason": RETRY_ADMISSION_REASON,
+        "coordinate": {
+            "scale": scale,
+            "training_seed": training_seed,
+            "calibration_seed": calibration_seed,
+            "evaluation_seed_reserved": evaluation_seed,
+        },
+        "observed_terminal_decision": "GO",
+        "superseded_manifest": {
+            **evidence.legacy_context.manifest_binding,
+            "bytes": evidence.legacy_manifest_file_binding["bytes"],
+        },
+        "superseded_matrix_ledger": evidence.matrix_ledger_binding,
+        "preserved_claim": evidence.claim_binding,
+        "preserved_calibration_artifact": evidence.artifact_binding,
+        "terminal_training_matrix_ledger": evidence.training_matrix_binding,
+        "checkpoint": evidence.checkpoint_binding,
+        "execution_environment": evidence.execution_environment,
+        "current_manifest": current_manifest_binding,
+        "current_source": context.source,
+        "incident_report": dict(incident_report_binding),
+        "quarantine_rule": {
+            "root": str(Path(os.path.abspath(SUPERSEDED_OUTPUT_ROOT))),
+            "immutable_forever": True,
+            "legacy_artifact_admissible_as_v1_2_result": False,
+        },
+        "retry_rule": {
+            "output_root": str(Path(os.path.abspath(output_root))),
+            "scheduler_gpu_lock_path": str(_canonical_gpu_lock_path(RETRY_GPU_LOCK_PATH)),
+            "failed_attempt_gpu_lease": dict(evidence.matrix_ledger["gpu_lease"]),
+            "retry_limit": 1,
+            "coordinate_count": 1,
+            "authorization_registered_after_result_disclosure": True,
+            "authorization_basis": "parent-only-checkpoint-path-representation-false-negative",
+            "counterfactual_outcome_independence_claimed": False,
+            "old_result_admitted_to_amended_cohort": False,
+            "retry_consumed_at_admission_commit": True,
+            "first_launch_requires_same_process_that_created_admission": True,
+            "read_only_preflight_completed_before_admission_commit": True,
+            "restart_before_first_ledger_promotion": "terminal-fail-closed-no-retry",
+            "owner_controlled_deletion_or_filesystem_rollback": (
+                "outside-threat-model-and-invalidates-evidence"
+            ),
+            "general_retry_policy_created": False,
+        },
+        "scientific_subprocesses_started_at_creation": 0,
+    }
+
+
+def _admission_encoded_bytes(payload: Mapping[str, Any]) -> bytes:
+    return (json.dumps(payload, indent=2, sort_keys=True, allow_nan=False) + "\n").encode()
+
+
+def _fsync_directory(path: Path) -> None:
+    descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def _durable_mkdir(path: Path) -> None:
+    absolute = Path(os.path.abspath(path))
+    if absolute.exists():
+        _require(
+            absolute.is_dir() and not absolute.is_symlink(),
+            "Durable calibration directory is unsafe.",
+        )
+        return
+    parent = absolute.parent
+    _require(
+        parent.is_dir() and not parent.is_symlink(),
+        "Durable calibration directory parent is missing or unsafe.",
+    )
+    absolute.mkdir(mode=0o700)
+    _fsync_directory(absolute)
+    _fsync_directory(parent)
+
+
+def _exclusive_write_retry_admission(path: Path, payload: Mapping[str, Any]) -> None:
+    _durable_mkdir(path.parent)
+    staging = path.parent / RETRY_ADMISSION_STAGING_NAME
+    encoded = _admission_encoded_bytes(payload)
+    if os.path.lexists(staging):
+        staged = attestation.open_regular_nofollow(staging)
+        try:
+            _require(
+                staged.read_bytes() == encoded,
+                "Retry-admission staging bytes differ from the registered payload.",
+            )
+        finally:
+            staged.close()
+    else:
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_CLOEXEC", 0)
+        no_follow = getattr(os, "O_NOFOLLOW", None)
+        _require(no_follow is not None, "Retry admission requires O_NOFOLLOW support.")
+        descriptor = os.open(staging, flags | cast(int, no_follow), 0o600)
+        try:
+            offset = 0
+            while offset < len(encoded):
+                written = os.write(descriptor, encoded[offset:])
+                _require(written > 0, "Retry-admission staging write made no progress.")
+                offset += written
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+        _fsync_directory(path.parent)
+    if not os.path.lexists(path):
+        try:
+            os.link(staging, path, follow_symlinks=False)
+        except FileExistsError as error:
+            raise ValueError("Retry admission already exists and cannot be recreated.") from error
+        _fsync_directory(path.parent)
+    final = attestation.open_regular_nofollow(path)
+    staged = attestation.open_regular_nofollow(staging)
+    try:
+        final_stat = os.fstat(final.file_descriptor)
+        staged_stat = os.fstat(staged.file_descriptor)
+        _require(
+            final.read_bytes() == encoded
+            and staged.read_bytes() == encoded
+            and (final_stat.st_dev, final_stat.st_ino)
+            == (staged_stat.st_dev, staged_stat.st_ino)
+            and final_stat.st_uid == os.getuid()
+            and final_stat.st_nlink == 2
+            and stat.S_IMODE(final_stat.st_mode) == 0o600,
+            "Committed retry admission staging/final inode is unsafe.",
+        )
+        os.fsync(final.file_descriptor)
+    finally:
+        staged.close()
+        final.close()
+    staging.unlink()
+    _fsync_directory(path.parent)
+    final = attestation.open_regular_nofollow(path)
+    try:
+        final_stat = os.fstat(final.file_descriptor)
+        _require(
+            final.read_bytes() == encoded
+            and final_stat.st_uid == os.getuid()
+            and final_stat.st_nlink == 1
+            and stat.S_IMODE(final_stat.st_mode) == 0o600,
+            "Final retry admission ownership, link count, mode, or bytes drifted.",
+        )
+        final.assert_unchanged()
+    finally:
+        final.close()
+
+
+def _retry_admission_public_binding(
+    opened: attestation.OpenedRegularFile,
+    payload: Mapping[str, Any],
+) -> dict[str, Any]:
+    envelope = cast(Mapping[str, Any], payload["attestation"])
+    binding = {
+        "path": str(opened.path),
+        "sha256": opened.sha256,
+        "bytes": opened.bytes,
+        "payload_sha256": payload.get("payload_sha256"),
+        "attestation_mac": envelope.get("mac"),
+        "admission_id": payload.get("admission_id"),
+        "coordinate": payload.get("coordinate"),
+        "preserved_claim_sha256": cast(Mapping[str, Any], payload["preserved_claim"]).get(
+            "sha256"
+        ),
+        "preserved_artifact_sha256": cast(
+            Mapping[str, Any], payload["preserved_calibration_artifact"]
+        ).get("sha256"),
+    }
+    _require(
+        set(binding) == RETRY_ADMISSION_BINDING_FIELDS,
+        "Retry-admission public binding schema drifted.",
+    )
+    return binding
+
+
+def _assert_retry_admission_file_binding(binding: Mapping[str, Any]) -> None:
+    _require(
+        set(binding) == RETRY_ADMISSION_BINDING_FIELDS,
+        "Retry-admission file binding schema drifted.",
+    )
+    path = binding.get("path")
+    _require(isinstance(path, str) and bool(path), "Retry-admission path binding is invalid.")
+    opened = attestation.open_regular_nofollow(Path(cast(str, path)))
+    try:
+        metadata = os.fstat(opened.file_descriptor)
+        _require(
+            opened.sha256 == binding.get("sha256")
+            and opened.bytes == binding.get("bytes")
+            and metadata.st_uid == os.getuid()
+            and metadata.st_nlink == 1
+            and stat.S_IMODE(metadata.st_mode) == 0o600,
+            "Retry-admission file changed, disappeared, or became unsafe.",
+        )
+        opened.assert_unchanged()
+    finally:
+        opened.close()
+
+
+def _load_retry_admission(
+    *,
+    path: Path,
+    output_root: Path,
+    context: training_matrix.FrozenContext,
+    evidence: ValidatedQuarantineEvidence,
+    incident_report_binding: Mapping[str, Any],
+    trust_root: attestation.TrustRoot,
+) -> ValidatedRetryAdmission:
+    opened = attestation.open_regular_nofollow(path)
+    try:
+        file_stat = os.fstat(opened.file_descriptor)
+        _require(
+            file_stat.st_uid == os.getuid()
+            and file_stat.st_nlink == 1
+            and stat.S_IMODE(file_stat.st_mode) == 0o600,
+            "Retry admission ownership, link count, or mode is unsafe.",
+        )
+        raw = opened.read_bytes()
+        try:
+            payload = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise ValueError("Retry admission is invalid JSON.") from error
+        _require(isinstance(payload, dict), "Retry admission must be a JSON object.")
+        _require(set(payload) == RETRY_ADMISSION_FIELDS, "Retry admission schema drifted.")
+        _validate_payload_digest(payload)
+        semantic = dict(payload)
+        envelope = semantic.pop("attestation")
+        _require(isinstance(envelope, Mapping), "Retry admission attestation is missing.")
+        attestation.verify_attestation(
+            semantic,
+            cast(Mapping[str, Any], envelope),
+            trust_root=trust_root,
+            purpose=RETRY_ADMISSION_ATTESTATION_PURPOSE,
+        )
+        expected = _attested_payload(
+            _retry_admission_semantic_payload(
+                output_root=output_root,
+                context=context,
+                evidence=evidence,
+                incident_report_binding=incident_report_binding,
+            ),
+            trust_root=trust_root,
+            purpose=RETRY_ADMISSION_ATTESTATION_PURPOSE,
+        )
+        _require(payload == expected, "Retry admission semantic evidence binding drifted.")
+        _require(
+            raw == _admission_encoded_bytes(payload),
+            "Retry admission bytes are not in the one canonical encoding.",
+        )
+        opened.assert_unchanged()
+        public_binding = _retry_admission_public_binding(opened, payload)
+        return ValidatedRetryAdmission(
+            payload=payload,
+            public_binding=public_binding,
+            evidence=evidence,
+        )
+    finally:
+        opened.close()
+
+
+def _load_or_create_retry_admission(
+    *,
+    output_root: Path,
+    matrix_summary: Path,
+    context: training_matrix.FrozenContext,
+    legacy_context: training_matrix.FrozenContext,
+    trust_root: attestation.TrustRoot,
+    training_matrix_summary_path: Path,
+    training_matrix_payload: Mapping[str, Any],
+    trainer_binding: Mapping[str, Any],
+    ledger_records: Mapping[tuple[str, int], Mapping[str, Any]],
+    matrix_lock: _MatrixLockLease,
+    gpu_lease: gpu_lock.GPULockLease,
+    device_guard: gpu_lock.GPULockLease,
+    expected_execution_environment: Mapping[str, Any],
+) -> tuple[ValidatedRetryAdmission | None, bool]:
+    admission_path = Path(os.path.abspath(output_root)) / RETRY_ADMISSION_NAME
+    if not REQUIRE_RETRY_ADMISSION:
+        _require(
+            not os.path.lexists(admission_path),
+            "Test-only retry-admission bypass may not coexist with an admission.",
+        )
+        return None, False
+    matrix_lock.assert_held()
+    gpu_lease.assert_held()
+    device_guard.assert_held()
+    evidence = _validate_quarantine_evidence(
+        legacy_context=legacy_context,
+        trust_root=trust_root,
+        training_matrix_summary_path=training_matrix_summary_path,
+        training_matrix_payload=training_matrix_payload,
+        trainer_binding=trainer_binding,
+        ledger_records=ledger_records,
+    )
+    _require(
+        dict(expected_execution_environment) == evidence.execution_environment,
+        "Revision 1.2 retry requires the exact failed-attempt execution environment before "
+        "its one-shot admission may be committed.",
+    )
+    report_path = REPOSITORY_ROOT / contract.CALIBRATION_PATH_AMENDMENT_REPORT_PATH
+    opened_report = attestation.open_regular_nofollow(report_path)
+    try:
+        _require(
+            opened_report.sha256 == contract.CALIBRATION_PATH_AMENDMENT_REPORT_SHA256,
+            "Calibration path-amendment report bytes drifted.",
+        )
+        incident_report_binding = {
+            "path": str(opened_report.path),
+            "sha256": opened_report.sha256,
+            "bytes": opened_report.bytes,
+        }
+        opened_report.assert_unchanged()
+    finally:
+        opened_report.close()
+    if os.path.lexists(admission_path):
+        if os.path.lexists(admission_path.parent / RETRY_ADMISSION_STAGING_NAME):
+            expected_payload = _attested_payload(
+                _retry_admission_semantic_payload(
+                    output_root=output_root,
+                    context=context,
+                    evidence=evidence,
+                    incident_report_binding=incident_report_binding,
+                ),
+                trust_root=trust_root,
+                purpose=RETRY_ADMISSION_ATTESTATION_PURPOSE,
+            )
+            _exclusive_write_retry_admission(admission_path, expected_payload)
+        return (
+            _load_retry_admission(
+                path=admission_path,
+                output_root=output_root,
+                context=context,
+                evidence=evidence,
+                incident_report_binding=incident_report_binding,
+                trust_root=trust_root,
+            ),
+            False,
+        )
+    _require(
+        not os.path.lexists(matrix_summary),
+        "Amended calibration matrix exists without its retry admission.",
+    )
+    if output_root.exists():
+        allowed_staging = output_root / RETRY_ADMISSION_STAGING_NAME
+        _require(
+            all(item == allowed_staging for item in output_root.iterdir()),
+            "Retry admission must precede every amended calibration artifact.",
+        )
+    payload = _attested_payload(
+        _retry_admission_semantic_payload(
+            output_root=output_root,
+            context=context,
+            evidence=evidence,
+            incident_report_binding=incident_report_binding,
+        ),
+        trust_root=trust_root,
+        purpose=RETRY_ADMISSION_ATTESTATION_PURPOSE,
+    )
+    matrix_lock.assert_held()
+    gpu_lease.assert_held()
+    device_guard.assert_held()
+    _exclusive_write_retry_admission(admission_path, payload)
+    matrix_lock.assert_held()
+    gpu_lease.assert_held()
+    device_guard.assert_held()
+    evidence = _validate_quarantine_evidence(
+        legacy_context=legacy_context,
+        trust_root=trust_root,
+        training_matrix_summary_path=training_matrix_summary_path,
+        training_matrix_payload=training_matrix_payload,
+        trainer_binding=trainer_binding,
+        ledger_records=ledger_records,
+    )
+    return (
+        _load_retry_admission(
+            path=admission_path,
+            output_root=output_root,
+            context=context,
+            evidence=evidence,
+            incident_report_binding=incident_report_binding,
+            trust_root=trust_root,
+        ),
+        True,
+    )
+
+
+@contextmanager
+def _held_retry_evidence_snapshots(
+    admission: ValidatedRetryAdmission | None,
+) -> Iterator[None]:
+    if admission is None:
+        yield
+        return
+    _assert_exact_quarantine_inventory()
+    bound_items = [
+        admission.public_binding,
+        admission.payload["superseded_manifest"],
+        admission.payload["current_manifest"],
+        admission.payload["superseded_matrix_ledger"],
+        admission.payload["preserved_claim"],
+        admission.payload["preserved_calibration_artifact"],
+        admission.payload["terminal_training_matrix_ledger"],
+        admission.payload["checkpoint"],
+        admission.payload["incident_report"],
+    ]
+    opened_files: list[attestation.OpenedRegularFile] = []
+    try:
+        for binding in bound_items:
+            _require(isinstance(binding, Mapping), "Retry snapshot binding is invalid.")
+            path = binding.get("path")
+            _require(isinstance(path, str), "Retry snapshot path binding is invalid.")
+            opened = attestation.open_regular_nofollow(Path(path))
+            _require(
+                opened.sha256 == binding.get("sha256")
+                and opened.bytes == binding.get("bytes"),
+                "Retry evidence changed before child launch.",
+            )
+            opened_files.append(opened)
+        for opened in opened_files:
+            opened.assert_unchanged()
+        _assert_exact_quarantine_inventory()
+        yield
+        _assert_exact_quarantine_inventory()
+        for opened in opened_files:
+            opened.assert_unchanged()
+    finally:
+        for opened in reversed(opened_files):
+            opened.close()
+
+
+@contextmanager
+def _held_matrix_ledger_snapshot(
+    path: Path,
+    *,
+    expected_payload: Mapping[str, Any],
+    trust_root: attestation.TrustRoot,
+) -> Iterator[None]:
+    """Hold the exact validated prefix ledger inode across one scientific child."""
+
+    opened = attestation.open_regular_nofollow(path)
+    try:
+        metadata = os.fstat(opened.file_descriptor)
+        _require(
+            metadata.st_uid == os.getuid()
+            and metadata.st_nlink == 1
+            and stat.S_IMODE(metadata.st_mode) == 0o600,
+            "Calibration matrix prefix ledger ownership, link count, or mode is unsafe.",
+        )
+        raw = opened.read_bytes()
+        expected_raw = (
+            json.dumps(expected_payload, indent=2, sort_keys=True, allow_nan=False) + "\n"
+        ).encode()
+        _require(raw == expected_raw, "Calibration matrix prefix bytes differ from the expected prefix.")
+        try:
+            payload = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise ValueError("Calibration matrix prefix ledger is invalid JSON.") from error
+        _require(
+            isinstance(payload, dict) and payload == dict(expected_payload),
+            "Calibration matrix prefix ledger differs from the validated in-memory prefix.",
+        )
+        _validate_payload_digest(payload)
+        envelope = payload.get("attestation")
+        _require(isinstance(envelope, Mapping), "Calibration matrix prefix attestation is missing.")
+        semantic = dict(payload)
+        semantic.pop("attestation")
+        attestation.verify_attestation(
+            semantic,
+            cast(Mapping[str, Any], envelope),
+            trust_root=trust_root,
+            purpose=MATRIX_ATTESTATION_PURPOSE,
+        )
+        opened.assert_unchanged()
+        yield
+        opened.assert_unchanged()
+    finally:
+        opened.close()
+
+
+def load_retry_admission_for_downstream(
+    *,
+    output_root: Path,
+    context: training_matrix.FrozenContext,
+    training_context: training_matrix.FrozenContext,
+    trust_root: attestation.TrustRoot,
+    training_matrix_summary_path: Path,
+    training_matrix_payload: Mapping[str, Any],
+    trainer_binding: Mapping[str, Any],
+    ledger_records: Mapping[tuple[str, int], Mapping[str, Any]],
+) -> ValidatedRetryAdmission | None:
+    if not REQUIRE_RETRY_ADMISSION:
+        return None
+    evidence = _validate_quarantine_evidence(
+        legacy_context=training_context,
+        trust_root=trust_root,
+        training_matrix_summary_path=training_matrix_summary_path,
+        training_matrix_payload=training_matrix_payload,
+        trainer_binding=trainer_binding,
+        ledger_records=ledger_records,
+    )
+    report_path = REPOSITORY_ROOT / contract.CALIBRATION_PATH_AMENDMENT_REPORT_PATH
+    opened_report = attestation.open_regular_nofollow(report_path)
+    try:
+        _require(
+            opened_report.sha256 == contract.CALIBRATION_PATH_AMENDMENT_REPORT_SHA256,
+            "Calibration path-amendment report bytes drifted.",
+        )
+        report_binding = {
+            "path": str(opened_report.path),
+            "sha256": opened_report.sha256,
+            "bytes": opened_report.bytes,
+        }
+        opened_report.assert_unchanged()
+    finally:
+        opened_report.close()
+    return _load_retry_admission(
+        path=Path(os.path.abspath(output_root)) / RETRY_ADMISSION_NAME,
+        output_root=output_root,
+        context=context,
+        evidence=evidence,
+        incident_report_binding=report_binding,
+        trust_root=trust_root,
     )
 
 
@@ -1605,7 +2652,10 @@ def _load_terminal_training_ledger(
             ledger_records[coordinate] = dict(record)
         opened_ledger.assert_unchanged()
         opened_trainer.assert_unchanged()
-        training_matrix.assert_environment_unchanged(context)
+        training_matrix.assert_frozen_context_reference_unchanged(
+            context,
+            trust_root=trust_root,
+        )
         return ledger_path, payload, trainer_binding, ledger_records
     finally:
         opened_ledger.close()
@@ -1617,6 +2667,7 @@ def _preflight_output_tree(
     output_root: Path,
     matrix_summary: Path,
     completed_cells: int,
+    retry_admission_path: Path | None = None,
 ) -> None:
     """Reject every non-prefix or non-inventory output before launch/publication."""
 
@@ -1634,6 +2685,13 @@ def _preflight_output_tree(
     _require(root.is_dir(), "Calibration output root is not a directory.")
 
     allowed: set[Path] = {summary}
+    if retry_admission_path is not None:
+        admission = Path(os.path.abspath(retry_admission_path))
+        _require(
+            admission.parent == root,
+            "Calibration retry admission must be stored directly under the output root.",
+        )
+        allowed.add(admission)
     cursor = summary.parent
     while cursor != root:
         _require(cursor.is_relative_to(root), "Calibration summary parent escaped output root.")
@@ -1730,8 +2788,26 @@ def _run_matrix_locked(
     with _ACTIVE_MATRIX_LOCKS_GUARD:
         lock_owned = lock_path in _ACTIVE_MATRIX_LOCKS
     _require(lock_owned, "Calibration matrix execution requires the exclusive process lock.")
+    if REQUIRE_RETRY_ADMISSION:
+        expected_retry_lock = str(_canonical_gpu_lock_path(RETRY_GPU_LOCK_PATH))
+        _require(
+            str(_canonical_gpu_lock_path(gpu_lease.path)) == expected_retry_lock
+            and gpu_lease_binding.get("path") == expected_retry_lock,
+            "Revision 1.2 retry is not holding the frozen failed-attempt GPU scheduler lock.",
+        )
     canonical_script = _canonical_calibration_script(calibration_script)
     context = training_matrix.establish_frozen_context(manifest_path)
+    if REQUIRE_RETRY_ADMISSION:
+        expected_manifest_path = (
+            contract.MANIFEST_PATH
+            if contract.MANIFEST_PATH.is_absolute()
+            else REPOSITORY_ROOT / contract.MANIFEST_PATH
+        ).resolve()
+        _require(
+            context.manifest_path == expected_manifest_path
+            and context.manifest_binding.get("experiment_id") == contract.EXPERIMENT_ID,
+            "Revision 1.2 retry requires the canonical current manifest context.",
+        )
     _assert_calibration_implementation_binding(context)
     raw_manifest_attestation = context.manifest_binding.get("attestation")
     _require(
@@ -1757,6 +2833,9 @@ def _run_matrix_locked(
     script_fd, script_snapshot = _open_canonical_script(canonical_script)
     os.close(script_fd)
     script_binding = script_snapshot.public_binding
+    training_context = (
+        _load_v1_1_context(trust_root=trust_root) if REQUIRE_RETRY_ADMISSION else context
+    )
     (
         training_matrix_summary_path,
         training_matrix_payload,
@@ -1764,15 +2843,39 @@ def _run_matrix_locked(
         ledger_records,
     ) = _load_terminal_training_ledger(
         training_output_root=training_output_root,
-        context=context,
+        context=training_context,
         trust_root=trust_root,
     )
+    admission, retry_launch_authorized_in_this_process = _load_or_create_retry_admission(
+        output_root=output_root,
+        matrix_summary=matrix_summary,
+        context=context,
+        legacy_context=training_context,
+        trust_root=trust_root,
+        training_matrix_summary_path=training_matrix_summary_path,
+        training_matrix_payload=training_matrix_payload,
+        trainer_binding=trainer_binding,
+        ledger_records=ledger_records,
+        matrix_lock=matrix_lock,
+        gpu_lease=gpu_lease,
+        device_guard=device_guard,
+        expected_execution_environment=frozen_execution_environment,
+    )
+    retry_admission_binding = None if admission is None else admission.public_binding
+    if admission is not None:
+        _require(
+            execution_environment.validate_execution_environment(frozen_execution_environment)
+            == admission.evidence.execution_environment,
+            "Revision 1.2 retry requires the exact failed-attempt execution environment.",
+        )
 
     completed: list[dict[str, Any]] = []
+    current_prefix_payload: dict[str, Any] | None = None
     if matrix_summary.exists():
         gpu_lease.assert_held()
+        current_prefix_payload = _load_json(matrix_summary, label="calibration matrix")
         completed = validate_matrix_summary(
-            _load_json(matrix_summary, label="calibration matrix"),
+            current_prefix_payload,
             output_root=output_root,
             training_output_root=training_output_root,
             calibration_script=canonical_script,
@@ -1781,22 +2884,34 @@ def _run_matrix_locked(
             expected_gpu_lease=gpu_lease_binding,
             expected_execution_environment=frozen_execution_environment,
             context=context,
+            training_context=training_context,
             trust_root=trust_root,
             training_matrix_summary_path=training_matrix_summary_path,
             training_matrix_payload=training_matrix_payload,
             trainer_binding=trainer_binding,
             ledger_records=ledger_records,
+            retry_admission=retry_admission_binding,
         )
         matrix_lock.assert_held()
+
+    if REQUIRE_RETRY_ADMISSION and len(completed) == 0:
+        _require(
+            retry_launch_authorized_in_this_process,
+            "The sole calibration retry was consumed when its admission was committed by a "
+            "prior process; an empty or rolled-back prefix may not launch it again.",
+        )
 
     _preflight_output_tree(
         output_root=output_root,
         matrix_summary=matrix_summary,
         completed_cells=len(completed),
+        retry_admission_path=(
+            None if admission is None else Path(cast(str, admission.public_binding["path"]))
+        ),
     )
     training_inputs = _preflight_training_inputs(
         training_output_root=training_output_root,
-        context=context,
+        context=training_context,
         trust_root=trust_root,
         trainer_binding=trainer_binding,
         ledger_records=ledger_records,
@@ -1808,21 +2923,51 @@ def _run_matrix_locked(
 
     if not matrix_summary.exists():
         gpu_lease.assert_held()
+        empty_prefix = _matrix_payload(
+            completed,
+            context=context,
+            calibration_script_binding=script_binding,
+            matrix_lock_binding=matrix_lock_binding,
+            gpu_lease_binding=gpu_lease_binding,
+            execution_environment_binding=frozen_execution_environment,
+            trust_root=trust_root,
+            retry_admission=retry_admission_binding,
+        )
         _publish_matrix_ledger(
             matrix_summary,
-            _matrix_payload(
-                completed,
-                context=context,
-                calibration_script_binding=script_binding,
-                matrix_lock_binding=matrix_lock_binding,
-                gpu_lease_binding=gpu_lease_binding,
-                execution_environment_binding=frozen_execution_environment,
-                trust_root=trust_root,
-            ),
+            empty_prefix,
             matrix_lock=matrix_lock,
+            trust_root=trust_root,
         )
+        validated_empty_prefix = validate_matrix_summary(
+            _load_json(matrix_summary, label="empty-prefix calibration matrix"),
+            output_root=output_root,
+            training_output_root=training_output_root,
+            calibration_script=canonical_script,
+            calibration_script_binding=script_binding,
+            matrix_lock_binding=matrix_lock_binding,
+            expected_gpu_lease=gpu_lease_binding,
+            expected_execution_environment=frozen_execution_environment,
+            context=context,
+            training_context=training_context,
+            trust_root=trust_root,
+            training_matrix_summary_path=training_matrix_summary_path,
+            training_matrix_payload=training_matrix_payload,
+            trainer_binding=trainer_binding,
+            ledger_records=ledger_records,
+            retry_admission=retry_admission_binding,
+        )
+        _require(
+            validated_empty_prefix == [],
+            "Fresh amended calibration ledger is not the independently validated empty prefix.",
+        )
+        current_prefix_payload = empty_prefix
         gpu_lease.assert_held()
 
+    _require(
+        current_prefix_payload is not None,
+        "Calibration matrix prefix was not established before child iteration.",
+    )
     for index, (scale, training_seed, calibration_seed, evaluation_seed) in enumerate(
         _coordinates()
     ):
@@ -1838,6 +2983,7 @@ def _run_matrix_locked(
             calibration_script=canonical_script,
             artifact_path=artifact_path,
             manifest_path=context.manifest_path,
+            training_manifest_path=training_context.manifest_path,
             training_summary_path=summary_path,
             training_matrix_summary_path=training_matrix_summary_path,
             checkpoint_path=checkpoint_path,
@@ -1862,6 +3008,7 @@ def _run_matrix_locked(
                 calibration_seed=calibration_seed,
                 evaluation_seed=evaluation_seed,
                 context=context,
+                training_context=training_context,
                 summary_path=summary_path,
                 summary=summary,
                 checkpoint=checkpoint,
@@ -1881,7 +3028,7 @@ def _run_matrix_locked(
                 training_output_root=training_output_root,
                 scale=scale,
                 training_seed=training_seed,
-                context=context,
+                context=training_context,
                 trust_root=trust_root,
                 trainer_binding=trainer_binding,
                 ledger_record=ledger_records[(scale, training_seed)],
@@ -1891,6 +3038,7 @@ def _run_matrix_locked(
                 calibration_script=canonical_script,
                 artifact_path=artifact_path,
                 manifest_path=context.manifest_path,
+                training_manifest_path=training_context.manifest_path,
                 training_summary_path=summary_path,
                 training_matrix_summary_path=training_matrix_summary_path,
                 checkpoint_path=checkpoint_path,
@@ -1919,14 +3067,22 @@ def _run_matrix_locked(
                 )
                 gpu_lease.assert_held()
                 device_guard.assert_held()
-                result = _run_calibrator_from_stable_script(
-                    command,
-                    canonical=canonical_script,
-                    expected=script_snapshot,
-                    trust_root=trust_root,
-                    gpu_lease=gpu_lease,
-                    device_guard=device_guard,
-                )
+                with (
+                    _held_retry_evidence_snapshots(admission),
+                    _held_matrix_ledger_snapshot(
+                        matrix_summary,
+                        expected_payload=cast(Mapping[str, Any], current_prefix_payload),
+                        trust_root=trust_root,
+                    ),
+                ):
+                    result = _run_calibrator_from_stable_script(
+                        command,
+                        canonical=canonical_script,
+                        expected=script_snapshot,
+                        trust_root=trust_root,
+                        gpu_lease=gpu_lease,
+                        device_guard=device_guard,
+                    )
                 matrix_lock.assert_held()
                 gpu_lease.assert_held()
                 device_guard.assert_held()
@@ -1950,6 +3106,7 @@ def _run_matrix_locked(
                     calibration_seed=calibration_seed,
                     evaluation_seed=evaluation_seed,
                     context=context,
+                    training_context=training_context,
                     summary_path=summary_path,
                     summary=summary,
                     checkpoint=checkpoint,
@@ -1991,25 +3148,40 @@ def _run_matrix_locked(
                 f"Previously completed calibration cell drifted: {scale}/{training_seed}.",
             )
         else:
-            completed.append(record)
-            gpu_lease.assert_held()
-            _publish_matrix_ledger(
-                matrix_summary,
-                _matrix_payload(
-                    completed,
-                    context=context,
-                    calibration_script_binding=script_binding,
-                    matrix_lock_binding=matrix_lock_binding,
-                    gpu_lease_binding=gpu_lease_binding,
-                    execution_environment_binding=frozen_execution_environment,
+            with _held_retry_evidence_snapshots(admission):
+                with _held_matrix_ledger_snapshot(
+                    matrix_summary,
+                    expected_payload=cast(Mapping[str, Any], current_prefix_payload),
                     trust_root=trust_root,
-                ),
-                matrix_lock=matrix_lock,
-            )
-            gpu_lease.assert_held()
+                ):
+                    candidate_completed = [*completed, record]
+                    gpu_lease.assert_held()
+                    if retry_admission_binding is not None:
+                        _assert_retry_admission_file_binding(retry_admission_binding)
+                    next_prefix_payload = _matrix_payload(
+                        candidate_completed,
+                        context=context,
+                        calibration_script_binding=script_binding,
+                        matrix_lock_binding=matrix_lock_binding,
+                        gpu_lease_binding=gpu_lease_binding,
+                        execution_environment_binding=frozen_execution_environment,
+                        trust_root=trust_root,
+                        retry_admission=retry_admission_binding,
+                    )
+                _publish_matrix_ledger(
+                    matrix_summary,
+                    next_prefix_payload,
+                    matrix_lock=matrix_lock,
+                    trust_root=trust_root,
+                )
+                completed.append(record)
+                current_prefix_payload = next_prefix_payload
+                gpu_lease.assert_held()
 
     gpu_lease.assert_held()
     training_matrix.assert_environment_unchanged(context)
+    if retry_admission_binding is not None:
+        _assert_retry_admission_file_binding(retry_admission_binding)
     terminal = _matrix_payload(
         completed,
         context=context,
@@ -2018,26 +3190,39 @@ def _run_matrix_locked(
         gpu_lease_binding=gpu_lease_binding,
         execution_environment_binding=frozen_execution_environment,
         trust_root=trust_root,
+        retry_admission=retry_admission_binding,
     )
     gpu_lease.assert_held()
-    _publish_matrix_ledger(matrix_summary, terminal, matrix_lock=matrix_lock)
-    gpu_lease.assert_held()
-    validate_matrix_summary(
-        terminal,
-        output_root=output_root,
-        training_output_root=training_output_root,
-        calibration_script=canonical_script,
-        calibration_script_binding=script_binding,
-        matrix_lock_binding=matrix_lock_binding,
-        expected_gpu_lease=gpu_lease_binding,
-        expected_execution_environment=frozen_execution_environment,
-        context=context,
-        trust_root=trust_root,
-        training_matrix_summary_path=training_matrix_summary_path,
-        training_matrix_payload=training_matrix_payload,
-        trainer_binding=trainer_binding,
-        ledger_records=ledger_records,
+    _require(
+        terminal == current_prefix_payload,
+        "Terminal calibration payload differs from the last durably published prefix.",
     )
+    with (
+        _held_retry_evidence_snapshots(admission),
+        _held_matrix_ledger_snapshot(
+            matrix_summary,
+            expected_payload=terminal,
+            trust_root=trust_root,
+        ),
+    ):
+        validate_matrix_summary(
+            terminal,
+            output_root=output_root,
+            training_output_root=training_output_root,
+            calibration_script=canonical_script,
+            calibration_script_binding=script_binding,
+            matrix_lock_binding=matrix_lock_binding,
+            expected_gpu_lease=gpu_lease_binding,
+            expected_execution_environment=frozen_execution_environment,
+            context=context,
+            training_context=training_context,
+            trust_root=trust_root,
+            training_matrix_summary_path=training_matrix_summary_path,
+            training_matrix_payload=training_matrix_payload,
+            trainer_binding=trainer_binding,
+            ledger_records=ledger_records,
+            retry_admission=retry_admission_binding,
+        )
     matrix_lock.assert_held()
     gpu_lease.assert_held()
     device_guard.assert_held()
@@ -2119,7 +3304,22 @@ def run_matrix(
 ) -> dict[str, Any]:
     """Run the complete CUDA calibration matrix under one project-wide GPU lease."""
 
-    requested_gpu_lock = gpu_lock.DEFAULT_LOCK_PATH if gpu_lock_path is None else gpu_lock_path
+    requested_gpu_lock = (
+        RETRY_GPU_LOCK_PATH
+        if REQUIRE_RETRY_ADMISSION and gpu_lock_path is None
+        else gpu_lock.DEFAULT_LOCK_PATH
+        if gpu_lock_path is None
+        else gpu_lock_path
+    )
+    if REQUIRE_RETRY_ADMISSION:
+        requested_lock = _absolute_path(requested_gpu_lock).resolve(strict=False)
+        superseded_root = _absolute_path(SUPERSEDED_OUTPUT_ROOT).resolve(strict=False)
+        _require(
+            requested_lock == _absolute_path(RETRY_GPU_LOCK_PATH).resolve(strict=False)
+            and not _paths_overlap(requested_lock, superseded_root),
+            "Revision 1.2 retry requires the frozen failed-attempt GPU scheduler lock outside "
+            "the quarantine.",
+        )
     lease = gpu_lock.acquire_gpu_lock(
         "p2-direct-calibration-matrix",
         path=requested_gpu_lock,
