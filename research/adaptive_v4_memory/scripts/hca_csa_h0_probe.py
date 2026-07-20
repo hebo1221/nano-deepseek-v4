@@ -62,7 +62,7 @@ class HCACSAReadSidecar:
             raise ValueError("HCA--CSA read sidecar requires eval mode.")
         self.model = model
         self.reads: list[CompressedMemoryReadRecord] = []
-        self._pending: dict[int, tuple[str, torch.Tensor, torch.Tensor, int]] = {}
+        self._pending: dict[int, tuple[Literal["hca", "csa"], torch.Tensor, torch.Tensor, int]] = {}
         self._handles: list[Any] = []
         self._restores: list[tuple[Any, bool, Any]] = []
         self._active = False
