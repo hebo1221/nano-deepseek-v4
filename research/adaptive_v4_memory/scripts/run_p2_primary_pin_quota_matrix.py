@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, cast
 
 import adaptive_v4_execution_environment as execution_environment
+import calibrate_p2_direct_soft_lag as calibrator
 import evaluate_p2_direct_controller_shard_v1_3 as evaluator
 import p2_direct_attestation as attestation
 import p2_direct_controller_contract_v1_3 as contract
@@ -52,7 +53,7 @@ def _atomic_json(path: Path, payload: dict[str, Any]) -> None:
     finally:
         os.close(descriptor)
 def _implementation_digest() -> str:
-    paths = (Path(__file__), Path(evaluator.__file__), Path(contract.__file__))
+    paths = (Path(__file__), Path(calibrator.__file__), Path(evaluator.__file__), Path(contract.__file__))
     return _digest([[str(path), _file_digest(path)] for path in paths])
 def coordinates() -> list[dict[str, Any]]:
     return [
@@ -133,39 +134,62 @@ def _cohort_paths(scale: str, seed: int) -> dict[str, Path]:
             cast(str, cast(dict[str, Any], training["terminal_matrix_ledger"])["path"])
         ),
     }
+def _bound_file(path: Path, binding: dict[str, Any]) -> dict[str, Any]:
+    if path.is_symlink():
+        raise ValueError(f"Frozen research input is a symlink: {path}")
+    digest = _file_digest(path)
+    if (path.resolve(strict=True) != Path(binding["path"]).resolve(strict=True)
+            or path.stat().st_size != binding["bytes"] or digest != binding["sha256"]):
+        raise ValueError(f"Frozen research input binding drifted: {path}")
+    return {"path": str(path), "sha256": digest, "bytes": path.stat().st_size}
+def _cohort_binding(paths: dict[str, Path], calibration: dict[str, Any]) -> dict[str, Any]:
+    training = cast(dict[str, Any], calibration["training_summary"])
+    expected = {"checkpoint": cast(dict[str, Any], calibration["checkpoint"]),
+                "training_summary": training,
+                "training_matrix": cast(dict[str, Any], training["terminal_matrix_ledger"])}
+    dependencies = {"calibration": {"path": str(paths["calibration"]),
+                    "sha256": _file_digest(paths["calibration"]),
+                    "bytes": paths["calibration"].stat().st_size}}
+    dependencies.update({name: _bound_file(paths[name], item) for name, item in expected.items()})
+    body = {"calibration_payload_sha256": calibration["payload_sha256"], "dependencies": dependencies}
+    return {**body, "input_binding_digest": _digest(body)}
+def _research_arms(calibration: dict[str, Any], budget: str, scale: str, seed: int) -> dict[str, Any]:
+    cell, validated_budgets = contract.v1_2._validated_calibration_coordinate(
+        calibration, budget, expected_scale=scale, expected_training_seed=seed,
+        expected_global_block_budget=contract.DIRECT_GLOBAL_BLOCK_BUDGETS[scale][budget],
+        expected_csa_layers=contract.DIRECT_CSA_LAYERS_BY_SCALE[scale])
+    legacy = dict(calibration)
+    legacy["experiment_id"] = contract.v1_2.LEGACY_CALIBRATION_SCAFFOLD_ID
+    scaffolds, metadata = contract.build_arm_configs(legacy, budget)
+    calibrated_budgets = tuple(metadata["calibrated_layer_budgets"])
+    if calibrated_budgets != validated_budgets:
+        raise ValueError("Research arm calibration budgets drifted.")
+    exact = contract.v1_2._balanced_fixed_budgets(
+        calibrated_budgets, cast(str, cell["quota"]["calibration_digest"]))
+    signal = scaffolds["hierarchical+pins"].configs[0].signal
+    built: dict[str, Any] = {}
+    for name in contract.ALL_ARM_NAMES:
+        semantics = contract.EXPECTED_ARM_SEMANTICS[name]
+        if semantics.quota_runtime in {"balanced-feasible", "soft-lag", "soft-lag-permuted"}:
+            built[name] = contract.v1_2._exact_fixed_scaffold(
+                scaffolds[semantics.scaffold_name], semantics,
+                layer_budgets=exact, signal_config=signal)
+        else:
+            built[name] = contract.v1_2._rename_scaffold(scaffolds[semantics.scaffold_name], semantics)
+    contract.validate_arm_semantics(built)
+    return {name: built[name] for name in ARMS}
 def _load_cohort(
     scale: str, seed: int, *, trust_root: attestation.TrustRoot, device: torch.device
 ) -> tuple[Any, dict[str, Any], dict[str, dict[str, Any]], dict[str, Any]]:
     paths = _cohort_paths(scale, seed)
-    inputs, calibration, reuse, first_arms, _metadata, raw_checkpoint = (
-        evaluator.establish_evaluator_inputs(
-            checkpoint_path=paths["checkpoint"],
-            training_summary_path=paths["training_summary"],
-            training_matrix_summary_path=paths["training_matrix"],
-            calibration_path=paths["calibration"],
-            reuse_admission_path=contract.V1_3_4_REUSE_ADMISSION_PATH,
-            preheldout_genesis_path=contract.V1_3_4_PREHELDOUT_GENESIS_PATH,
-            quality_start_activation_path=contract.V1_3_4_QUALITY_START_ACTIVATION_PATH,
-            manifest_path=contract.V1_3_4_MANIFEST_PATH,
-            scale=scale,
-            training_seed=seed,
-            budget=contract.BUDGETS[0],
-            trust_root=trust_root,
-        )
-    )
-    arms_by_budget = {contract.BUDGETS[0]: first_arms}
-    for budget in contract.BUDGETS[1:]:
-        built, _ = contract.build_direct_controller_arms(
-            calibration,
-            budget,
-            reuse_admission=reuse,
-            trust_root=trust_root,
-            expected_scale=scale,
-            expected_training_seed=seed,
-            expected_global_block_budget=contract.DIRECT_GLOBAL_BLOCK_BUDGETS[scale][budget],
-            expected_csa_layers=contract.DIRECT_CSA_LAYERS_BY_SCALE[scale],
-        )
-        arms_by_budget[budget] = built
+    if paths["calibration"].is_symlink():
+        raise ValueError("Frozen calibration input is a symlink.")
+    calibration = calibrator.validate_calibration_artifact(
+        json.loads(paths["calibration"].read_text()), verify_bindings=False, trust_root=trust_root)
+    cohort_binding = _cohort_binding(paths, calibration)
+    arms_by_budget = {budget: _research_arms(calibration, budget, scale, seed)
+                      for budget in contract.BUDGETS}
+    raw_checkpoint = torch.load(paths["checkpoint"], map_location="cpu", weights_only=True)
     model = evaluator._load_checkpoint_model(
         raw_checkpoint,
         scale=scale,
@@ -174,13 +198,7 @@ def _load_cohort(
         dtype=torch.bfloat16,
     )
     del raw_checkpoint
-    dependencies = {
-        name: {"path": str(path), "sha256": _file_digest(path)} for name, path in paths.items()
-    }
-    return model, calibration, arms_by_budget, {
-        "input_binding_digest": inputs["input_binding_digest"],
-        "dependencies": dependencies,
-    }
+    return model, calibration, arms_by_budget, cohort_binding
 def _run_cell(
     model: Any,
     calibration: dict[str, Any],
@@ -349,7 +367,7 @@ def main() -> None:
     ).stdout.strip():
         raise RuntimeError("Primary pin/quota matrix requires a clean source tree.")
     source = {"commit": commit, "dirty": False}
-    manifest = json.loads(contract.V1_3_4_MANIFEST_PATH.read_text())
+    manifest = contract.load_v1_3_4_manifest()
     trust_root = attestation.load_trust_root(
         args.attestation_key_path,
         repository_root=Path.cwd(),
@@ -357,6 +375,10 @@ def main() -> None:
         expected_key_id=cast(str, manifest["attestation"]["key_id"]),
     )
     activation = json.loads(contract.V1_3_4_QUALITY_START_ACTIVATION_PATH.read_text())
+    evaluator.admission._verify_attested_payload(
+        activation, trust_root=trust_root,
+        purpose=evaluator.admission.V1_3_4_QUALITY_START_ACTIVATION_PURPOSE,
+        label="Research input v1.3.4 activation")
     captured = execution_environment.capture_execution_environment()
     expected_environment = activation["base_prerequisites_binding"][
         "execution_environment_projection"
@@ -378,7 +400,7 @@ def main() -> None:
     implementation_digest = _implementation_digest()
     selected = coordinates()
     completed: list[tuple[dict[str, Any], Path]] = []
-    dependency_bindings: dict[tuple[str, int], dict[str, dict[str, str]]] = {}
+    dependency_bindings: dict[tuple[str, int], dict[str, Any]] = {}
     for coordinate in selected:
         path = cell_path(args.output_root, coordinate)
         if path.is_file():
@@ -386,15 +408,13 @@ def main() -> None:
             validate_cell(payload, coordinate)
             cohort = (cast(str, coordinate["scale"]), cast(int, coordinate["training_seed"]))
             if cohort not in dependency_bindings:
-                dependency_bindings[cohort] = {
-                    name: {"path": str(item), "sha256": _file_digest(item)}
-                    for name, item in _cohort_paths(*cohort).items()
-                }
+                paths = _cohort_paths(*cohort)
+                dependency_bindings[cohort] = _cohort_binding(
+                    paths, json.loads(paths["calibration"].read_text()))
             if (
                 payload.get("source") != source
                 or payload.get("implementation_digest") != implementation_digest
-                or payload.get("cohort_binding", {}).get("dependencies")
-                != dependency_bindings[cohort]
+                or payload.get("cohort_binding") != dependency_bindings[cohort]
             ):
                 raise RuntimeError("Primary pin/quota resume binding drifted.")
             completed.append((coordinate, path))
