@@ -24,39 +24,40 @@ def trust_root() -> attestation.TrustRoot:
     return attestation.TrustRoot(key=key, key_id=attestation.derive_key_id(key))
 
 
-def test_persistent_session_uses_only_v1_3_3_authorities_and_paths() -> None:
+def test_persistent_session_uses_only_v1_3_4_authorities_and_paths() -> None:
     assert session.READY_ONLY_PREFLIGHT_SESSION_ROLE == (
-        contract.V1_3_3_READY_ONLY_PREFLIGHT_SESSION_ROLE
+        contract.V1_3_4_READY_ONLY_PREFLIGHT_SESSION_ROLE
     ) == "ready_only_preflight"
-    assert session.QUALITY_SESSION_ROLE == contract.V1_3_3_QUALITY_SESSION_ROLE == "quality"
+    assert session.QUALITY_SESSION_ROLE == contract.V1_3_4_QUALITY_SESSION_ROLE == "quality"
     assert session.SESSION_ROLES == frozenset({"ready_only_preflight", "quality"})
     assert session.PLAN_ATTESTATION_PURPOSE == (
-        contract.V1_3_3_PERSISTENT_SESSION_PLAN_ATTESTATION_PURPOSE
+        contract.V1_3_4_PERSISTENT_SESSION_PLAN_ATTESTATION_PURPOSE
     )
     assert session.WORK_ATTESTATION_PURPOSE == (
-        contract.V1_3_3_PERSISTENT_SESSION_WORK_ATTESTATION_PURPOSE
+        contract.V1_3_4_PERSISTENT_SESSION_WORK_ATTESTATION_PURPOSE
     )
     assert session.RESULT_ATTESTATION_PURPOSE == (
-        contract.V1_3_3_PERSISTENT_SESSION_RESULT_ATTESTATION_PURPOSE
+        contract.V1_3_4_PERSISTENT_SESSION_RESULT_ATTESTATION_PURPOSE
     )
     assert session.RECEIPT_ATTESTATION_PURPOSE == (
-        contract.V1_3_3_PERSISTENT_SESSION_RECEIPT_ATTESTATION_PURPOSE
+        contract.V1_3_4_PERSISTENT_SESSION_RECEIPT_ATTESTATION_PURPOSE
     )
     assert session.LAUNCH_LEDGER_ATTESTATION_PURPOSE == (
-        contract.V1_3_3_PERSISTENT_SESSION_LAUNCH_LEDGER_ATTESTATION_PURPOSE
+        contract.V1_3_4_PERSISTENT_SESSION_LAUNCH_LEDGER_ATTESTATION_PURPOSE
     )
     assert session.TERMINAL_LEDGER_ATTESTATION_PURPOSE == (
-        contract.V1_3_3_PERSISTENT_SESSION_TERMINAL_LEDGER_ATTESTATION_PURPOSE
+        contract.V1_3_4_PERSISTENT_SESSION_TERMINAL_LEDGER_ATTESTATION_PURPOSE
     )
-    assert session._CANONICAL_OUTPUT_ROOT == contract.V1_3_3_OUTPUT_ROOT
+    assert session._CANONICAL_OUTPUT_ROOT == contract.V1_3_4_OUTPUT_ROOT
     assert session._CANONICAL_SESSION_LEDGER_ROOT == (
-        contract.V1_3_3_PERSISTENT_SESSION_LEDGER_ROOT
+        contract.V1_3_4_PERSISTENT_SESSION_LEDGER_ROOT
     )
     assert session._CANONICAL_SESSION_LEDGER_LOCK_PATH == (
-        contract.V1_3_3_PERSISTENT_SESSION_LEDGER_LOCK_PATH
+        contract.V1_3_4_PERSISTENT_SESSION_LEDGER_LOCK_PATH
     )
-    assert "v1-3-3" in session.SESSION_LEDGER_ROOT_SUFFIX
+    assert "v1-3-4" in session.SESSION_LEDGER_ROOT_SUFFIX
     assert "v1-3-1" not in session.SESSION_LEDGER_ROOT_SUFFIX
+    assert "v1-3-3" not in session.SESSION_LEDGER_ROOT_SUFFIX
     purposes = (
         session.PLAN_ATTESTATION_PURPOSE,
         session.WORK_ATTESTATION_PURPOSE,
@@ -65,8 +66,9 @@ def test_persistent_session_uses_only_v1_3_3_authorities_and_paths() -> None:
         session.LAUNCH_LEDGER_ATTESTATION_PURPOSE,
         session.TERMINAL_LEDGER_ATTESTATION_PURPOSE,
     )
-    assert all("v1-3-3" in purpose for purpose in purposes)
+    assert all("v1-3-4" in purpose for purpose in purposes)
     assert all("v1-3-2" not in purpose for purpose in purposes)
+    assert all("v1-3-3" not in purpose for purpose in purposes)
 
 
 def _plan(

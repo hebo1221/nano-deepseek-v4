@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 import base64
 import hashlib
+import importlib.machinery
 import inspect
 import io
 import json
@@ -10,9 +11,10 @@ import os
 import py_compile
 import subprocess
 import sys
+import typing
 from collections import Counter
 from pathlib import Path
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 
 import pytest
 import typing_extensions
@@ -54,7 +56,7 @@ def _imports(source: str) -> set[str]:
 def _sealed_common_provenance() -> tuple[dict[str, object], dict[str, object], dict[str, object]]:
     authority: dict[str, object] = {
         "schema_version": 1,
-        "launcher": "p2-direct-controller-git-object-launcher-v1-3-3",
+        "launcher": "p2-direct-controller-git-object-launcher-v1-3-4",
         "sealed_runner": True,
         "sealed_inventory": True,
     }
@@ -73,7 +75,7 @@ def _sealed_common_provenance() -> tuple[dict[str, object], dict[str, object], d
     }
     source: dict[str, object] = {
         "schema_version": 1,
-        "launcher": "p2-direct-controller-git-object-launcher-v1-3-3",
+        "launcher": "p2-direct-controller-git-object-launcher-v1-3-4",
         "repository_root": str(REPOSITORY_ROOT.resolve()),
         "bundle_sha256": "2" * 64,
         "pinned_head_oid": "3" * 40,
@@ -92,7 +94,7 @@ def _sealed_route(selector: str, *, sha_digit: str = "6") -> dict[str, object]:
     }
     return {
         "schema_version": 1,
-        "launcher": "p2-direct-controller-git-object-launcher-v1-3-3",
+        "launcher": "p2-direct-controller-git-object-launcher-v1-3-4",
         "entrypoint_selector": selector,
         "entrypoint_relative_path": paths[selector],
         "source_bundle_sha256": "2" * 64,
@@ -118,19 +120,32 @@ def test_generator_reproduces_all_committed_v1_3_sources() -> None:
     )
     assert all("V1_3_1" not in source for source in expected.values())
     assert all("v1-3-1" not in source for source in expected.values())
-    assert all("V1_3_3_1" not in source for source in expected.values())
-    assert all("v1_3_3_1" not in source for source in expected.values())
+    assert all("V1_3_4_1" not in source for source in expected.values())
+    assert all("v1_3_4_1" not in source for source in expected.values())
     evaluator_source = expected[GENERATED_PATHS["evaluator"]]
     matrix_source = expected[GENERATED_PATHS["matrix"]]
-    assert 'globals().get("SEALED_SOURCE_PROVENANCE_V1_3_3")' in evaluator_source
-    assert 'globals().get("SEALED_LAUNCH_ROUTING_V1_3_3")' in evaluator_source
-    assert 'globals().get("SEALED_LAUNCH_ROUTING_V1_3_3")' in matrix_source
+    assert 'globals().get("SEALED_SOURCE_PROVENANCE_V1_3_4")' in evaluator_source
+    assert 'globals().get("SEALED_LAUNCH_ROUTING_V1_3_4")' in evaluator_source
+    assert 'globals().get("SEALED_LAUNCH_ROUTING_V1_3_4")' in matrix_source
     assert "exact-fill-v1-3-worker-" not in matrix_source
-    assert "exact-fill-v1-3-3-worker-" in matrix_source
+    assert "exact-fill-v1-3-4-worker-" in matrix_source
 
 
-def test_generated_operational_sources_contain_no_v1_3_2_namespace() -> None:
-    stale_tokens = ("V1_3_2", "v1_3_2", "V1.3.2", "v1.3.2", "V1-3-2", "v1-3-2")
+def test_generated_operational_sources_contain_no_superseded_live_namespace() -> None:
+    stale_tokens = (
+        "V1_3_2",
+        "v1_3_2",
+        "V1.3.2",
+        "v1.3.2",
+        "V1-3-2",
+        "v1-3-2",
+        "V1_3_3",
+        "v1_3_3",
+        "V1.3.3",
+        "v1.3.3",
+        "V1-3-3",
+        "v1-3-3",
+    )
     for path, source in generator.generated_sources().items():
         for token in stale_tokens:
             assert token not in source, f"stale operational namespace {token!r} in {path}"
@@ -143,27 +158,27 @@ def test_generator_pins_and_preserves_every_v1_2_source_byte_for_byte() -> None:
 
 
 def test_generated_module_identity_and_paths_are_contract_derived() -> None:
-    assert evaluator.EXPERIMENT_ID == contract.V1_3_3_SHARD_EXPERIMENT_ID
-    assert evaluator.ATTESTATION_PURPOSE == contract.V1_3_3_SHARD_ATTESTATION_PURPOSE
-    assert matrix.EXPERIMENT_ID == contract.V1_3_3_MATRIX_EXPERIMENT_ID
-    assert matrix.WORKER_EXPERIMENT_ID == contract.V1_3_3_WORKER_LEDGER_EXPERIMENT_ID
-    assert matrix.MATRIX_ATTESTATION_PURPOSE == contract.V1_3_3_MATRIX_ATTESTATION_PURPOSE
-    assert matrix.WORKER_ATTESTATION_PURPOSE == contract.V1_3_3_WORKER_LEDGER_ATTESTATION_PURPOSE
-    assert audit.EXPERIMENT_ID == contract.V1_3_3_INTEGRITY_EXPERIMENT_ID
-    assert audit.ATTESTATION_PURPOSE == contract.V1_3_3_INTEGRITY_ATTESTATION_PURPOSE
-    assert summary.EXPERIMENT_ID == contract.V1_3_3_SUMMARY_EXPERIMENT_ID
-    assert summary.ATTESTATION_PURPOSE == contract.V1_3_3_SUMMARY_ATTESTATION_PURPOSE
-    assert matrix.OUTPUT_ROOT == contract.V1_3_3_OUTPUT_ROOT
+    assert evaluator.EXPERIMENT_ID == contract.V1_3_4_SHARD_EXPERIMENT_ID
+    assert evaluator.ATTESTATION_PURPOSE == contract.V1_3_4_SHARD_ATTESTATION_PURPOSE
+    assert matrix.EXPERIMENT_ID == contract.V1_3_4_MATRIX_EXPERIMENT_ID
+    assert matrix.WORKER_EXPERIMENT_ID == contract.V1_3_4_WORKER_LEDGER_EXPERIMENT_ID
+    assert matrix.MATRIX_ATTESTATION_PURPOSE == contract.V1_3_4_MATRIX_ATTESTATION_PURPOSE
+    assert matrix.WORKER_ATTESTATION_PURPOSE == contract.V1_3_4_WORKER_LEDGER_ATTESTATION_PURPOSE
+    assert audit.EXPERIMENT_ID == contract.V1_3_4_INTEGRITY_EXPERIMENT_ID
+    assert audit.ATTESTATION_PURPOSE == contract.V1_3_4_INTEGRITY_ATTESTATION_PURPOSE
+    assert summary.EXPERIMENT_ID == contract.V1_3_4_SUMMARY_EXPERIMENT_ID
+    assert summary.ATTESTATION_PURPOSE == contract.V1_3_4_SUMMARY_ATTESTATION_PURPOSE
+    assert matrix.OUTPUT_ROOT == contract.V1_3_4_OUTPUT_ROOT
     assert matrix.MATRIX_SUMMARY_NAME == contract.MATRIX_SUMMARY_NAME
-    assert matrix.MATRIX_SUMMARY == contract.V1_3_3_MATRIX_SUMMARY_PATH
-    assert matrix._matrix_lock_path(matrix.OUTPUT_ROOT) == contract.V1_3_3_ACTIVATION_MATRIX_LOCK_PATH.resolve()
-    assert matrix._worker_ledger_root(matrix.OUTPUT_ROOT) == contract.V1_3_3_WORKER_LEDGER_ROOT.resolve()
-    assert matrix.REUSE_ADMISSION_PATH == contract.V1_3_3_REUSE_ADMISSION_PATH
-    assert matrix.PREHELDOUT_GENESIS_PATH == contract.V1_3_3_PREHELDOUT_GENESIS_PATH
-    assert contract.V1_3_3_ADMISSION_ROOT.parent == contract.V1_3_3_OUTPUT_ROOT.parent
-    assert contract.V1_3_3_ADMISSION_ROOT != contract.V1_3_3_OUTPUT_ROOT
-    assert not contract.V1_3_3_REUSE_ADMISSION_PATH.is_relative_to(contract.V1_3_3_OUTPUT_ROOT)
-    assert not contract.V1_3_3_PREHELDOUT_GENESIS_PATH.is_relative_to(contract.V1_3_3_OUTPUT_ROOT)
+    assert matrix.MATRIX_SUMMARY == contract.V1_3_4_MATRIX_SUMMARY_PATH
+    assert matrix._matrix_lock_path(matrix.OUTPUT_ROOT) == contract.V1_3_4_ACTIVATION_MATRIX_LOCK_PATH.resolve()
+    assert matrix._worker_ledger_root(matrix.OUTPUT_ROOT) == contract.V1_3_4_WORKER_LEDGER_ROOT.resolve()
+    assert matrix.REUSE_ADMISSION_PATH == contract.V1_3_4_REUSE_ADMISSION_PATH
+    assert matrix.PREHELDOUT_GENESIS_PATH == contract.V1_3_4_PREHELDOUT_GENESIS_PATH
+    assert contract.V1_3_4_ADMISSION_ROOT.parent == contract.V1_3_4_OUTPUT_ROOT.parent
+    assert contract.V1_3_4_ADMISSION_ROOT != contract.V1_3_4_OUTPUT_ROOT
+    assert not contract.V1_3_4_REUSE_ADMISSION_PATH.is_relative_to(contract.V1_3_4_OUTPUT_ROOT)
+    assert not contract.V1_3_4_PREHELDOUT_GENESIS_PATH.is_relative_to(contract.V1_3_4_OUTPUT_ROOT)
 
 
 def test_generated_modules_import_only_the_v1_3_controller_pipeline() -> None:
@@ -271,6 +286,8 @@ def test_evaluator_input_schema_requires_admission_and_genesis_without_top_p() -
         "experiment_id": "admission",
         "historical_receipt_sha256": "1" * 64,
         "canonical_nonobservation_sha256": "2" * 64,
+        "superseded_failure_lineage_sha256": "c" * 64,
+        "superseded_failure_lineage_projection_sha256": "d" * 64,
     }
     genesis_binding = {
         "path": "/tmp/genesis.json",
@@ -294,6 +311,8 @@ def test_evaluator_input_schema_requires_admission_and_genesis_without_top_p() -
         "base_prerequisites_sha256": "9" * 64,
         "sealed_source_bundle_sha256": "a" * 64,
         "sealed_launch_routing_sha256": "b" * 64,
+        "superseded_failure_lineage_sha256": "c" * 64,
+        "superseded_failure_lineage_projection_sha256": "d" * 64,
     }
     source = {
         "source": {},
@@ -362,7 +381,7 @@ def test_admission_failure_precedes_every_evaluator_cuda_probe(
     monkeypatch.setattr(evaluator, "_assert_repository_import_origins", lambda: None)
     monkeypatch.setattr(
         evaluator.admission,
-        "establish_v1_3_3_quality_context",
+        "establish_v1_3_4_quality_context",
         lambda *_a, **_k: context,
     )
     monkeypatch.setattr(
@@ -599,20 +618,22 @@ def test_child_uses_fresh_pycache_prefix_and_rejects_rogue_package_origin(
         )
         monkeypatch.setattr(
             evaluator,
-            "_ADAPTIVE_V4_SEALED_SITE_PACKAGES_V1_3_3",
+            "_ADAPTIVE_V4_SEALED_SITE_PACKAGES_V1_3_4",
             str(site_packages),
             raising=False,
         )
         monkeypatch.setattr(
             evaluator.contract,
-            "v1_3_3_implementation_file_paths",
+            "v1_3_4_implementation_file_paths",
             lambda: (
                 "research/adaptive_v4_memory/scripts/evaluate_p2_direct_controller_shard_v1_3.py",
             ),
         )
+        rogue_module = ModuleType("nano_deepseek_v4._ignored_rogue_v1_3_test")
+        rogue_module.__file__ = str(rogue)
         with pytest.raises(ValueError, match="outside the frozen implementation inventory"):
             evaluator._assert_repository_import_origins(
-                {"nano_deepseek_v4._ignored_rogue_v1_3_test": SimpleNamespace(__file__=str(rogue))}
+                {rogue_module.__name__: rogue_module}
             )
     finally:
         rogue.unlink(missing_ok=True)
@@ -711,7 +732,7 @@ def test_child_uses_fresh_pycache_prefix_and_rejects_rogue_package_origin(
     sealed_global_result = run_bootstrap(
         root=tmp_path,
         files=[inventory_row(tmp_path, bootstrap_global_helper)],
-        source=b"print(_ADAPTIVE_V4_SEALED_SITE_PACKAGES_V1_3_3)\n",
+        source=b"print(_ADAPTIVE_V4_SEALED_SITE_PACKAGES_V1_3_4)\n",
         script=tmp_path / "sealed_evaluator.py",
     )
     assert sealed_global_result.returncode == 0, sealed_global_result.stderr
@@ -845,14 +866,14 @@ def test_runtime_import_guard_accepts_only_exact_sealed_site_packages(
     assert Path(str(typing_extensions.__file__)).resolve().is_relative_to(site_packages)
     monkeypatch.setattr(
         evaluator.contract,
-        "v1_3_3_implementation_file_paths",
+        "v1_3_4_implementation_file_paths",
         lambda: (
             "research/adaptive_v4_memory/scripts/evaluate_p2_direct_controller_shard_v1_3.py",
         ),
     )
     monkeypatch.setattr(
         evaluator,
-        "_ADAPTIVE_V4_SEALED_SITE_PACKAGES_V1_3_3",
+        "_ADAPTIVE_V4_SEALED_SITE_PACKAGES_V1_3_4",
         str(site_packages),
         raising=False,
     )
@@ -864,23 +885,27 @@ def test_runtime_import_guard_accepts_only_exact_sealed_site_packages(
     inside_link = site_packages / "_adaptive_v4_v132_symlink_escape.py"
     inside_link.symlink_to(outside)
     try:
+        inside_symlink_module = ModuleType("inside_symlink_escape")
+        inside_symlink_module.__file__ = str(inside_link)
         with pytest.raises(ValueError, match="escaped its sealed root"):
             evaluator._assert_repository_import_origins(
-                {"inside_symlink_escape": SimpleNamespace(__file__=str(inside_link))}
+                {inside_symlink_module.__name__: inside_symlink_module}
             )
     finally:
         inside_link.unlink(missing_ok=True)
 
     outside_link = tmp_path / "outside_link_into_site_packages.py"
     outside_link.symlink_to(Path(str(typing_extensions.__file__)).resolve())
+    outside_symlink_module = ModuleType("outside_symlink_forgery")
+    outside_symlink_module.__file__ = str(outside_link)
     with pytest.raises(ValueError, match="escaped its sealed root"):
         evaluator._assert_repository_import_origins(
-            {"outside_symlink_forgery": SimpleNamespace(__file__=str(outside_link))}
+            {outside_symlink_module.__name__: outside_symlink_module}
         )
 
     monkeypatch.setattr(
         evaluator,
-        "_ADAPTIVE_V4_SEALED_SITE_PACKAGES_V1_3_3",
+        "_ADAPTIVE_V4_SEALED_SITE_PACKAGES_V1_3_4",
         str(REPOSITORY_ROOT.resolve()),
     )
     with pytest.raises(ValueError, match="not the exact verified runtime root"):
@@ -888,18 +913,201 @@ def test_runtime_import_guard_accepts_only_exact_sealed_site_packages(
 
     monkeypatch.setattr(
         evaluator,
-        "_ADAPTIVE_V4_SEALED_SITE_PACKAGES_V1_3_3",
+        "_ADAPTIVE_V4_SEALED_SITE_PACKAGES_V1_3_4",
         str(site_packages.parent / ".." / site_packages.parent.name / site_packages.name),
     )
     with pytest.raises(ValueError, match="not the exact verified runtime root"):
         evaluator._assert_repository_import_origins({"typing_extensions": typing_extensions})
 
 
+def test_runtime_import_guard_accepts_originless_virtual_module_namespaces(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    site_packages = Path(
+        str(launcher._python_runtime_binding(REPOSITORY_ROOT)["site_packages"])
+    )
+    monkeypatch.setattr(
+        evaluator.contract,
+        "v1_3_4_implementation_file_paths",
+        lambda: (
+            "research/adaptive_v4_memory/scripts/evaluate_p2_direct_controller_shard_v1_3.py",
+        ),
+    )
+    monkeypatch.setattr(
+        evaluator,
+        "_ADAPTIVE_V4_SEALED_SITE_PACKAGES_V1_3_4",
+        str(site_packages),
+        raising=False,
+    )
+
+    frozen_path = GENERATED_PATHS["evaluator"].resolve()
+    frozen = ModuleType("evaluate_p2_direct_controller_shard_v1_3")
+    frozen.__file__ = str(frozen_path)
+    frozen_spec = importlib.machinery.ModuleSpec(
+        frozen.__name__,
+        loader=object(),
+        origin=str(frozen_path),
+    )
+    frozen_spec.has_location = True
+    frozen.__spec__ = frozen_spec
+    evaluator._assert_repository_import_origins({frozen.__name__: frozen})
+
+    class VirtualModule(ModuleType):
+        __file__ = "_virtual_module_compatibility_marker.py"
+
+    virtual = VirtualModule("unrelated.virtual_namespace")
+    assert "__file__" not in vars(virtual)
+    assert virtual.__spec__ is None
+    assert evaluator.torch.ops.__file__ == "_ops.py"
+    assert "__file__" not in vars(evaluator.torch.ops)
+    assert evaluator.torch.ops.__spec__ is None
+    assert evaluator.torch.classes.__file__ == "_classes.py"
+    assert "__file__" not in vars(evaluator.torch.classes)
+    assert evaluator.torch.classes.__spec__ is None
+    typing_io = sys.modules["typing.io"]
+    typing_re = sys.modules["typing.re"]
+
+    evaluator._assert_repository_import_origins(
+        {
+            frozen.__name__: frozen,
+            "negative.import.cache": None,
+            "typing": typing,
+            "typing.io": typing_io,
+            "typing.re": typing_re,
+            "unrelated.virtual_namespace": virtual,
+            "torch.ops": evaluator.torch.ops,
+            "torch.classes": evaluator.torch.classes,
+        }
+    )
+
+
+def test_runtime_import_guard_rejects_owned_and_disagreeing_origin_claims(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    site_packages = Path(
+        str(launcher._python_runtime_binding(REPOSITORY_ROOT)["site_packages"])
+    )
+    monkeypatch.setattr(
+        evaluator.contract,
+        "v1_3_4_implementation_file_paths",
+        lambda: (
+            "research/adaptive_v4_memory/scripts/evaluate_p2_direct_controller_shard_v1_3.py",
+        ),
+    )
+    monkeypatch.setattr(
+        evaluator,
+        "_ADAPTIVE_V4_SEALED_SITE_PACKAGES_V1_3_4",
+        str(site_packages),
+        raising=False,
+    )
+
+    relative_claim = ModuleType("relative_claim")
+    relative_claim.__file__ = "_owned_nonexistent_origin.py"
+    with pytest.raises(ValueError, match="Imported module origin is not exact"):
+        evaluator._assert_repository_import_origins({"relative_claim": relative_claim})
+
+    malformed_file_claim = ModuleType("malformed_file_claim")
+    malformed_file_claim.__file__ = Path("_non_string_origin.py")  # type: ignore[assignment]
+    with pytest.raises(ValueError, match="own __file__ metadata is malformed"):
+        evaluator._assert_repository_import_origins(
+            {"malformed_file_claim": malformed_file_claim}
+        )
+
+    malformed_spec_claim = ModuleType("malformed_spec_claim")
+    malformed_spec_claim.__spec__ = SimpleNamespace(  # type: ignore[assignment]
+        has_location=False,
+        origin=None,
+    )
+    with pytest.raises(ValueError, match="own __spec__ metadata is malformed"):
+        evaluator._assert_repository_import_origins(
+            {"malformed_spec_claim": malformed_spec_claim}
+        )
+
+    with pytest.raises(ValueError, match="not a structurally anchored namespace proxy"):
+        evaluator._assert_repository_import_origins(
+            {"arbitrary.import.registry.entry": object()}
+        )
+
+    forged_typing_proxy = type(
+        "typing.forged",
+        (),
+        {"__module__": "typing", "__qualname__": "forged"},
+    )
+    with pytest.raises(ValueError, match="not a structurally anchored namespace proxy"):
+        evaluator._assert_repository_import_origins(
+            {"typing": typing, "typing.forged": forged_typing_proxy}
+        )
+
+    same_metaclass_forged_proxy = type(sys.modules["typing.io"])(
+        "typing.same_metaclass_forged",
+        (),
+        {
+            "__module__": "typing",
+            "__qualname__": "same_metaclass_forged",
+            "marker": True,
+        },
+    )
+    with pytest.raises(ValueError, match="not a structurally anchored namespace proxy"):
+        evaluator._assert_repository_import_origins(
+            {
+                "typing": typing,
+                "typing.same_metaclass_forged": same_metaclass_forged_proxy,
+            }
+        )
+
+    orphaned_proxy = type(
+        "orphaned_namespace",
+        (),
+        {"__module__": "missing_parent"},
+    )
+    with pytest.raises(ValueError, match="not a structurally anchored namespace proxy"):
+        evaluator._assert_repository_import_origins(
+            {"missing_parent.orphaned_namespace": orphaned_proxy}
+        )
+
+    rogue = REPOSITORY_ROOT / "nano_deepseek_v4/_ignored_spec_rogue_v1_3_test.py"
+    rogue.write_text("ROGUE = True\n", encoding="utf-8")
+    try:
+        spec_only_claim = ModuleType("nano_deepseek_v4._ignored_spec_rogue_v1_3_test")
+        spec = importlib.machinery.ModuleSpec(
+            spec_only_claim.__name__,
+            loader=object(),
+            origin=str(rogue),
+        )
+        spec.has_location = True
+        spec_only_claim.__spec__ = spec
+        with pytest.raises(ValueError, match="outside the frozen implementation inventory"):
+            evaluator._assert_repository_import_origins(
+                {spec_only_claim.__name__: spec_only_claim}
+            )
+    finally:
+        rogue.unlink(missing_ok=True)
+
+    file_origin = tmp_path / "declared-file.py"
+    spec_origin = tmp_path / "declared-spec.py"
+    file_origin.write_text("VALUE = 'file'\n", encoding="utf-8")
+    spec_origin.write_text("VALUE = 'spec'\n", encoding="utf-8")
+    disagreeing = ModuleType("disagreeing_provenance")
+    disagreeing.__file__ = str(file_origin)
+    disagreeing_spec = importlib.machinery.ModuleSpec(
+        disagreeing.__name__,
+        loader=object(),
+        origin=str(spec_origin),
+    )
+    disagreeing_spec.has_location = True
+    disagreeing.__spec__ = disagreeing_spec
+    with pytest.raises(ValueError, match="provenance metadata disagrees"):
+        evaluator._assert_repository_import_origins(
+            {disagreeing.__name__: disagreeing}
+        )
+
+
 def test_summary_cli_defaults_cannot_fall_back_to_the_v1_2_output_tree() -> None:
     source = _source("summary")
     assert "default=integrity_audit.INTEGRITY_OUTPUT" in source
-    assert "default=contract.V1_3_3_MATRIX_SUMMARY_PATH" in source
-    assert "default=contract.V1_3_3_OUTPUT_ROOT" in source
+    assert "default=contract.V1_3_4_MATRIX_SUMMARY_PATH" in source
+    assert "default=contract.V1_3_4_OUTPUT_ROOT" in source
     assert "confirmatory_comparator_rule" in source
     assert "strongest_fixed_comparator_rule" not in source
 
@@ -917,7 +1125,7 @@ def test_entrypoint_clis_forward_explicit_key_path_with_sanitized_environment(
     def fake_run_matrix(**kwargs: object) -> dict[str, object]:
         matrix_call.update(kwargs)
         return {
-            "experiment_id": contract.V1_3_3_MATRIX_EXPERIMENT_ID,
+            "experiment_id": contract.V1_3_4_MATRIX_EXPERIMENT_ID,
             "status": "terminal",
             "integrity_status": "INTEGRITY-PASS",
             "completed_shards": matrix.EXPECTED_SHARDS,
@@ -1006,7 +1214,7 @@ def test_prerequisites_only_cli_has_a_dedicated_nonledger_result_schema(
         matrix,
         "run_matrix",
         lambda **_kwargs: {
-            "experiment_id": contract.V1_3_3_MATRIX_EXPERIMENT_ID,
+            "experiment_id": contract.V1_3_4_MATRIX_EXPERIMENT_ID,
             "status": "prerequisites_validated",
             "expected_shards": matrix.EXPECTED_SHARDS,
         },
@@ -1015,7 +1223,7 @@ def test_prerequisites_only_cli_has_a_dedicated_nonledger_result_schema(
         sys,
         "argv",
         [
-            "matrix-v1-3-3",
+            "matrix-v1-3-4",
             "--attestation-key-path",
             str(key_path),
             "--start-mode",
@@ -1024,7 +1232,7 @@ def test_prerequisites_only_cli_has_a_dedicated_nonledger_result_schema(
     )
     assert matrix.main() == 0
     assert json.loads(capsys.readouterr().out) == {
-        "experiment_id": contract.V1_3_3_MATRIX_EXPERIMENT_ID,
+        "experiment_id": contract.V1_3_4_MATRIX_EXPERIMENT_ID,
         "expected_shards": matrix.EXPECTED_SHARDS,
         "status": "prerequisites_validated",
     }
@@ -1133,7 +1341,7 @@ def test_quality_start_mode_and_stop_limit_truth_table_precedes_layout(
             matrix.run_matrix(start_mode=start_mode, max_new_cells=limit)
 
 
-def test_v1_3_3_single_worker_topology_rejects_before_any_mutating_lock(
+def test_v1_3_4_single_worker_topology_rejects_before_any_mutating_lock(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(matrix, "_require_launcher_authority", lambda: {})
@@ -1449,7 +1657,7 @@ def test_runner_rejects_nested_coordinate_scoped_activation_promotion() -> None:
         bundles={},
         public_binding=public_binding,
     )
-    scoped = matrix.admission.ValidatedQualityStartActivationV1_3_3(
+    scoped = matrix.admission.ValidatedQualityStartActivationV1_3_4(
         _seal=object(),
         payload={"base_prerequisites_binding": public_binding},
         public_binding={"activation": "binding"},
@@ -1459,6 +1667,7 @@ def test_runner_rejects_nested_coordinate_scoped_activation_promotion() -> None:
         superseded_empty_lineage=SimpleNamespace(),
         superseded_failure_lineage=SimpleNamespace(),
         superseded_prerequisite_failure_lineage=SimpleNamespace(),
+        superseded_ready_preflight_failure_lineage=SimpleNamespace(),
         consumer_coordinate=(contract.SCALES[0], contract.TRAINING_SEEDS[0]),
         root_identity={},
         matrix_lock_binding={},
@@ -1547,7 +1756,7 @@ def test_mutating_lock_paths_reject_authority_key_and_hardlink_aliases(
         )
     with pytest.raises(ValueError, match="overlaps"):
         matrix._validate_quality_mutating_lock_path(
-            matrix.admission.V1_3_3_ACTIVATION_BOOTSTRAP_LOCK_PATH,
+            matrix.admission.V1_3_4_ACTIVATION_BOOTSTRAP_LOCK_PATH,
             layout=layout,
             manifest_path=manifest_path,
             attestation_key_path=None,
@@ -1597,7 +1806,7 @@ def test_source_provenance_distinguishes_pinned_head_from_frozen_source_commit(
     ).encode()
     provenance = {
         "schema_version": 1,
-        "launcher": "p2-direct-controller-git-object-launcher-v1-3-3",
+        "launcher": "p2-direct-controller-git-object-launcher-v1-3-4",
         "repository_root": str(REPOSITORY_ROOT.resolve()),
         "bundle_sha256": "4" * 64,
         "pinned_head_oid": pinned_head,
@@ -1612,13 +1821,13 @@ def test_source_provenance_distinguishes_pinned_head_from_frozen_source_commit(
             "source_base64": base64.b64encode(manifest_source).decode("ascii"),
         },
     }
-    monkeypatch.setattr(matrix, "SEALED_SOURCE_PROVENANCE_V1_3_3", provenance)
+    monkeypatch.setattr(matrix, "SEALED_SOURCE_PROVENANCE_V1_3_4", provenance)
     assert matrix._validated_source_provenance() == provenance
     assert source_commit != pinned_head
 
     mismatched = dict(provenance)
     mismatched["frozen_source_commit"] = "6" * 40
-    monkeypatch.setattr(matrix, "SEALED_SOURCE_PROVENANCE_V1_3_3", mismatched)
+    monkeypatch.setattr(matrix, "SEALED_SOURCE_PROVENANCE_V1_3_4", mismatched)
     with pytest.raises(ValueError, match="decoded HEAD manifest implementation"):
         matrix._validated_source_provenance()
 
@@ -1631,15 +1840,15 @@ def test_audit_and_summary_routes_are_active_only_for_their_own_entrypoint(
     summary_route = _sealed_route("summary")
     alternate_audit_route = _sealed_route("audit", sha_digit="8")
     for module in (audit, summary):
-        monkeypatch.setattr(module, "SEALED_LAUNCH_AUTHORITY_V1_3_3", authority)
-        monkeypatch.setattr(module, "SEALED_PYTHON_RUNTIME_V1_3_3", runtime)
-        monkeypatch.setattr(module, "SEALED_SOURCE_PROVENANCE_V1_3_3", source_provenance)
-    monkeypatch.setattr(matrix, "SEALED_LAUNCH_AUTHORITY_V1_3_3", None)
-    monkeypatch.setattr(matrix, "SEALED_PYTHON_RUNTIME_V1_3_3", None)
-    monkeypatch.setattr(matrix, "SEALED_SOURCE_PROVENANCE_V1_3_3", None)
-    monkeypatch.setattr(matrix, "SEALED_LAUNCH_ROUTING_V1_3_3", None)
+        monkeypatch.setattr(module, "SEALED_LAUNCH_AUTHORITY_V1_3_4", authority)
+        monkeypatch.setattr(module, "SEALED_PYTHON_RUNTIME_V1_3_4", runtime)
+        monkeypatch.setattr(module, "SEALED_SOURCE_PROVENANCE_V1_3_4", source_provenance)
+    monkeypatch.setattr(matrix, "SEALED_LAUNCH_AUTHORITY_V1_3_4", None)
+    monkeypatch.setattr(matrix, "SEALED_PYTHON_RUNTIME_V1_3_4", None)
+    monkeypatch.setattr(matrix, "SEALED_SOURCE_PROVENANCE_V1_3_4", None)
+    monkeypatch.setattr(matrix, "SEALED_LAUNCH_ROUTING_V1_3_4", None)
 
-    monkeypatch.setattr(audit, "SEALED_LAUNCH_ROUTING_V1_3_3", audit_route)
+    monkeypatch.setattr(audit, "SEALED_LAUNCH_ROUTING_V1_3_4", audit_route)
     assert audit._active_audit_launch_routing() == audit_route
     assert (
         audit._validate_audit_launch_routing_snapshot(
@@ -1652,7 +1861,7 @@ def test_audit_and_summary_routes_are_active_only_for_their_own_entrypoint(
             alternate_audit_route, source_provenance=source_provenance
         )
 
-    monkeypatch.setattr(audit, "SEALED_LAUNCH_ROUTING_V1_3_3", None)
+    monkeypatch.setattr(audit, "SEALED_LAUNCH_ROUTING_V1_3_4", None)
     assert (
         audit._validate_audit_launch_routing_snapshot(
             alternate_audit_route, source_provenance=source_provenance
@@ -1664,10 +1873,10 @@ def test_audit_and_summary_routes_are_active_only_for_their_own_entrypoint(
             summary_route, source_provenance=source_provenance
         )
 
-    monkeypatch.setattr(summary, "SEALED_LAUNCH_ROUTING_V1_3_3", summary_route)
+    monkeypatch.setattr(summary, "SEALED_LAUNCH_ROUTING_V1_3_4", summary_route)
     assert summary._active_summary_launch_routing() == summary_route
-    assert audit.SEALED_LAUNCH_ROUTING_V1_3_3 is None
-    assert matrix.SEALED_LAUNCH_ROUTING_V1_3_3 is None
+    assert audit.SEALED_LAUNCH_ROUTING_V1_3_4 is None
+    assert matrix.SEALED_LAUNCH_ROUTING_V1_3_4 is None
 
 
 def test_matrix_session_crosscheck_binds_actual_argv_and_recovered_eof() -> None:
@@ -2395,7 +2604,7 @@ def test_evaluator_ready_only_role_accepts_only_eof_before_any_work_or_publicati
     output = output_root / "forbidden-envelope.json"
     plan = {
         "session_nonce": "1" * 64,
-        "session_role": contract.V1_3_3_READY_ONLY_PREFLIGHT_SESSION_ROLE,
+        "session_role": contract.V1_3_4_READY_ONLY_PREFLIGHT_SESSION_ROLE,
         "scale": coordinate["scale"],
         "training_seed": coordinate["training_seed"],
         "coordinates": [coordinate],

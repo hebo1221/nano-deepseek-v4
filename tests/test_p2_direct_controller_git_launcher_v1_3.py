@@ -21,25 +21,27 @@ sys.path.insert(0, str(SCRIPTS))
 import p2_direct_controller_git_launcher_v1_3 as launcher  # noqa: E402
 
 
-def test_launcher_uses_only_the_v1_3_3_operational_namespace() -> None:
-    assert launcher.LAUNCHER_ID == "p2-direct-controller-git-object-launcher-v1-3-3"
-    assert launcher.EXPECTED_EXPERIMENT_ID.endswith("v1.3.3")
-    assert launcher.MANIFEST_RELATIVE_PATH.endswith("v1-3-3.json")
+def test_launcher_uses_only_the_v1_3_4_operational_namespace() -> None:
+    assert launcher.LAUNCHER_ID == "p2-direct-controller-git-object-launcher-v1-3-4"
+    assert launcher.EXPECTED_EXPERIMENT_ID.endswith("v1.3.4")
+    assert launcher.MANIFEST_RELATIVE_PATH.endswith("v1-3-4.json")
     assert launcher.EXPECTED_MANIFEST_STATUS == (
-        "frozen_v1_3_3_reuse_admission_view_schema_amendment_after_signed_v1_3_2_"
-        "zero_quality_prerequisites_failure_before_activation"
+        "frozen_v1_3_4_runtime_module_provenance_amendment_after_signed_v1_3_3_"
+        "zero_quality_postactivation_ready_preflight_launch_failure"
     )
-    assert "V1_3_3" in launcher.RUNNER_FD_ENV
-    assert "V1_3_3" in launcher.SOURCE_BUNDLE_FD_ENV
-    assert "V1_3_3" in launcher.LAUNCH_ROUTING_FD_ENV
-    assert launcher.SEALED_LAUNCH_SENTINEL_NAME.endswith("V1_3_3")
-    assert launcher.PYTHON_RUNTIME_BINDING_NAME.endswith("V1_3_3")
-    assert launcher.SOURCE_PROVENANCE_BINDING_NAME.endswith("V1_3_3")
-    assert launcher.LAUNCH_ROUTING_BINDING_NAME.endswith("V1_3_3")
+    assert "V1_3_4" in launcher.RUNNER_FD_ENV
+    assert "V1_3_4" in launcher.SOURCE_BUNDLE_FD_ENV
+    assert "V1_3_4" in launcher.LAUNCH_ROUTING_FD_ENV
+    assert launcher.SEALED_LAUNCH_SENTINEL_NAME.endswith("V1_3_4")
+    assert launcher.PYTHON_RUNTIME_BINDING_NAME.endswith("V1_3_4")
+    assert launcher.SOURCE_PROVENANCE_BINDING_NAME.endswith("V1_3_4")
+    assert launcher.LAUNCH_ROUTING_BINDING_NAME.endswith("V1_3_4")
     assert "V1_3_1" not in launcher.RUNNER_BOOTSTRAP_SOURCE
     assert "v1-3-1" not in launcher.RUNNER_BOOTSTRAP_SOURCE
     assert "V1_3_2" not in launcher.RUNNER_BOOTSTRAP_SOURCE
     assert "v1-3-2" not in launcher.RUNNER_BOOTSTRAP_SOURCE
+    assert "V1_3_3" not in launcher.RUNNER_BOOTSTRAP_SOURCE
+    assert "v1-3-3" not in launcher.RUNNER_BOOTSTRAP_SOURCE
     operational_values = (
         launcher.LAUNCHER_ID,
         launcher.EXPECTED_EXPERIMENT_ID,
@@ -52,7 +54,9 @@ def test_launcher_uses_only_the_v1_3_3_operational_namespace() -> None:
         launcher.SOURCE_PROVENANCE_BINDING_NAME,
         launcher.LAUNCH_ROUTING_BINDING_NAME,
     )
-    assert all("v1-3-2" not in value and "V1_3_2" not in value for value in operational_values)
+    assert all(
+        "v1-3-3" not in value and "V1_3_3" not in value for value in operational_values
+    )
 
 
 def _git(root: Path, arguments: Sequence[str]) -> str:

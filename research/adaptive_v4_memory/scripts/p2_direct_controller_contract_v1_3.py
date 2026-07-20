@@ -177,6 +177,80 @@ V1_3_3_PERSISTENT_SESSION_LAUNCH_LEDGER_ATTESTATION_PURPOSE = (
 V1_3_3_PERSISTENT_SESSION_TERMINAL_LEDGER_ATTESTATION_PURPOSE = (
     "p2-direct-controller-exact-fill-v1-3-3-persistent-terminal-ledger-v1"
 )
+
+# Revision 1.3.3 crossed its activation boundary, then its zero-work
+# ready-only preflight exited before a ready receipt because the evaluator's
+# repository-origin audit treated the runtime-defined ``torch.ops`` module as
+# a repository source file.  Revision 1.3.4 is a prospective runtime-module
+# provenance amendment.  The v1.3.3 admission, activation, and failed session
+# ledgers remain immutable historical evidence in their original namespace.
+V1_3_4_EXPERIMENT_ID = "p2-post-rank-direct-controller-exact-fill-v1.3.4"
+V1_3_4_MANIFEST_STATUS = (
+    "frozen_v1_3_4_runtime_module_provenance_amendment_after_signed_v1_3_3_"
+    "zero_quality_postactivation_ready_preflight_launch_failure"
+)
+V1_3_4_MANIFEST_PATH = Path(
+    "research/adaptive_v4_memory/manifests/p2-post-rank-direct-controller-exact-fill-v1-3-4.json"
+)
+V1_3_4_OUTPUT_ROOT = Path(
+    "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-4"
+)
+V1_3_4_MATRIX_SUMMARY_PATH = V1_3_4_OUTPUT_ROOT / MATRIX_SUMMARY_NAME
+V1_3_4_INTEGRITY_OUTPUT_PATH = (
+    V1_3_4_OUTPUT_ROOT.parent / "controller-exact-fill-v1-3-4.integrity.json"
+)
+V1_3_4_SUMMARY_OUTPUT_PATH = V1_3_4_OUTPUT_ROOT.parent / "controller-exact-fill-v1-3-4.summary.json"
+V1_3_4_ADMISSION_ROOT = V1_3_4_OUTPUT_ROOT.parent / "controller-exact-fill-v1-3-4-admission"
+V1_3_4_REUSE_ADMISSION_PATH = V1_3_4_ADMISSION_ROOT / "historical-reuse-admission.json"
+V1_3_4_PREHELDOUT_GENESIS_PATH = V1_3_4_ADMISSION_ROOT / "preheldout-genesis.json"
+V1_3_4_ACTIVATION_ROOT = V1_3_4_OUTPUT_ROOT.parent / "controller-exact-fill-v1-3-4-activation"
+V1_3_4_ACTIVATION_MATRIX_LOCK_PATH = V1_3_4_ACTIVATION_ROOT / "matrix.lock"
+V1_3_4_QUALITY_START_ACTIVATION_PATH = V1_3_4_ACTIVATION_ROOT / "quality-start-activation.json"
+V1_3_4_WORKER_LEDGER_ROOT = V1_3_4_OUTPUT_ROOT.parent / (
+    f".{V1_3_4_OUTPUT_ROOT.name}.p2-direct-controller-workers-v1-3-4"
+)
+V1_3_4_PERSISTENT_SESSION_LEDGER_ROOT = V1_3_4_OUTPUT_ROOT.parent / (
+    f".{V1_3_4_OUTPUT_ROOT.name}.p2-direct-controller-persistent-sessions-v1-3-4"
+)
+V1_3_4_PERSISTENT_SESSION_LEDGER_LOCK_PATH = (
+    V1_3_4_PERSISTENT_SESSION_LEDGER_ROOT.parent
+    / f"{V1_3_4_PERSISTENT_SESSION_LEDGER_ROOT.name}.lock"
+)
+
+V1_3_4_SHARD_EXPERIMENT_ID = "p2-post-rank-direct-controller-exact-fill-shard-v1.3.4"
+V1_3_4_MATRIX_EXPERIMENT_ID = "p2-post-rank-direct-controller-exact-fill-matrix-v1.3.4"
+V1_3_4_WORKER_LEDGER_EXPERIMENT_ID = (
+    "p2-post-rank-direct-controller-exact-fill-worker-ledger-v1.3.4"
+)
+V1_3_4_INTEGRITY_EXPERIMENT_ID = "p2-post-rank-direct-controller-exact-fill-integrity-v1.3.4"
+V1_3_4_SUMMARY_EXPERIMENT_ID = "p2-post-rank-direct-controller-exact-fill-summary-v1.3.4"
+V1_3_4_CANONICAL_GIT_OBJECT_LAUNCHER_ID = "p2-direct-controller-git-object-launcher-v1-3-4"
+V1_3_4_REUSE_ADMISSION_ATTESTATION_PURPOSE = "p2-direct-v1.3.4-reuse-admission-v1"
+V1_3_4_PREHELDOUT_GENESIS_ATTESTATION_PURPOSE = "p2-direct-v1.3.4-preheldout-genesis-v1"
+V1_3_4_QUALITY_START_ACTIVATION_ATTESTATION_PURPOSE = "p2-direct-v1.3.4-quality-start-activation-v1"
+V1_3_4_SHARD_ATTESTATION_PURPOSE = "p2-direct-controller-exact-fill-shard-v1-3-4"
+V1_3_4_MATRIX_ATTESTATION_PURPOSE = "p2-direct-controller-exact-fill-matrix-v1-3-4"
+V1_3_4_WORKER_LEDGER_ATTESTATION_PURPOSE = "p2-direct-controller-exact-fill-worker-ledger-v1-3-4"
+V1_3_4_INTEGRITY_ATTESTATION_PURPOSE = "p2-direct-controller-exact-fill-integrity-v1-3-4"
+V1_3_4_SUMMARY_ATTESTATION_PURPOSE = "p2-direct-controller-exact-fill-summary-v1-3-4"
+V1_3_4_PERSISTENT_SESSION_PLAN_ATTESTATION_PURPOSE = (
+    "p2-direct-controller-exact-fill-v1-3-4-persistent-session-plan-v1"
+)
+V1_3_4_PERSISTENT_SESSION_WORK_ATTESTATION_PURPOSE = (
+    "p2-direct-controller-exact-fill-v1-3-4-persistent-session-work-v1"
+)
+V1_3_4_PERSISTENT_SESSION_RESULT_ATTESTATION_PURPOSE = (
+    "p2-direct-controller-exact-fill-v1-3-4-persistent-session-result-v1"
+)
+V1_3_4_PERSISTENT_SESSION_RECEIPT_ATTESTATION_PURPOSE = (
+    "p2-direct-controller-exact-fill-v1-3-4-persistent-session-receipt-v1"
+)
+V1_3_4_PERSISTENT_SESSION_LAUNCH_LEDGER_ATTESTATION_PURPOSE = (
+    "p2-direct-controller-exact-fill-v1-3-4-persistent-launch-ledger-v1"
+)
+V1_3_4_PERSISTENT_SESSION_TERMINAL_LEDGER_ATTESTATION_PURPOSE = (
+    "p2-direct-controller-exact-fill-v1-3-4-persistent-terminal-ledger-v1"
+)
 MATRIX_LOCK_SUFFIX = "p2-direct-controller-matrix-v1-3.lock"
 WORKER_LEDGER_ROOT_SUFFIX = "p2-direct-controller-workers-v1-3"
 PERSISTENT_SESSION_LEDGER_ROOT_SUFFIX = "p2-direct-controller-persistent-sessions-v1-3"
@@ -253,6 +327,15 @@ V1_3_3_TOTAL_NORMAL_PATH_CHECKPOINT_MODEL_LOADS = (
 )
 V1_3_3_READY_ONLY_PREFLIGHT_SESSION_ROLE = "ready_only_preflight"
 V1_3_3_QUALITY_SESSION_ROLE = "quality"
+V1_3_4_READY_ONLY_PREFLIGHT_MODEL_LOADS = 1
+V1_3_4_QUALITY_SESSION_NORMAL_PATH_MODEL_LOADS = (
+    UNINTERRUPTED_SINGLE_WORKER_NORMAL_PATH_CHECKPOINT_MODEL_LOADS
+)
+V1_3_4_TOTAL_NORMAL_PATH_CHECKPOINT_MODEL_LOADS = (
+    V1_3_4_READY_ONLY_PREFLIGHT_MODEL_LOADS + V1_3_4_QUALITY_SESSION_NORMAL_PATH_MODEL_LOADS
+)
+V1_3_4_READY_ONLY_PREFLIGHT_SESSION_ROLE = "ready_only_preflight"
+V1_3_4_QUALITY_SESSION_ROLE = "quality"
 
 # Revision 1.3 is a new quality protocol.  These immutable values identify the
 # observed historical chain without reinterpreting or modifying revision 1.2.
@@ -381,6 +464,151 @@ V1_3_2_REUSE_ADMISSION_PUBLIC_BINDING_FIELDS = (
     "superseded_failure_lineage_projection_sha256",
 )
 V1_3_3_REUSE_ADMISSION_PUBLIC_BINDING_FIELDS = V1_3_2_REUSE_ADMISSION_PUBLIC_BINDING_FIELDS
+V1_3_4_REUSE_ADMISSION_PUBLIC_BINDING_FIELDS = V1_3_3_REUSE_ADMISSION_PUBLIC_BINDING_FIELDS
+
+# Exact v1.3.3 zero-quality post-activation ready-preflight failure.  The
+# experiment-owned artifacts and HMAC envelopes below are immutable facts.
+# The traceback text is a source/stderr diagnosis, not a field authenticated by
+# the terminal ledger, whose signed facts stop at launch_failure/return-code 1
+# with no ready/final receipt and no completed work or result.
+V1_3_3_SUPERSEDED_IMPLEMENTATION_SOURCE_COMMIT = "af26a021dc99c54d48fe0c0e0ea7cfdea615e44a"
+V1_3_3_SUPERSEDED_IMPLEMENTATION_SOURCE_TREE = "a141844f19c8ca796796db6c7caf766f4045f914"
+V1_3_3_SUPERSEDED_IMPLEMENTATION_TREE_DIGEST = (
+    "5c61e93bd259aec342ae26dac94447fc5ef40985df7b4af86c00b10e9d4548a0"
+)
+V1_3_3_SUPERSEDED_RESULT_SOURCE_COMMIT = "6a4f936a85ad837c7fa0907a23747bb8a494fa96"
+V1_3_3_SUPERSEDED_RESULT_SOURCE_TREE = "d0a040e02661ec0b1f51920df3353a539c250040"
+V1_3_3_SUPERSEDED_MANIFEST_SHA256 = (
+    "b7024052085aee9ab5741575d7968d9d4a758cfeab1d2e240161e5087a68e495"
+)
+V1_3_3_SUPERSEDED_MANIFEST_BYTES = 81_675
+V1_3_3_SUPERSEDED_MANIFEST_GIT_BLOB = "e28e567c854d46399bc2c2f7ed891a9c93bf52f2"
+V1_3_3_SUPERSEDED_LIVE_IMPLEMENTATION_INVENTORY_DIGEST = (
+    "d332cf248124cc964224b46c82567e93b1f29e2a2b6ba44dff2b94e17944cace"
+)
+V1_3_3_SUPERSEDED_LIVE_IMPLEMENTATION_FILE_COUNT = 54
+V1_3_3_SUPERSEDED_SOURCE_BUNDLE_SHA256 = (
+    "69acca5fb524e72f8f8d01918cd4dbf6621b498ab312a843ebf594dddd5ca16d"
+)
+V1_3_3_SUPERSEDED_ADMISSION_SHA256 = (
+    "32eb171fd5131d27a54683c7b917dd4d3f9cec635d65d11d331cb4950caea186"
+)
+V1_3_3_SUPERSEDED_ADMISSION_BYTES = 59_688
+V1_3_3_SUPERSEDED_ADMISSION_PAYLOAD_SHA256 = (
+    "d38e79d08dd4c276f305225d335bcd1c41ab06206b37b271ead0f95d7f7d47e4"
+)
+V1_3_3_SUPERSEDED_ADMISSION_ATTESTATION_PAYLOAD_SHA256 = (
+    "4531233f187f3776fb1bd0c254de5e88e76834ec22a951124f01814de2583f90"
+)
+V1_3_3_SUPERSEDED_ADMISSION_ATTESTATION_MAC = (
+    "8796d993e628aff74e93d02327527959d9a99d0548cee362db6ae78742deea29"
+)
+V1_3_3_SUPERSEDED_GENESIS_SHA256 = (
+    "b276ebb6eb811935a7a1b677518f8e889ea82795cd189fbda051b247dc39dee0"
+)
+V1_3_3_SUPERSEDED_GENESIS_BYTES = 59_252
+V1_3_3_SUPERSEDED_GENESIS_PAYLOAD_SHA256 = (
+    "9741ae44cc08eeb7ef9170c4d16a4b2a3c4186250d85295302dc99e160966ebd"
+)
+V1_3_3_SUPERSEDED_GENESIS_ATTESTATION_PAYLOAD_SHA256 = (
+    "74c7fcff3a4ce033a435c7482d81d0c8f16e4ea1a09fb2e054da8bb291246b1b"
+)
+V1_3_3_SUPERSEDED_GENESIS_ATTESTATION_MAC = (
+    "bb5f7ed076936ef09bf2406fac1eacc527247537b0454545ab51b1b49abf8959"
+)
+V1_3_3_SUPERSEDED_ACTIVATION_LOCK_SHA256 = (
+    "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+)
+V1_3_3_SUPERSEDED_ACTIVATION_LOCK_BYTES = 0
+V1_3_3_SUPERSEDED_ACTIVATION_SHA256 = (
+    "adf07b131ae7dcdcafe106a31bea6e202ebd81c89b2cbd78b5a0761318e8fa4c"
+)
+V1_3_3_SUPERSEDED_ACTIVATION_BYTES = 295_752
+V1_3_3_SUPERSEDED_ACTIVATION_PAYLOAD_SHA256 = (
+    "3faa13b34d6eee980057dc7df412ef0808cea8e0ade690096457b0bf369e2c49"
+)
+V1_3_3_SUPERSEDED_ACTIVATION_ATTESTATION_PAYLOAD_SHA256 = (
+    "f3582f21dd8e3479af5c52ec15ffff0a9736a955db418a63bc4d7cde52e8e866"
+)
+V1_3_3_SUPERSEDED_ACTIVATION_ATTESTATION_MAC = (
+    "c1999e71d3d7148116412a7c1ff2f87ea1994d193615a9966143df2db5448441"
+)
+V1_3_3_SUPERSEDED_ACTIVATION_NONCE = (
+    "44cfcb4d89d0efa0d9b6567374f382981f2f1343dd50a8cc4165a2b7f2e48da0"
+)
+V1_3_3_SUPERSEDED_SESSION_NONCE = "67520e50e2778b4650966938efc2fa6f3b8440819bbd6f4578e799c082ed9d56"
+V1_3_3_SUPERSEDED_LAUNCH_AUTHORITY_NONCE = (
+    "d557290c212de570b57ab3975d03c2ae7877578fa773fee76e07df3e365fb552"
+)
+V1_3_3_SUPERSEDED_SESSION_LAUNCH_PATH = V1_3_3_PERSISTENT_SESSION_LEDGER_ROOT / (
+    f"{V1_3_3_SUPERSEDED_SESSION_NONCE}.launch.json"
+)
+V1_3_3_SUPERSEDED_SESSION_TERMINAL_PATH = V1_3_3_PERSISTENT_SESSION_LEDGER_ROOT / (
+    f"{V1_3_3_SUPERSEDED_SESSION_NONCE}.terminal.json"
+)
+V1_3_3_SUPERSEDED_SESSION_LOCK_SHA256 = V1_3_3_SUPERSEDED_ACTIVATION_LOCK_SHA256
+V1_3_3_SUPERSEDED_SESSION_LOCK_BYTES = 0
+V1_3_3_SUPERSEDED_SESSION_LAUNCH_SHA256 = (
+    "339e7c7c3f533de09ff8d2a0758dd48b9e041160ca11d0b9b4f7619449c13ed6"
+)
+V1_3_3_SUPERSEDED_SESSION_LAUNCH_BYTES = 22_020
+V1_3_3_SUPERSEDED_SESSION_LAUNCH_PAYLOAD_SHA256 = (
+    "6c540ed450b557779a2f6b2414e91a72983b40e0f9e9b2250e82ebb405bcdec9"
+)
+V1_3_3_SUPERSEDED_SESSION_LAUNCH_ATTESTATION_PAYLOAD_SHA256 = (
+    "bdf3a7dc636037e0b4b01981e5e0f04be4da50a5b130168bd37465b5498c153c"
+)
+V1_3_3_SUPERSEDED_SESSION_LAUNCH_ATTESTATION_MAC = (
+    "3dbb0cd1425caa5d34ec84221aa6ac9d0f15ec2a4c6f6bc49fe77e0f6181ce7e"
+)
+V1_3_3_SUPERSEDED_SESSION_PLAN_PAYLOAD_SHA256 = (
+    "68fc1851707ad82a583ea5ea8b403922e2c932c467456ae3f27f433e3c902524"
+)
+V1_3_3_SUPERSEDED_SESSION_PLAN_ATTESTATION_PAYLOAD_SHA256 = (
+    "f68c1ac7db296d5b3278eec1dbcf26355e334abdc46839634baeef252403fd92"
+)
+V1_3_3_SUPERSEDED_SESSION_PLAN_ATTESTATION_MAC = (
+    "562ea68d55805024247fbb12dde5047ac067fa16fe0d5d7afca277114e9715e2"
+)
+V1_3_3_SUPERSEDED_SESSION_TERMINAL_SHA256 = (
+    "2513be78bd9ec8a01970a6fdc1f6ebe32594c4ea2f894de520d26c78c9f8c95d"
+)
+V1_3_3_SUPERSEDED_SESSION_TERMINAL_BYTES = 19_744
+V1_3_3_SUPERSEDED_SESSION_TERMINAL_PAYLOAD_SHA256 = (
+    "d9695120480590924c68d4c644303e17735fb3b1cf5c962897419ae70cc34683"
+)
+V1_3_3_SUPERSEDED_SESSION_TERMINAL_ATTESTATION_PAYLOAD_SHA256 = (
+    "c9fe491a869ed11fd9d675f81121a4f966a02fd36e4ccb6720b6425b868d89ec"
+)
+V1_3_3_SUPERSEDED_SESSION_TERMINAL_ATTESTATION_MAC = (
+    "475da7a7dcea1fde6df10f54a04a3c2616967d7078fe40f1c4e6795ce04c5bb0"
+)
+V1_3_3_SUPERSEDED_PRIOR_FAILURE_LINEAGE_SHA256 = (
+    "49c244f853c5ef185682ed9e76573e6bcd0e9ade234ae886077693751ecd52bc"
+)
+V1_3_3_SUPERSEDED_PRIOR_FAILURE_LINEAGE_PROJECTION_SHA256 = (
+    "8386956fb97218fa159721cd22a075badd5a0479d98a302eda275f59396c3156"
+)
+V1_3_3_SUPERSEDED_COORDINATE_DIGEST = V1_3_2_SUPERSEDED_COORDINATE_DIGEST
+V1_3_3_SUPERSEDED_EXPECTED_SHARDS = V1_3_2_SUPERSEDED_EXPECTED_SHARDS
+V1_3_3_SUPERSEDED_PREFLIGHT_COORDINATE_DIGEST = (
+    "aae3df2942c0f115e8bfed87579303277583474aa8f71ac575c76a761f3c5ed7"
+)
+V1_3_3_SUPERSEDED_EMPTY_PREFIX_DIGEST = (
+    "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+)
+V1_3_3_SUPERSEDED_INPUT_BINDING_DIGEST = (
+    "7ad354afb44f4eeba2b1e3150dc5fd0f278430a6c82890636dcf98c3ba6770d3"
+)
+V1_3_3_SUPERSEDED_CANONICAL_EVALUATOR_DIGEST = (
+    "308c63b9c4d50f9ec7d0bfa8fa5fc65eb2ccf91fc7b5517704a31cb7e3730afd"
+)
+V1_3_3_SUPERSEDED_GPU_LEASE_BINDING_DIGEST = (
+    "538d800c80b15c1ac20fec54c6e66013a31c86711b8ea990611dcd2c80e53b45"
+)
+V1_3_3_SUPERSEDED_PREREQUISITES_BINDING_DIGEST = (
+    "1aec05cc3081bc1312fda7aa79970440feed5790f5888d7faaf1d559a21a0823"
+)
 
 # Exact v1.3.1 zero-quality launch-failure lineage.  These values bind the
 # implementation/result commits and every durable artifact that existed when
@@ -787,6 +1015,14 @@ V1_3_3_REUSE_ADMISSION_VIEW_AMENDMENT_REPORT_PATH = Path(
 V1_3_3_IMPLEMENTATION_PATHS = (
     *V1_3_2_IMPLEMENTATION_PATHS,
     str(V1_3_3_REUSE_ADMISSION_VIEW_AMENDMENT_REPORT_PATH),
+)
+V1_3_4_RUNTIME_MODULE_PROVENANCE_AMENDMENT_REPORT_PATH = Path(
+    "research/adaptive_v4_memory/reports/"
+    "2026-07-20-p2-direct-controller-v1-3-4-runtime-module-provenance-amendment.md"
+)
+V1_3_4_IMPLEMENTATION_PATHS = (
+    *V1_3_3_IMPLEMENTATION_PATHS,
+    str(V1_3_4_RUNTIME_MODULE_PROVENANCE_AMENDMENT_REPORT_PATH),
 )
 
 MANIFEST_TOP_LEVEL_FIELDS = frozenset(
@@ -1627,6 +1863,302 @@ def expected_v1_3_3_superseded_static_failure_lineage() -> dict[str, Any]:
     return {**projection, "projection_sha256": json_digest(projection)}
 
 
+def expected_v1_3_4_superseded_ready_preflight_failure_lineage() -> dict[str, Any]:
+    """Return the normalized signed v1.3.3 zero-quality failure lineage.
+
+    Only experiment-owned durable artifacts are included.  Shared scheduler,
+    activation-bootstrap, and physical-device lock contents are deliberately
+    excluded because they are mutable cross-run coordination state.  The
+    traceback diagnosis is separately labelled source-bound stderr evidence;
+    it is not represented as a signed terminal-ledger error field.
+    """
+
+    first_coordinate = dict(quality_coordinates()[0])
+    _require(
+        json_digest([first_coordinate]) == V1_3_3_SUPERSEDED_PREFLIGHT_COORDINATE_DIGEST,
+        "V1.3.3 ready-preflight coordinate projection drifted.",
+    )
+    admission_binding = {
+        "path": str(V1_3_3_REUSE_ADMISSION_PATH),
+        "sha256": V1_3_3_SUPERSEDED_ADMISSION_SHA256,
+        "bytes": V1_3_3_SUPERSEDED_ADMISSION_BYTES,
+        "experiment_id": V1_3_3_EXPERIMENT_ID,
+        "payload_sha256": V1_3_3_SUPERSEDED_ADMISSION_PAYLOAD_SHA256,
+        "attestation_mac": V1_3_3_SUPERSEDED_ADMISSION_ATTESTATION_MAC,
+        "historical_receipt_sha256": V1_3_SUPERSEDED_HISTORICAL_RECEIPT_PAYLOAD_SHA256,
+        "canonical_nonobservation_sha256": (
+            V1_3_SUPERSEDED_CANONICAL_NONOBSERVATION_PAYLOAD_SHA256
+        ),
+        "superseded_failure_lineage_sha256": (V1_3_3_SUPERSEDED_PRIOR_FAILURE_LINEAGE_SHA256),
+        "superseded_failure_lineage_projection_sha256": (
+            V1_3_3_SUPERSEDED_PRIOR_FAILURE_LINEAGE_PROJECTION_SHA256
+        ),
+    }
+    genesis_binding = {
+        "path": str(V1_3_3_PREHELDOUT_GENESIS_PATH),
+        "sha256": V1_3_3_SUPERSEDED_GENESIS_SHA256,
+        "bytes": V1_3_3_SUPERSEDED_GENESIS_BYTES,
+        "experiment_id": V1_3_3_EXPERIMENT_ID,
+        "payload_sha256": V1_3_3_SUPERSEDED_GENESIS_PAYLOAD_SHA256,
+        "attestation_mac": V1_3_3_SUPERSEDED_GENESIS_ATTESTATION_MAC,
+        "reuse_admission_sha256": V1_3_3_SUPERSEDED_ADMISSION_SHA256,
+        "expected_shards": V1_3_3_SUPERSEDED_EXPECTED_SHARDS,
+        "coordinate_digest": V1_3_3_SUPERSEDED_COORDINATE_DIGEST,
+        "superseded_failure_lineage_sha256": (V1_3_3_SUPERSEDED_PRIOR_FAILURE_LINEAGE_SHA256),
+        "superseded_failure_lineage_projection_sha256": (
+            V1_3_3_SUPERSEDED_PRIOR_FAILURE_LINEAGE_PROJECTION_SHA256
+        ),
+    }
+    activation_binding = {
+        "path": str(V1_3_3_QUALITY_START_ACTIVATION_PATH),
+        "sha256": V1_3_3_SUPERSEDED_ACTIVATION_SHA256,
+        "bytes": V1_3_3_SUPERSEDED_ACTIVATION_BYTES,
+        "payload_sha256": V1_3_3_SUPERSEDED_ACTIVATION_PAYLOAD_SHA256,
+        "attestation_payload_sha256": (V1_3_3_SUPERSEDED_ACTIVATION_ATTESTATION_PAYLOAD_SHA256),
+        "attestation_mac": V1_3_3_SUPERSEDED_ACTIVATION_ATTESTATION_MAC,
+        "attestation_purpose": V1_3_3_QUALITY_START_ACTIVATION_ATTESTATION_PURPOSE,
+        "status": "activated",
+        "activation_nonce": V1_3_3_SUPERSEDED_ACTIVATION_NONCE,
+    }
+    launch_binding = {
+        "path": str(V1_3_3_SUPERSEDED_SESSION_LAUNCH_PATH),
+        "sha256": V1_3_3_SUPERSEDED_SESSION_LAUNCH_SHA256,
+        "bytes": V1_3_3_SUPERSEDED_SESSION_LAUNCH_BYTES,
+        "payload_sha256": V1_3_3_SUPERSEDED_SESSION_LAUNCH_PAYLOAD_SHA256,
+        "attestation_payload_sha256": (V1_3_3_SUPERSEDED_SESSION_LAUNCH_ATTESTATION_PAYLOAD_SHA256),
+        "attestation_mac": V1_3_3_SUPERSEDED_SESSION_LAUNCH_ATTESTATION_MAC,
+        "attestation_purpose": (V1_3_3_PERSISTENT_SESSION_LAUNCH_LEDGER_ATTESTATION_PURPOSE),
+    }
+    terminal_binding = {
+        "path": str(V1_3_3_SUPERSEDED_SESSION_TERMINAL_PATH),
+        "sha256": V1_3_3_SUPERSEDED_SESSION_TERMINAL_SHA256,
+        "bytes": V1_3_3_SUPERSEDED_SESSION_TERMINAL_BYTES,
+        "payload_sha256": V1_3_3_SUPERSEDED_SESSION_TERMINAL_PAYLOAD_SHA256,
+        "attestation_payload_sha256": (
+            V1_3_3_SUPERSEDED_SESSION_TERMINAL_ATTESTATION_PAYLOAD_SHA256
+        ),
+        "attestation_mac": V1_3_3_SUPERSEDED_SESSION_TERMINAL_ATTESTATION_MAC,
+        "attestation_purpose": (V1_3_3_PERSISTENT_SESSION_TERMINAL_LEDGER_ATTESTATION_PURPOSE),
+    }
+    quality_state = {
+        "records": [],
+        "completed_shards": 0,
+        "globally_committed_shards": 0,
+        "integrity_pass_shards": 0,
+        "integrity_fail_shards": 0,
+        "quality_evaluation_started": False,
+        "evaluation_seed_used_to_initialize_quality_rng": False,
+        "quality_rng_initialized": False,
+        "evaluation_inputs_materialized": 0,
+        "quality_predictions_materialized": 0,
+        "quality_outcomes_materialized": 0,
+        "quality_aggregates_materialized": 0,
+        "quality_outcomes_aggregated": False,
+        "outcome_selection_performed": False,
+        "outcome_dependent_early_stopping": False,
+        "active_claim_count": 0,
+        "orphan_claim_count": 0,
+        "worker_ledger_count": 0,
+        "ready_preflight_launch_count": 1,
+        "ready_preflight_terminal_count": 1,
+        "ready_preflight_success_count": 0,
+        "ready_preflight_failed_count": 1,
+        "ready_receipt_count": 0,
+        "final_receipt_count": 0,
+        "work_order_count": 0,
+        "work_result_count": 0,
+        "observed_successful_model_loads": 0,
+        "checkpoint_model_load_attempt_upper_bound": 1,
+        "quality_session_launch_count": 0,
+        "top_p_quality_input_count": 0,
+        "scientific_subprocesses_started_during_activation": 0,
+    }
+    projection = {
+        "schema_version": 1,
+        "lineage_type": (
+            "signed-superseded-zero-quality-postactivation-ready-preflight-launch-failure"
+        ),
+        "experiment_id": V1_3_3_EXPERIMENT_ID,
+        "result_source_commit": V1_3_3_SUPERSEDED_RESULT_SOURCE_COMMIT,
+        "result_source_tree": V1_3_3_SUPERSEDED_RESULT_SOURCE_TREE,
+        "implementation": {
+            "source_commit": V1_3_3_SUPERSEDED_IMPLEMENTATION_SOURCE_COMMIT,
+            "source_tree": V1_3_3_SUPERSEDED_IMPLEMENTATION_SOURCE_TREE,
+            "tree_digest": V1_3_3_SUPERSEDED_IMPLEMENTATION_TREE_DIGEST,
+            "live_inventory_digest": (V1_3_3_SUPERSEDED_LIVE_IMPLEMENTATION_INVENTORY_DIGEST),
+            "live_file_count": V1_3_3_SUPERSEDED_LIVE_IMPLEMENTATION_FILE_COUNT,
+            "sealed_source_bundle_sha256": V1_3_3_SUPERSEDED_SOURCE_BUNDLE_SHA256,
+        },
+        "manifest": {
+            "path": str(V1_3_3_MANIFEST_PATH),
+            "sha256": V1_3_3_SUPERSEDED_MANIFEST_SHA256,
+            "bytes": V1_3_3_SUPERSEDED_MANIFEST_BYTES,
+            "git_blob": V1_3_3_SUPERSEDED_MANIFEST_GIT_BLOB,
+            "experiment_id": V1_3_3_EXPERIMENT_ID,
+            "implementation_source_commit": (V1_3_3_SUPERSEDED_IMPLEMENTATION_SOURCE_COMMIT),
+            "implementation_tree_digest": V1_3_3_SUPERSEDED_IMPLEMENTATION_TREE_DIGEST,
+        },
+        "admission_root": {
+            "path": str(V1_3_3_ADMISSION_ROOT),
+            "mode": 0o700,
+            "exact_relative_directories": ["."],
+            "exact_relative_files": [
+                V1_3_3_REUSE_ADMISSION_PATH.name,
+                V1_3_3_PREHELDOUT_GENESIS_PATH.name,
+            ],
+            "file_mode": 0o600,
+            "file_nlink": 1,
+        },
+        "reuse_admission": {
+            **admission_binding,
+            "attestation_payload_sha256": (V1_3_3_SUPERSEDED_ADMISSION_ATTESTATION_PAYLOAD_SHA256),
+            "attestation_purpose": V1_3_3_REUSE_ADMISSION_ATTESTATION_PURPOSE,
+            "status": "terminal",
+        },
+        "preheldout_genesis": {
+            **genesis_binding,
+            "attestation_payload_sha256": (V1_3_3_SUPERSEDED_GENESIS_ATTESTATION_PAYLOAD_SHA256),
+            "attestation_purpose": V1_3_3_PREHELDOUT_GENESIS_ATTESTATION_PURPOSE,
+            "status": "in_progress",
+            "completed_shards": 0,
+            "records": [],
+        },
+        "activation_root": {
+            "path": str(V1_3_3_ACTIVATION_ROOT),
+            "mode": 0o700,
+            "exact_relative_directories": ["."],
+            "exact_relative_files": [
+                V1_3_3_ACTIVATION_MATRIX_LOCK_PATH.name,
+                V1_3_3_QUALITY_START_ACTIVATION_PATH.name,
+            ],
+            "file_mode": 0o600,
+            "file_nlink": 1,
+            "matrix_lock": {
+                "path": str(V1_3_3_ACTIVATION_MATRIX_LOCK_PATH),
+                "sha256": V1_3_3_SUPERSEDED_ACTIVATION_LOCK_SHA256,
+                "bytes": V1_3_3_SUPERSEDED_ACTIVATION_LOCK_BYTES,
+            },
+            "activation": activation_binding,
+        },
+        "cross_relations": {
+            "genesis_reuse_admission_binding": admission_binding,
+            "activation_reuse_admission_binding": admission_binding,
+            "activation_preheldout_genesis_binding": genesis_binding,
+            "shared_superseded_failure_lineage_sha256": (
+                V1_3_3_SUPERSEDED_PRIOR_FAILURE_LINEAGE_SHA256
+            ),
+            "shared_superseded_failure_lineage_projection_sha256": (
+                V1_3_3_SUPERSEDED_PRIOR_FAILURE_LINEAGE_PROJECTION_SHA256
+            ),
+        },
+        "registered_grid": {
+            "expected_shards": V1_3_3_SUPERSEDED_EXPECTED_SHARDS,
+            "coordinate_digest": V1_3_3_SUPERSEDED_COORDINATE_DIGEST,
+            "exact_fill_arm_names": list(ALL_ARM_NAMES),
+        },
+        "persistent_session": {
+            "root": str(V1_3_3_PERSISTENT_SESSION_LEDGER_ROOT),
+            "mode": 0o700,
+            "exact_relative_directories": ["."],
+            "exact_relative_files": [
+                V1_3_3_SUPERSEDED_SESSION_LAUNCH_PATH.name,
+                V1_3_3_SUPERSEDED_SESSION_TERMINAL_PATH.name,
+            ],
+            "file_mode": 0o600,
+            "file_nlink": 1,
+            "lock": {
+                "path": str(V1_3_3_PERSISTENT_SESSION_LEDGER_LOCK_PATH),
+                "sha256": V1_3_3_SUPERSEDED_SESSION_LOCK_SHA256,
+                "bytes": V1_3_3_SUPERSEDED_SESSION_LOCK_BYTES,
+                "mode": 0o600,
+                "nlink": 1,
+            },
+            "session_nonce": V1_3_3_SUPERSEDED_SESSION_NONCE,
+            "launch_authority_nonce": V1_3_3_SUPERSEDED_LAUNCH_AUTHORITY_NONCE,
+            "plan": {
+                "payload_sha256": V1_3_3_SUPERSEDED_SESSION_PLAN_PAYLOAD_SHA256,
+                "attestation_payload_sha256": (
+                    V1_3_3_SUPERSEDED_SESSION_PLAN_ATTESTATION_PAYLOAD_SHA256
+                ),
+                "attestation_mac": V1_3_3_SUPERSEDED_SESSION_PLAN_ATTESTATION_MAC,
+                "attestation_purpose": (V1_3_3_PERSISTENT_SESSION_PLAN_ATTESTATION_PURPOSE),
+                "session_role": V1_3_3_READY_ONLY_PREFLIGHT_SESSION_ROLE,
+                "coordinates": [first_coordinate],
+                "coordinate_count": 1,
+                "coordinate_digest": V1_3_3_SUPERSEDED_PREFLIGHT_COORDINATE_DIGEST,
+                "assignment_completed_prefix_count": 0,
+                "assignment_completed_prefix_digest": V1_3_3_SUPERSEDED_EMPTY_PREFIX_DIGEST,
+                "max_new_cells_stop_limit": 1,
+                "model_load_limit": 1,
+                "worker_index": 0,
+                "worker_count": 1,
+                "input_binding_digest": V1_3_3_SUPERSEDED_INPUT_BINDING_DIGEST,
+                "canonical_evaluator_digest": (V1_3_3_SUPERSEDED_CANONICAL_EVALUATOR_DIGEST),
+                "gpu_lease_binding_digest": V1_3_3_SUPERSEDED_GPU_LEASE_BINDING_DIGEST,
+                "prerequisites_binding_digest": (V1_3_3_SUPERSEDED_PREREQUISITES_BINDING_DIGEST),
+                "outcome_dependent_selection": False,
+            },
+            "launch": {
+                **launch_binding,
+                "checkpoint_model_load_attempt_upper_bound": 1,
+                "durably_evidenced_launch_authority_full_historical_evidence_replay_count": 1,
+                "session_triggered_full_historical_evidence_replay_count": 0,
+                "outcome_dependent_selection": False,
+            },
+            "terminal": {
+                **terminal_binding,
+                "status": "launch_failure",
+                "child_process_returncode": 1,
+                "plan_payload_sha256": V1_3_3_SUPERSEDED_SESSION_PLAN_PAYLOAD_SHA256,
+                "ready_receipt": None,
+                "final_receipt": None,
+                "completed_work_payload_sha256": [],
+                "completed_result_payload_sha256": [],
+                "published_bundle_reingestion_count": 0,
+            },
+        },
+        "source_bound_stderr_diagnosis": {
+            "provenance": "source-bound-stderr-and-frozen-source-not-signed-terminal-fields",
+            "stage": "ready-only-preflight-import-origin-audit-before-ready-receipt",
+            "signed_terminal_error_or_traceback_field_present": False,
+            "signed_terminal_status": "launch_failure",
+            "signed_terminal_child_process_returncode": 1,
+            "inner_exception_type": "FileNotFoundError",
+            "inner_errno": 2,
+            "inner_exception_message": (
+                "[Errno 2] No such file or directory: '/home/hebo1221/nano-deepseek-v4/_ops.py'"
+            ),
+            "evaluator_exception_type": "ValueError",
+            "evaluator_exception_message": (
+                "Imported module origin is not exact: torch.ops -> "
+                "/home/hebo1221/nano-deepseek-v4/_ops.py"
+            ),
+            "evaluator_function": "_assert_repository_import_origins",
+            "parent_exception_type": "ValueError",
+            "parent_exception_message": "Persistent evaluator exited before its ready receipt.",
+            "parent_functions": [
+                "_start_persistent_evaluator",
+                "_ensure_ready_only_preflight",
+            ],
+        },
+        "absent_paths": [
+            str(V1_3_3_OUTPUT_ROOT),
+            str(V1_3_3_MATRIX_SUMMARY_PATH),
+            str(V1_3_3_WORKER_LEDGER_ROOT),
+            str(V1_3_3_INTEGRITY_OUTPUT_PATH),
+            str(V1_3_3_SUMMARY_OUTPUT_PATH),
+        ],
+        "absent_staging_prefixes": [
+            ".controller-exact-fill-v1-3-3-admission.staging-",
+            ".controller-exact-fill-v1-3-3-activation.staging-",
+        ],
+        "external_mutable_lock_contents_in_normalized_lineage": False,
+        "attestation_key_id": V1_2_ATTESTATION_KEY_ID,
+        "quality_state": quality_state,
+    }
+    return {**projection, "projection_sha256": json_digest(projection)}
+
+
 def expected_v1_3_2_activation_policy() -> dict[str, Any]:
     """Freeze the outcome-independent one-cell operational start protocol."""
 
@@ -1843,6 +2375,104 @@ def expected_v1_3_3_artifact_namespaces() -> dict[str, Any]:
     namespaces["v1_3_2_output_or_admission_namespace_reused"] = False
     namespaces["superseded_v1_3_2_static_admission_root"] = str(V1_3_2_ADMISSION_ROOT)
     namespaces["superseded_v1_3_2_static_pair_is_read_only_lineage"] = True
+    return namespaces
+
+
+def _retag_v1_3_3_value_for_v1_3_4(value: Any) -> Any:
+    """Retag protocol structure while preserving the frozen scientific design."""
+
+    if isinstance(value, dict):
+        return {key: _retag_v1_3_3_value_for_v1_3_4(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_retag_v1_3_3_value_for_v1_3_4(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_retag_v1_3_3_value_for_v1_3_4(item) for item in value)
+    if isinstance(value, str):
+        return (
+            value.replace("v1.3.3", "v1.3.4")
+            .replace("v1-3-3", "v1-3-4")
+            .replace("v1_3_3", "v1_3_4")
+        )
+    return copy.deepcopy(value)
+
+
+def expected_v1_3_4_ready_preflight_policy() -> dict[str, Any]:
+    policy = cast(
+        dict[str, Any],
+        _retag_v1_3_3_value_for_v1_3_4(expected_v1_3_3_ready_preflight_policy()),
+    )
+    _require(
+        policy["session_role"] == V1_3_4_READY_ONLY_PREFLIGHT_SESSION_ROLE,
+        "V1.3.4 ready-only role retag drifted.",
+    )
+    return policy
+
+
+def expected_v1_3_4_activation_policy() -> dict[str, Any]:
+    policy = cast(
+        dict[str, Any],
+        _retag_v1_3_3_value_for_v1_3_4(expected_v1_3_3_activation_policy()),
+    )
+    policy["ready_only_preflight"] = expected_v1_3_4_ready_preflight_policy()
+    policy.pop(
+        "historical_v1_3_2_static_lineage_revalidated_before_every_mutation",
+        None,
+    )
+    policy[
+        "historical_v1_3_2_static_lineage_revalidated_at_each_mutating_phase_entry"
+    ] = True
+    policy[
+        "historical_v1_3_3_ready_preflight_failure_lineage_revalidated_at_each_"
+        "mutating_phase_entry"
+    ] = True
+    policy["historical_lineage_full_revalidation_boundaries"] = [
+        "admission-staging-recovery-and-publication",
+        "activation-staging-recovery-and-publication",
+        "activation-or-static-capability-reload-and-handoff",
+        "authenticated-quality-session-entry-before-first-write",
+    ]
+    policy[
+        "historical_lineage_rehashed_before_each_shard_or_ledger_write_within_one_"
+        "retained_activation_lease_session"
+    ] = False
+    policy[
+        "signed-lineage-bindings-and-retained-activation-lease-carry-authority-within-"
+        "one-authenticated-session"
+    ] = True
+    policy["canonical_v1_3_3_entrypoint_status"] = "retired"
+    policy["out_of_band_c6_key_holder_execution_in_scope"] = False
+    policy["runtime_module_provenance"] = {
+        "module_name_allowlist_used": False,
+        "filesystem_claim_sources": [
+            "module-instance-own-__file__",
+            "module-instance-own-__spec__.origin-when-has_location-is-true",
+        ],
+        "both_claims_require_lexical_and-resolved-identity-when-present": True,
+        "malformed_instance_owned_file_or_spec_metadata_is_rejected": True,
+        "nonmodule_registry_entries_require_structural_class_proxy_anchor_to_an_"
+        "audited_defining_module": True,
+        "class_proxy_object_identity_is_statically_resolved_from_owner_namespace": True,
+        "none_registry_entries_are_nonexecuting_negative_import_cache": True,
+        "every_filesystem_claim_retains_strict-resolve-site-packages-escape-and-"
+        "repository-frozen-inventory-validation": True,
+        "no-own-file-and-no-locatable-own-spec-means-virtual-or-namespace-module-without-"
+        "source-backed-import-claim": True,
+    }
+    return policy
+
+
+def expected_v1_3_4_artifact_namespaces() -> dict[str, Any]:
+    namespaces = cast(
+        dict[str, Any],
+        _retag_v1_3_3_value_for_v1_3_4(expected_v1_3_3_artifact_namespaces()),
+    )
+    namespaces["v1_3_3_output_or_admission_namespace_reused"] = False
+    namespaces["superseded_v1_3_3_admission_root"] = str(V1_3_3_ADMISSION_ROOT)
+    namespaces["superseded_v1_3_3_activation_root"] = str(V1_3_3_ACTIVATION_ROOT)
+    namespaces["superseded_v1_3_3_persistent_session_root"] = str(
+        V1_3_3_PERSISTENT_SESSION_LEDGER_ROOT
+    )
+    namespaces["superseded_v1_3_3_runtime_state_is_read_only_lineage"] = True
     return namespaces
 
 
@@ -2538,6 +3168,143 @@ def v1_3_3_implementation_tree_digest_at_commit(source_commit: str) -> str:
     return _implementation_index_digest(V1_3_3_IMPLEMENTATION_PATHS, canonical)
 
 
+def _v1_3_4_validate_implementation_inventory(
+    parsed_entries: list[tuple[str, str]],
+) -> tuple[str, ...]:
+    _require(
+        len(V1_3_4_IMPLEMENTATION_PATHS) == len(set(V1_3_4_IMPLEMENTATION_PATHS)),
+        "V1.3.4 implementation path inventory contains duplicates.",
+    )
+    paths = [path for path, _entry in parsed_entries]
+    _require(
+        len(paths) == len(set(paths)),
+        "V1.3.4 Git implementation inventory contains duplicate paths.",
+    )
+    canonical = tuple(entry for _path, entry in sorted(parsed_entries))
+    _require(
+        tuple(entry for _path, entry in parsed_entries) == canonical,
+        "V1.3.4 Git implementation entries are not canonical.",
+    )
+    tracked = set(paths)
+    package_prefix = PACKAGE_IMPLEMENTATION_ROOT.rstrip("/") + "/"
+    _require(PROJECT_DEPENDENCY_SPEC_PATH in tracked, "Dependency specification missing.")
+    _require(
+        any(path.startswith(package_prefix) for path in tracked),
+        "Tracked package implementation inventory is empty.",
+    )
+    required = (
+        *PROTOCOL_FREEZE_PATHS,
+        *v1_2.DIRECT_RESEARCH_IMPLEMENTATION_PATHS,
+        *V1_3_RESEARCH_IMPLEMENTATION_PATHS,
+        str(V1_3_1_ACTIVATION_AMENDMENT_REPORT_PATH),
+        str(V1_3_2_IMPORT_BOUNDARY_AMENDMENT_REPORT_PATH),
+        str(V1_3_3_REUSE_ADMISSION_VIEW_AMENDMENT_REPORT_PATH),
+        str(V1_3_4_RUNTIME_MODULE_PROVENANCE_AMENDMENT_REPORT_PATH),
+    )
+    missing = [path for path in required if path not in tracked]
+    _require(not missing, f"V1.3.4 implementation paths are missing: {missing}")
+    return canonical
+
+
+def _v1_3_4_index_entries() -> tuple[tuple[str, str], ...]:
+    output = subprocess.run(
+        ["git", "ls-files", "-s", "--", *V1_3_4_IMPLEMENTATION_PATHS],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    parsed: list[tuple[str, str]] = []
+    for entry in (line for line in output.splitlines() if line):
+        metadata, separator, path = entry.partition("\t")
+        fields = metadata.split()
+        _require(
+            separator == "\t" and len(fields) == 3 and fields[2] == "0" and bool(path),
+            "V1.3.4 implementation index entry is malformed or not stage zero.",
+        )
+        mode, object_id, _stage = fields
+        _require(
+            mode in {"100644", "100755"} and is_git_oid(object_id),
+            "V1.3.4 implementation entry is not a regular tracked blob.",
+        )
+        parsed.append((path, entry))
+    _v1_3_4_validate_implementation_inventory(parsed)
+    untracked = subprocess.run(
+        ["git", "ls-files", "--others", "--exclude-standard", "--", *V1_3_4_IMPLEMENTATION_PATHS],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    untracked_paths = [path for path in untracked.splitlines() if path]
+    _require(
+        not untracked_paths,
+        f"Untracked files exist inside the v1.3.4 implementation inventory: {untracked_paths}",
+    )
+    return tuple(parsed)
+
+
+def v1_3_4_implementation_tree_digest(
+    paths: tuple[str, ...] = V1_3_4_IMPLEMENTATION_PATHS,
+) -> str:
+    _require(
+        paths == V1_3_4_IMPLEMENTATION_PATHS,
+        "Implementation path inventory or ordering drifted from the v1.3.4 contract.",
+    )
+    parsed = _v1_3_4_index_entries()
+    canonical = _v1_3_4_validate_implementation_inventory(list(parsed))
+    return _implementation_index_digest(paths, canonical)
+
+
+def v1_3_4_implementation_file_paths(
+    paths: tuple[str, ...] = V1_3_4_IMPLEMENTATION_PATHS,
+) -> tuple[str, ...]:
+    _require(
+        paths == V1_3_4_IMPLEMENTATION_PATHS,
+        "Implementation path inventory or ordering drifted from the v1.3.4 contract.",
+    )
+    parsed = _v1_3_4_index_entries()
+    return tuple(path for path, _entry in sorted(parsed))
+
+
+def v1_3_4_implementation_tree_digest_at_commit(source_commit: str) -> str:
+    _require(is_git_oid(source_commit), "V1.3.4 implementation source commit is invalid.")
+    commit_check = subprocess.run(
+        ["git", "cat-file", "-e", f"{source_commit}^{{commit}}"],
+        capture_output=True,
+        text=True,
+    )
+    _require(commit_check.returncode == 0, "V1.3.4 source commit is not a commit object.")
+    output = subprocess.run(
+        [
+            "git",
+            "ls-tree",
+            "-r",
+            "--full-tree",
+            source_commit,
+            "--",
+            *V1_3_4_IMPLEMENTATION_PATHS,
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    parsed: list[tuple[str, str]] = []
+    for entry in (line for line in output.splitlines() if line):
+        metadata, separator, path = entry.partition("\t")
+        fields = metadata.split()
+        _require(
+            separator == "\t" and len(fields) == 3 and bool(path),
+            "V1.3.4 implementation commit-tree entry is malformed.",
+        )
+        mode, object_type, object_id = fields
+        _require(
+            object_type == "blob" and mode in {"100644", "100755"} and is_git_oid(object_id),
+            "V1.3.4 implementation commit tree contains a non-regular blob.",
+        )
+        parsed.append((path, f"{mode} {object_id} 0\t{path}"))
+    canonical = _v1_3_4_validate_implementation_inventory(parsed)
+    return _implementation_index_digest(V1_3_4_IMPLEMENTATION_PATHS, canonical)
+
+
 def build_v1_3_2_manifest_payload(
     *,
     attestation_key_id: str,
@@ -2863,6 +3630,188 @@ def load_v1_3_3_manifest(
     )
 
 
+def build_v1_3_4_manifest_payload(
+    *,
+    attestation_key_id: str,
+    implementation_tree_digest: str,
+    implementation_source_commit: str,
+) -> dict[str, Any]:
+    """Build the prospective v1.3.4 runtime-module provenance amendment."""
+
+    payload = build_v1_3_3_manifest_payload(
+        attestation_key_id=attestation_key_id,
+        implementation_tree_digest=implementation_tree_digest,
+        implementation_source_commit=implementation_source_commit,
+    )
+    payload["experiment_id"] = V1_3_4_EXPERIMENT_ID
+    payload["status"] = V1_3_4_MANIFEST_STATUS
+    disclosure = copy.deepcopy(payload["lineage_and_adaptation_disclosure"])
+    disclosure.update(
+        {
+            "protocol_relation_to_v1_3": (
+                "prospective-runtime-module-provenance-amendment-after-signed-v1.3.3-"
+                "zero-quality-postactivation-ready-preflight-launch-failure-not-a-repair-"
+                "overwrite-resume-or-quality-informed-refreeze"
+            ),
+            "v1_3_3_quality_outcomes_observed_before_amendment": False,
+            "v1_3_3_signed_zero_quality_postactivation_ready_preflight_launch_failure_lineage": (
+                expected_v1_3_4_superseded_ready_preflight_failure_lineage()
+            ),
+            "amendment_trigger": (
+                "runtime-module-origin-audit-misclassified-the-source-less-torch.ops-virtual-"
+                "namespace-class-level-compatibility-file-sentinel-as-a-filesystem-"
+                "provenance-claim"
+            ),
+            "failure_diagnosis_is_source_bound_stderr_not_a_signed_terminal_field": True,
+            "runtime_module_provenance_uses_structural_claims_not_module_name_allowlists": True,
+            "scientific-grid-arm-estimand-or-success-gate_changed": False,
+        }
+    )
+    payload["lineage_and_adaptation_disclosure"] = disclosure
+    cohort = copy.deepcopy(payload["cohort"])
+    cohort["freshness_definition"] = "never-used-for-quality-preserved-through-v1.3.4"
+    payload["cohort"] = cohort
+    execution = copy.deepcopy(payload["execution_contract"])
+    transport = copy.deepcopy(execution["sealed_launch_and_persistent_session"])
+    transport["canonical_git_object_launcher_id"] = V1_3_4_CANONICAL_GIT_OBJECT_LAUNCHER_ID
+    transport["quality_start_activation"] = expected_v1_3_4_activation_policy()
+    transport["persistent_session_roles"] = {
+        "ready_only_preflight": V1_3_4_READY_ONLY_PREFLIGHT_SESSION_ROLE,
+        "quality_work": V1_3_4_QUALITY_SESSION_ROLE,
+    }
+    transport["ready_only_preflight"] = expected_v1_3_4_ready_preflight_policy()
+    transport["ready_only_preflight_normal_path_model_loads"] = (
+        V1_3_4_READY_ONLY_PREFLIGHT_MODEL_LOADS
+    )
+    transport["quality_session_normal_path_model_loads"] = (
+        V1_3_4_QUALITY_SESSION_NORMAL_PATH_MODEL_LOADS
+    )
+    transport["total_normal_path_checkpoint_model_loads"] = (
+        V1_3_4_TOTAL_NORMAL_PATH_CHECKPOINT_MODEL_LOADS
+    )
+    transport["matrix_binds_role_tagged_preflight_hmac_evidence"] = True
+    execution["sealed_launch_and_persistent_session"] = transport
+    execution.pop("v1_3_3_quality_manifest_context_required", None)
+    execution.pop("v1_3_3_ready_only_preflight_required_before_first_claim", None)
+    execution["v1_3_4_quality_manifest_context_required"] = True
+    execution[
+        "v1_3_3_signed_zero_quality_postactivation_ready_preflight_launch_failure_lineage_"
+        "context_required"
+    ] = True
+    execution["v1_3_4_ready_only_preflight_required_before_first_claim"] = True
+    payload["execution_contract"] = execution
+    payload["artifact_namespaces"] = expected_v1_3_4_artifact_namespaces()
+    boundary = copy.deepcopy(payload["claim_boundary"])
+    boundary["required_reporting_label"] = (
+        "quality-blind-v1.3.4-runtime-module-provenance-amendment"
+    )
+    boundary["forbidden_reporting_label"] = "unchanged-v1.3.3-preregistration"
+    payload["claim_boundary"] = boundary
+    payload["implementation"] = {
+        "paths": list(V1_3_4_IMPLEMENTATION_PATHS),
+        "tree_digest": implementation_tree_digest,
+        "source_commit": implementation_source_commit,
+    }
+    return payload
+
+
+def validate_v1_3_4_manifest_payload(
+    payload: dict[str, Any], *, verify_implementation: bool = False
+) -> dict[str, Any]:
+    validate_seed_namespaces()
+    _require(set(payload) == MANIFEST_TOP_LEVEL_FIELDS, "V1.3.4 manifest schema drifted.")
+    _require(payload.get("schema_version") == SCHEMA_VERSION, "V1.3.4 schema drifted.")
+    _require(
+        payload.get("experiment_id") == V1_3_4_EXPERIMENT_ID,
+        "Wrong v1.3.4 experiment ID.",
+    )
+    _require(
+        payload.get("status") == V1_3_4_MANIFEST_STATUS,
+        "V1.3.4 manifest is not frozen.",
+    )
+    raw_attestation = payload.get("attestation")
+    _require(isinstance(raw_attestation, Mapping), "V1.3.4 attestation is missing.")
+    key_id = cast(Mapping[str, Any], raw_attestation).get("key_id")
+    _require(key_id == V1_2_ATTESTATION_KEY_ID, "V1.3.4 trust root drifted.")
+    implementation = payload.get("implementation")
+    _require(isinstance(implementation, Mapping), "V1.3.4 implementation is missing.")
+    implementation_map = cast(Mapping[str, Any], implementation)
+    _require(
+        set(implementation_map) == {"paths", "tree_digest", "source_commit"}
+        and tuple(implementation_map.get("paths", ())) == V1_3_4_IMPLEMENTATION_PATHS,
+        "V1.3.4 implementation inventory drifted.",
+    )
+    frozen_digest = implementation_map.get("tree_digest")
+    frozen_commit = implementation_map.get("source_commit")
+    _require(is_sha256(frozen_digest), "V1.3.4 implementation digest is invalid.")
+    _require(is_git_oid(frozen_commit), "V1.3.4 implementation commit is invalid.")
+    expected = build_v1_3_4_manifest_payload(
+        attestation_key_id=cast(str, key_id),
+        implementation_tree_digest=cast(str, frozen_digest),
+        implementation_source_commit=cast(str, frozen_commit),
+    )
+    _require(payload == expected, "V1.3.4 manifest content drifted from the amendment.")
+    if verify_implementation:
+        _require(
+            frozen_digest
+            == v1_3_4_implementation_tree_digest_at_commit(cast(str, frozen_commit))
+            == v1_3_4_implementation_tree_digest(),
+            "V1.3.4 implementation differs from its frozen manifest.",
+        )
+        state = source_state()
+        _require(state["dirty"] is False, "V1.3.4 execution requires clean source.")
+        amendment_ancestry = subprocess.run(
+            [
+                "git",
+                "merge-base",
+                "--is-ancestor",
+                V1_3_3_SUPERSEDED_RESULT_SOURCE_COMMIT,
+                cast(str, frozen_commit),
+            ],
+            capture_output=True,
+        )
+        _require(
+            amendment_ancestry.returncode == 0,
+            "V1.3.4 implementation does not descend from the signed v1.3.3 failure.",
+        )
+        ancestry = subprocess.run(
+            [
+                "git",
+                "merge-base",
+                "--is-ancestor",
+                cast(str, frozen_commit),
+                cast(str, state["commit"]),
+            ],
+            capture_output=True,
+        )
+        _require(ancestry.returncode == 0, "Source does not descend from v1.3.4 freeze.")
+    return payload
+
+
+def load_v1_3_4_manifest(
+    path: Path = V1_3_4_MANIFEST_PATH, *, verify_implementation: bool = True
+) -> dict[str, Any]:
+    if not path.is_file() or path.is_symlink():
+        raise RuntimeError(
+            "The final v1.3.4 manifest is absent or unsafe; quality launch is forbidden."
+        )
+    opened = attestation.open_regular_nofollow(path)
+    try:
+        raw = opened.read_bytes()
+        payload = json.loads(raw.decode("utf-8"))
+        _require(isinstance(payload, dict), "V1.3.4 manifest root must be an object.")
+        _require(
+            raw == canonical_pretty_manifest_bytes(cast(Mapping[str, Any], payload)),
+            "V1.3.4 manifest bytes are not canonical pretty JSON.",
+        )
+        opened.assert_unchanged()
+    finally:
+        opened.close()
+    return validate_v1_3_4_manifest_payload(
+        cast(dict[str, Any], payload), verify_implementation=verify_implementation
+    )
+
+
 def _validate_reuse_admission_view(
     reuse_admission: object,
     *,
@@ -2887,7 +3836,7 @@ def _validate_reuse_admission_view(
     binding_map = cast(Mapping[str, Any], public_binding)
     calibration_map = cast(Mapping[object, Any], calibrations)
     checkpoint_map = cast(Mapping[object, Any], checkpoints)
-    expected_binding_fields = frozenset(V1_3_3_REUSE_ADMISSION_PUBLIC_BINDING_FIELDS)
+    expected_binding_fields = frozenset(V1_3_4_REUSE_ADMISSION_PUBLIC_BINDING_FIELDS)
     _require(
         set(binding_map) == expected_binding_fields,
         "Reuse-admission public binding schema drifted.",
@@ -2915,6 +3864,7 @@ def _validate_reuse_admission_view(
     _require(
         isinstance(binding_map["experiment_id"], str)
         and bool(binding_map["experiment_id"])
+        and binding_map["experiment_id"] == V1_3_4_EXPERIMENT_ID
         and binding_map["experiment_id"] == payload_map.get("experiment_id"),
         "Reuse-admission experiment ID is invalid or differs from its payload.",
     )
@@ -2937,10 +3887,19 @@ def _validate_reuse_admission_view(
         == cast(Mapping[str, Any], empty_lineage).get("canonical_nonobservation_payload_sha256"),
         "Reuse-admission empty-lineage binding drifted.",
     )
-    failure_lineage = payload_map.get("superseded_zero_quality_prerequisite_failure_lineage")
-    projection_sha256 = payload_map.get(
-        "superseded_zero_quality_prerequisite_failure_lineage_projection_sha256"
+    failure_lineage = payload_map.get(
+        "superseded_zero_quality_ready_preflight_failure_lineage"
     )
+    projection_sha256 = payload_map.get(
+        "superseded_zero_quality_ready_preflight_failure_lineage_projection_sha256"
+    )
+    if not isinstance(failure_lineage, Mapping):
+        failure_lineage = payload_map.get(
+            "superseded_zero_quality_prerequisite_failure_lineage"
+        )
+        projection_sha256 = payload_map.get(
+            "superseded_zero_quality_prerequisite_failure_lineage_projection_sha256"
+        )
     if not isinstance(failure_lineage, Mapping):
         failure_lineage = payload_map.get("superseded_zero_quality_failure_lineage")
         projection_sha256 = payload_map.get(
@@ -2979,7 +3938,7 @@ def _validate_reuse_admission_view(
         coordinate in checkpoint_map,
         "Reuse admission does not contain the expected checkpoint coordinate.",
     )
-    return {field: binding_map[field] for field in V1_3_3_REUSE_ADMISSION_PUBLIC_BINDING_FIELDS}
+    return {field: binding_map[field] for field in V1_3_4_REUSE_ADMISSION_PUBLIC_BINDING_FIELDS}
 
 
 def _validated_admitted_calibration(
@@ -3256,7 +4215,7 @@ def build_direct_controller_arms(
         "validated_global_block_budget": expected_global_block_budget,
         "validated_csa_layers": expected_csa_layers,
         "upstream_experiment_id": v1_2.EXPERIMENT_ID,
-        "quality_experiment_id": V1_3_3_EXPERIMENT_ID,
+        "quality_experiment_id": V1_3_4_EXPERIMENT_ID,
         "dual_manifest_contexts_validated": True,
         "reuse_admission": admission_binding,
         "physical_match_target_arm": PRIMARY_ADAPTIVE_ARM,

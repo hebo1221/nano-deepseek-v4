@@ -83,104 +83,104 @@ def _insert_generated_header(text: str) -> str:
     return text.replace(f"{marker}\n", f"{marker}\n{GENERATED_HEADER}", 1)
 
 
-def _upgrade_generated_contract_to_v1_3_3(text: str) -> str:
-    """Move every generated quality authority reference into the v1.3.3 namespace."""
+def _upgrade_generated_contract_to_v1_3_4(text: str) -> str:
+    """Move every generated quality authority reference into the v1.3.4 namespace."""
 
     replacements = (
-        ("contract.SHARD_EXPERIMENT_ID", "contract.V1_3_3_SHARD_EXPERIMENT_ID"),
-        ("contract.MATRIX_EXPERIMENT_ID", "contract.V1_3_3_MATRIX_EXPERIMENT_ID"),
+        ("contract.SHARD_EXPERIMENT_ID", "contract.V1_3_4_SHARD_EXPERIMENT_ID"),
+        ("contract.MATRIX_EXPERIMENT_ID", "contract.V1_3_4_MATRIX_EXPERIMENT_ID"),
         (
             "contract.WORKER_LEDGER_EXPERIMENT_ID",
-            "contract.V1_3_3_WORKER_LEDGER_EXPERIMENT_ID",
+            "contract.V1_3_4_WORKER_LEDGER_EXPERIMENT_ID",
         ),
-        ("contract.INTEGRITY_EXPERIMENT_ID", "contract.V1_3_3_INTEGRITY_EXPERIMENT_ID"),
-        ("contract.SUMMARY_EXPERIMENT_ID", "contract.V1_3_3_SUMMARY_EXPERIMENT_ID"),
-        ("contract.SHARD_ATTESTATION_PURPOSE", "contract.V1_3_3_SHARD_ATTESTATION_PURPOSE"),
-        ("contract.MATRIX_ATTESTATION_PURPOSE", "contract.V1_3_3_MATRIX_ATTESTATION_PURPOSE"),
+        ("contract.INTEGRITY_EXPERIMENT_ID", "contract.V1_3_4_INTEGRITY_EXPERIMENT_ID"),
+        ("contract.SUMMARY_EXPERIMENT_ID", "contract.V1_3_4_SUMMARY_EXPERIMENT_ID"),
+        ("contract.SHARD_ATTESTATION_PURPOSE", "contract.V1_3_4_SHARD_ATTESTATION_PURPOSE"),
+        ("contract.MATRIX_ATTESTATION_PURPOSE", "contract.V1_3_4_MATRIX_ATTESTATION_PURPOSE"),
         (
             "contract.WORKER_LEDGER_ATTESTATION_PURPOSE",
-            "contract.V1_3_3_WORKER_LEDGER_ATTESTATION_PURPOSE",
+            "contract.V1_3_4_WORKER_LEDGER_ATTESTATION_PURPOSE",
         ),
         (
             "contract.INTEGRITY_ATTESTATION_PURPOSE",
-            "contract.V1_3_3_INTEGRITY_ATTESTATION_PURPOSE",
+            "contract.V1_3_4_INTEGRITY_ATTESTATION_PURPOSE",
         ),
-        ("contract.SUMMARY_ATTESTATION_PURPOSE", "contract.V1_3_3_SUMMARY_ATTESTATION_PURPOSE"),
-        ("contract.INTEGRITY_OUTPUT_PATH", "contract.V1_3_3_INTEGRITY_OUTPUT_PATH"),
-        ("contract.SUMMARY_OUTPUT_PATH", "contract.V1_3_3_SUMMARY_OUTPUT_PATH"),
-        ("contract.MATRIX_SUMMARY_PATH", "contract.V1_3_3_MATRIX_SUMMARY_PATH"),
-        ("contract.REUSE_ADMISSION_PATH", "contract.V1_3_3_REUSE_ADMISSION_PATH"),
+        ("contract.SUMMARY_ATTESTATION_PURPOSE", "contract.V1_3_4_SUMMARY_ATTESTATION_PURPOSE"),
+        ("contract.INTEGRITY_OUTPUT_PATH", "contract.V1_3_4_INTEGRITY_OUTPUT_PATH"),
+        ("contract.SUMMARY_OUTPUT_PATH", "contract.V1_3_4_SUMMARY_OUTPUT_PATH"),
+        ("contract.MATRIX_SUMMARY_PATH", "contract.V1_3_4_MATRIX_SUMMARY_PATH"),
+        ("contract.REUSE_ADMISSION_PATH", "contract.V1_3_4_REUSE_ADMISSION_PATH"),
         (
             "contract.PREHELDOUT_GENESIS_PATH",
-            "contract.V1_3_3_PREHELDOUT_GENESIS_PATH",
+            "contract.V1_3_4_PREHELDOUT_GENESIS_PATH",
         ),
-        ("contract.IMPLEMENTATION_PATHS", "contract.V1_3_3_IMPLEMENTATION_PATHS"),
-        ("contract.MANIFEST_PATH", "contract.V1_3_3_MANIFEST_PATH"),
-        ("contract.OUTPUT_ROOT", "contract.V1_3_3_OUTPUT_ROOT"),
-        ("contract.EXPERIMENT_ID", "contract.V1_3_3_EXPERIMENT_ID"),
+        ("contract.IMPLEMENTATION_PATHS", "contract.V1_3_4_IMPLEMENTATION_PATHS"),
+        ("contract.MANIFEST_PATH", "contract.V1_3_4_MANIFEST_PATH"),
+        ("contract.OUTPUT_ROOT", "contract.V1_3_4_OUTPUT_ROOT"),
+        ("contract.EXPERIMENT_ID", "contract.V1_3_4_EXPERIMENT_ID"),
         (
             "contract.implementation_tree_digest()",
-            "contract.v1_3_3_implementation_tree_digest()",
+            "contract.v1_3_4_implementation_tree_digest()",
         ),
         (
             "contract.implementation_file_paths()",
-            "contract.v1_3_3_implementation_file_paths()",
+            "contract.v1_3_4_implementation_file_paths()",
         ),
     )
     for old, new in replacements:
         text = text.replace(old, new)
     # Fragments added by v1.3.1 must be retagged before the broader V1_3
     # compatibility names below are upgraded.  Otherwise the prefix replacement
-    # turns ``V1_3_1`` into the malformed and unsealed ``V1_3_3_1`` namespace.
+    # turns ``V1_3_1`` into the malformed and unsealed ``V1_3_4_1`` namespace.
     for old, new in (
-        ("V1_3_1", "V1_3_3"),
-        ("v1_3_1", "v1_3_3"),
-        ("V1.3.1", "V1.3.3"),
-        ("v1.3.1", "v1.3.3"),
-        ("V1-3-1", "V1-3-3"),
-        ("v1-3-1", "v1-3-3"),
+        ("V1_3_1", "V1_3_4"),
+        ("v1_3_1", "v1_3_4"),
+        ("V1.3.1", "V1.3.4"),
+        ("v1.3.1", "v1.3.4"),
+        ("V1-3-1", "V1-3-4"),
+        ("v1-3-1", "v1-3-4"),
     ):
         text = text.replace(old, new)
 
     global_upgrades = (
-        ("SEALED_LAUNCH_AUTHORITY_V1_3", "SEALED_LAUNCH_AUTHORITY_V1_3_3"),
-        ("SEALED_PYTHON_RUNTIME_V1_3", "SEALED_PYTHON_RUNTIME_V1_3_3"),
-        ("SEALED_SOURCE_PROVENANCE_V1_3", "SEALED_SOURCE_PROVENANCE_V1_3_3"),
-        ("SEALED_LAUNCH_ROUTING_V1_3", "SEALED_LAUNCH_ROUTING_V1_3_3"),
+        ("SEALED_LAUNCH_AUTHORITY_V1_3", "SEALED_LAUNCH_AUTHORITY_V1_3_4"),
+        ("SEALED_PYTHON_RUNTIME_V1_3", "SEALED_PYTHON_RUNTIME_V1_3_4"),
+        ("SEALED_SOURCE_PROVENANCE_V1_3", "SEALED_SOURCE_PROVENANCE_V1_3_4"),
+        ("SEALED_LAUNCH_ROUTING_V1_3", "SEALED_LAUNCH_ROUTING_V1_3_4"),
     )
     for index, (old, new) in enumerate(global_upgrades):
-        placeholder = f"__PRESERVED_V1_3_3_GLOBAL_{index}__"
+        placeholder = f"__PRESERVED_V1_3_4_GLOBAL_{index}__"
         text = text.replace(new, placeholder)
         text = text.replace(old, new)
         text = text.replace(placeholder, new)
     for old, new in (
         (
             "ADAPTIVE_V4_CANONICAL_DIRECT_EXACT_FILL_V1_3_EVALUATOR_FD",
-            "ADAPTIVE_V4_CANONICAL_DIRECT_EXACT_FILL_V1_3_3_EVALUATOR_FD",
+            "ADAPTIVE_V4_CANONICAL_DIRECT_EXACT_FILL_V1_3_4_EVALUATOR_FD",
         ),
         (
             "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_IMPORT_INVENTORY_FD",
-            "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_3_IMPORT_INVENTORY_FD",
+            "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_4_IMPORT_INVENTORY_FD",
         ),
         (
             "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_PERSISTENT_PLAN_FD",
-            "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_3_PERSISTENT_PLAN_FD",
+            "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_4_PERSISTENT_PLAN_FD",
         ),
         (
             "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_PROJECTED_REMAINING_SHARDS",
-            "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_3_PROJECTED_REMAINING_SHARDS",
+            "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_4_PROJECTED_REMAINING_SHARDS",
         ),
         (
             "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_PROJECTED_REMAINING_TOKEN_ROWS",
-            "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_3_PROJECTED_REMAINING_TOKEN_ROWS",
+            "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_4_PROJECTED_REMAINING_TOKEN_ROWS",
         ),
-        ("exact-fill-v1-3-cell.claim", "exact-fill-v1-3-3-cell.claim"),
-        ("exact-fill-v1-3-import-inventory", "exact-fill-v1-3-3-import-inventory"),
-        ("exact-fill-v1-3-pycache", "exact-fill-v1-3-3-pycache"),
-        ("exact-fill-v1-3-matrix", "exact-fill-v1-3-3-matrix"),
-        ("paper-grade v1.3 exact-fill", "paper-grade v1.3.3 exact-fill"),
-        ("live v1.3 quality context", "live v1.3.3 quality context"),
-        ("Bound v1.3 manifest", "Bound v1.3.3 manifest"),
+        ("exact-fill-v1-3-cell.claim", "exact-fill-v1-3-4-cell.claim"),
+        ("exact-fill-v1-3-import-inventory", "exact-fill-v1-3-4-import-inventory"),
+        ("exact-fill-v1-3-pycache", "exact-fill-v1-3-4-pycache"),
+        ("exact-fill-v1-3-matrix", "exact-fill-v1-3-4-matrix"),
+        ("paper-grade v1.3 exact-fill", "paper-grade v1.3.4 exact-fill"),
+        ("live v1.3 quality context", "live v1.3.4 quality context"),
+        ("Bound v1.3 manifest", "Bound v1.3.4 manifest"),
     ):
         text = text.replace(old, new)
     return text
@@ -188,15 +188,15 @@ def _upgrade_generated_contract_to_v1_3_3(text: str) -> str:
 
 def _sealed_entrypoint_preamble(*, selector: str, relative_path: str) -> str:
     return f'''if __name__ == "__main__":
-    _launcher_sentinel = globals().get("_ADAPTIVE_V4_GIT_OBJECT_LAUNCH_SENTINEL_V1_3_3")
+    _launcher_sentinel = globals().get("_ADAPTIVE_V4_GIT_OBJECT_LAUNCH_SENTINEL_V1_3_4")
     if _launcher_sentinel != {{
         "schema_version": 1,
-        "launcher": "p2-direct-controller-git-object-launcher-v1-3-3",
+        "launcher": "p2-direct-controller-git-object-launcher-v1-3-4",
         "sealed_runner": True,
         "sealed_inventory": True,
     }}:
         raise RuntimeError("Direct controller sealed launcher sentinel drifted.")
-    _python_runtime = globals().get("_ADAPTIVE_V4_GIT_OBJECT_PYTHON_RUNTIME_V1_3_3")
+    _python_runtime = globals().get("_ADAPTIVE_V4_GIT_OBJECT_PYTHON_RUNTIME_V1_3_4")
     if not isinstance(_python_runtime, dict) or set(_python_runtime) != {{
         "schema_version", "implementation", "cache_tag", "version", "executable",
         "venv_executable", "resolved_executable", "executable_sha256",
@@ -204,7 +204,7 @@ def _sealed_entrypoint_preamble(*, selector: str, relative_path: str) -> str:
     }}:
         raise RuntimeError("Direct controller sealed Python runtime binding is missing.")
     _source_provenance = globals().get(
-        "_ADAPTIVE_V4_GIT_OBJECT_SOURCE_PROVENANCE_V1_3_3"
+        "_ADAPTIVE_V4_GIT_OBJECT_SOURCE_PROVENANCE_V1_3_4"
     )
     if not isinstance(_source_provenance, dict) or set(_source_provenance) != {{
         "schema_version", "launcher", "repository_root", "bundle_sha256",
@@ -212,7 +212,7 @@ def _sealed_entrypoint_preamble(*, selector: str, relative_path: str) -> str:
         "head_manifest",
     }}:
         raise RuntimeError("Direct controller sealed source provenance is missing.")
-    _launch_routing = globals().get("_ADAPTIVE_V4_GIT_OBJECT_LAUNCH_ROUTING_V1_3_3")
+    _launch_routing = globals().get("_ADAPTIVE_V4_GIT_OBJECT_LAUNCH_ROUTING_V1_3_4")
     if not isinstance(_launch_routing, dict) or set(_launch_routing) != {{
         "schema_version", "launcher", "entrypoint_selector", "entrypoint_relative_path",
         "source_bundle_sha256", "git_mode", "git_blob_oid", "sha256", "bytes",
@@ -224,7 +224,7 @@ def _sealed_entrypoint_preamble(*, selector: str, relative_path: str) -> str:
     if (
         _launch_routing.get("schema_version") != 1
         or _launch_routing.get("launcher")
-        != "p2-direct-controller-git-object-launcher-v1-3-3"
+        != "p2-direct-controller-git-object-launcher-v1-3-4"
         or _launch_routing.get("entrypoint_selector") != {selector!r}
         or _launch_routing.get("entrypoint_relative_path") != {relative_path!r}
         or _launch_routing.get("source_bundle_sha256")
@@ -239,16 +239,16 @@ def _sealed_entrypoint_preamble(*, selector: str, relative_path: str) -> str:
         or globals().get("__file__") != _expected_entrypoint
     ):
         raise RuntimeError("Direct controller sealed launch routing drifted.")
-    SEALED_LAUNCH_AUTHORITY_V1_3_3 = dict(_launcher_sentinel)
-    SEALED_PYTHON_RUNTIME_V1_3_3 = dict(_python_runtime)
-    SEALED_SOURCE_PROVENANCE_V1_3_3 = dict(_source_provenance)
-    SEALED_LAUNCH_ROUTING_V1_3_3 = dict(_launch_routing)
+    SEALED_LAUNCH_AUTHORITY_V1_3_4 = dict(_launcher_sentinel)
+    SEALED_PYTHON_RUNTIME_V1_3_4 = dict(_python_runtime)
+    SEALED_SOURCE_PROVENANCE_V1_3_4 = dict(_source_provenance)
+    SEALED_LAUNCH_ROUTING_V1_3_4 = dict(_launch_routing)
     del _launcher_sentinel, _python_runtime, _source_provenance, _launch_routing
     del _expected_entrypoint
-    globals().pop("_ADAPTIVE_V4_GIT_OBJECT_LAUNCH_SENTINEL_V1_3_3", None)
-    globals().pop("_ADAPTIVE_V4_GIT_OBJECT_PYTHON_RUNTIME_V1_3_3", None)
-    globals().pop("_ADAPTIVE_V4_GIT_OBJECT_SOURCE_PROVENANCE_V1_3_3", None)
-    globals().pop("_ADAPTIVE_V4_GIT_OBJECT_LAUNCH_ROUTING_V1_3_3", None)
+    globals().pop("_ADAPTIVE_V4_GIT_OBJECT_LAUNCH_SENTINEL_V1_3_4", None)
+    globals().pop("_ADAPTIVE_V4_GIT_OBJECT_PYTHON_RUNTIME_V1_3_4", None)
+    globals().pop("_ADAPTIVE_V4_GIT_OBJECT_SOURCE_PROVENANCE_V1_3_4", None)
+    globals().pop("_ADAPTIVE_V4_GIT_OBJECT_LAUNCH_ROUTING_V1_3_4", None)
 
 '''
 
@@ -487,6 +487,8 @@ def _validate_inputs_structure(inputs: Mapping[str, Any]) -> dict[str, Any]:
             "experiment_id",
             "historical_receipt_sha256",
             "canonical_nonobservation_sha256",
+            "superseded_failure_lineage_sha256",
+            "superseded_failure_lineage_projection_sha256",
         }
         and isinstance(reuse_map.get("path"), str)
         and bool(reuse_map.get("path"))
@@ -501,6 +503,8 @@ def _validate_inputs_structure(inputs: Mapping[str, Any]) -> dict[str, Any]:
                 "attestation_mac",
                 "historical_receipt_sha256",
                 "canonical_nonobservation_sha256",
+                "superseded_failure_lineage_sha256",
+                "superseded_failure_lineage_projection_sha256",
             )
         ),
         "Reuse-admission public binding schema drifted.",
@@ -539,6 +543,8 @@ def _validate_inputs_structure(inputs: Mapping[str, Any]) -> dict[str, Any]:
             "base_prerequisites_sha256",
             "sealed_source_bundle_sha256",
             "sealed_launch_routing_sha256",
+            "superseded_failure_lineage_sha256",
+            "superseded_failure_lineage_projection_sha256",
         }
         and isinstance(activation_map.get("path"), str)
         and isinstance(activation_map.get("activation_root"), str)
@@ -556,6 +562,8 @@ def _validate_inputs_structure(inputs: Mapping[str, Any]) -> dict[str, Any]:
                 "base_prerequisites_sha256",
                 "sealed_source_bundle_sha256",
                 "sealed_launch_routing_sha256",
+                "superseded_failure_lineage_sha256",
+                "superseded_failure_lineage_projection_sha256",
             )
         ),
         "Quality-start activation public binding schema drifted.",
@@ -934,11 +942,11 @@ def arm_execution_order(schedule_index: int) -> tuple[str, ...]:
 
 
 EVALUATOR_IMPORT_GUARD = r'''
-def _sealed_site_packages_root_v1_3_3() -> Path:
-    raw = globals().get("_ADAPTIVE_V4_SEALED_SITE_PACKAGES_V1_3_3")
+def _sealed_site_packages_root_v1_3_4() -> Path:
+    raw = globals().get("_ADAPTIVE_V4_SEALED_SITE_PACKAGES_V1_3_4")
     _require(
         isinstance(raw, str) and bool(raw),
-        "Sealed v1.3.3 site-packages authority is missing.",
+        "Sealed v1.3.4 site-packages authority is missing.",
     )
     sealed = cast(str, raw)
     repository_root = REPOSITORY_ROOT.resolve(strict=True)
@@ -956,7 +964,7 @@ def _sealed_site_packages_root_v1_3_3() -> Path:
         resolved = lexical.resolve(strict=True)
         expected_resolved = expected.resolve(strict=True)
     except (OSError, RuntimeError) as error:
-        raise ValueError("Sealed v1.3.3 site-packages authority is not exact.") from error
+        raise ValueError("Sealed v1.3.4 site-packages authority is not exact.") from error
     _require(
         sealed == str(lexical)
         and lexical == resolved
@@ -964,7 +972,7 @@ def _sealed_site_packages_root_v1_3_3() -> Path:
         and expected == expected_resolved
         and lexical.is_dir()
         and not lexical.is_symlink(),
-        "Sealed v1.3.3 site-packages authority is not the exact verified runtime root.",
+        "Sealed v1.3.4 site-packages authority is not the exact verified runtime root.",
     )
     return lexical
 
@@ -973,42 +981,180 @@ def _assert_repository_import_origins(
     modules: Mapping[str, Any] | None = None,
 ) -> None:
     repository_root = REPOSITORY_ROOT.resolve(strict=True)
-    site_packages_root = _sealed_site_packages_root_v1_3_3()
+    site_packages_root = _sealed_site_packages_root_v1_3_4()
     allowed_files = {
         (repository_root / relative).resolve(strict=True)
         for relative in contract.implementation_file_paths()
     }
     active_modules = sys.modules if modules is None else modules
     for module_name, module in tuple(active_modules.items()):
-        raw_origin = getattr(module, "__file__", None)
-        if not isinstance(raw_origin, str):
+        _require(
+            isinstance(module_name, str) and bool(module_name),
+            "Imported module registry contains a malformed name.",
+        )
+        if module is None:
+            # A None entry is an import-system negative cache and cannot
+            # expose executable module contents.
             continue
-        lexical_origin = Path(os.path.abspath(raw_origin))
-        try:
-            resolved_origin = lexical_origin.resolve(strict=True)
-        except (OSError, RuntimeError) as error:
-            raise ValueError(
-                f"Imported module origin is not exact: {module_name} -> {lexical_origin}"
-            ) from error
-        lexical_in_environment = lexical_origin.is_relative_to(site_packages_root)
-        resolved_in_environment = resolved_origin.is_relative_to(site_packages_root)
-        if lexical_in_environment or resolved_in_environment:
+        if not isinstance(module, type(sys)):
+            try:
+                proxy_namespace = (
+                    type.__getattribute__(module, "__dict__")
+                    if isinstance(module, type)
+                    else None
+                )
+                proxy_name = (
+                    type.__getattribute__(module, "__name__")
+                    if isinstance(module, type)
+                    else None
+                )
+                proxy_qualname = (
+                    type.__getattribute__(module, "__qualname__")
+                    if isinstance(module, type)
+                    else None
+                )
+            except (AttributeError, TypeError):
+                proxy_namespace = None
+                proxy_name = None
+                proxy_qualname = None
+            defining_module = (
+                proxy_namespace.get("__module__")
+                if isinstance(proxy_namespace, Mapping)
+                else None
+            )
+            parent = (
+                active_modules.get(defining_module)
+                if isinstance(defining_module, str)
+                else None
+            )
+            proxy_metaclass = type(module)
+            proxy_metaclass_module = type.__getattribute__(
+                proxy_metaclass, "__module__"
+            )
+            proxy_metaclass_name = type.__getattribute__(proxy_metaclass, "__name__")
+            parent_namespace = (
+                object.__getattribute__(parent, "__dict__")
+                if isinstance(parent, type(sys))
+                else None
+            )
+            anchored_proxy: object | None = parent
+            if isinstance(proxy_qualname, str):
+                for component in proxy_qualname.split("."):
+                    if not component or component == "<locals>":
+                        anchored_proxy = None
+                        break
+                    if isinstance(anchored_proxy, type(sys)):
+                        namespace = object.__getattribute__(anchored_proxy, "__dict__")
+                    elif isinstance(anchored_proxy, type):
+                        namespace = type.__getattribute__(anchored_proxy, "__dict__")
+                    else:
+                        anchored_proxy = None
+                        break
+                    if not isinstance(namespace, Mapping) or component not in namespace:
+                        anchored_proxy = None
+                        break
+                    anchored_proxy = namespace[component]
             _require(
-                lexical_in_environment and resolved_in_environment,
-                f"Trusted site-packages import escaped its sealed root: "
-                f"{module_name} -> {lexical_origin} -> {resolved_origin}",
+                isinstance(module, type)
+                and isinstance(defining_module, str)
+                and bool(defining_module)
+                and isinstance(parent, type(sys))
+                and isinstance(proxy_namespace, Mapping)
+                and isinstance(proxy_name, str)
+                and isinstance(proxy_qualname, str)
+                and module_name
+                == proxy_name
+                == f"{defining_module}.{proxy_qualname}"
+                and proxy_metaclass_module == defining_module
+                and isinstance(parent_namespace, Mapping)
+                and parent_namespace.get(proxy_metaclass_name) is proxy_metaclass
+                and anchored_proxy is module
+                and "__file__" not in proxy_namespace
+                and "__spec__" not in proxy_namespace,
+                f"Imported registry entry is not a structurally anchored namespace proxy: "
+                f"{module_name}",
             )
             continue
-        lexical_in_repository = lexical_origin.is_relative_to(repository_root)
-        resolved_in_repository = resolved_origin.is_relative_to(repository_root)
-        if not lexical_in_repository and not resolved_in_repository:
-            continue
+        try:
+            module_namespace = object.__getattribute__(module, "__dict__")
+        except (AttributeError, TypeError) as error:
+            raise ValueError(
+                f"Imported module namespace metadata is inaccessible: {module_name}"
+            ) from error
         _require(
-            lexical_origin == resolved_origin
-            and resolved_origin.suffix == ".py"
-            and resolved_origin in allowed_files,
-            f"Repository-local import is outside the frozen implementation inventory: "
-            f"{module_name} -> {lexical_origin} -> {resolved_origin}",
+            isinstance(module_namespace, Mapping),
+            f"Imported module namespace metadata is malformed: {module_name}",
+        )
+
+        declared_origins: list[tuple[str, str]] = []
+        if "__file__" in module_namespace:
+            raw_file = module_namespace["__file__"]
+            _require(
+                raw_file is None or (isinstance(raw_file, str) and bool(raw_file)),
+                f"Imported module own __file__ metadata is malformed: {module_name}",
+            )
+            if isinstance(raw_file, str):
+                declared_origins.append(("__file__", raw_file))
+        raw_spec = module_namespace.get("__spec__")
+        _require(
+            raw_spec is None or isinstance(raw_spec, importlib.machinery.ModuleSpec),
+            f"Imported module own __spec__ metadata is malformed: {module_name}",
+        )
+        if isinstance(raw_spec, importlib.machinery.ModuleSpec) and raw_spec.has_location:
+            _require(
+                isinstance(raw_spec.origin, str)
+                and bool(raw_spec.origin)
+                and raw_spec.loader is not None,
+                f"Imported module location spec is incomplete: {module_name}",
+            )
+            declared_origins.append(("__spec__.origin", cast(str, raw_spec.origin)))
+
+        # ModuleType subclasses may expose a class-level compatibility marker
+        # named ``__file__`` without representing a source-backed import.  Only
+        # instance-owned metadata and location-bearing ModuleSpec records are
+        # authoritative filesystem provenance.
+        if not declared_origins:
+            continue
+
+        resolved_claims: list[tuple[Path, Path]] = []
+        for origin_kind, raw_origin in declared_origins:
+            lexical_origin = Path(os.path.abspath(raw_origin))
+            try:
+                resolved_origin = lexical_origin.resolve(strict=True)
+            except (OSError, RuntimeError) as error:
+                raise ValueError(
+                    f"Imported module origin is not exact: "
+                    f"{module_name} {origin_kind} -> {lexical_origin}"
+                ) from error
+            resolved_claims.append((lexical_origin, resolved_origin))
+            lexical_in_environment = lexical_origin.is_relative_to(site_packages_root)
+            resolved_in_environment = resolved_origin.is_relative_to(site_packages_root)
+            if lexical_in_environment or resolved_in_environment:
+                _require(
+                    lexical_in_environment and resolved_in_environment,
+                    f"Trusted site-packages import escaped its sealed root: "
+                    f"{module_name} {origin_kind} -> "
+                    f"{lexical_origin} -> {resolved_origin}",
+                )
+                continue
+            lexical_in_repository = lexical_origin.is_relative_to(repository_root)
+            resolved_in_repository = resolved_origin.is_relative_to(repository_root)
+            if not lexical_in_repository and not resolved_in_repository:
+                continue
+            _require(
+                lexical_origin == resolved_origin
+                and resolved_origin.suffix == ".py"
+                and resolved_origin in allowed_files,
+                f"Repository-local import is outside the frozen implementation inventory: "
+                f"{module_name} {origin_kind} -> "
+                f"{lexical_origin} -> {resolved_origin}",
+            )
+
+        first_claim = resolved_claims[0]
+        _require(
+            all(claim == first_claim for claim in resolved_claims[1:]),
+            f"Imported module provenance metadata disagrees: "
+            f"{module_name} -> {resolved_claims}",
         )
 '''
 
@@ -1801,7 +1947,7 @@ g = {
     "__name__": "__main__",
     "__file__": p,
     "__package__": None,
-    "_ADAPTIVE_V4_SEALED_SITE_PACKAGES_V1_3_3": site_packages,
+    "_ADAPTIVE_V4_SEALED_SITE_PACKAGES_V1_3_4": site_packages,
 }
 exec(compile(data, p, "exec"), g, g)
 '''
@@ -4568,7 +4714,7 @@ def _ensure_ready_only_preflight(
     evaluator_snapshot: CanonicalEvaluatorSnapshot,
     evaluator_binding: Mapping[str, Any],
     prerequisites: FrozenPrerequisites,
-    activation_lease: admission.QualityStartActivationLeaseV1_3_3,
+    activation_lease: admission.QualityStartActivationLeaseV1_3_4,
     launch_authority_nonce: str,
     gpu_lease_binding: Mapping[str, Any],
     gpu_lease: GPULockLease,
@@ -5964,6 +6110,11 @@ def _generate_evaluator(source: str) -> str:
     text = _replace_exact(text, "import argparse\nimport gzip\n", "import argparse\nimport gc\nimport gzip\n")
     text = _replace_exact(
         text,
+        "import hashlib\nimport json\n",
+        "import hashlib\nimport importlib.machinery\nimport json\n",
+    )
+    text = _replace_exact(
+        text,
         "import platform\nimport tempfile\n",
         "import platform\nimport sys\nimport tempfile\n",
     )
@@ -6040,7 +6191,7 @@ def _generate_evaluator(source: str) -> str:
     _require("top_p_match" not in text, "Evaluator retained a top-p match input.")
     _require("validate_calibration_artifact" not in text, "Evaluator retained live v1.2 validation.")
     _require("establish_provenance" not in text, "Evaluator retained live v1.2 provenance.")
-    return _insert_generated_header(_upgrade_generated_contract_to_v1_3_3(text))
+    return _insert_generated_header(_upgrade_generated_contract_to_v1_3_4(text))
 
 
 def _generate_runner(source: str) -> str:
@@ -7525,7 +7676,7 @@ def _generate_runner(source: str) -> str:
     )
     text = text.replace(
         'f"p2-direct-controller-worker-{worker_index}-of-{worker_count}"',
-        'f"p2-direct-controller-exact-fill-v1-3-3-worker-{worker_index}-of-{worker_count}"',
+        'f"p2-direct-controller-exact-fill-v1-3-4-worker-{worker_index}-of-{worker_count}"',
     )
     text = text.replace(
         '"p2-direct-controller-matrix-single"',
@@ -7632,7 +7783,7 @@ def _generate_runner(source: str) -> str:
                 gpu_lease.assert_held()
                 device_context = _capture_selected_device_context(gpu_lease)
                 device_guard_lease = _acquire_selected_device_guard(
-                    label=f"p2-direct-controller-exact-fill-v1-3-3-worker-{worker_index}-of-{worker_count}",
+                    label=f"p2-direct-controller-exact-fill-v1-3-4-worker-{worker_index}-of-{worker_count}",
                     device_context=device_context,
                     scheduler_lease=gpu_lease,
                 )
@@ -7664,7 +7815,7 @@ def _generate_runner(source: str) -> str:
                 gpu_lease.assert_held()
                 device_context = _capture_selected_device_context(gpu_lease)
                 device_guard_lease = _acquire_selected_device_guard(
-                    label=f"p2-direct-controller-exact-fill-v1-3-3-worker-{worker_index}-of-{worker_count}",
+                    label=f"p2-direct-controller-exact-fill-v1-3-4-worker-{worker_index}-of-{worker_count}",
                     device_context=device_context,
                     scheduler_lease=gpu_lease,
                 )
@@ -8121,7 +8272,7 @@ def _generate_runner(source: str) -> str:
         'help="Unsupported by the frozen v1.3.1 single-worker topology.",',
     )
     _require("top_p" not in text.lower(), "Runner retained a top-p prerequisite or identifier.")
-    generated = _insert_generated_header(_upgrade_generated_contract_to_v1_3_3(text))
+    generated = _insert_generated_header(_upgrade_generated_contract_to_v1_3_4(text))
     return _insert_sealed_entrypoint_preamble(
         generated,
         selector="matrix",
@@ -8708,7 +8859,7 @@ def _integrity_payload(
         count=1,
     )
     _require("top_p" not in text.lower(), "Audit retained a top-p prerequisite or identifier.")
-    generated = _insert_generated_header(_upgrade_generated_contract_to_v1_3_3(text))
+    generated = _insert_generated_header(_upgrade_generated_contract_to_v1_3_4(text))
     return _insert_sealed_entrypoint_preamble(
         generated,
         selector="audit",
@@ -9257,7 +9408,7 @@ def _register_external_bindings(
         count=1,
     )
     _require("top_p" not in text.lower(), "Summary retained top-p quality data or schema.")
-    generated = _insert_generated_header(_upgrade_generated_contract_to_v1_3_3(text))
+    generated = _insert_generated_header(_upgrade_generated_contract_to_v1_3_4(text))
     return _insert_sealed_entrypoint_preamble(
         generated,
         selector="summary",

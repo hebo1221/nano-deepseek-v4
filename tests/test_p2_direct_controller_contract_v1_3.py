@@ -74,7 +74,7 @@ def _validated_admission(calibration: Mapping[str, Any]) -> SimpleNamespace:
     failure_projection_sha256 = "1" * 64
     return SimpleNamespace(
         payload={
-            "experiment_id": contract.V1_3_3_EXPERIMENT_ID,
+            "experiment_id": contract.V1_3_4_EXPERIMENT_ID,
             "payload_sha256": payload_sha256,
             "attestation": {"mac": attestation_mac},
             "quality_evaluation_started": False,
@@ -92,10 +92,10 @@ def _validated_admission(calibration: Mapping[str, Any]) -> SimpleNamespace:
             ),
         },
         public_binding={
-            "path": "/tmp/v1-3-3-reuse-admission.json",
+            "path": "/tmp/v1-3-4-reuse-admission.json",
             "sha256": "a" * 64,
             "bytes": 1024,
-            "experiment_id": contract.V1_3_3_EXPERIMENT_ID,
+            "experiment_id": contract.V1_3_4_EXPERIMENT_ID,
             "payload_sha256": payload_sha256,
             "attestation_mac": attestation_mac,
             "historical_receipt_sha256": historical_receipt_sha256,
@@ -283,7 +283,7 @@ def test_builder_uses_admission_validator_and_returns_only_exact_fill(
     )
     assert metadata["exact_fill_arms"] == contract.ALL_ARM_NAMES
     assert metadata["dual_manifest_contexts_validated"] is True
-    assert metadata["quality_experiment_id"] == contract.V1_3_3_EXPERIMENT_ID
+    assert metadata["quality_experiment_id"] == contract.V1_3_4_EXPERIMENT_ID
     assert metadata["quality_experiment_id"] != contract.EXPERIMENT_ID
     assert not _contains_threshold_metadata(metadata)
     contract.validate_arm_semantics(arms)
@@ -381,23 +381,23 @@ def test_persistent_session_namespaces_and_transport_claims_are_exact() -> None:
     assert contract.PERSISTENT_SESSION_LEDGER_ROOT.name.startswith(".")
     assert not contract.PERSISTENT_SESSION_LEDGER_ROOT.name.startswith("..")
     absolute_output_root = (
-        Path(__file__).resolve().parents[1] / contract.V1_3_3_OUTPUT_ROOT
+        Path(__file__).resolve().parents[1] / contract.V1_3_4_OUTPUT_ROOT
     ).resolve()
-    expected_v1_3_3_suffix = contract.V1_3_3_PERSISTENT_SESSION_LEDGER_ROOT.name.removeprefix(
-        f".{contract.V1_3_3_OUTPUT_ROOT.name}."
+    expected_v1_3_4_suffix = contract.V1_3_4_PERSISTENT_SESSION_LEDGER_ROOT.name.removeprefix(
+        f".{contract.V1_3_4_OUTPUT_ROOT.name}."
     )
-    assert persistent_session.SESSION_LEDGER_ROOT_SUFFIX == expected_v1_3_3_suffix
+    assert persistent_session.SESSION_LEDGER_ROOT_SUFFIX == expected_v1_3_4_suffix
     assert (
         persistent_session.session_ledger_root(absolute_output_root)
         == (
-            Path(__file__).resolve().parents[1] / contract.V1_3_3_PERSISTENT_SESSION_LEDGER_ROOT
+            Path(__file__).resolve().parents[1] / contract.V1_3_4_PERSISTENT_SESSION_LEDGER_ROOT
         ).resolve()
     )
     assert (
         persistent_session.session_ledger_lock_path(absolute_output_root)
         == (
             Path(__file__).resolve().parents[1]
-            / contract.V1_3_3_PERSISTENT_SESSION_LEDGER_LOCK_PATH
+            / contract.V1_3_4_PERSISTENT_SESSION_LEDGER_LOCK_PATH
         ).resolve()
     )
     assert {
@@ -426,12 +426,12 @@ def test_persistent_session_namespaces_and_transport_claims_are_exact() -> None:
         "launch": persistent_session.LAUNCH_LEDGER_ATTESTATION_PURPOSE,
         "terminal": persistent_session.TERMINAL_LEDGER_ATTESTATION_PURPOSE,
     } == {
-        "plan": contract.V1_3_3_PERSISTENT_SESSION_PLAN_ATTESTATION_PURPOSE,
-        "work": contract.V1_3_3_PERSISTENT_SESSION_WORK_ATTESTATION_PURPOSE,
-        "result": contract.V1_3_3_PERSISTENT_SESSION_RESULT_ATTESTATION_PURPOSE,
-        "receipt": contract.V1_3_3_PERSISTENT_SESSION_RECEIPT_ATTESTATION_PURPOSE,
-        "launch": contract.V1_3_3_PERSISTENT_SESSION_LAUNCH_LEDGER_ATTESTATION_PURPOSE,
-        "terminal": contract.V1_3_3_PERSISTENT_SESSION_TERMINAL_LEDGER_ATTESTATION_PURPOSE,
+        "plan": contract.V1_3_4_PERSISTENT_SESSION_PLAN_ATTESTATION_PURPOSE,
+        "work": contract.V1_3_4_PERSISTENT_SESSION_WORK_ATTESTATION_PURPOSE,
+        "result": contract.V1_3_4_PERSISTENT_SESSION_RESULT_ATTESTATION_PURPOSE,
+        "receipt": contract.V1_3_4_PERSISTENT_SESSION_RECEIPT_ATTESTATION_PURPOSE,
+        "launch": contract.V1_3_4_PERSISTENT_SESSION_LAUNCH_LEDGER_ATTESTATION_PURPOSE,
+        "terminal": contract.V1_3_4_PERSISTENT_SESSION_TERMINAL_LEDGER_ATTESTATION_PURPOSE,
     }
     assert namespaces["persistent_session_ledger_root"] == str(
         contract.PERSISTENT_SESSION_LEDGER_ROOT
@@ -892,9 +892,7 @@ def test_v1_3_3_scientific_projection_is_byte_canonical_v1_3_2_equality() -> Non
         "confirmatory_success_gate",
         "descriptive_feasibility_evidence",
     ):
-        assert contract.canonical_json(amended[field]) == contract.canonical_json(
-            previous[field]
-        )
+        assert contract.canonical_json(amended[field]) == contract.canonical_json(previous[field])
     assert amended["cohort"] == {
         **previous["cohort"],
         "freshness_definition": "never-used-for-quality-preserved-through-v1.3.3",
@@ -917,11 +915,11 @@ def test_reuse_admission_view_requires_relationally_exact_ten_field_schema(
 
     _arms, metadata = _build(calibration, canonical)
     assert tuple(metadata["reuse_admission"]) == (
-        contract.V1_3_3_REUSE_ADMISSION_PUBLIC_BINDING_FIELDS
+        contract.V1_3_4_REUSE_ADMISSION_PUBLIC_BINDING_FIELDS
     )
     assert metadata["reuse_admission"] == canonical.public_binding
 
-    for field in contract.V1_3_3_REUSE_ADMISSION_PUBLIC_BINDING_FIELDS:
+    for field in contract.V1_3_4_REUSE_ADMISSION_PUBLIC_BINDING_FIELDS:
         missing = _validated_admission(calibration)
         missing.public_binding.pop(field)
         with pytest.raises(ValueError, match="schema drifted"):
@@ -943,3 +941,347 @@ def test_reuse_admission_view_requires_relationally_exact_ten_field_schema(
     ] = "3" * 64
     with pytest.raises(ValueError, match="failure-lineage binding drifted"):
         _build(calibration, projection_tampered)
+
+
+def test_v1_3_4_ready_preflight_failure_lineage_is_exact_signed_zero_quality_and_source_bound() -> (
+    None
+):
+    lineage = contract.expected_v1_3_4_superseded_ready_preflight_failure_lineage()
+    normalized = {key: value for key, value in lineage.items() if key != "projection_sha256"}
+
+    assert lineage["projection_sha256"] == contract.json_digest(normalized)
+    assert lineage["lineage_type"] == (
+        "signed-superseded-zero-quality-postactivation-ready-preflight-launch-failure"
+    )
+    assert lineage["experiment_id"] == contract.V1_3_3_EXPERIMENT_ID
+    assert lineage["implementation"] == {
+        "source_commit": contract.V1_3_3_SUPERSEDED_IMPLEMENTATION_SOURCE_COMMIT,
+        "source_tree": contract.V1_3_3_SUPERSEDED_IMPLEMENTATION_SOURCE_TREE,
+        "tree_digest": contract.V1_3_3_SUPERSEDED_IMPLEMENTATION_TREE_DIGEST,
+        "live_inventory_digest": (contract.V1_3_3_SUPERSEDED_LIVE_IMPLEMENTATION_INVENTORY_DIGEST),
+        "live_file_count": contract.V1_3_3_SUPERSEDED_LIVE_IMPLEMENTATION_FILE_COUNT,
+        "sealed_source_bundle_sha256": contract.V1_3_3_SUPERSEDED_SOURCE_BUNDLE_SHA256,
+    }
+    assert lineage["manifest"]["sha256"] == contract.V1_3_3_SUPERSEDED_MANIFEST_SHA256
+    assert lineage["admission_root"]["exact_relative_files"] == [
+        "historical-reuse-admission.json",
+        "preheldout-genesis.json",
+    ]
+    assert lineage["reuse_admission"]["sha256"] == (contract.V1_3_3_SUPERSEDED_ADMISSION_SHA256)
+    assert lineage["preheldout_genesis"]["sha256"] == (contract.V1_3_3_SUPERSEDED_GENESIS_SHA256)
+    activation = lineage["activation_root"]
+    assert activation["exact_relative_files"] == [
+        "matrix.lock",
+        "quality-start-activation.json",
+    ]
+    assert activation["matrix_lock"] == {
+        "path": str(contract.V1_3_3_ACTIVATION_MATRIX_LOCK_PATH),
+        "sha256": contract.V1_3_3_SUPERSEDED_ACTIVATION_LOCK_SHA256,
+        "bytes": 0,
+    }
+    assert activation["activation"]["status"] == "activated"
+    assert activation["activation"]["sha256"] == (contract.V1_3_3_SUPERSEDED_ACTIVATION_SHA256)
+
+    session = lineage["persistent_session"]
+    assert session["root"] == str(contract.V1_3_3_PERSISTENT_SESSION_LEDGER_ROOT)
+    assert session["exact_relative_files"] == [
+        contract.V1_3_3_SUPERSEDED_SESSION_LAUNCH_PATH.name,
+        contract.V1_3_3_SUPERSEDED_SESSION_TERMINAL_PATH.name,
+    ]
+    assert session["lock"]["path"] == str(contract.V1_3_3_PERSISTENT_SESSION_LEDGER_LOCK_PATH)
+    assert session["lock"]["sha256"] == contract.V1_3_3_SUPERSEDED_SESSION_LOCK_SHA256
+    assert session["plan"]["session_role"] == "ready_only_preflight"
+    assert session["plan"]["coordinate_count"] == 1
+    assert session["plan"]["assignment_completed_prefix_count"] == 0
+    assert session["plan"]["model_load_limit"] == 1
+    assert session["launch"]["sha256"] == contract.V1_3_3_SUPERSEDED_SESSION_LAUNCH_SHA256
+    assert session["terminal"] == {
+        "path": str(contract.V1_3_3_SUPERSEDED_SESSION_TERMINAL_PATH),
+        "sha256": contract.V1_3_3_SUPERSEDED_SESSION_TERMINAL_SHA256,
+        "bytes": contract.V1_3_3_SUPERSEDED_SESSION_TERMINAL_BYTES,
+        "payload_sha256": contract.V1_3_3_SUPERSEDED_SESSION_TERMINAL_PAYLOAD_SHA256,
+        "attestation_payload_sha256": (
+            contract.V1_3_3_SUPERSEDED_SESSION_TERMINAL_ATTESTATION_PAYLOAD_SHA256
+        ),
+        "attestation_mac": contract.V1_3_3_SUPERSEDED_SESSION_TERMINAL_ATTESTATION_MAC,
+        "attestation_purpose": (
+            contract.V1_3_3_PERSISTENT_SESSION_TERMINAL_LEDGER_ATTESTATION_PURPOSE
+        ),
+        "status": "launch_failure",
+        "child_process_returncode": 1,
+        "plan_payload_sha256": contract.V1_3_3_SUPERSEDED_SESSION_PLAN_PAYLOAD_SHA256,
+        "ready_receipt": None,
+        "final_receipt": None,
+        "completed_work_payload_sha256": [],
+        "completed_result_payload_sha256": [],
+        "published_bundle_reingestion_count": 0,
+    }
+    assert lineage["quality_state"] == {
+        "records": [],
+        "completed_shards": 0,
+        "globally_committed_shards": 0,
+        "integrity_pass_shards": 0,
+        "integrity_fail_shards": 0,
+        "quality_evaluation_started": False,
+        "evaluation_seed_used_to_initialize_quality_rng": False,
+        "quality_rng_initialized": False,
+        "evaluation_inputs_materialized": 0,
+        "quality_predictions_materialized": 0,
+        "quality_outcomes_materialized": 0,
+        "quality_aggregates_materialized": 0,
+        "quality_outcomes_aggregated": False,
+        "outcome_selection_performed": False,
+        "outcome_dependent_early_stopping": False,
+        "active_claim_count": 0,
+        "orphan_claim_count": 0,
+        "worker_ledger_count": 0,
+        "ready_preflight_launch_count": 1,
+        "ready_preflight_terminal_count": 1,
+        "ready_preflight_success_count": 0,
+        "ready_preflight_failed_count": 1,
+        "ready_receipt_count": 0,
+        "final_receipt_count": 0,
+        "work_order_count": 0,
+        "work_result_count": 0,
+        "observed_successful_model_loads": 0,
+        "checkpoint_model_load_attempt_upper_bound": 1,
+        "quality_session_launch_count": 0,
+        "top_p_quality_input_count": 0,
+        "scientific_subprocesses_started_during_activation": 0,
+    }
+    assert lineage["absent_paths"] == [
+        str(contract.V1_3_3_OUTPUT_ROOT),
+        str(contract.V1_3_3_MATRIX_SUMMARY_PATH),
+        str(contract.V1_3_3_WORKER_LEDGER_ROOT),
+        str(contract.V1_3_3_INTEGRITY_OUTPUT_PATH),
+        str(contract.V1_3_3_SUMMARY_OUTPUT_PATH),
+    ]
+    assert lineage["external_mutable_lock_contents_in_normalized_lineage"] is False
+    assert b"/tmp/" not in contract.canonical_json(lineage)
+
+    diagnosis = lineage["source_bound_stderr_diagnosis"]
+    assert diagnosis["provenance"] == (
+        "source-bound-stderr-and-frozen-source-not-signed-terminal-fields"
+    )
+    assert diagnosis["signed_terminal_error_or_traceback_field_present"] is False
+    assert diagnosis["inner_exception_message"] == (
+        "[Errno 2] No such file or directory: '/home/hebo1221/nano-deepseek-v4/_ops.py'"
+    )
+    assert diagnosis["evaluator_exception_message"] == (
+        "Imported module origin is not exact: torch.ops -> /home/hebo1221/nano-deepseek-v4/_ops.py"
+    )
+    assert diagnosis["evaluator_function"] == "_assert_repository_import_origins"
+    assert diagnosis["parent_exception_message"] == (
+        "Persistent evaluator exited before its ready receipt."
+    )
+    assert diagnosis["parent_functions"] == [
+        "_start_persistent_evaluator",
+        "_ensure_ready_only_preflight",
+    ]
+
+
+def test_v1_3_4_manifest_binds_failure_lineage_distinct_namespaces_and_loader(
+    tmp_path: Path,
+) -> None:
+    payload = contract.build_v1_3_4_manifest_payload(
+        attestation_key_id=contract.V1_2_ATTESTATION_KEY_ID,
+        implementation_tree_digest="a" * 64,
+        implementation_source_commit="b" * 40,
+    )
+
+    assert contract.validate_v1_3_4_manifest_payload(copy.deepcopy(payload)) == payload
+    assert payload["experiment_id"] == contract.V1_3_4_EXPERIMENT_ID
+    assert payload["status"] == (
+        "frozen_v1_3_4_runtime_module_provenance_amendment_after_signed_v1_3_3_"
+        "zero_quality_postactivation_ready_preflight_launch_failure"
+    )
+    assert payload["implementation"]["paths"] == list(contract.V1_3_4_IMPLEMENTATION_PATHS)
+    disclosure = payload["lineage_and_adaptation_disclosure"]
+    assert (
+        disclosure[
+            "v1_3_3_signed_zero_quality_postactivation_ready_preflight_launch_failure_lineage"
+        ]
+        == contract.expected_v1_3_4_superseded_ready_preflight_failure_lineage()
+    )
+    assert disclosure["v1_3_3_quality_outcomes_observed_before_amendment"] is False
+    assert (
+        disclosure["failure_diagnosis_is_source_bound_stderr_not_a_signed_terminal_field"] is True
+    )
+    assert disclosure["runtime_module_provenance_uses_structural_claims_not_module_name_allowlists"]
+
+    namespaces = payload["artifact_namespaces"]
+    assert namespaces == contract.expected_v1_3_4_artifact_namespaces()
+    assert namespaces["v1_3_3_output_or_admission_namespace_reused"] is False
+    assert namespaces["superseded_v1_3_3_runtime_state_is_read_only_lineage"] is True
+    purposes = namespaces["attestation_purposes"]
+    assert all("v1-3-4" in purpose or "v1.3.4" in purpose for purpose in purposes.values())
+    assert set(purposes.values()).isdisjoint(
+        contract.expected_v1_3_3_artifact_namespaces()["attestation_purposes"].values()
+    )
+    activation = payload["execution_contract"]["sealed_launch_and_persistent_session"][
+        "quality_start_activation"
+    ]
+    provenance = activation["runtime_module_provenance"]
+    assert provenance["module_name_allowlist_used"] is False
+    assert provenance["filesystem_claim_sources"] == [
+        "module-instance-own-__file__",
+        "module-instance-own-__spec__.origin-when-has_location-is-true",
+    ]
+    assert provenance["both_claims_require_lexical_and-resolved-identity-when-present"] is True
+    assert provenance["malformed_instance_owned_file_or_spec_metadata_is_rejected"] is True
+    assert (
+        provenance[
+            "nonmodule_registry_entries_require_structural_class_proxy_anchor_to_an_"
+            "audited_defining_module"
+        ]
+        is True
+    )
+    assert (
+        provenance[
+            "class_proxy_object_identity_is_statically_resolved_from_owner_namespace"
+        ]
+        is True
+    )
+    assert provenance["none_registry_entries_are_nonexecuting_negative_import_cache"] is True
+    assert (
+        provenance[
+            "every_filesystem_claim_retains_strict-resolve-site-packages-escape-and-"
+            "repository-frozen-inventory-validation"
+        ]
+        is True
+    )
+    assert (
+        provenance[
+            "no-own-file-and-no-locatable-own-spec-means-virtual-or-namespace-module-without-"
+            "source-backed-import-claim"
+        ]
+        is True
+    )
+    assert (
+        activation[
+            "historical_v1_3_3_ready_preflight_failure_lineage_revalidated_at_each_"
+            "mutating_phase_entry"
+        ]
+        is True
+    )
+    assert activation[
+        "historical_v1_3_2_static_lineage_revalidated_at_each_mutating_phase_entry"
+    ] is True
+    assert activation["historical_lineage_full_revalidation_boundaries"] == [
+        "admission-staging-recovery-and-publication",
+        "activation-staging-recovery-and-publication",
+        "activation-or-static-capability-reload-and-handoff",
+        "authenticated-quality-session-entry-before-first-write",
+    ]
+    assert (
+        activation[
+            "historical_lineage_rehashed_before_each_shard_or_ledger_write_within_one_"
+            "retained_activation_lease_session"
+        ]
+        is False
+    )
+    assert (
+        activation[
+            "signed-lineage-bindings-and-retained-activation-lease-carry-authority-within-"
+            "one-authenticated-session"
+        ]
+        is True
+    )
+    assert activation["canonical_v1_3_3_entrypoint_status"] == "retired"
+    assert activation["out_of_band_c6_key_holder_execution_in_scope"] is False
+    assert payload["claim_boundary"]["required_reporting_label"] == (
+        "quality-blind-v1.3.4-runtime-module-provenance-amendment"
+    )
+
+    canonical = tmp_path / "v1-3-4.json"
+    canonical.write_bytes(contract.canonical_pretty_manifest_bytes(payload))
+    assert contract.load_v1_3_4_manifest(canonical, verify_implementation=False) == payload
+    symlink = tmp_path / "v1-3-4-link.json"
+    symlink.symlink_to(canonical)
+    with pytest.raises(RuntimeError, match="absent or unsafe"):
+        contract.load_v1_3_4_manifest(symlink, verify_implementation=False)
+
+    drift = copy.deepcopy(payload)
+    drift["lineage_and_adaptation_disclosure"][
+        "v1_3_3_signed_zero_quality_postactivation_ready_preflight_launch_failure_lineage"
+    ]["persistent_session"]["terminal"]["status"] = "stopped"
+    with pytest.raises(ValueError, match="content drifted"):
+        contract.validate_v1_3_4_manifest_payload(drift)
+
+
+def test_v1_3_4_freeze_rejects_an_implementation_sibling_of_the_signed_v1_3_3_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    implementation_commit = "c" * 40
+    current_commit = "d" * 40
+    digest = "a" * 64
+    payload = contract.build_v1_3_4_manifest_payload(
+        attestation_key_id=contract.V1_2_ATTESTATION_KEY_ID,
+        implementation_tree_digest=digest,
+        implementation_source_commit=implementation_commit,
+    )
+    monkeypatch.setattr(
+        contract,
+        "v1_3_4_implementation_tree_digest_at_commit",
+        lambda _commit: digest,
+    )
+    monkeypatch.setattr(contract, "v1_3_4_implementation_tree_digest", lambda: digest)
+    monkeypatch.setattr(
+        contract,
+        "source_state",
+        lambda: {"commit": current_commit, "dirty": False},
+    )
+
+    def fake_run(arguments: list[str], **_kwargs: object) -> SimpleNamespace:
+        assert arguments[:3] == ["git", "merge-base", "--is-ancestor"]
+        return SimpleNamespace(
+            returncode=(
+                1
+                if arguments[3] == contract.V1_3_3_SUPERSEDED_RESULT_SOURCE_COMMIT
+                and arguments[4] == implementation_commit
+                else 0
+            )
+        )
+
+    monkeypatch.setattr(contract.subprocess, "run", fake_run)
+    with pytest.raises(ValueError, match="does not descend from the signed v1.3.3 failure"):
+        contract.validate_v1_3_4_manifest_payload(
+            payload,
+            verify_implementation=True,
+        )
+
+
+def test_v1_3_4_scientific_projection_is_byte_canonical_v1_3_3_equality() -> None:
+    arguments = {
+        "attestation_key_id": contract.V1_2_ATTESTATION_KEY_ID,
+        "implementation_tree_digest": "a" * 64,
+        "implementation_source_commit": "b" * 40,
+    }
+    previous = contract.build_v1_3_3_manifest_payload(**arguments)
+    amended = contract.build_v1_3_4_manifest_payload(**arguments)
+
+    for field in (
+        "grid",
+        "phases",
+        "primary_estimand",
+        "statistical_analysis",
+        "confirmatory_success_gate",
+        "descriptive_feasibility_evidence",
+    ):
+        assert contract.canonical_json(amended[field]) == contract.canonical_json(previous[field])
+    assert amended["cohort"] == {
+        **previous["cohort"],
+        "freshness_definition": "never-used-for-quality-preserved-through-v1.3.4",
+    }
+
+
+def test_v1_3_4_inventory_appends_only_the_runtime_module_provenance_report() -> None:
+    assert contract.V1_3_4_IMPLEMENTATION_PATHS[:-1] == contract.V1_3_3_IMPLEMENTATION_PATHS
+    assert contract.V1_3_4_IMPLEMENTATION_PATHS[-1] == str(
+        contract.V1_3_4_RUNTIME_MODULE_PROVENANCE_AMENDMENT_REPORT_PATH
+    )
+    assert "2026-07-20" in contract.V1_3_4_IMPLEMENTATION_PATHS[-1]
+    with pytest.raises(ValueError, match="inventory or ordering drifted"):
+        contract.v1_3_4_implementation_tree_digest((contract.PROJECT_DEPENDENCY_SPEC_PATH,))
+    with pytest.raises(ValueError, match="inventory or ordering drifted"):
+        contract.v1_3_4_implementation_file_paths((contract.PROJECT_DEPENDENCY_SPEC_PATH,))

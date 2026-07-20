@@ -5,6 +5,7 @@ import argparse
 import gc
 import gzip
 import hashlib
+import importlib.machinery
 import json
 import math
 import os
@@ -39,10 +40,10 @@ from nano_deepseek_v4 import (
     generate_adaptive_memory_workload,
 )
 
-EXPERIMENT_ID = contract.V1_3_3_SHARD_EXPERIMENT_ID
+EXPERIMENT_ID = contract.V1_3_4_SHARD_EXPERIMENT_ID
 ARTIFACT_TYPE = "raw-direct-controller-exact-fill-shard"
 SCHEMA_VERSION = 1
-ATTESTATION_PURPOSE = contract.V1_3_3_SHARD_ATTESTATION_PURPOSE
+ATTESTATION_PURPOSE = contract.V1_3_4_SHARD_ATTESTATION_PURPOSE
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 
 TERMINAL_PASS = "INTEGRITY-PASS"
@@ -50,9 +51,9 @@ TERMINAL_FAIL = "INTEGRITY-FAIL"
 DTYPE_NAME = "bfloat16"
 DEVICE_TYPE = "cuda"
 ASYNC_TRANSFER = False
-STORAGE_PROJECTED_SHARDS_ENV = "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_3_PROJECTED_REMAINING_SHARDS"
-STORAGE_PROJECTED_TOKEN_ROWS_ENV = "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_3_PROJECTED_REMAINING_TOKEN_ROWS"
-PERSISTENT_PLAN_FD_ENV = "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_3_PERSISTENT_PLAN_FD"
+STORAGE_PROJECTED_SHARDS_ENV = "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_4_PROJECTED_REMAINING_SHARDS"
+STORAGE_PROJECTED_TOKEN_ROWS_ENV = "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_4_PROJECTED_REMAINING_TOKEN_ROWS"
+PERSISTENT_PLAN_FD_ENV = "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_4_PERSISTENT_PLAN_FD"
 ENVELOPE_PLANNING_ALLOWANCE_BYTES = 1024 * 1024
 TOP_LEVEL_FIELDS = {
     "schema_version",
@@ -428,11 +429,11 @@ def arm_execution_order(schedule_index: int) -> tuple[str, ...]:
     _strict_int(schedule_index, "schedule_index")
     return contract.arm_execution_order(schedule_index)
 
-def _sealed_site_packages_root_v1_3_3() -> Path:
-    raw = globals().get("_ADAPTIVE_V4_SEALED_SITE_PACKAGES_V1_3_3")
+def _sealed_site_packages_root_v1_3_4() -> Path:
+    raw = globals().get("_ADAPTIVE_V4_SEALED_SITE_PACKAGES_V1_3_4")
     _require(
         isinstance(raw, str) and bool(raw),
-        "Sealed v1.3.3 site-packages authority is missing.",
+        "Sealed v1.3.4 site-packages authority is missing.",
     )
     sealed = cast(str, raw)
     repository_root = REPOSITORY_ROOT.resolve(strict=True)
@@ -450,7 +451,7 @@ def _sealed_site_packages_root_v1_3_3() -> Path:
         resolved = lexical.resolve(strict=True)
         expected_resolved = expected.resolve(strict=True)
     except (OSError, RuntimeError) as error:
-        raise ValueError("Sealed v1.3.3 site-packages authority is not exact.") from error
+        raise ValueError("Sealed v1.3.4 site-packages authority is not exact.") from error
     _require(
         sealed == str(lexical)
         and lexical == resolved
@@ -458,7 +459,7 @@ def _sealed_site_packages_root_v1_3_3() -> Path:
         and expected == expected_resolved
         and lexical.is_dir()
         and not lexical.is_symlink(),
-        "Sealed v1.3.3 site-packages authority is not the exact verified runtime root.",
+        "Sealed v1.3.4 site-packages authority is not the exact verified runtime root.",
     )
     return lexical
 
@@ -467,42 +468,180 @@ def _assert_repository_import_origins(
     modules: Mapping[str, Any] | None = None,
 ) -> None:
     repository_root = REPOSITORY_ROOT.resolve(strict=True)
-    site_packages_root = _sealed_site_packages_root_v1_3_3()
+    site_packages_root = _sealed_site_packages_root_v1_3_4()
     allowed_files = {
         (repository_root / relative).resolve(strict=True)
-        for relative in contract.v1_3_3_implementation_file_paths()
+        for relative in contract.v1_3_4_implementation_file_paths()
     }
     active_modules = sys.modules if modules is None else modules
     for module_name, module in tuple(active_modules.items()):
-        raw_origin = getattr(module, "__file__", None)
-        if not isinstance(raw_origin, str):
+        _require(
+            isinstance(module_name, str) and bool(module_name),
+            "Imported module registry contains a malformed name.",
+        )
+        if module is None:
+            # A None entry is an import-system negative cache and cannot
+            # expose executable module contents.
             continue
-        lexical_origin = Path(os.path.abspath(raw_origin))
-        try:
-            resolved_origin = lexical_origin.resolve(strict=True)
-        except (OSError, RuntimeError) as error:
-            raise ValueError(
-                f"Imported module origin is not exact: {module_name} -> {lexical_origin}"
-            ) from error
-        lexical_in_environment = lexical_origin.is_relative_to(site_packages_root)
-        resolved_in_environment = resolved_origin.is_relative_to(site_packages_root)
-        if lexical_in_environment or resolved_in_environment:
+        if not isinstance(module, type(sys)):
+            try:
+                proxy_namespace = (
+                    type.__getattribute__(module, "__dict__")
+                    if isinstance(module, type)
+                    else None
+                )
+                proxy_name = (
+                    type.__getattribute__(module, "__name__")
+                    if isinstance(module, type)
+                    else None
+                )
+                proxy_qualname = (
+                    type.__getattribute__(module, "__qualname__")
+                    if isinstance(module, type)
+                    else None
+                )
+            except (AttributeError, TypeError):
+                proxy_namespace = None
+                proxy_name = None
+                proxy_qualname = None
+            defining_module = (
+                proxy_namespace.get("__module__")
+                if isinstance(proxy_namespace, Mapping)
+                else None
+            )
+            parent = (
+                active_modules.get(defining_module)
+                if isinstance(defining_module, str)
+                else None
+            )
+            proxy_metaclass = type(module)
+            proxy_metaclass_module = type.__getattribute__(
+                proxy_metaclass, "__module__"
+            )
+            proxy_metaclass_name = type.__getattribute__(proxy_metaclass, "__name__")
+            parent_namespace = (
+                object.__getattribute__(parent, "__dict__")
+                if isinstance(parent, type(sys))
+                else None
+            )
+            anchored_proxy: object | None = parent
+            if isinstance(proxy_qualname, str):
+                for component in proxy_qualname.split("."):
+                    if not component or component == "<locals>":
+                        anchored_proxy = None
+                        break
+                    if isinstance(anchored_proxy, type(sys)):
+                        namespace = object.__getattribute__(anchored_proxy, "__dict__")
+                    elif isinstance(anchored_proxy, type):
+                        namespace = type.__getattribute__(anchored_proxy, "__dict__")
+                    else:
+                        anchored_proxy = None
+                        break
+                    if not isinstance(namespace, Mapping) or component not in namespace:
+                        anchored_proxy = None
+                        break
+                    anchored_proxy = namespace[component]
             _require(
-                lexical_in_environment and resolved_in_environment,
-                f"Trusted site-packages import escaped its sealed root: "
-                f"{module_name} -> {lexical_origin} -> {resolved_origin}",
+                isinstance(module, type)
+                and isinstance(defining_module, str)
+                and bool(defining_module)
+                and isinstance(parent, type(sys))
+                and isinstance(proxy_namespace, Mapping)
+                and isinstance(proxy_name, str)
+                and isinstance(proxy_qualname, str)
+                and module_name
+                == proxy_name
+                == f"{defining_module}.{proxy_qualname}"
+                and proxy_metaclass_module == defining_module
+                and isinstance(parent_namespace, Mapping)
+                and parent_namespace.get(proxy_metaclass_name) is proxy_metaclass
+                and anchored_proxy is module
+                and "__file__" not in proxy_namespace
+                and "__spec__" not in proxy_namespace,
+                f"Imported registry entry is not a structurally anchored namespace proxy: "
+                f"{module_name}",
             )
             continue
-        lexical_in_repository = lexical_origin.is_relative_to(repository_root)
-        resolved_in_repository = resolved_origin.is_relative_to(repository_root)
-        if not lexical_in_repository and not resolved_in_repository:
-            continue
+        try:
+            module_namespace = object.__getattribute__(module, "__dict__")
+        except (AttributeError, TypeError) as error:
+            raise ValueError(
+                f"Imported module namespace metadata is inaccessible: {module_name}"
+            ) from error
         _require(
-            lexical_origin == resolved_origin
-            and resolved_origin.suffix == ".py"
-            and resolved_origin in allowed_files,
-            f"Repository-local import is outside the frozen implementation inventory: "
-            f"{module_name} -> {lexical_origin} -> {resolved_origin}",
+            isinstance(module_namespace, Mapping),
+            f"Imported module namespace metadata is malformed: {module_name}",
+        )
+
+        declared_origins: list[tuple[str, str]] = []
+        if "__file__" in module_namespace:
+            raw_file = module_namespace["__file__"]
+            _require(
+                raw_file is None or (isinstance(raw_file, str) and bool(raw_file)),
+                f"Imported module own __file__ metadata is malformed: {module_name}",
+            )
+            if isinstance(raw_file, str):
+                declared_origins.append(("__file__", raw_file))
+        raw_spec = module_namespace.get("__spec__")
+        _require(
+            raw_spec is None or isinstance(raw_spec, importlib.machinery.ModuleSpec),
+            f"Imported module own __spec__ metadata is malformed: {module_name}",
+        )
+        if isinstance(raw_spec, importlib.machinery.ModuleSpec) and raw_spec.has_location:
+            _require(
+                isinstance(raw_spec.origin, str)
+                and bool(raw_spec.origin)
+                and raw_spec.loader is not None,
+                f"Imported module location spec is incomplete: {module_name}",
+            )
+            declared_origins.append(("__spec__.origin", cast(str, raw_spec.origin)))
+
+        # ModuleType subclasses may expose a class-level compatibility marker
+        # named ``__file__`` without representing a source-backed import.  Only
+        # instance-owned metadata and location-bearing ModuleSpec records are
+        # authoritative filesystem provenance.
+        if not declared_origins:
+            continue
+
+        resolved_claims: list[tuple[Path, Path]] = []
+        for origin_kind, raw_origin in declared_origins:
+            lexical_origin = Path(os.path.abspath(raw_origin))
+            try:
+                resolved_origin = lexical_origin.resolve(strict=True)
+            except (OSError, RuntimeError) as error:
+                raise ValueError(
+                    f"Imported module origin is not exact: "
+                    f"{module_name} {origin_kind} -> {lexical_origin}"
+                ) from error
+            resolved_claims.append((lexical_origin, resolved_origin))
+            lexical_in_environment = lexical_origin.is_relative_to(site_packages_root)
+            resolved_in_environment = resolved_origin.is_relative_to(site_packages_root)
+            if lexical_in_environment or resolved_in_environment:
+                _require(
+                    lexical_in_environment and resolved_in_environment,
+                    f"Trusted site-packages import escaped its sealed root: "
+                    f"{module_name} {origin_kind} -> "
+                    f"{lexical_origin} -> {resolved_origin}",
+                )
+                continue
+            lexical_in_repository = lexical_origin.is_relative_to(repository_root)
+            resolved_in_repository = resolved_origin.is_relative_to(repository_root)
+            if not lexical_in_repository and not resolved_in_repository:
+                continue
+            _require(
+                lexical_origin == resolved_origin
+                and resolved_origin.suffix == ".py"
+                and resolved_origin in allowed_files,
+                f"Repository-local import is outside the frozen implementation inventory: "
+                f"{module_name} {origin_kind} -> "
+                f"{lexical_origin} -> {resolved_origin}",
+            )
+
+        first_claim = resolved_claims[0]
+        _require(
+            all(claim == first_claim for claim in resolved_claims[1:]),
+            f"Imported module provenance metadata disagrees: "
+            f"{module_name} -> {resolved_claims}",
         )
 
 
@@ -1206,13 +1345,13 @@ def establish_evaluator_inputs(
         context=contract.CONTEXTS[0],
         replicate=contract.REPLICATES[0],
     )
-    quality_context = admission.establish_v1_3_3_quality_context(
+    quality_context = admission.establish_v1_3_4_quality_context(
         manifest_path,
-        implementation_paths=contract.V1_3_3_IMPLEMENTATION_PATHS,
+        implementation_paths=contract.V1_3_4_IMPLEMENTATION_PATHS,
         repository_root=REPOSITORY_ROOT,
     )
-    raw_sealed_source = globals().get("SEALED_SOURCE_PROVENANCE_V1_3_3")
-    raw_sealed_routing = globals().get("SEALED_LAUNCH_ROUTING_V1_3_3")
+    raw_sealed_source = globals().get("SEALED_SOURCE_PROVENANCE_V1_3_4")
+    raw_sealed_routing = globals().get("SEALED_LAUNCH_ROUTING_V1_3_4")
     calibration, opened_calibration = _opened_json(calibration_path)
     try:
         raw_checkpoint_binding = calibration.get("checkpoint")
@@ -2954,6 +3093,8 @@ def _validate_inputs_structure(inputs: Mapping[str, Any]) -> dict[str, Any]:
             "experiment_id",
             "historical_receipt_sha256",
             "canonical_nonobservation_sha256",
+            "superseded_failure_lineage_sha256",
+            "superseded_failure_lineage_projection_sha256",
         }
         and isinstance(reuse_map.get("path"), str)
         and bool(reuse_map.get("path"))
@@ -2968,6 +3109,8 @@ def _validate_inputs_structure(inputs: Mapping[str, Any]) -> dict[str, Any]:
                 "attestation_mac",
                 "historical_receipt_sha256",
                 "canonical_nonobservation_sha256",
+                "superseded_failure_lineage_sha256",
+                "superseded_failure_lineage_projection_sha256",
             )
         ),
         "Reuse-admission public binding schema drifted.",
@@ -3006,6 +3149,8 @@ def _validate_inputs_structure(inputs: Mapping[str, Any]) -> dict[str, Any]:
             "base_prerequisites_sha256",
             "sealed_source_bundle_sha256",
             "sealed_launch_routing_sha256",
+            "superseded_failure_lineage_sha256",
+            "superseded_failure_lineage_projection_sha256",
         }
         and isinstance(activation_map.get("path"), str)
         and isinstance(activation_map.get("activation_root"), str)
@@ -3023,6 +3168,8 @@ def _validate_inputs_structure(inputs: Mapping[str, Any]) -> dict[str, Any]:
                 "base_prerequisites_sha256",
                 "sealed_source_bundle_sha256",
                 "sealed_launch_routing_sha256",
+                "superseded_failure_lineage_sha256",
+                "superseded_failure_lineage_projection_sha256",
             )
         ),
         "Quality-start activation public binding schema drifted.",
@@ -3049,27 +3196,27 @@ def _external_quality_context(
 ) -> admission.QualityContext:
     manifest_binding = cast(Mapping[str, Any], inputs["manifest"])
     manifest_path = manifest_binding.get("path")
-    _require(isinstance(manifest_path, str), "Bound v1.3.3 manifest path is missing.")
-    quality_context = admission.establish_v1_3_3_quality_context(
+    _require(isinstance(manifest_path, str), "Bound v1.3.4 manifest path is missing.")
+    quality_context = admission.establish_v1_3_4_quality_context(
         Path(cast(str, manifest_path)),
-        implementation_paths=contract.V1_3_3_IMPLEMENTATION_PATHS,
+        implementation_paths=contract.V1_3_4_IMPLEMENTATION_PATHS,
         repository_root=REPOSITORY_ROOT,
     )
     _require(
         quality_context.source == inputs.get("source")
         and quality_context.manifest_binding == inputs.get("manifest"),
-        "Direct-shard live v1.3.3 quality context drifted.",
+        "Direct-shard live v1.3.4 quality context drifted.",
     )
     return quality_context
 
 
 def _validate_external_consumer_authority(
-    consumer: admission.ActivatedConsumerAuthorityV1_3_3,
+    consumer: admission.ActivatedConsumerAuthorityV1_3_4,
     inputs: Mapping[str, Any],
     coordinate: Mapping[str, Any],
     *,
     quality_context: admission.QualityContext,
-) -> admission.ActivatedConsumerAuthorityV1_3_3:
+) -> admission.ActivatedConsumerAuthorityV1_3_4:
     consumer = admission.require_activated_consumer_authority(consumer)
     scale = cast(str, coordinate["scale"])
     training_seed = cast(int, coordinate["training_seed"])
@@ -3081,8 +3228,8 @@ def _validate_external_consumer_authority(
     activation_binding = cast(Mapping[str, Any], inputs["quality_start_activation"])
     activation = consumer.activation
     _require(
-        type(consumer) is admission.ActivatedConsumerAuthorityV1_3_3
-        and type(activation) is admission.ValidatedQualityStartActivationV1_3_3
+        type(consumer) is admission.ActivatedConsumerAuthorityV1_3_4
+        and type(activation) is admission.ValidatedQualityStartActivationV1_3_4
         and consumer.coordinate == admitted_coordinate
         and activation.consumer_coordinate == admitted_coordinate
         and activation.quality_context.source == quality_context.source
@@ -3117,7 +3264,7 @@ def _load_external_consumer_authority(
     trust_root: attestation.TrustRoot,
 ) -> tuple[
     admission.QualityContext,
-    admission.ActivatedConsumerAuthorityV1_3_3,
+    admission.ActivatedConsumerAuthorityV1_3_4,
 ]:
     quality_context = _external_quality_context(inputs)
     calibration_binding = cast(Mapping[str, Any], inputs["calibration_artifact"])
@@ -3148,7 +3295,7 @@ def _validate_external_inputs(
     coordinate: Mapping[str, Any],
     *,
     trust_root: attestation.TrustRoot,
-    _consumer_authority: admission.ActivatedConsumerAuthorityV1_3_3 | None = None,
+    _consumer_authority: admission.ActivatedConsumerAuthorityV1_3_4 | None = None,
 ) -> tuple[dict[str, Any], dict[str, BuiltCausalArm], dict[str, Any]]:
     if _consumer_authority is None:
         quality_context, consumer = _load_external_consumer_authority(
@@ -3209,7 +3356,7 @@ class _ExternalAuthorityCacheEntry:
     immutable_inputs: dict[str, Any]
     trust_root_key_id: str
     coordinate: dict[str, Any]
-    consumer: admission.ActivatedConsumerAuthorityV1_3_3
+    consumer: admission.ActivatedConsumerAuthorityV1_3_4
 
 
 @dataclass(frozen=True)
@@ -3352,7 +3499,7 @@ class DirectControllerExternalValidationCache:
     def assert_unchanged(self, *, trust_root: attestation.TrustRoot) -> None:
         """Revalidate each authority once and every unique arm cohort at finalization."""
 
-        refreshed: dict[str, admission.ActivatedConsumerAuthorityV1_3_3] = {}
+        refreshed: dict[str, admission.ActivatedConsumerAuthorityV1_3_4] = {}
         for authority_key, authority_cached in self._authorities.items():
             _require(
                 authority_cached.trust_root_key_id == trust_root.key_id,
@@ -4656,7 +4803,7 @@ def _run_persistent_session(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Run one paper-grade v1.3.3 exact-fill direct-controller shard."
+        description="Run one paper-grade v1.3.4 exact-fill direct-controller shard."
     )
     parser.add_argument("--checkpoint", type=Path, required=True)
     parser.add_argument("--training-summary", type=Path, required=True)
@@ -4665,7 +4812,7 @@ def main() -> None:
     parser.add_argument("--reuse-admission", type=Path, required=True)
     parser.add_argument("--preheldout-genesis", type=Path, required=True)
     parser.add_argument("--quality-start-activation", type=Path, required=True)
-    parser.add_argument("--manifest", type=Path, default=contract.V1_3_3_MANIFEST_PATH)
+    parser.add_argument("--manifest", type=Path, default=contract.V1_3_4_MANIFEST_PATH)
     parser.add_argument("--scale", choices=contract.SCALES, required=True)
     parser.add_argument("--training-seed", type=int, choices=contract.TRAINING_SEEDS, required=True)
     parser.add_argument("--budget", choices=contract.BUDGETS, required=True)
@@ -4687,9 +4834,9 @@ def main() -> None:
 
     _require(contract.is_sha256(args.launch_nonce), "--launch-nonce must be 64 lowercase hex.")
     _assert_repository_import_origins()
-    context = admission.establish_v1_3_3_quality_context(
+    context = admission.establish_v1_3_4_quality_context(
         args.manifest,
-        implementation_paths=contract.V1_3_3_IMPLEMENTATION_PATHS,
+        implementation_paths=contract.V1_3_4_IMPLEMENTATION_PATHS,
         repository_root=REPOSITORY_ROOT,
     )
     trust_root = attestation.trust_root_from_inherited_environment(

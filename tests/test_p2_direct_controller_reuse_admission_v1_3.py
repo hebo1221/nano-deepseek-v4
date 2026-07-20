@@ -13,7 +13,7 @@ import tempfile
 import threading
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -21,6 +21,7 @@ SCRIPTS = Path(__file__).resolve().parents[1] / "research" / "adaptive_v4_memory
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
+import evaluate_p2_direct_controller_shard_v1_3 as evaluator  # noqa: E402
 import p2_direct_attestation as attestation  # noqa: E402
 import p2_direct_controller_contract_v1_3 as contract  # noqa: E402
 import p2_direct_controller_reuse_admission_v1_3 as admission  # noqa: E402
@@ -1059,7 +1060,7 @@ def test_authoritative_calibration_replay_rejects_duck_admission_and_path_substi
     with pytest.raises(ValueError, match="duck-typed"):
         admission.validate_admitted_calibration(
             payload,
-            admission=copy.copy(validated).__dict__,  # type: ignore[arg-type]
+            admission=copy.copy(validated).__dict__,
             trust_root=trust_root,
             expected_scale=coordinate[0],
             expected_training_seed=coordinate[1],
@@ -3797,19 +3798,46 @@ else:
     subprocess.run([sys.executable, "-I", "-c", code], check=True)
 
 
+def _superseded_ready_preflight_failure_fixture() -> (
+    admission.SupersededReadyPreflightFailureLineageV1_3_3
+):
+    projection = contract.expected_v1_3_4_superseded_ready_preflight_failure_lineage()
+    source = {
+        "schema_version": 1,
+        "lineage_type": (
+            "fixture-signed-zero-quality-postactivation-ready-preflight-launch-failure"
+        ),
+        "normalized_contract_projection": projection,
+        "normalized_contract_projection_sha256": projection["projection_sha256"],
+    }
+    return admission.SupersededReadyPreflightFailureLineageV1_3_3(
+        _seal=admission._SUPERSEDED_READY_PREFLIGHT_FAILURE_LINEAGE_V1_3_3_SEAL,
+        manifest={},
+        reuse_admission={},
+        preheldout_genesis={},
+        quality_start_activation={},
+        persistent_launch={},
+        persistent_terminal={},
+        public_binding={
+            **source,
+            "lineage_sha256": admission._json_digest(source),
+        },
+    )
+
+
 def _activation_test_authority(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> tuple[
     attestation.TrustRoot,
     admission.QualityContext,
-    admission.PrestartQualityAuthorityV1_3_3,
+    admission.PrestartQualityAuthorityV1_3_4,
     dict[str, Any],
     dict[str, Any],
     dict[str, Any],
 ]:
     trust_root = _trust_root()
-    manifest = tmp_path / "manifest-v1-3-3.json"
+    manifest = tmp_path / "manifest-v1-3-4.json"
     _write_json(manifest, {"fixture": "manifest"})
     context = admission.QualityContext(
         manifest_path=manifest,
@@ -3817,7 +3845,7 @@ def _activation_test_authority(
             "path": str(manifest),
             "sha256": hashlib.sha256(manifest.read_bytes()).hexdigest(),
             "bytes": manifest.stat().st_size,
-            "experiment_id": admission.V1_3_3_QUALITY_EXPERIMENT_ID,
+            "experiment_id": admission.V1_3_4_QUALITY_EXPERIMENT_ID,
             "implementation_source_commit": "a" * 40,
             "implementation_digest": "b" * 64,
             "live_implementation_inventory_digest": "c" * 64,
@@ -3887,14 +3915,37 @@ def _activation_test_authority(
             "lineage_sha256": admission._json_digest(prerequisite_source),
         },
     )
+    ready_preflight_failure = _superseded_ready_preflight_failure_fixture()
+    ready_preflight_projection = cast(
+        dict[str, Any],
+        ready_preflight_failure.public_binding["normalized_contract_projection"],
+    )
     reuse_payload = admission._attested_payload(
         {
+            "experiment_id": admission.V1_3_4_QUALITY_EXPERIMENT_ID,
+            "superseded_empty_lineage": lineage.public_binding,
+            "superseded_zero_quality_failure_lineage": failure_lineage.public_binding,
+            "superseded_zero_quality_failure_lineage_projection_sha256": (
+                normalized_failure_projection["projection_sha256"]
+            ),
+            "superseded_zero_quality_prerequisite_failure_lineage": (
+                prerequisite_failure.public_binding
+            ),
+            "superseded_zero_quality_prerequisite_failure_lineage_projection_sha256": (
+                prerequisite_projection["projection_sha256"]
+            ),
+            "superseded_zero_quality_ready_preflight_failure_lineage": (
+                ready_preflight_failure.public_binding
+            ),
+            "superseded_zero_quality_ready_preflight_failure_lineage_projection_sha256": (
+                ready_preflight_projection["projection_sha256"]
+            ),
             "quality_evaluation_started": False,
             "evaluation_seed_used_to_initialize_quality_rng": False,
             "quality_rng_initialized": False,
         },
         trust_root=trust_root,
-        purpose=admission.V1_3_3_REUSE_ADMISSION_PURPOSE,
+        purpose=admission.V1_3_4_REUSE_ADMISSION_PURPOSE,
     )
     reuse_path = tmp_path / "admission.json"
     _write_json(reuse_path, reuse_payload)
@@ -3905,15 +3956,15 @@ def _activation_test_authority(
             "path": str(reuse_path),
             "sha256": hashlib.sha256(reuse_bytes).hexdigest(),
             "bytes": len(reuse_bytes),
-            "experiment_id": admission.V1_3_3_QUALITY_EXPERIMENT_ID,
+            "experiment_id": admission.V1_3_4_QUALITY_EXPERIMENT_ID,
             "payload_sha256": reuse_payload["payload_sha256"],
             "attestation_mac": reuse_payload["attestation"]["mac"],
             "historical_receipt_sha256": "1" * 64,
             "canonical_nonobservation_sha256": "2" * 64,
-            "superseded_failure_lineage_sha256": prerequisite_failure.public_binding[
+            "superseded_failure_lineage_sha256": ready_preflight_failure.public_binding[
                 "lineage_sha256"
             ],
-            "superseded_failure_lineage_projection_sha256": prerequisite_projection[
+            "superseded_failure_lineage_projection_sha256": ready_preflight_projection[
                 "projection_sha256"
             ],
         },
@@ -3924,18 +3975,37 @@ def _activation_test_authority(
     )
     genesis_payload = admission._attested_payload(
         {
+            "experiment_id": admission.V1_3_4_QUALITY_EXPERIMENT_ID,
+            "reuse_admission": reuse.public_binding,
+            "superseded_empty_lineage": lineage.public_binding,
+            "superseded_zero_quality_failure_lineage": failure_lineage.public_binding,
+            "superseded_zero_quality_failure_lineage_projection_sha256": (
+                normalized_failure_projection["projection_sha256"]
+            ),
+            "superseded_zero_quality_prerequisite_failure_lineage": (
+                prerequisite_failure.public_binding
+            ),
+            "superseded_zero_quality_prerequisite_failure_lineage_projection_sha256": (
+                prerequisite_projection["projection_sha256"]
+            ),
             "expected_shards": admission.EXPECTED_QUALITY_SHARDS,
             "coordinate_digest": admission.QUALITY_COORDINATE_DIGEST,
-            "superseded_failure_lineage_sha256": prerequisite_failure.public_binding[
+            "superseded_zero_quality_ready_preflight_failure_lineage": (
+                ready_preflight_failure.public_binding
+            ),
+            "superseded_zero_quality_ready_preflight_failure_lineage_projection_sha256": (
+                ready_preflight_projection["projection_sha256"]
+            ),
+            "superseded_failure_lineage_sha256": ready_preflight_failure.public_binding[
                 "lineage_sha256"
             ],
-            "superseded_failure_lineage_projection_sha256": prerequisite_projection[
+            "superseded_failure_lineage_projection_sha256": ready_preflight_projection[
                 "projection_sha256"
             ],
             "exact_fill_arm_names": list(admission.FROZEN_EXACT_FILL_ARM_NAMES),
         },
         trust_root=trust_root,
-        purpose=admission.V1_3_3_PREHELDOUT_GENESIS_PURPOSE,
+        purpose=admission.V1_3_4_PREHELDOUT_GENESIS_PURPOSE,
     )
     genesis_path = tmp_path / "genesis.json"
     _write_json(genesis_path, genesis_payload)
@@ -3946,12 +4016,18 @@ def _activation_test_authority(
             "path": str(genesis_path),
             "sha256": hashlib.sha256(genesis_bytes).hexdigest(),
             "bytes": len(genesis_bytes),
-            "experiment_id": admission.V1_3_3_QUALITY_EXPERIMENT_ID,
+            "experiment_id": admission.V1_3_4_QUALITY_EXPERIMENT_ID,
             "payload_sha256": genesis_payload["payload_sha256"],
             "attestation_mac": genesis_payload["attestation"]["mac"],
             "reuse_admission_sha256": reuse.public_binding["sha256"],
             "expected_shards": admission.EXPECTED_QUALITY_SHARDS,
             "coordinate_digest": admission.QUALITY_COORDINATE_DIGEST,
+            "superseded_failure_lineage_sha256": ready_preflight_failure.public_binding[
+                "lineage_sha256"
+            ],
+            "superseded_failure_lineage_projection_sha256": ready_preflight_projection[
+                "projection_sha256"
+            ],
         },
     )
     calibration_binding = {
@@ -3960,7 +4036,7 @@ def _activation_test_authority(
         "bytes": len(reuse_bytes),
         "payload_sha256": reuse_payload["payload_sha256"],
         "attestation_mac": reuse_payload["attestation"]["mac"],
-        "experiment_id": admission.V1_3_3_QUALITY_EXPERIMENT_ID,
+        "experiment_id": admission.V1_3_4_QUALITY_EXPERIMENT_ID,
         "attestation_purpose": admission.LEGACY_CALIBRATION_PURPOSE,
     }
     checkpoint_binding = {
@@ -3980,49 +4056,54 @@ def _activation_test_authority(
                 path=genesis_path,
                 public_binding=dict(checkpoint_binding),
             )
-    activation_relative = Path("activation-v1-3-3")
+    activation_relative = Path("activation-v1-3-4")
     prospective = (
-        Path("quality-v1-3-3"),
-        Path("quality-v1-3-3.integrity.json"),
-        Path("quality-v1-3-3.summary.json"),
+        Path("quality-v1-3-4"),
+        Path("quality-v1-3-4.integrity.json"),
+        Path("quality-v1-3-4.summary.json"),
     )
-    monkeypatch.setattr(admission, "V1_3_3_ACTIVATION_ROOT", activation_relative)
+    monkeypatch.setattr(admission, "V1_3_4_ACTIVATION_ROOT", activation_relative)
     monkeypatch.setattr(
         admission,
-        "V1_3_3_ACTIVATION_MATRIX_LOCK_PATH",
+        "V1_3_4_ACTIVATION_MATRIX_LOCK_PATH",
         activation_relative / "matrix.lock",
     )
     monkeypatch.setattr(
         admission,
-        "V1_3_3_QUALITY_START_ACTIVATION_PATH",
+        "V1_3_4_QUALITY_START_ACTIVATION_PATH",
         activation_relative / "quality-start-activation.json",
     )
-    monkeypatch.setattr(admission, "V1_3_3_PROSPECTIVE_QUALITY_PATHS", prospective)
+    monkeypatch.setattr(admission, "V1_3_4_PROSPECTIVE_QUALITY_PATHS", prospective)
     monkeypatch.setattr(
         admission,
-        "V1_3_3_ACTIVATION_BOOTSTRAP_LOCK_PATH",
+        "V1_3_4_ACTIVATION_BOOTSTRAP_LOCK_PATH",
         tmp_path / "activation-bootstrap.lock",
     )
     monkeypatch.setattr(admission, "assert_quality_context_unchanged", lambda _context: None)
     monkeypatch.setattr(
         admission,
-        "_require_v1_3_3_context",
+        "_require_v1_3_4_context",
         lambda _context, *, trust_root: None,
     )
     monkeypatch.setattr(
         admission,
-        "_validate_sealed_source_provenance_v1_3_3",
+        "_validate_sealed_source_provenance_v1_3_4",
         lambda value, *, quality_context: dict(value),
     )
     monkeypatch.setattr(
         admission,
-        "_validate_sealed_launch_routing_v1_3_3",
+        "_validate_sealed_launch_routing_v1_3_4",
         lambda value, *, source_provenance: dict(value),
     )
     monkeypatch.setattr(
         admission,
         "load_superseded_static_only_failure_lineage_v1_3_2",
         lambda **_kwargs: prerequisite_failure,
+    )
+    monkeypatch.setattr(
+        admission,
+        "load_superseded_ready_preflight_failure_lineage_v1_3_3",
+        lambda **_kwargs: ready_preflight_failure,
     )
 
     def load_fixture_static_bundle(
@@ -4033,12 +4114,21 @@ def _activation_test_authority(
         admission.SupersededEmptyLineageV1_3,
         admission.SupersededZeroQualityFailureLineageV1_3_1,
         admission.SupersededStaticOnlyFailureLineageV1_3_2,
+        admission.SupersededReadyPreflightFailureLineageV1_3_3,
     ]:
         scope = kwargs.get("consumer_scope")
         if scope is None:
-            return reuse, genesis, lineage, failure_lineage, prerequisite_failure
-        assert type(scope) is admission._ActivatedConsumerScopeV1_3_3
-        coordinate = scope.coordinate
+            return (
+                reuse,
+                genesis,
+                lineage,
+                failure_lineage,
+                prerequisite_failure,
+                ready_preflight_failure,
+            )
+        assert type(scope) is admission._ActivatedConsumerScopeV1_3_4
+        typed_scope = cast(admission._ActivatedConsumerScopeV1_3_4, scope)
+        coordinate = typed_scope.coordinate
         admitted_calibration = reuse.calibrations[coordinate]
         admitted_checkpoint = reuse.checkpoints[coordinate]
         expected_calibration = {
@@ -4053,8 +4143,8 @@ def _activation_test_authority(
             )
         }
         if (
-            scope.calibration_binding != expected_calibration
-            or scope.checkpoint_binding != admitted_checkpoint.public_binding
+            typed_scope.calibration_binding != expected_calibration
+            or typed_scope.checkpoint_binding != admitted_checkpoint.public_binding
         ):
             raise ValueError("Activated consumer bindings differ from the admitted coordinate.")
         scoped = admission.ValidatedReuseAdmission(
@@ -4065,11 +4155,18 @@ def _activation_test_authority(
             quality_context=reuse.quality_context,
             execution_environment_projection=reuse.execution_environment_projection,
         )
-        return scoped, genesis, lineage, failure_lineage, prerequisite_failure
+        return (
+            scoped,
+            genesis,
+            lineage,
+            failure_lineage,
+            prerequisite_failure,
+            ready_preflight_failure,
+        )
 
     monkeypatch.setattr(
         admission,
-        "_load_v1_3_3_static_bundle",
+        "_load_v1_3_4_static_bundle",
         load_fixture_static_bundle,
     )
     prestart = admission.load_prestart_quality_authority(
@@ -4104,7 +4201,7 @@ def _publish_test_activation(
 ) -> tuple[
     attestation.TrustRoot,
     admission.QualityContext,
-    admission.QualityStartActivationLeaseV1_3_3,
+    admission.QualityStartActivationLeaseV1_3_4,
     dict[str, Any],
     dict[str, Any],
     dict[str, Any],
@@ -4123,7 +4220,7 @@ def _publish_test_activation(
     return trust_root, context, lease, base, source, routing
 
 
-def test_v1_3_3_activation_is_atomic_exact2_and_keeps_the_prerename_flock(
+def test_v1_3_4_activation_is_atomic_exact2_and_keeps_the_prerename_flock(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -4131,11 +4228,11 @@ def test_v1_3_3_activation_is_atomic_exact2_and_keeps_the_prerename_flock(
         tmp_path,
         monkeypatch,
     )
-    read_only: admission.ValidatedQualityStartActivationV1_3_3 | None = None
+    read_only: admission.ValidatedQualityStartActivationV1_3_4 | None = None
     try:
         lease.assert_held()
         activation = lease.activation
-        root = tmp_path / admission.V1_3_3_ACTIVATION_ROOT
+        root = tmp_path / admission.V1_3_4_ACTIVATION_ROOT
         assert {path.name for path in root.iterdir()} == {
             "matrix.lock",
             "quality-start-activation.json",
@@ -4173,7 +4270,51 @@ def test_v1_3_3_activation_is_atomic_exact2_and_keeps_the_prerename_flock(
         assert (
             activation.public_binding["superseded_failure_lineage_projection_sha256"]
             == activation.payload[
-                "superseded_zero_quality_prerequisite_failure_lineage_projection_sha256"
+                "superseded_zero_quality_ready_preflight_failure_lineage_projection_sha256"
+            ]
+        )
+        assert (
+            activation.public_binding["superseded_failure_lineage_sha256"]
+            == activation.superseded_ready_preflight_failure_lineage.public_binding[
+                "lineage_sha256"
+            ]
+        )
+        for binding in (
+            activation.reuse_admission.public_binding,
+            activation.preheldout_genesis.public_binding,
+            activation.public_binding,
+        ):
+            assert (
+                binding["superseded_failure_lineage_sha256"]
+                == (
+                    activation.superseded_ready_preflight_failure_lineage.public_binding[
+                        "lineage_sha256"
+                    ]
+                )
+            )
+            assert (
+                binding["superseded_failure_lineage_projection_sha256"]
+                == (
+                    activation.superseded_ready_preflight_failure_lineage.public_binding[
+                        "normalized_contract_projection_sha256"
+                    ]
+                )
+            )
+        for payload in (
+            activation.reuse_admission.payload,
+            activation.preheldout_genesis.payload,
+            activation.payload,
+        ):
+            assert (
+                payload["superseded_zero_quality_ready_preflight_failure_lineage"]
+                == activation.superseded_ready_preflight_failure_lineage.public_binding
+            )
+        assert (
+            activation.payload["prestart_absence_witness"][
+                "superseded_ready_preflight_failure_lineage_sha256"
+            ]
+            == activation.superseded_ready_preflight_failure_lineage.public_binding[
+                "lineage_sha256"
             ]
         )
         read_only = admission.load_activated_quality_authority(
@@ -4203,9 +4344,7 @@ def test_v1_3_3_activation_is_atomic_exact2_and_keeps_the_prerename_flock(
             == activation.payload["preheldout_genesis"]
         )
         with pytest.raises(ValueError, match="raw or duck-typed"):
-            admission.load_activated_reuse_admission(  # type: ignore[arg-type]
-                {"skip": True}, trust_root=trust_root
-            )
+            admission.load_activated_reuse_admission({"skip": True}, trust_root=trust_root)
     finally:
         lease.close()
     assert read_only is not None
@@ -4218,7 +4357,7 @@ def test_v1_3_3_activation_is_atomic_exact2_and_keeps_the_prerename_flock(
     resumed.close()
 
 
-def test_v1_3_3_consumer_authority_is_coordinate_scoped_and_cannot_claim_owner_power(
+def test_v1_3_4_consumer_authority_is_coordinate_scoped_and_cannot_claim_owner_power(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -4241,7 +4380,7 @@ def test_v1_3_3_consumer_authority_is_coordinate_scoped_and_cannot_claim_owner_p
     calibration_binding = {
         field: admitted_calibration.public_binding[field] for field in calibration_fields
     }
-    original_loader = admission._load_v1_3_3_static_bundle
+    original_loader = admission._load_v1_3_4_static_bundle
     scopes: list[object | None] = []
 
     def record_scope(
@@ -4250,13 +4389,16 @@ def test_v1_3_3_consumer_authority_is_coordinate_scoped_and_cannot_claim_owner_p
         admission.ValidatedReuseAdmission,
         admission.ValidatedPreheldoutGenesis,
         admission.SupersededEmptyLineageV1_3,
+        admission.SupersededZeroQualityFailureLineageV1_3_1,
+        admission.SupersededStaticOnlyFailureLineageV1_3_2,
+        admission.SupersededReadyPreflightFailureLineageV1_3_3,
     ]:
         scopes.append(kwargs.get("consumer_scope"))
-        return original_loader(**kwargs)  # type: ignore[arg-type]
+        return original_loader(**kwargs)
 
     monkeypatch.setattr(
         admission,
-        "_load_v1_3_3_static_bundle",
+        "_load_v1_3_4_static_bundle",
         record_scope,
     )
     try:
@@ -4281,7 +4423,7 @@ def test_v1_3_3_consumer_authority_is_coordinate_scoped_and_cannot_claim_owner_p
         assert set(consumer.reuse_admission.checkpoints) == {coordinate}
         assert len(scopes) == 1
         assert scopes[0] is not None
-        nominal = admission.ActivatedConsumerAuthorityV1_3_3(
+        nominal = admission.ActivatedConsumerAuthorityV1_3_4(
             _seal=object(),
             activation=consumer.activation,
             reuse_admission=consumer.reuse_admission,
@@ -4318,7 +4460,7 @@ def test_v1_3_3_consumer_authority_is_coordinate_scoped_and_cannot_claim_owner_p
         lease.close()
 
 
-def test_v1_3_3_consumer_authority_rejects_unadmitted_selected_binding(
+def test_v1_3_4_consumer_authority_rejects_unadmitted_selected_binding(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -4364,7 +4506,7 @@ def test_v1_3_3_consumer_authority_rejects_unadmitted_selected_binding(
         lease.close()
 
 
-def test_v1_3_3_publish_closes_transferred_lease_when_post_wrap_assertion_fails(
+def test_v1_3_4_publish_closes_transferred_lease_when_post_wrap_assertion_fails(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -4372,10 +4514,10 @@ def test_v1_3_3_publish_closes_transferred_lease_when_post_wrap_assertion_fails(
         tmp_path,
         monkeypatch,
     )
-    original_assert = admission.QualityStartActivationLeaseV1_3_3.assert_held
+    original_assert = admission.QualityStartActivationLeaseV1_3_4.assert_held
     fail_once = True
 
-    def injected_assert(lease: admission.QualityStartActivationLeaseV1_3_3) -> None:
+    def injected_assert(lease: admission.QualityStartActivationLeaseV1_3_4) -> None:
         nonlocal fail_once
         if fail_once:
             fail_once = False
@@ -4383,7 +4525,7 @@ def test_v1_3_3_publish_closes_transferred_lease_when_post_wrap_assertion_fails(
         original_assert(lease)
 
     monkeypatch.setattr(
-        admission.QualityStartActivationLeaseV1_3_3,
+        admission.QualityStartActivationLeaseV1_3_4,
         "assert_held",
         injected_assert,
     )
@@ -4395,8 +4537,8 @@ def test_v1_3_3_publish_closes_transferred_lease_when_post_wrap_assertion_fails(
             sealed_source_provenance=source,
             sealed_launch_routing=routing,
         )
-    assert admission._ACTIVE_V1_3_3_ACTIVATION_LEASE_FDS == set()
-    lock_path = tmp_path / admission.V1_3_3_ACTIVATION_MATRIX_LOCK_PATH
+    assert admission._ACTIVE_V1_3_4_ACTIVATION_LEASE_FDS == set()
+    lock_path = tmp_path / admission.V1_3_4_ACTIVATION_MATRIX_LOCK_PATH
     descriptor = os.open(lock_path, os.O_RDWR)
     try:
         admission.fcntl.flock(
@@ -4408,7 +4550,7 @@ def test_v1_3_3_publish_closes_transferred_lease_when_post_wrap_assertion_fails(
         os.close(descriptor)
 
 
-def test_v1_3_3_acquire_closes_transferred_lease_when_final_assertion_fails(
+def test_v1_3_4_acquire_closes_transferred_lease_when_final_assertion_fails(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -4419,10 +4561,10 @@ def test_v1_3_3_acquire_closes_transferred_lease_when_final_assertion_fails(
     activation = lease.activation
     lock_path = Path(activation.matrix_lock_binding["path"])
     lease.close()
-    original_assert = admission.QualityStartActivationLeaseV1_3_3.assert_held
+    original_assert = admission.QualityStartActivationLeaseV1_3_4.assert_held
     fail_once = True
 
-    def injected_assert(candidate: admission.QualityStartActivationLeaseV1_3_3) -> None:
+    def injected_assert(candidate: admission.QualityStartActivationLeaseV1_3_4) -> None:
         nonlocal fail_once
         if fail_once:
             fail_once = False
@@ -4430,7 +4572,7 @@ def test_v1_3_3_acquire_closes_transferred_lease_when_final_assertion_fails(
         original_assert(candidate)
 
     monkeypatch.setattr(
-        admission.QualityStartActivationLeaseV1_3_3,
+        admission.QualityStartActivationLeaseV1_3_4,
         "assert_held",
         injected_assert,
     )
@@ -4439,8 +4581,8 @@ def test_v1_3_3_acquire_closes_transferred_lease_when_final_assertion_fails(
             activation,
             trust_root=trust_root,
         )
-    assert admission._ACTIVE_V1_3_3_ACTIVATION_LEASE_FDS == set()
-    assert admission._PENDING_V1_3_3_ACTIVATION_LEASE_IDENTITIES == set()
+    assert admission._ACTIVE_V1_3_4_ACTIVATION_LEASE_FDS == set()
+    assert admission._PENDING_V1_3_4_ACTIVATION_LEASE_IDENTITIES == set()
     descriptor = os.open(lock_path, os.O_RDWR)
     try:
         admission.fcntl.flock(
@@ -4452,7 +4594,7 @@ def test_v1_3_3_acquire_closes_transferred_lease_when_final_assertion_fails(
         os.close(descriptor)
 
 
-def test_v1_3_3_same_process_pending_acquire_fails_without_self_deadlock(
+def test_v1_3_4_same_process_pending_acquire_fails_without_self_deadlock(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -4476,7 +4618,7 @@ def test_v1_3_3_same_process_pending_acquire_fails_without_self_deadlock(
         original_flock(descriptor, operation)
 
     monkeypatch.setattr(admission.fcntl, "flock", controlled_flock)
-    acquired: list[admission.QualityStartActivationLeaseV1_3_3] = []
+    acquired: list[admission.QualityStartActivationLeaseV1_3_4] = []
     failures: list[BaseException] = []
 
     def acquire_first() -> None:
@@ -4506,10 +4648,10 @@ def test_v1_3_3_same_process_pending_acquire_fails_without_self_deadlock(
     assert failures == []
     assert len(acquired) == 1
     acquired[0].close()
-    assert admission._PENDING_V1_3_3_ACTIVATION_LEASE_IDENTITIES == set()
+    assert admission._PENDING_V1_3_4_ACTIVATION_LEASE_IDENTITIES == set()
 
 
-def test_v1_3_3_publish_reuses_the_single_prestart_full_grid_replay(
+def test_v1_3_4_publish_reuses_the_single_prestart_full_grid_replay(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -4517,7 +4659,7 @@ def test_v1_3_3_publish_reuses_the_single_prestart_full_grid_replay(
         tmp_path,
         monkeypatch,
     )
-    original_loader = admission._load_v1_3_3_static_bundle
+    original_loader = admission._load_v1_3_4_static_bundle
     full_replays = 0
 
     def count_loader(
@@ -4526,12 +4668,15 @@ def test_v1_3_3_publish_reuses_the_single_prestart_full_grid_replay(
         admission.ValidatedReuseAdmission,
         admission.ValidatedPreheldoutGenesis,
         admission.SupersededEmptyLineageV1_3,
+        admission.SupersededZeroQualityFailureLineageV1_3_1,
+        admission.SupersededStaticOnlyFailureLineageV1_3_2,
+        admission.SupersededReadyPreflightFailureLineageV1_3_3,
     ]:
         nonlocal full_replays
         full_replays += 1
-        return original_loader(**kwargs)  # type: ignore[arg-type]
+        return original_loader(**kwargs)
 
-    monkeypatch.setattr(admission, "_load_v1_3_3_static_bundle", count_loader)
+    monkeypatch.setattr(admission, "_load_v1_3_4_static_bundle", count_loader)
     lease = admission.publish_quality_start_activation(
         prestart=prestart,
         trust_root=trust_root,
@@ -4545,7 +4690,7 @@ def test_v1_3_3_publish_reuses_the_single_prestart_full_grid_replay(
         lease.close()
 
 
-def test_v1_3_3_resume_replays_full_grid_once_then_uses_cached_authority(
+def test_v1_3_4_resume_replays_full_grid_once_then_uses_cached_authority(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -4555,7 +4700,7 @@ def test_v1_3_3_resume_replays_full_grid_once_then_uses_cached_authority(
     )
     published = lease.activation
     lease.close()
-    original_loader = admission._load_v1_3_3_static_bundle
+    original_loader = admission._load_v1_3_4_static_bundle
     full_replays = 0
 
     def count_loader(
@@ -4564,12 +4709,15 @@ def test_v1_3_3_resume_replays_full_grid_once_then_uses_cached_authority(
         admission.ValidatedReuseAdmission,
         admission.ValidatedPreheldoutGenesis,
         admission.SupersededEmptyLineageV1_3,
+        admission.SupersededZeroQualityFailureLineageV1_3_1,
+        admission.SupersededStaticOnlyFailureLineageV1_3_2,
+        admission.SupersededReadyPreflightFailureLineageV1_3_3,
     ]:
         nonlocal full_replays
         full_replays += 1
-        return original_loader(**kwargs)  # type: ignore[arg-type]
+        return original_loader(**kwargs)
 
-    monkeypatch.setattr(admission, "_load_v1_3_3_static_bundle", count_loader)
+    monkeypatch.setattr(admission, "_load_v1_3_4_static_bundle", count_loader)
     activation = admission.load_activated_quality_authority(
         quality_context=context,
         trust_root=trust_root,
@@ -4599,7 +4747,7 @@ def test_v1_3_3_resume_replays_full_grid_once_then_uses_cached_authority(
         resumed.close()
 
 
-def test_v1_3_3_resume_fsyncs_activation_root_and_parent_before_handoff(
+def test_v1_3_4_resume_fsyncs_activation_root_and_parent_before_handoff(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -4629,7 +4777,7 @@ def test_v1_3_3_resume_fsyncs_activation_root_and_parent_before_handoff(
         resumed.close()
 
 
-def test_v1_3_3_activation_flock_blocks_competing_process_until_release(
+def test_v1_3_4_activation_flock_blocks_competing_process_until_release(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -4669,7 +4817,7 @@ finally:
     assert acquired.stdout.strip() == "acquired"
 
 
-def test_v1_3_3_two_concurrent_publishers_yield_exactly_one_exact2_activation(
+def test_v1_3_4_two_concurrent_publishers_yield_exactly_one_exact2_activation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -4698,7 +4846,7 @@ def test_v1_3_3_two_concurrent_publishers_yield_exactly_one_exact2_activation(
                         sealed_launch_routing=routing,
                     )
                     try:
-                        root = tmp_path / admission.V1_3_3_ACTIVATION_ROOT
+                        root = tmp_path / admission.V1_3_4_ACTIVATION_ROOT
                         if {path.name for path in root.iterdir()} != {
                             "matrix.lock",
                             "quality-start-activation.json",
@@ -4726,7 +4874,7 @@ def test_v1_3_3_two_concurrent_publishers_yield_exactly_one_exact2_activation(
                 break
             outcomes += chunk
         assert sorted(outcomes) == [ord("F"), ord("S")]
-        root = tmp_path / admission.V1_3_3_ACTIVATION_ROOT
+        root = tmp_path / admission.V1_3_4_ACTIVATION_ROOT
         assert {path.name for path in root.iterdir()} == {
             "matrix.lock",
             "quality-start-activation.json",
@@ -4743,7 +4891,7 @@ def test_v1_3_3_two_concurrent_publishers_yield_exactly_one_exact2_activation(
 
 
 @pytest.mark.parametrize("tamper", ["receipt", "lock", "extra-member"])
-def test_v1_3_3_activation_rejects_tamper(
+def test_v1_3_4_activation_rejects_tamper(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     tamper: str,
@@ -4753,7 +4901,7 @@ def test_v1_3_3_activation_rejects_tamper(
         monkeypatch,
     )
     public = lease.activation.public_binding
-    root = tmp_path / admission.V1_3_3_ACTIVATION_ROOT
+    root = tmp_path / admission.V1_3_4_ACTIVATION_ROOT
     lease.close()
     if tamper == "receipt":
         path = root / "quality-start-activation.json"
@@ -4785,7 +4933,7 @@ def test_v1_3_3_activation_rejects_tamper(
         )
 
 
-def test_v1_3_3_activation_rejects_resigned_malformed_prestart_absence_witness(
+def test_v1_3_4_activation_rejects_resigned_malformed_prestart_absence_witness(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -4793,7 +4941,7 @@ def test_v1_3_3_activation_rejects_resigned_malformed_prestart_absence_witness(
         tmp_path,
         monkeypatch,
     )
-    root = tmp_path / admission.V1_3_3_ACTIVATION_ROOT
+    root = tmp_path / admission.V1_3_4_ACTIVATION_ROOT
     receipt_path = root / "quality-start-activation.json"
     lease.close()
 
@@ -4810,7 +4958,7 @@ def test_v1_3_3_activation_rejects_resigned_malformed_prestart_absence_witness(
     forged = admission._attested_payload(
         core,
         trust_root=trust_root,
-        purpose=admission.V1_3_3_QUALITY_START_ACTIVATION_PURPOSE,
+        purpose=admission.V1_3_4_QUALITY_START_ACTIVATION_PURPOSE,
     )
     _write_json(receipt_path, forged)
 
@@ -4824,7 +4972,54 @@ def test_v1_3_3_activation_rejects_resigned_malformed_prestart_absence_witness(
         )
 
 
-def test_v1_3_3_activation_rename_fault_leaves_no_final_or_staging_root(
+def test_v1_3_4_activation_rejects_rehashed_ready_preflight_lineage_tamper(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    trust_root, context, lease, _base, _source, _routing = _publish_test_activation(
+        tmp_path,
+        monkeypatch,
+    )
+    root = tmp_path / admission.V1_3_4_ACTIVATION_ROOT
+    receipt_path = root / "quality-start-activation.json"
+    lease.close()
+
+    payload = json.loads(receipt_path.read_text(encoding="utf-8"))
+    core = {
+        key: value for key, value in payload.items() if key not in {"payload_sha256", "attestation"}
+    }
+    lineage_field = "superseded_zero_quality_ready_preflight_failure_lineage"
+    projection_field = "superseded_zero_quality_ready_preflight_failure_lineage_projection_sha256"
+    ready_lineage = copy.deepcopy(core[lineage_field])
+    projection = ready_lineage["normalized_contract_projection"]
+    projection["quality_state"]["quality_outcomes_materialized"] = 1
+    projection["projection_sha256"] = admission._json_digest(
+        {key: value for key, value in projection.items() if key != "projection_sha256"}
+    )
+    ready_lineage["normalized_contract_projection_sha256"] = projection["projection_sha256"]
+    ready_lineage["lineage_sha256"] = admission._json_digest(
+        {key: value for key, value in ready_lineage.items() if key != "lineage_sha256"}
+    )
+    core[lineage_field] = ready_lineage
+    core[projection_field] = projection["projection_sha256"]
+    forged = admission._attested_payload(
+        core,
+        trust_root=trust_root,
+        purpose=admission.V1_3_4_QUALITY_START_ACTIVATION_PURPOSE,
+    )
+    _write_json(receipt_path, forged)
+
+    with pytest.raises(ValueError, match="(?i)ready-preflight|lineage|activation"):
+        admission.load_activated_quality_authority(
+            quality_context=context,
+            trust_root=trust_root,
+            expected_shards=admission.EXPECTED_QUALITY_SHARDS,
+            coordinate_digest=admission.QUALITY_COORDINATE_DIGEST,
+            exact_fill_arm_names=admission.FROZEN_EXACT_FILL_ARM_NAMES,
+        )
+
+
+def test_v1_3_4_activation_rename_fault_leaves_no_final_or_staging_root(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -4846,22 +5041,22 @@ def test_v1_3_3_activation_rename_fault_leaves_no_final_or_staging_root(
             sealed_launch_routing=routing,
         )
     parent = tmp_path
-    assert not (tmp_path / admission.V1_3_3_ACTIVATION_ROOT).exists()
+    assert not (tmp_path / admission.V1_3_4_ACTIVATION_ROOT).exists()
     assert not any(
-        path.name.startswith(admission.V1_3_3_ACTIVATION_STAGING_PREFIX)
+        path.name.startswith(admission.V1_3_4_ACTIVATION_STAGING_PREFIX)
         for path in parent.iterdir()
     )
     from adaptive_v4_gpu_lock import acquire_gpu_lock
 
     bootstrap = acquire_gpu_lock(
         "activation-fault-reacquire",
-        path=admission.V1_3_3_ACTIVATION_BOOTSTRAP_LOCK_PATH,
+        path=admission.V1_3_4_ACTIVATION_BOOTSTRAP_LOCK_PATH,
     )
     bootstrap.close()
 
 
 @pytest.mark.parametrize("fault", ["parent-fsync", "final-validation"])
-def test_v1_3_3_post_rename_fault_preserves_immutable_final_and_hard_fails(
+def test_v1_3_4_post_rename_fault_preserves_immutable_final_and_hard_fails(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     fault: str,
@@ -4889,10 +5084,10 @@ def test_v1_3_3_post_rename_fault_preserves_immutable_final_and_hard_fails(
 
         def fail_final_activation_validation(
             **kwargs: object,
-        ) -> admission.ValidatedQualityStartActivationV1_3_3:
+        ) -> admission.ValidatedQualityStartActivationV1_3_4:
             if kwargs.get("storage_root") == kwargs.get("canonical_root"):
                 raise ValueError("injected post-rename final-validation fault")
-            return real_activation_validator(**kwargs)  # type: ignore[arg-type]
+            return real_activation_validator(**kwargs)
 
         monkeypatch.setattr(
             admission,
@@ -4907,13 +5102,13 @@ def test_v1_3_3_post_rename_fault_preserves_immutable_final_and_hard_fails(
             sealed_source_provenance=source,
             sealed_launch_routing=routing,
         )
-    root = tmp_path / admission.V1_3_3_ACTIVATION_ROOT
+    root = tmp_path / admission.V1_3_4_ACTIVATION_ROOT
     assert {path.name for path in root.iterdir()} == {
         "matrix.lock",
         "quality-start-activation.json",
     }
     assert not any(
-        path.name.startswith(admission.V1_3_3_ACTIVATION_STAGING_PREFIX)
+        path.name.startswith(admission.V1_3_4_ACTIVATION_STAGING_PREFIX)
         for path in tmp_path.iterdir()
     )
     before = {
@@ -4952,7 +5147,7 @@ def test_v1_3_3_post_rename_fault_preserves_immutable_final_and_hard_fails(
     assert after == before
 
 
-def test_v1_3_3_public_authority_apis_have_no_raw_skip_boolean() -> None:
+def test_v1_3_4_public_authority_apis_have_no_raw_skip_boolean() -> None:
     for function in (
         admission.load_prestart_quality_authority,
         admission.publish_quality_start_activation,
@@ -5071,7 +5266,7 @@ def test_v1_3_2_static_failure_absence_rejects_staging_race(
         )
 
 
-def test_v1_3_3_static_admission_and_genesis_bind_the_superseded_lineage(
+def test_v1_3_4_static_admission_and_genesis_bind_the_immediate_superseded_lineage(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -5081,7 +5276,7 @@ def test_v1_3_3_static_admission_and_genesis_bind_the_superseded_lineage(
     context = admission.QualityContext(
         manifest_path=manifest,
         manifest_binding={
-            "experiment_id": admission.V1_3_3_QUALITY_EXPERIMENT_ID,
+            "experiment_id": admission.V1_3_4_QUALITY_EXPERIMENT_ID,
             "attestation": {"key_id": trust_root.key_id},
         },
         source={"commit": "a" * 40, "dirty": False},
@@ -5145,34 +5340,39 @@ def test_v1_3_3_static_admission_and_genesis_bind_the_superseded_lineage(
             "lineage_sha256": admission._json_digest(prerequisite_source),
         },
     )
-    static_root = Path("static-v1-3-3-admission")
-    activation_root = Path("activation-v1-3-3")
-    monkeypatch.setattr(admission, "V1_3_3_ADMISSION_ROOT", static_root)
+    ready_preflight_failure = _superseded_ready_preflight_failure_fixture()
+    ready_preflight_projection = cast(
+        dict[str, Any],
+        ready_preflight_failure.public_binding["normalized_contract_projection"],
+    )
+    static_root = Path("static-v1-3-4-admission")
+    activation_root = Path("activation-v1-3-4")
+    monkeypatch.setattr(admission, "V1_3_4_ADMISSION_ROOT", static_root)
     monkeypatch.setattr(
         admission,
-        "V1_3_3_DEFAULT_ADMISSION_PATH",
+        "V1_3_4_DEFAULT_ADMISSION_PATH",
         static_root / "historical-reuse-admission.json",
     )
     monkeypatch.setattr(
         admission,
-        "V1_3_3_DEFAULT_GENESIS_PATH",
+        "V1_3_4_DEFAULT_GENESIS_PATH",
         static_root / "preheldout-genesis.json",
     )
-    monkeypatch.setattr(admission, "V1_3_3_ACTIVATION_ROOT", activation_root)
+    monkeypatch.setattr(admission, "V1_3_4_ACTIVATION_ROOT", activation_root)
     monkeypatch.setattr(
         admission,
-        "V1_3_3_ACTIVATION_MATRIX_LOCK_PATH",
+        "V1_3_4_ACTIVATION_MATRIX_LOCK_PATH",
         activation_root / "matrix.lock",
     )
     monkeypatch.setattr(
         admission,
-        "V1_3_3_PROSPECTIVE_QUALITY_PATHS",
-        (Path("quality-v1-3-3"),),
+        "V1_3_4_PROSPECTIVE_QUALITY_PATHS",
+        (Path("quality-v1-3-4"),),
     )
     monkeypatch.setattr(admission, "assert_quality_context_unchanged", lambda _context: None)
     monkeypatch.setattr(
         admission,
-        "_require_v1_3_3_context",
+        "_require_v1_3_4_context",
         lambda _context, *, trust_root: None,
     )
     monkeypatch.setattr(
@@ -5192,22 +5392,28 @@ def test_v1_3_3_static_admission_and_genesis_bind_the_superseded_lineage(
     )
     monkeypatch.setattr(
         admission,
-        "_v1_3_3_admission_entries",
+        "load_superseded_ready_preflight_failure_lineage_v1_3_3",
+        lambda **_kwargs: ready_preflight_failure,
+    )
+    monkeypatch.setattr(
+        admission,
+        "_v1_3_4_admission_entries",
         lambda _lineage, *, quality_context: ({}, {}),
     )
-    admission_payload = admission.build_v1_3_3_reuse_admission_payload(
+    admission_payload = admission.build_v1_3_4_reuse_admission_payload(
         quality_context=context,
         trust_root=trust_root,
         superseded_empty_lineage=lineage,
         superseded_failure_lineage=failure_lineage,
         superseded_prerequisite_failure_lineage=prerequisite_failure,
+        superseded_ready_preflight_failure_lineage=ready_preflight_failure,
         admission_nonce="3" * 64,
     )
     root = tmp_path / static_root
     root.mkdir(mode=0o700)
     admission_path = root / "historical-reuse-admission.json"
     _write_json(admission_path, admission_payload)
-    admission_binding = admission._v1_3_3_reuse_admission_public_binding(
+    admission_binding = admission._v1_3_4_reuse_admission_public_binding(
         path=admission_path,
         payload=admission_payload,
         sha256=hashlib.sha256(admission_path.read_bytes()).hexdigest(),
@@ -5221,19 +5427,20 @@ def test_v1_3_3_static_admission_and_genesis_bind_the_superseded_lineage(
         quality_context=context,
         execution_environment_projection={"fixture": True},
     )
-    genesis_payload = admission.build_v1_3_3_preheldout_genesis_payload(
+    genesis_payload = admission.build_v1_3_4_preheldout_genesis_payload(
         admission=provisional,
         trust_root=trust_root,
         superseded_empty_lineage=lineage,
         superseded_failure_lineage=failure_lineage,
         superseded_prerequisite_failure_lineage=prerequisite_failure,
+        superseded_ready_preflight_failure_lineage=ready_preflight_failure,
         expected_shards=admission.EXPECTED_QUALITY_SHARDS,
         coordinate_digest=admission.QUALITY_COORDINATE_DIGEST,
         exact_fill_arm_names=admission.FROZEN_EXACT_FILL_ARM_NAMES,
     )
     genesis_path = root / "preheldout-genesis.json"
     _write_json(genesis_path, genesis_payload)
-    validated = admission._validate_v1_3_3_reuse_admission_internal(
+    validated = admission._validate_v1_3_4_reuse_admission_internal(
         admission_payload,
         admission_path=admission_path,
         storage_path=admission_path,
@@ -5242,7 +5449,7 @@ def test_v1_3_3_static_admission_and_genesis_bind_the_superseded_lineage(
         trust_root=trust_root,
         quality_context=context,
     )
-    genesis = admission._validate_v1_3_3_preheldout_genesis_internal(
+    genesis = admission._validate_v1_3_4_preheldout_genesis_internal(
         genesis_payload,
         genesis_path=genesis_path,
         storage_path=genesis_path,
@@ -5252,6 +5459,7 @@ def test_v1_3_3_static_admission_and_genesis_bind_the_superseded_lineage(
         superseded_empty_lineage=lineage,
         superseded_failure_lineage=failure_lineage,
         superseded_prerequisite_failure_lineage=prerequisite_failure,
+        superseded_ready_preflight_failure_lineage=ready_preflight_failure,
         trust_root=trust_root,
         expected_shards=admission.EXPECTED_QUALITY_SHARDS,
         coordinate_digest=admission.QUALITY_COORDINATE_DIGEST,
@@ -5281,16 +5489,37 @@ def test_v1_3_3_static_admission_and_genesis_bind_the_superseded_lineage(
         genesis.payload["superseded_zero_quality_prerequisite_failure_lineage"]
         == prerequisite_failure.public_binding
     )
-    assert validated.payload["attestation"]["purpose"] == (admission.V1_3_3_REUSE_ADMISSION_PURPOSE)
+    for payload in (validated.payload, genesis.payload):
+        assert payload["superseded_zero_quality_ready_preflight_failure_lineage"] == (
+            ready_preflight_failure.public_binding
+        )
+        assert (
+            payload["superseded_zero_quality_ready_preflight_failure_lineage_projection_sha256"]
+            == ready_preflight_projection["projection_sha256"]
+        )
+    for public_binding in (validated.public_binding, genesis.public_binding):
+        assert (
+            public_binding["superseded_failure_lineage_sha256"]
+            == (ready_preflight_failure.public_binding["lineage_sha256"])
+        )
+        assert (
+            public_binding["superseded_failure_lineage_projection_sha256"]
+            == (ready_preflight_projection["projection_sha256"])
+        )
+    assert validated.payload["attestation"]["purpose"] == (admission.V1_3_4_REUSE_ADMISSION_PURPOSE)
     assert genesis.payload["attestation"]["purpose"] == (
-        admission.V1_3_3_PREHELDOUT_GENESIS_PURPOSE
+        admission.V1_3_4_PREHELDOUT_GENESIS_PURPOSE
     )
     # Cross the producer/consumer module boundary with the actual producer
     # shape.  The missing integration at this exact seam allowed v1.3.2's
     # eight-versus-ten-field defect to survive its isolated unit suites.
     coordinate = (admission.SCALES[0], admission.TRAINING_SEEDS[0])
-    validated.calibrations[coordinate] = object()  # type: ignore[assignment]
-    validated.checkpoints[coordinate] = object()  # type: ignore[assignment]
+    validated.calibrations[coordinate] = object()
+    validated.checkpoints[coordinate] = object()
+    assert len(admission_binding) == 10
+    assert set(admission_binding) == set(
+        contract.V1_3_4_REUSE_ADMISSION_PUBLIC_BINDING_FIELDS
+    )
     assert (
         contract._validate_reuse_admission_view(
             validated,
@@ -5299,11 +5528,51 @@ def test_v1_3_3_static_admission_and_genesis_bind_the_superseded_lineage(
         )
         == validated.public_binding
     )
+    calibration_binding = {
+        "path": "/tmp/calibration.json",
+        "bytes": 1,
+        "sha256": "a" * 64,
+        "payload_sha256": "b" * 64,
+        "attestation_mac": "c" * 64,
+        "experiment_id": "calibration",
+    }
+    activation_binding = {
+        "path": "/tmp/activation.json",
+        "sha256": "6" * 64,
+        "bytes": 1,
+        "experiment_id": "activation",
+        "payload_sha256": "7" * 64,
+        "attestation_mac": "8" * 64,
+        "activation_root": "/tmp/activation",
+        "matrix_lock_path": "/tmp/activation/matrix.lock",
+        "matrix_lock_device": 1,
+        "matrix_lock_inode": 2,
+        "base_prerequisites_sha256": "9" * 64,
+        "sealed_source_bundle_sha256": "a" * 64,
+        "sealed_launch_routing_sha256": "b" * 64,
+        "superseded_failure_lineage_sha256": "c" * 64,
+        "superseded_failure_lineage_projection_sha256": "d" * 64,
+    }
+    source_inputs = {
+        "source": {},
+        "manifest": {},
+        "checkpoint": {},
+        "training_summary": {},
+        "calibration_artifact": calibration_binding,
+        "reuse_admission": admission_binding,
+        "preheldout_genesis": genesis.public_binding,
+        "quality_start_activation": activation_binding,
+    }
+    evaluator_inputs = {
+        **source_inputs,
+        "input_binding_digest": evaluator._input_binding_digest(source_inputs),
+    }
+    assert evaluator._validate_inputs_structure(evaluator_inputs) == evaluator_inputs
     forged = copy.deepcopy(admission_payload)
     forged["superseded_empty_lineage"]["lineage_sha256"] = "0" * 64
     _write_json(admission_path, forged)
     with pytest.raises(ValueError, match="(?i)attestation|digest|checksum"):
-        admission._validate_v1_3_3_reuse_admission_internal(
+        admission._validate_v1_3_4_reuse_admission_internal(
             forged,
             admission_path=admission_path,
             storage_path=admission_path,
