@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import json
 import os
 import py_compile
+import stat
 import subprocess
 import sys
 import tempfile
@@ -37,6 +39,49 @@ def _write_bytes(path: Path, payload: bytes) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(payload)
     path.chmod(0o600)
+
+
+def _run_thread_fs_subprocess(
+    tmp_path: Path,
+    program: str,
+    *,
+    executable: Path | None = None,
+    extra_sys_path: Path | None = None,
+) -> subprocess.CompletedProcess[str]:
+    repository = tmp_path / "thread-fs-repository"
+    detached = tmp_path / "thread-fs-detached"
+    repository.mkdir(parents=True)
+    detached.mkdir(parents=True)
+    bootstrap = f"""
+import dataclasses
+import json
+import os
+import sys
+import threading
+import time
+from pathlib import Path
+
+if {str(extra_sys_path) if extra_sys_path is not None else None!r} is not None:
+    sys.path.insert(0, {str(extra_sys_path) if extra_sys_path is not None else None!r})
+sys.path.insert(0, {str(SCRIPTS)!r})
+import p2_direct_controller_reuse_admission_v1_3 as admission
+
+repository = Path({str(repository)!r})
+detached = Path({str(detached)!r})
+os.chdir(detached)
+{program}
+"""
+    environment = dict(os.environ)
+    environment["PYTHONDONTWRITEBYTECODE"] = "1"
+    return subprocess.run(
+        [str(executable or Path(sys.executable)), "-B", "-c", bootstrap],
+        cwd=detached,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=30,
+    )
 
 
 def _git_blob_oid(payload: bytes) -> str:
@@ -320,6 +365,310 @@ def _module_origin_audit() -> dict[str, Any]:
     }
 
 
+def _fixture_builder_adapter_claim(root: Path) -> dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "actual_child_process_executable_unchanged": True,
+        "sys_executable_mutated": False,
+        "reexec_performed": False,
+        "adapter_operation": "clone-original-builder-result-and-replace-index-zero-only",
+        "nonzero_argv_bytes_and_order_preserved": True,
+        "builder_replay_policy": "exact-signed-membership-complete-coverage-repeats-allowed",
+        "adapter_context_install_and_restore_cwd": "detached-result-source",
+        "callable_identity_restored": True,
+        "interpreter_spelling": {
+            "schema_version": 1,
+            "recorded_executable": str(root / ".venv/bin/python"),
+            "alias_symlink_chain": [
+                {
+                    "path": str(root / ".venv/bin/python"),
+                    "target": "python3",
+                    "device": 1,
+                    "inode": 2,
+                    "mode": stat.S_IFLNK | 0o777,
+                    "uid": os.getuid(),
+                    "gid": os.getgid(),
+                }
+            ],
+            "resolved_target": "/usr/bin/python3.12",
+            "target_metadata": {"fixture": True},
+            "target_sha256": "9" * 64,
+        },
+        "builders": [
+            {
+                "builder": "calibration_matrix.build_calibration_command",
+                "invocation_entry_cwd": "detached-result-source",
+                "original_call_cwd": "canonical-repository-root",
+                "invocation_exit_cwd": "detached-result-source",
+                "signed_command_count": 10,
+                "signed_command_inventory_sha256": "a" * 64,
+                "expected_invocation_count": 10,
+                "expected_invocation_multiset_sha256": "d" * 64,
+            },
+            {
+                "builder": "top_p_matrix.build_generator_command",
+                "invocation_entry_cwd": "detached-result-source",
+                "original_call_cwd": "detached-result-source",
+                "invocation_exit_cwd": "detached-result-source",
+                "signed_command_count": 40,
+                "signed_command_inventory_sha256": "b" * 64,
+                "expected_invocation_count": 40,
+                "expected_invocation_multiset_sha256": "e" * 64,
+            },
+            {
+                "builder": "training_matrix.build_training_command",
+                "invocation_entry_cwd": "canonical-repository-root",
+                "original_call_cwd": "canonical-repository-root",
+                "invocation_exit_cwd": "canonical-repository-root",
+                "signed_command_count": 10,
+                "signed_command_inventory_sha256": "c" * 64,
+                "expected_invocation_count": 692,
+                "expected_invocation_multiset_sha256": "f" * 64,
+            },
+        ],
+        "signed_command_count": 60,
+        "expected_builder_invocation_count": 742,
+    }
+
+
+def _fixture_calibration_provenance_claim(root: Path) -> dict[str, Any]:
+    current_profile = {
+        "name": "current-v1.2",
+        "manifest_path": str(root / admission.HISTORICAL_MANIFEST_RELATIVE_PATH),
+        "manifest_binding": {"fixture": "current-v1.2"},
+        "source": {"commit": admission.HISTORICAL_RESULT_SOURCE_COMMIT, "dirty": False},
+    }
+    current_profile = {
+        **current_profile,
+        "profile_sha256": admission._json_digest(current_profile),
+    }
+    training_profile = {
+        "name": "training-v1.1",
+        "manifest_path": str(root / admission.V1_1_MANIFEST_RELATIVE_PATH),
+        "manifest_binding": {"fixture": "training-v1.1"},
+        "source": {"commit": admission.V1_1_RESULT_SOURCE_COMMIT, "dirty": False},
+    }
+    training_profile = {
+        **training_profile,
+        "profile_sha256": admission._json_digest(training_profile),
+    }
+    current_sha256 = current_profile["profile_sha256"]
+    training_sha256 = training_profile["profile_sha256"]
+    outer_profiles: list[dict[str, Any]] = []
+    for scale in admission.SCALES:
+        for training_seed in admission.TRAINING_SEEDS:
+            profile = {
+                "coordinate": {"scale": scale, "training_seed": training_seed},
+                "entry_cwd_mode": "detached",
+                "checkpoint_path": f"checkpoint/{scale}/{training_seed}",
+                "manifest_path": current_profile["manifest_path"],
+                "training_manifest_path": training_profile["manifest_path"],
+                "training_summary_path": f"summary/{scale}/{training_seed}",
+                "training_matrix_summary_path": "training-ledger",
+                "optional_path_arguments": "all-explicit",
+                "ordered_inner_context_profiles": [current_sha256, training_sha256],
+            }
+            outer_profiles.append(
+                {
+                    "profile": profile,
+                    "profile_sha256": admission._json_digest(profile),
+                    "expected_invocations": 6,
+                }
+            )
+    legacy_profile = {
+        "coordinate": {
+            "scale": admission.SCALES[0],
+            "training_seed": admission.TRAINING_SEEDS[0],
+        },
+        "entry_cwd_mode": "canonical-root",
+        "checkpoint_path": "checkpoint/legacy",
+        "manifest_path": training_profile["manifest_path"],
+        "training_manifest_path": training_profile["manifest_path"],
+        "training_summary_path": "summary/legacy",
+        "training_matrix_summary_path": "training-ledger",
+        "optional_path_arguments": "all-explicit",
+        "ordered_inner_context_profiles": [training_sha256, training_sha256],
+    }
+    outer_profiles.append(
+        {
+            "profile": legacy_profile,
+            "profile_sha256": admission._json_digest(legacy_profile),
+            "expected_invocations": 1,
+        }
+    )
+    outer_profiles.sort(key=lambda row: row["profile_sha256"])
+    ordered_pairs = [
+        {
+            "ordered_context_profile_sha256": [current_sha256, training_sha256],
+            "expected_invocations": 60,
+        },
+        {
+            "ordered_context_profile_sha256": [training_sha256, training_sha256],
+            "expected_invocations": 1,
+        },
+    ]
+    ordered_pairs.sort(key=lambda row: admission._json_digest(row["ordered_context_profile_sha256"]))
+    inner_invocations = [
+        {"profile_sha256": current_sha256, "expected_invocations": 60},
+        {"profile_sha256": training_sha256, "expected_invocations": 62},
+    ]
+    inner_invocations.sort(key=lambda row: str(row["profile_sha256"]))
+    return {
+        "schema_version": 1,
+        "functions": {
+            "outer": "calibration.establish_provenance",
+            "inner": "calibration._frozen_context_for_manifest",
+        },
+        "cwd_translation": {
+            "outer": "detached-or-authorized-root-to-canonical-root-to-same-entry",
+            "inner": "authorized-root-to-detached-source-validation-to-authorized-root",
+        },
+        "callable_identity_restored": True,
+        "outer_profiles": outer_profiles,
+        "outer_profile_count": 11,
+        "outer_invocation_count": 61,
+        "ordered_inner_pairs": ordered_pairs,
+        "ordered_inner_pair_count": 2,
+        "inner_context_invocations": inner_invocations,
+        "inner_invocation_count": 122,
+        "implicit_v1_2_source_state_invocation_count": 180,
+        "outer_invocation_multiset_sha256": admission._json_digest(outer_profiles),
+        "ordered_inner_pair_multiset_sha256": admission._json_digest(ordered_pairs),
+        "inner_context_invocation_multiset_sha256": admission._json_digest(inner_invocations),
+        "context_profiles": [current_profile, training_profile],
+    }
+
+
+def _fixture_thread_fs_isolation_claim() -> dict[str, Any]:
+    semantic_observation = {
+        "python_thread_count_before_probe": 1,
+        "python_thread_count_during_probe": 2,
+        "python_thread_count_after_probe": 1,
+        "native_task_count_before_probe": 1,
+        "native_task_count_during_probe": 2,
+        "native_task_count_after_probe": 1,
+        "preexisting_non_main_native_task_count": 0,
+        "probe_thread_native_task_count": 1,
+        "main_transition": ["detached", "canonical-root", "detached"],
+        "probe_thread_transition": ["detached", "detached", "detached"],
+        "preexisting_non_main_transition": ["detached", "detached", "detached"],
+        "task_set_restored_after_probe": True,
+        "all_tasks_detached_after_probe": True,
+    }
+    return {
+        "schema_version": 2,
+        "static_policy": admission._historical_thread_fs_isolation_static_policy(),
+        "dynamic_observation": {
+            **semantic_observation,
+            "semantic_observation_sha256": (
+                admission._historical_thread_fs_semantic_observation_sha256(
+                    semantic_observation
+                )
+            ),
+        },
+    }
+
+
+def _fixture_quarantine_cwd_adapter_claim(root: Path) -> dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "function": "calibration_matrix._validate_quarantine_evidence",
+        "quarantine_root": str(root / admission.HISTORICAL_CALIBRATION_QUARANTINE_ROOT),
+        "training_matrix_summary_path": str(root / admission.HISTORICAL_TRAINING_LEDGER),
+        "training_matrix_payload_sha256": "2" * 64,
+        "trainer_binding": {"fixture": "trainer"},
+        "ledger_record_count": len(admission.SCALES) * len(admission.TRAINING_SEEDS),
+        "ledger_record_inventory_sha256": "3" * 64,
+        "legacy_source": {"commit": admission.V1_1_RESULT_SOURCE_COMMIT, "dirty": False},
+        "legacy_manifest": {
+            "path": str(root / admission.V1_1_MANIFEST_RELATIVE_PATH),
+            "sha256": admission.V1_1_MANIFEST_SHA256,
+        },
+        "expected_invocation_count": 1,
+        "expected_invocation_profile_sha256": "4" * 64,
+    }
+
+
+def _fixture_retry_admission_cwd_claim(root: Path) -> dict[str, Any]:
+    path = root / admission.HISTORICAL_CALIBRATION_ADMISSION
+    retry_binding = {
+        "path": str(path),
+        "sha256": admission.HISTORICAL_CALIBRATION_ADMISSION_SHA256,
+        "bytes": admission.HISTORICAL_CALIBRATION_ADMISSION_BYTES,
+        "payload_sha256": "1" * 64,
+    }
+    profile = {
+        "path": str(path),
+        "output_root": str(root / admission.HISTORICAL_CALIBRATION_ROOT),
+        "context": {"fixture": "current"},
+        "evidence": {"fixture": "quarantine"},
+        "incident_report_binding": {"fixture": "report"},
+        "trust_root_key_id": "2" * 64,
+    }
+    return {
+        "schema_version": 1,
+        "function": "calibration_matrix._load_retry_admission",
+        "cwd_translation": "detached-to-canonical-root-to-detached",
+        "cwd_sensitive_semantic_field": "quarantine_rule.root",
+        "expected_canonical_quarantine_root": str(
+            root / admission.HISTORICAL_CALIBRATION_QUARANTINE_ROOT
+        ),
+        "retry_admission": retry_binding,
+        "argument_profile": profile,
+        "argument_profile_sha256": admission._json_digest(profile),
+        "expected_result_payload_json_sha256": "3" * 64,
+        "expected_result_public_binding": {
+            "path": str(path),
+            "sha256": admission.HISTORICAL_CALIBRATION_ADMISSION_SHA256,
+            "bytes": admission.HISTORICAL_CALIBRATION_ADMISSION_BYTES,
+            "payload_sha256": "1" * 64,
+            "attestation_mac": "4" * 64,
+            "admission_id": "fixture-admission",
+            "coordinate": {"fixture": True},
+            "preserved_claim_sha256": "5" * 64,
+            "preserved_artifact_sha256": "6" * 64,
+        },
+        "expected_invocation_count": 1,
+        "callable_identity_restored": True,
+    }
+
+
+def _fixture_relative_path_adapter_claim() -> dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "cwd_isolation": "CLONE_FS-private-main-task-exact-directory-fd-scopes",
+        "callable_identity_restored": True,
+        "exact_invocation_multiplicities_required": True,
+        "functions": [
+            {
+                "function": "calibration_matrix._validate_quarantine_evidence",
+                "expected_profile_count": 1,
+                "expected_invocation_count": 1,
+                "expected_invocation_multiset_sha256": "5" * 64,
+            },
+            {
+                "function": "training_matrix._validate_checkpoint",
+                "expected_profile_count": 21,
+                "expected_invocation_count": 692,
+                "expected_invocation_multiset_sha256": "6" * 64,
+            },
+            {
+                "function": "training_matrix._validate_superseded_training_bundle",
+                "expected_profile_count": 4,
+                "expected_invocation_count": 71,
+                "expected_invocation_multiset_sha256": "7" * 64,
+            },
+            {
+                "function": "training_matrix._validate_training_command",
+                "expected_profile_count": 11,
+                "expected_invocation_count": 692,
+                "expected_invocation_multiset_sha256": "8" * 64,
+            },
+        ],
+        "expected_invocation_count": 1456,
+    }
+
+
 def _historical_receipt(
     *,
     root: Path,
@@ -439,6 +788,42 @@ def _historical_receipt(
             "quality_rng_initialized": False,
             "validation_mode": "stored-only-detached-result-source-no-cuda",
             "legacy_key_transport_override": "sealed-fd-only-loader-adapter",
+            "historical_artifact_command_path_resolution": (
+                admission._historical_command_path_resolution_claim(
+                    [
+                        {
+                            "option": "--output-dir",
+                            "recorded_relative_path": (
+                                "artifacts/adaptive_v4_memory/paper_grade/"
+                                f"p2_post_rank_direct/training/{scale}/seed-{training_seed}"
+                            ),
+                            "resolved_path": str(
+                                root
+                                / "artifacts/adaptive_v4_memory/paper_grade/"
+                                / "p2_post_rank_direct/training"
+                                / scale
+                                / f"seed-{training_seed}"
+                            ),
+                            "scale": scale,
+                            "training_seed": training_seed,
+                        }
+                        for scale in admission.SCALES
+                        for training_seed in admission.TRAINING_SEEDS
+                    ]
+                )
+            ),
+            "historical_artifact_command_builder_adapter": _fixture_builder_adapter_claim(root),
+            "historical_calibration_provenance_cwd_adapter": (
+                _fixture_calibration_provenance_claim(root)
+            ),
+            "historical_quarantine_cwd_adapter": _fixture_quarantine_cwd_adapter_claim(root),
+            "historical_retry_admission_cwd_adapter": (
+                _fixture_retry_admission_cwd_claim(root)
+            ),
+            "historical_relative_path_adapter_invocations": (
+                _fixture_relative_path_adapter_claim()
+            ),
+            "historical_thread_fs_isolation": _fixture_thread_fs_isolation_claim(),
             "module_origin_audit": _module_origin_audit(),
             "scientific_subprocesses_started": 0,
             "quality_evaluator_imported": False,
@@ -1293,6 +1678,1804 @@ def test_index_inventory_reports_canonical_untracked_relative_paths(tmp_path: Pa
         "Untracked files exist inside the implementation inventory: "
         '["implementation/a-first.py","implementation/z-last.py"]'
     )
+
+
+def _legacy_adapter_inventory(repository: Path) -> list[dict[str, Any]]:
+    return [
+        {
+            "option": "--output-dir",
+            "recorded_relative_path": f"training/{scale}/seed-{seed}",
+            "resolved_path": str(repository / "training" / scale / f"seed-{seed}"),
+            "checkpoint_binding": {
+                "path": f"training/{scale}/seed-{seed}/{scale}-step-1000.pt",
+                "sha256": "d" * 64,
+                "bytes": 1,
+            },
+            "checkpoint_relative_path": f"training/{scale}/seed-{seed}/{scale}-step-1000.pt",
+            "resolved_checkpoint_path": str(
+                repository / "training" / scale / f"seed-{seed}" / f"{scale}-step-1000.pt"
+            ),
+            "command_sha256": "c" * 64,
+            "expected_context_profile": {
+                "manifest_binding": {"experiment_id": "fixture-context"},
+                "source": {"commit": "f" * 40, "dirty": False},
+            },
+            "scale": scale,
+            "training_seed": seed,
+        }
+        for scale in admission.SCALES
+        for seed in admission.TRAINING_SEEDS
+    ]
+
+
+def test_historical_command_relative_path_is_root_based_and_fail_closed(
+    tmp_path: Path,
+) -> None:
+    repository = tmp_path / "repository"
+    expected = repository / "artifacts" / "training" / "run"
+    expected.mkdir(parents=True)
+    recorded, resolved = admission._resolve_historical_command_relative_path(
+        "artifacts/training/run",
+        repository_root=repository,
+        expected_path=expected,
+        label="Fixture output directory",
+    )
+    assert recorded == "artifacts/training/run"
+    assert resolved == expected
+
+    with pytest.raises(ValueError, match="parent traversal"):
+        admission._resolve_historical_command_relative_path(
+            "artifacts/../training/run",
+            repository_root=repository,
+            expected_path=expected,
+            label="Fixture output directory",
+        )
+
+    target = tmp_path / "outside"
+    target.mkdir()
+    symlink = repository / "symlink"
+    symlink.symlink_to(target, target_is_directory=True)
+    with pytest.raises(ValueError, match="symbolic|exact"):
+        admission._resolve_historical_command_relative_path(
+            "symlink",
+            repository_root=repository,
+            expected_path=symlink,
+            label="Fixture output directory",
+        )
+
+
+def _rehash_thread_fs_semantic_observation(claim: dict[str, Any]) -> None:
+    dynamic = claim["dynamic_observation"]
+    semantic_observation = {
+        field: dynamic[field]
+        for field in admission._HISTORICAL_THREAD_FS_SEMANTIC_OBSERVATION_FIELDS
+    }
+    dynamic["semantic_observation_sha256"] = (
+        admission._historical_thread_fs_semantic_observation_sha256(semantic_observation)
+    )
+
+
+def test_thread_fs_isolation_claim_is_deterministic_across_processes_and_roots(
+    tmp_path: Path,
+) -> None:
+    program = """
+assert len(admission._native_task_ids()) == 1
+claim = admission._unshare_validating_thread_fs_context(
+    repository_root=repository,
+    detached_root=detached,
+)
+print(json.dumps({
+    "claim": claim,
+    "detached": str(detached),
+    "native_id": threading.get_native_id(),
+}, sort_keys=True, separators=(",", ":")))
+"""
+    first = _run_thread_fs_subprocess(tmp_path / "first", program)
+    second = _run_thread_fs_subprocess(tmp_path / "second", program)
+
+    assert first.returncode == 0, first.stderr
+    assert second.returncode == 0, second.stderr
+    first_result = json.loads(first.stdout)
+    second_result = json.loads(second.stdout)
+    assert first_result["detached"] != second_result["detached"]
+    assert first_result["native_id"] != second_result["native_id"]
+    assert admission.canonical_json(first_result["claim"]) == admission.canonical_json(
+        second_result["claim"]
+    )
+    assert first_result["claim"]["schema_version"] == 2
+    dynamic = first_result["claim"]["dynamic_observation"]
+    assert "probe_profile_sha256" not in dynamic
+    assert set(dynamic) == {
+        *admission._HISTORICAL_THREAD_FS_SEMANTIC_OBSERVATION_FIELDS,
+        "semantic_observation_sha256",
+    }
+
+
+def test_thread_fs_isolation_claim_rejects_valid_hex_digest_tamper() -> None:
+    claim = _fixture_thread_fs_isolation_claim()
+    claim["dynamic_observation"]["semantic_observation_sha256"] = "0" * 64
+
+    with pytest.raises(ValueError, match="dynamic observation"):
+        admission._verify_historical_thread_fs_isolation_claim(claim)
+
+
+def test_thread_fs_isolation_claim_rejects_rehashed_fixed_semantic_tamper() -> None:
+    claim = _fixture_thread_fs_isolation_claim()
+    claim["dynamic_observation"]["python_thread_count_before_probe"] = 2
+    _rehash_thread_fs_semantic_observation(claim)
+
+    with pytest.raises(ValueError, match="dynamic observation"):
+        admission._verify_historical_thread_fs_isolation_claim(claim)
+
+
+@pytest.mark.parametrize(
+    "field",
+    (
+        "python_thread_count_before_probe",
+        "python_thread_count_during_probe",
+        "python_thread_count_after_probe",
+        "native_task_count_before_probe",
+        "native_task_count_during_probe",
+        "native_task_count_after_probe",
+        "preexisting_non_main_native_task_count",
+        "probe_thread_native_task_count",
+    ),
+)
+@pytest.mark.parametrize("replacement_type", ("bool", "float"))
+def test_thread_fs_isolation_claim_rejects_rehashed_noninteger_counters(
+    field: str,
+    replacement_type: str,
+) -> None:
+    claim = _fixture_thread_fs_isolation_claim()
+    dynamic = claim["dynamic_observation"]
+    original = dynamic[field]
+    dynamic[field] = bool(original) if replacement_type == "bool" else float(original)
+    _rehash_thread_fs_semantic_observation(claim)
+
+    with pytest.raises(ValueError, match="dynamic observation"):
+        admission._verify_historical_thread_fs_isolation_claim(claim)
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    (
+        "extra",
+        "missing",
+        "wrong-domain",
+        "old-schema-and-probe-profile",
+        "noncanonical-static-policy-number",
+    ),
+)
+def test_thread_fs_isolation_claim_rejects_noncanonical_contracts(mutation: str) -> None:
+    claim = _fixture_thread_fs_isolation_claim()
+    dynamic = claim["dynamic_observation"]
+    if mutation == "extra":
+        dynamic["extra"] = None
+    elif mutation == "missing":
+        dynamic.pop("main_transition")
+    elif mutation == "wrong-domain":
+        semantic_observation = {
+            field: dynamic[field]
+            for field in admission._HISTORICAL_THREAD_FS_SEMANTIC_OBSERVATION_FIELDS
+        }
+        dynamic["semantic_observation_sha256"] = admission._json_digest(
+            {
+                "domain": f"{admission.HISTORICAL_THREAD_FS_SEMANTIC_OBSERVATION_DOMAIN}:wrong",
+                "schema_version": 1,
+                "observation": semantic_observation,
+            }
+        )
+    elif mutation == "old-schema-and-probe-profile":
+        claim["schema_version"] = 1
+        claim["static_policy"]["schema_version"] = 1
+        claim["static_policy"]["dynamic_observation_verification"] = (
+            "signed-child-observation-not-parent-recomputed"
+        )
+        dynamic["probe_profile_sha256"] = dynamic.pop("semantic_observation_sha256")
+    else:
+        claim["static_policy"]["schema_version"] = 2.0
+
+    with pytest.raises(ValueError, match="thread fs-isolation"):
+        admission._verify_historical_thread_fs_isolation_claim(claim)
+
+
+def test_thread_fs_isolation_real_probe_exact_once_and_scope_restoration(
+    tmp_path: Path,
+) -> None:
+    completed = _run_thread_fs_subprocess(
+        tmp_path,
+        """
+claim = admission._unshare_validating_thread_fs_context(
+    repository_root=repository,
+    detached_root=detached,
+)
+admission._verify_historical_thread_fs_isolation_claim(claim)
+assert claim["dynamic_observation"]["native_task_count_during_probe"] == (
+    claim["dynamic_observation"]["native_task_count_before_probe"] + 1
+)
+assert Path.cwd() == detached
+with admission._scoped_historical_command_resolution_cwd(
+    repository_root=repository,
+    detached_root=detached,
+):
+    assert Path.cwd() == repository
+    with admission._scoped_historical_command_resolution_cwd(
+        repository_root=repository,
+        detached_root=detached,
+    ):
+        assert Path.cwd() == repository
+assert Path.cwd() == detached
+try:
+    with admission._scoped_historical_command_resolution_cwd(
+        repository_root=repository,
+        detached_root=detached,
+    ):
+        with admission._scoped_historical_command_resolution_cwd(
+            repository_root=repository,
+            detached_root=detached,
+        ):
+            raise RuntimeError("nested injected failure")
+except RuntimeError as error:
+    assert str(error) == "nested injected failure"
+else:
+    raise AssertionError("nested failure did not propagate")
+assert Path.cwd() == detached
+assert admission._HISTORICAL_ROOT_CWD_AUTHORITY.get() is None
+try:
+    admission._unshare_validating_thread_fs_context(
+        repository_root=repository,
+        detached_root=detached,
+    )
+except ValueError as error:
+    assert "exactly once" in str(error)
+else:
+    raise AssertionError("duplicate unshare was accepted")
+assert Path.cwd() == detached
+""",
+    )
+    assert completed.returncode == 0, completed.stderr
+
+
+def test_thread_fs_isolation_preserves_preexisting_torch_native_tasks(
+    tmp_path: Path,
+) -> None:
+    completed = _run_thread_fs_subprocess(
+        tmp_path,
+        """
+import torch
+
+assert isinstance(torch.__version__, str)
+before = admission._native_task_ids()
+assert len(before) > 1
+claim = admission._unshare_validating_thread_fs_context(
+    repository_root=repository,
+    detached_root=detached,
+)
+dynamic = claim["dynamic_observation"]
+assert dynamic["native_task_count_before_probe"] == len(before)
+assert dynamic["preexisting_non_main_native_task_count"] == len(before) - 1
+assert dynamic["native_task_count_during_probe"] == len(before) + 1
+assert dynamic["native_task_count_after_probe"] == len(before)
+assert dynamic["preexisting_non_main_transition"] == ["detached", "detached", "detached"]
+assert Path.cwd() == detached
+with admission._scoped_historical_command_resolution_cwd(
+    repository_root=repository,
+    detached_root=detached,
+):
+    assert Path.cwd() == repository
+assert Path.cwd() == detached
+""",
+    )
+    assert completed.returncode == 0, completed.stderr
+
+
+def test_thread_fs_isolation_syscall_failure_leaves_no_capability(tmp_path: Path) -> None:
+    completed = _run_thread_fs_subprocess(
+        tmp_path,
+        """
+def failing_unshare(_flags):
+    raise OSError(1, "injected unshare failure")
+
+os.unshare = failing_unshare
+try:
+    admission._unshare_validating_thread_fs_context(
+        repository_root=repository,
+        detached_root=detached,
+    )
+except ValueError as error:
+    assert "probe failed" in str(error)
+else:
+    raise AssertionError("injected syscall failure was accepted")
+assert admission._HISTORICAL_THREAD_FS_UNSHARE_ATTEMPTED is True
+assert admission._HISTORICAL_THREAD_FS_ISOLATION_CAPABILITY is None
+assert admission._get_installed_historical_thread_fs_capability() is None
+assert admission._HISTORICAL_ROOT_CWD_AUTHORITY.get() is None
+assert Path.cwd() == detached
+""",
+    )
+    assert completed.returncode == 0, completed.stderr
+
+
+@pytest.mark.parametrize("failure_mode", ("start", "worker", "timeout"))
+def test_thread_fs_isolation_probe_failures_restore_detached(
+    tmp_path: Path,
+    failure_mode: str,
+) -> None:
+    injection = {
+        "start": """
+original_thread = threading.Thread
+class FailingStartThread(original_thread):
+    def start(self):
+        raise RuntimeError("injected probe start failure")
+admission.threading.Thread = FailingStartThread
+""",
+        "worker": """
+original_native_task_cwd = admission._native_task_cwd
+def failing_worker_cwd(task_id):
+    if threading.current_thread() is not threading.main_thread():
+        raise RuntimeError("injected probe worker failure")
+    return original_native_task_cwd(task_id)
+admission._native_task_cwd = failing_worker_cwd
+""",
+        "timeout": """
+original_thread = threading.Thread
+admission.HISTORICAL_THREAD_FS_PROBE_TIMEOUT_SECONDS = 0.02
+class SleepingProbeThread(original_thread):
+    def __init__(self, *args, **kwargs):
+        kwargs["target"] = lambda: time.sleep(0.10)
+        kwargs["daemon"] = True
+        super().__init__(*args, **kwargs)
+admission.threading.Thread = SleepingProbeThread
+""",
+    }[failure_mode]
+    completed = _run_thread_fs_subprocess(
+        tmp_path,
+        injection
+        + """
+try:
+    admission._unshare_validating_thread_fs_context(
+        repository_root=repository,
+        detached_root=detached,
+    )
+except ValueError:
+    pass
+else:
+    raise AssertionError("injected probe failure was accepted")
+assert admission._HISTORICAL_THREAD_FS_ISOLATION_CAPABILITY is None
+assert admission._get_installed_historical_thread_fs_capability() is None
+assert admission._HISTORICAL_ROOT_CWD_AUTHORITY.get() is None
+assert Path.cwd() == detached
+""",
+    )
+    assert completed.returncode == 0, completed.stderr
+
+
+def test_thread_fs_isolation_rejects_forged_and_replaced_capabilities(
+    tmp_path: Path,
+) -> None:
+    completed = _run_thread_fs_subprocess(
+        tmp_path,
+        """
+claim = {
+    "schema_version": 1,
+    "static_policy": admission._historical_thread_fs_isolation_static_policy(),
+    "dynamic_observation": {
+        "python_thread_count_before_probe": 1,
+        "python_thread_count_during_probe": 2,
+        "python_thread_count_after_probe": 1,
+        "native_task_count_before_probe": 1,
+        "native_task_count_during_probe": 2,
+        "native_task_count_after_probe": 1,
+        "preexisting_non_main_native_task_count": 0,
+        "probe_thread_native_task_count": 1,
+        "main_transition": ["detached", "canonical-root", "detached"],
+        "probe_thread_transition": ["detached", "detached", "detached"],
+        "preexisting_non_main_transition": ["detached", "detached", "detached"],
+        "task_set_restored_after_probe": True,
+        "all_tasks_detached_after_probe": True,
+        "probe_profile_sha256": "1" * 64,
+    },
+}
+claim_bytes = admission.canonical_json(claim)
+identity = admission._directory_identity(os.stat(detached, follow_symlinks=False))
+root_identity = admission._directory_identity(os.stat(repository, follow_symlinks=False))
+task_ids = admission._native_task_ids()
+task_cwds = admission._native_task_cwd_inventory(task_ids)
+forged = admission._HistoricalThreadFsIsolationCapability(
+    seal=admission._HISTORICAL_THREAD_FS_ISOLATION_SEAL,
+    repository_root=repository,
+    detached_root=detached,
+    root_identity=root_identity,
+    detached_identity=identity,
+    main_native_id=threading.get_native_id(),
+    baseline_task_ids=task_ids,
+    baseline_task_cwds=task_cwds,
+    claim_bytes=claim_bytes,
+    claim_sha256=admission.hashlib.sha256(claim_bytes).hexdigest(),
+)
+admission._HISTORICAL_THREAD_FS_UNSHARE_ATTEMPTED = True
+admission._HISTORICAL_THREAD_FS_ISOLATION_CAPABILITY = forged
+try:
+    with admission._scoped_historical_command_resolution_cwd(
+        repository_root=repository,
+        detached_root=detached,
+    ):
+        raise AssertionError("forged capability entered scope")
+except ValueError as error:
+    assert "private" in str(error)
+else:
+    raise AssertionError("forged capability was accepted")
+assert Path.cwd() == detached
+assert admission._HISTORICAL_ROOT_CWD_AUTHORITY.get() is None
+
+# A fresh child is required for the real one-shot after the intentionally forged global.
+""",
+    )
+    assert completed.returncode == 0, completed.stderr
+
+    replaced = _run_thread_fs_subprocess(
+        tmp_path / "replacement",
+        """
+claim = admission._unshare_validating_thread_fs_context(
+    repository_root=repository,
+    detached_root=detached,
+)
+installed = admission._get_installed_historical_thread_fs_capability()
+assert installed is admission._HISTORICAL_THREAD_FS_ISOLATION_CAPABILITY
+admission._HISTORICAL_THREAD_FS_UNSHARE_ATTEMPTED = False
+try:
+    with admission._scoped_historical_command_resolution_cwd(
+        repository_root=repository,
+        detached_root=detached,
+    ):
+        raise AssertionError("attempted=false entered scope")
+except ValueError:
+    pass
+admission._HISTORICAL_THREAD_FS_UNSHARE_ATTEMPTED = True
+replacement = dataclasses.replace(installed, claim_bytes=b"{}", claim_sha256="0" * 64)
+admission._HISTORICAL_THREAD_FS_ISOLATION_CAPABILITY = replacement
+try:
+    with admission._scoped_historical_command_resolution_cwd(
+        repository_root=repository,
+        detached_root=detached,
+    ):
+        raise AssertionError("replaced capability entered scope")
+except ValueError:
+    pass
+else:
+    raise AssertionError("replaced capability was accepted")
+assert Path.cwd() == detached
+assert admission._HISTORICAL_ROOT_CWD_AUTHORITY.get() is None
+""",
+    )
+    assert replaced.returncode == 0, replaced.stderr
+
+
+def test_thread_fs_scope_failures_attempt_unconditional_restoration(tmp_path: Path) -> None:
+    completed = _run_thread_fs_subprocess(
+        tmp_path,
+        """
+admission._unshare_validating_thread_fs_context(
+    repository_root=repository,
+    detached_root=detached,
+)
+
+# Main-task cwd churn.
+try:
+    with admission._scoped_historical_command_resolution_cwd(
+        repository_root=repository,
+        detached_root=detached,
+    ):
+        os.chdir(detached)
+except ValueError:
+    pass
+else:
+    raise AssertionError("main cwd churn was accepted")
+assert Path.cwd() == detached
+assert admission._HISTORICAL_ROOT_CWD_AUTHORITY.get() is None
+
+# New native task churn while a scope is active.
+ready = threading.Event()
+release = threading.Event()
+worker = None
+try:
+    with admission._scoped_historical_command_resolution_cwd(
+        repository_root=repository,
+        detached_root=detached,
+    ):
+        worker = threading.Thread(target=lambda: (ready.set(), release.wait()))
+        worker.start()
+        assert ready.wait(timeout=2)
+except ValueError:
+    pass
+else:
+    raise AssertionError("native task churn was accepted")
+finally:
+    release.set()
+    if worker is not None:
+        worker.join(timeout=2)
+assert worker is not None and not worker.is_alive()
+assert Path.cwd() == detached
+assert admission._HISTORICAL_ROOT_CWD_AUTHORITY.get() is None
+
+# Malformed ContextVar authority must not bypass cleanup.
+try:
+    with admission._scoped_historical_command_resolution_cwd(
+        repository_root=repository,
+        detached_root=detached,
+    ):
+        admission._HISTORICAL_ROOT_CWD_AUTHORITY.set(object())
+except ValueError:
+    pass
+else:
+    raise AssertionError("malformed authority was accepted")
+assert Path.cwd() == detached
+assert admission._HISTORICAL_ROOT_CWD_AUTHORITY.get() is None
+
+# ContextVar.set failure after fchdir(root) must still restore detached.
+real_authority = admission._HISTORICAL_ROOT_CWD_AUTHORITY
+class FailingSetAuthority:
+    def get(self):
+        return None
+    def set(self, _value):
+        raise RuntimeError("injected ContextVar.set failure")
+    def reset(self, _token):
+        raise AssertionError("reset must not be called without a token")
+admission._HISTORICAL_ROOT_CWD_AUTHORITY = FailingSetAuthority()
+try:
+    with admission._scoped_historical_command_resolution_cwd(
+        repository_root=repository,
+        detached_root=detached,
+    ):
+        raise AssertionError("set failure entered scope")
+except ValueError:
+    pass
+else:
+    raise AssertionError("ContextVar.set failure was accepted")
+assert Path.cwd() == detached
+admission._HISTORICAL_ROOT_CWD_AUTHORITY = real_authority
+assert real_authority.get() is None
+
+# ContextVar.reset failure must use the emergency clear before returning.
+class FailingResetAuthority:
+    def __init__(self, wrapped):
+        self.wrapped = wrapped
+    def get(self):
+        return self.wrapped.get()
+    def set(self, value):
+        return self.wrapped.set(value)
+    def reset(self, _token):
+        raise RuntimeError("injected ContextVar.reset failure")
+failing_reset = FailingResetAuthority(real_authority)
+admission._HISTORICAL_ROOT_CWD_AUTHORITY = failing_reset
+try:
+    with admission._scoped_historical_command_resolution_cwd(
+        repository_root=repository,
+        detached_root=detached,
+    ):
+        assert Path.cwd() == repository
+except ValueError:
+    pass
+else:
+    raise AssertionError("ContextVar.reset failure was accepted")
+assert Path.cwd() == detached
+assert failing_reset.get() is None
+""",
+    )
+    assert completed.returncode == 0, completed.stderr
+
+
+def test_thread_fs_scopes_reject_equal_but_distinct_authority_replacement(
+    tmp_path: Path,
+) -> None:
+    completed = _run_thread_fs_subprocess(
+        tmp_path,
+        """
+admission._unshare_validating_thread_fs_context(
+    repository_root=repository,
+    detached_root=detached,
+)
+
+def equal_replacement(authority):
+    replacement = tuple(list(authority))
+    assert replacement == authority
+    assert replacement is not authority
+    return replacement
+
+# The outer root scope must detect a value-equal ContextVar replacement.
+try:
+    with admission._scoped_historical_command_resolution_cwd(
+        repository_root=repository,
+        detached_root=detached,
+    ):
+        active = admission._HISTORICAL_ROOT_CWD_AUTHORITY.get()
+        admission._HISTORICAL_ROOT_CWD_AUTHORITY.set(equal_replacement(active))
+except ValueError:
+    pass
+else:
+    raise AssertionError("equal outer authority replacement was accepted")
+assert Path.cwd() == detached
+assert admission._HISTORICAL_ROOT_CWD_AUTHORITY.get() is None
+
+# A nested scope must retain the exact outer tuple object, not only equal fields.
+try:
+    with admission._scoped_historical_command_resolution_cwd(
+        repository_root=repository,
+        detached_root=detached,
+    ):
+        with admission._scoped_historical_command_resolution_cwd(
+            repository_root=repository,
+            detached_root=detached,
+        ):
+            active = admission._HISTORICAL_ROOT_CWD_AUTHORITY.get()
+            admission._HISTORICAL_ROOT_CWD_AUTHORITY.set(equal_replacement(active))
+except ValueError:
+    pass
+else:
+    raise AssertionError("equal nested authority replacement was accepted")
+assert Path.cwd() == detached
+assert admission._HISTORICAL_ROOT_CWD_AUTHORITY.get() is None
+
+# The reverse source-validation scope restores the original exact tuple but still fails closed.
+with admission._scoped_historical_command_resolution_cwd(
+    repository_root=repository,
+    detached_root=detached,
+):
+    saved = admission._HISTORICAL_ROOT_CWD_AUTHORITY.get()
+    try:
+        with admission._scoped_historical_source_validation_cwd(
+            repository_root=repository,
+            detached_root=detached,
+        ):
+            assert Path.cwd() == detached
+            admission._HISTORICAL_ROOT_CWD_AUTHORITY.set(equal_replacement(saved))
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("equal source-scope authority replacement was accepted")
+    assert Path.cwd() == repository
+    assert admission._HISTORICAL_ROOT_CWD_AUTHORITY.get() is saved
+assert Path.cwd() == detached
+assert admission._HISTORICAL_ROOT_CWD_AUTHORITY.get() is None
+""",
+    )
+    assert completed.returncode == 0, completed.stderr
+
+
+def test_superseded_path_spelling_modes_and_cleanup_are_fail_closed(
+    tmp_path: Path,
+) -> None:
+    completed = _run_thread_fs_subprocess(
+        tmp_path,
+        """
+admission._unshare_validating_thread_fs_context(
+    repository_root=repository,
+    detached_root=detached,
+)
+admission._source_state = lambda _root: {
+    "commit": admission.HISTORICAL_RESULT_SOURCE_COMMIT,
+    "dirty": False,
+}
+trust_root = object()
+trainer_binding = {"fixture": "trainer"}
+signed_environment = {"fixture": "environment"}
+claim = {
+    "output_root": str(repository / admission.HISTORICAL_TRAINING_ROOT),
+    "trainer_binding": trainer_binding,
+    "signed_execution_environment": signed_environment,
+    "allowed_return_raw_checkpoint": [False, True],
+}
+behavior = {"raise": False}
+observed = []
+
+def _validate_superseded_training_bundle(**keywords):
+    mode = admission._historical_training_path_spelling_mode()
+    observed.append((Path.cwd(), mode, keywords["output_root"]))
+    if behavior["raise"]:
+        raise RuntimeError("injected superseded validator failure")
+    return mode
+
+class LegacyTrainingMatrix:
+    pass
+
+legacy = LegacyTrainingMatrix()
+legacy._validate_superseded_training_bundle = _validate_superseded_training_bundle
+
+def invoke(output_root, *, raw=False):
+    return legacy._validate_superseded_training_bundle(
+        output_root=output_root,
+        trust_root=trust_root,
+        trainer_binding=trainer_binding,
+        expected_execution_environment=signed_environment,
+        return_raw_checkpoint=raw,
+    )
+
+with admission._legacy_superseded_bundle_cwd_adapter(
+    legacy,
+    repository_root=repository,
+    detached_root=detached,
+    trust_root=trust_root,
+    argument_claim=claim,
+) as invocations:
+    absolute = repository / admission.HISTORICAL_TRAINING_ROOT
+    relative = admission.HISTORICAL_TRAINING_ROOT
+
+    # detached+absolute, root+absolute, and root+recorded-relative are the only accepts.
+    assert invoke(absolute) == "absolute"
+    with admission._scoped_historical_command_resolution_cwd(
+        repository_root=repository,
+        detached_root=detached,
+    ):
+        assert invoke(absolute, raw=True) == "absolute"
+        assert invoke(relative) == "recorded-relative"
+    assert Path.cwd() == detached
+
+    try:
+        invoke(relative)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("detached+relative output root was accepted")
+
+    class EqualToEverything:
+        def __eq__(self, _other):
+            return True
+    try:
+        invoke(EqualToEverything())
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("non-Path overloaded equality bypassed output-root spelling")
+
+    behavior["raise"] = True
+    try:
+        invoke(absolute)
+    except RuntimeError as error:
+        assert str(error) == "injected superseded validator failure"
+    else:
+        raise AssertionError("injected original failure did not propagate")
+    behavior["raise"] = False
+    assert Path.cwd() == detached
+    assert admission._HISTORICAL_SUPERSEDED_PATH_SPELLING_AUTHORITY.get() is None
+
+    real_authority = admission._HISTORICAL_SUPERSEDED_PATH_SPELLING_AUTHORITY
+    class FailingResetAuthority:
+        def __init__(self, wrapped):
+            self.wrapped = wrapped
+        def get(self):
+            return self.wrapped.get()
+        def set(self, value):
+            return self.wrapped.set(value)
+        def reset(self, _token):
+            raise RuntimeError("injected spelling reset failure")
+    failing_reset = FailingResetAuthority(real_authority)
+    admission._HISTORICAL_SUPERSEDED_PATH_SPELLING_AUTHORITY = failing_reset
+    try:
+        try:
+            invoke(absolute)
+        except ValueError as error:
+            assert "cleanup failed" in str(error)
+        else:
+            raise AssertionError("spelling ContextVar reset failure was accepted")
+        assert failing_reset.get() is None
+        assert Path.cwd() == detached
+    finally:
+        admission._HISTORICAL_SUPERSEDED_PATH_SPELLING_AUTHORITY = real_authority
+
+    assert sum(invocations.values()) == 3
+
+assert legacy._validate_superseded_training_bundle is _validate_superseded_training_bundle
+assert admission._HISTORICAL_SUPERSEDED_PATH_SPELLING_AUTHORITY.get() is None
+assert Path.cwd() == detached
+assert [(cwd, mode) for cwd, mode, _path in observed[:3]] == [
+    (repository, "absolute"),
+    (repository, "absolute"),
+    (repository, "recorded-relative"),
+]
+""",
+    )
+    assert completed.returncode == 0, completed.stderr
+
+
+def test_builder_original_calls_use_exact_per_builder_cwd_and_restore_on_error(
+    tmp_path: Path,
+) -> None:
+    completed = _run_thread_fs_subprocess(
+        tmp_path,
+        """
+target = Path("/proc/self/exe").resolve(strict=True)
+venv_bin = repository / ".venv" / "bin"
+venv_bin.mkdir(parents=True)
+(venv_bin / "python").symlink_to(target)
+version = f"python{sys.version_info.major}.{sys.version_info.minor}"
+(repository / ".venv" / "lib" / version / "site-packages").mkdir(parents=True)
+runtime_binding = admission._archived_python_runtime_binding(repository)
+admission._unshare_validating_thread_fs_context(
+    repository_root=repository,
+    detached_root=detached,
+)
+behavior = {"raise_for": None}
+observed = []
+
+def make_original(name, expected_cwd, tag):
+    def original(*_arguments, **_keywords):
+        assert Path.cwd() == expected_cwd
+        observed.append((name, Path.cwd()))
+        if behavior["raise_for"] == name:
+            raise RuntimeError(f"injected {name} failure")
+        return [sys.executable, tag]
+    return original
+
+training_original = make_original("training", repository, "training")
+training_original.__name__ = "build_training_command"
+calibration_original = make_original("calibration", repository, "calibration")
+calibration_original.__name__ = "build_calibration_command"
+top_p_original = make_original("top-p", detached, "top-p")
+top_p_original.__name__ = "build_generator_command"
+
+class Module:
+    pass
+
+training = Module()
+calibration = Module()
+top_p = Module()
+training.build_training_command = training_original
+calibration.build_calibration_command = calibration_original
+top_p.build_generator_command = top_p_original
+
+with admission._retained_interpreter_spelling(repository, runtime_binding) as retained:
+    commands = {
+        "training_matrix.build_training_command": [
+            {
+                "command_sha256": admission._json_digest(
+                    [str(retained.path), "training"]
+                ),
+                "recorded_command": [str(retained.path), "training"],
+            }
+        ],
+        "calibration_matrix.build_calibration_command": [
+            {
+                "command_sha256": admission._json_digest(
+                    [str(retained.path), "calibration"]
+                ),
+                "recorded_command": [str(retained.path), "calibration"],
+            }
+        ],
+        "top_p_matrix.build_generator_command": [
+            {
+                "command_sha256": admission._json_digest([str(retained.path), "top-p"]),
+                "recorded_command": [str(retained.path), "top-p"],
+            }
+        ],
+    }
+    specs = (
+        (training, "build_training_command", "training_matrix.build_training_command"),
+        (
+            calibration,
+            "build_calibration_command",
+            "calibration_matrix.build_calibration_command",
+        ),
+        (top_p, "build_generator_command", "top_p_matrix.build_generator_command"),
+    )
+    with admission._legacy_builder_spelling_adapters(
+        specs,
+        repository_root=repository,
+        detached_root=detached,
+        retained=retained,
+        inventories=commands,
+    ) as seen:
+        # training is invoked inside the training validator's existing root authority.
+        with admission._scoped_historical_command_resolution_cwd(
+            repository_root=repository,
+            detached_root=detached,
+        ):
+            assert training.build_training_command() == [str(retained.path), "training"]
+            assert Path.cwd() == repository
+
+        # calibration alone performs detached -> root -> detached around its original.
+        assert calibration.build_calibration_command() == [
+            str(retained.path),
+            "calibration",
+        ]
+        assert Path.cwd() == detached
+
+        # top-p remains detached throughout.
+        assert top_p.build_generator_command() == [str(retained.path), "top-p"]
+        assert Path.cwd() == detached
+
+        before_wrong_cwd = len(observed)
+        for builder in (training.build_training_command,):
+            try:
+                builder()
+            except ValueError:
+                pass
+            else:
+                raise AssertionError("root-only training builder accepted detached invocation")
+        with admission._scoped_historical_command_resolution_cwd(
+            repository_root=repository,
+            detached_root=detached,
+        ):
+            for builder in (
+                calibration.build_calibration_command,
+                top_p.build_generator_command,
+            ):
+                try:
+                    builder()
+                except ValueError:
+                    pass
+                else:
+                    raise AssertionError("detached-only builder accepted root invocation")
+        assert len(observed) == before_wrong_cwd
+
+        behavior["raise_for"] = "training"
+        with admission._scoped_historical_command_resolution_cwd(
+            repository_root=repository,
+            detached_root=detached,
+        ):
+            try:
+                training.build_training_command()
+            except RuntimeError:
+                pass
+            else:
+                raise AssertionError("training original failure did not propagate")
+            assert Path.cwd() == repository
+        assert Path.cwd() == detached
+
+        behavior["raise_for"] = "calibration"
+        try:
+            calibration.build_calibration_command()
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError("calibration original failure did not propagate")
+        assert Path.cwd() == detached
+
+        behavior["raise_for"] = "top-p"
+        try:
+            top_p.build_generator_command()
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError("top-p original failure did not propagate")
+        assert Path.cwd() == detached
+        behavior["raise_for"] = None
+
+        assert {name: sum(counts.values()) for name, counts in seen.items()} == {
+            "training_matrix.build_training_command": 1,
+            "calibration_matrix.build_calibration_command": 1,
+            "top_p_matrix.build_generator_command": 1,
+        }
+
+assert training.build_training_command is training_original
+assert calibration.build_calibration_command is calibration_original
+assert top_p.build_generator_command is top_p_original
+assert Path.cwd() == detached
+assert admission._HISTORICAL_ROOT_CWD_AUTHORITY.get() is None
+""",
+        executable=Path("/proc/self/exe").resolve(strict=True),
+        extra_sys_path=next(
+            Path(entry)
+            for entry in sys.path
+            if entry and Path(entry).name in {"site-packages", "dist-packages"}
+        ),
+    )
+    assert completed.returncode == 0, completed.stderr
+
+
+def test_calibration_provenance_observes_full_multiset_and_rejects_caught_attempts(
+    tmp_path: Path,
+) -> None:
+    repository = tmp_path / "thread-fs-repository"
+    claim = _fixture_calibration_provenance_claim(repository)
+    completed = _run_thread_fs_subprocess(
+        tmp_path,
+        f"""
+import types
+
+claim = {claim!r}
+admission._verify_historical_calibration_provenance_claim(claim)
+admission._unshare_validating_thread_fs_context(
+    repository_root=repository,
+    detached_root=detached,
+)
+trust_root = object()
+contexts = {{row["manifest_path"]: row for row in claim["context_profiles"]}}
+current = next(row for row in claim["context_profiles"] if row["name"] == "current-v1.2")
+training = next(row for row in claim["context_profiles"] if row["name"] == "training-v1.1")
+behavior = {{"mode": "normal"}}
+boundary = {{"checked": False}}
+source_original_calls = {{"count": 0}}
+
+def source_state():
+    assert Path.cwd() == detached
+    source_original_calls["count"] += 1
+    return {{"commit": admission.HISTORICAL_RESULT_SOURCE_COMMIT, "dirty": False}}
+
+contract_module = types.SimpleNamespace(source_state=source_state)
+training_matrix = types.SimpleNamespace(contract=contract_module)
+calibration = types.SimpleNamespace(training_matrix=training_matrix)
+
+def _frozen_context_for_manifest(manifest_path, *, trust_root):
+    assert Path.cwd() == detached
+    assert trust_root is globals()["trust_root"]
+    row = contexts[str(manifest_path)]
+    mode = behavior["mode"]
+
+    # While source bytes are inspected from detached, ordinary root adapters must stay closed.
+    if mode == "normal" and row["name"] == "current-v1.2" and not boundary["checked"]:
+        try:
+            with admission._scoped_historical_command_resolution_cwd(
+                repository_root=repository,
+                detached_root=detached,
+            ):
+                raise AssertionError("ordinary root scope entered source-validation cwd")
+        except ValueError:
+            boundary["checked"] = True
+
+    if row["name"] == "current-v1.2":
+        attempts = 4 if mode == "extra-current-source" else 3
+        for _index in range(attempts):
+            try:
+                contract_module.source_state()
+            except ValueError:
+                if mode != "extra-current-source":
+                    raise
+    elif mode == "legacy-source":
+        try:
+            contract_module.source_state()
+        except ValueError:
+            pass
+
+    if mode == "inner-exception":
+        raise RuntimeError("injected frozen-context failure")
+    return types.SimpleNamespace(
+        manifest_path=Path(row["manifest_path"]),
+        manifest_binding=row["manifest_binding"],
+        source=row["source"],
+    )
+
+def establish_provenance(checkpoint_path, **keywords):
+    assert Path.cwd() == repository
+    assert keywords["trust_root"] is trust_root
+    mode = behavior["mode"]
+    ordered = (
+        [current["manifest_path"], training["manifest_path"]]
+        if str(keywords["manifest_path"]) == current["manifest_path"]
+        else [training["manifest_path"], training["manifest_path"]]
+    )
+    if mode == "wrong-order":
+        ordered.reverse()
+    elif mode == "missing-inner":
+        ordered = ordered[:1]
+
+    for path in ordered:
+        try:
+            calibration._frozen_context_for_manifest(
+                Path(path),
+                trust_root=trust_root,
+            )
+        except (RuntimeError, ValueError):
+            if mode not in {{"extra-current-source", "legacy-source"}}:
+                raise
+
+    if mode == "extra-inner":
+        try:
+            calibration._frozen_context_for_manifest(
+                Path(ordered[-1]),
+                trust_root=trust_root,
+            )
+        except ValueError:
+            pass
+    if mode == "replace-provenance-authority":
+        active = admission._HISTORICAL_CALIBRATION_PROVENANCE_AUTHORITY.get()
+        replacement = dataclasses.replace(active)
+        assert replacement == active and replacement is not active
+        admission._HISTORICAL_CALIBRATION_PROVENANCE_AUTHORITY.set(replacement)
+    if mode == "replace-root-authority":
+        active_root = admission._HISTORICAL_ROOT_CWD_AUTHORITY.get()
+        replacement_root = tuple(list(active_root))
+        assert replacement_root == active_root and replacement_root is not active_root
+        admission._HISTORICAL_ROOT_CWD_AUTHORITY.set(replacement_root)
+    return (checkpoint_path, keywords["scale"], keywords["training_seed"])
+
+calibration._frozen_context_for_manifest = _frozen_context_for_manifest
+calibration.establish_provenance = establish_provenance
+
+def call_profile(profile):
+    def invoke():
+        return calibration.establish_provenance(
+            Path(profile["checkpoint_path"]),
+            scale=profile["coordinate"]["scale"],
+            training_seed=profile["coordinate"]["training_seed"],
+            manifest_path=Path(profile["manifest_path"]),
+            training_manifest_path=Path(profile["training_manifest_path"]),
+            training_summary_path=Path(profile["training_summary_path"]),
+            training_matrix_summary_path=Path(profile["training_matrix_summary_path"]),
+            trust_root=trust_root,
+        )
+    if profile["entry_cwd_mode"] == "canonical-root":
+        with admission._scoped_historical_command_resolution_cwd(
+            repository_root=repository,
+            detached_root=detached,
+        ):
+            return invoke()
+    return invoke()
+
+current_outer = next(
+    row["profile"]
+    for row in claim["outer_profiles"]
+    if row["profile"]["entry_cwd_mode"] == "detached"
+)
+legacy_outer = next(
+    row["profile"]
+    for row in claim["outer_profiles"]
+    if row["profile"]["entry_cwd_mode"] == "canonical-root"
+)
+
+def require_failure(mode, profile):
+    behavior["mode"] = mode
+    before_source_calls = source_original_calls["count"]
+    caught = None
+    try:
+        with admission._legacy_calibration_provenance_cwd_adapters(
+            calibration,
+            repository_root=repository,
+            detached_root=detached,
+            trust_root=trust_root,
+            claim=claim,
+        ):
+            call_profile(profile)
+    except (RuntimeError, ValueError) as error:
+        caught = error
+    else:
+        raise AssertionError(f"{{mode}} provenance drift was accepted")
+    assert Path.cwd() == detached
+    assert admission._HISTORICAL_ROOT_CWD_AUTHORITY.get() is None
+    assert admission._HISTORICAL_CALIBRATION_PROVENANCE_AUTHORITY.get() is None
+    assert calibration.establish_provenance is establish_provenance
+    assert calibration._frozen_context_for_manifest is _frozen_context_for_manifest
+    assert contract_module.source_state is source_state
+    if mode == "inner-exception":
+        causes = []
+        cursor = caught
+        while cursor is not None:
+            causes.append(cursor)
+            cursor = cursor.__cause__
+        assert any(
+            type(error) is RuntimeError and str(error) == "injected frozen-context failure"
+            for error in causes
+        )
+    if mode == "legacy-source":
+        assert source_original_calls["count"] == before_source_calls
+
+for failure_mode, profile in (
+    ("wrong-order", current_outer),
+    ("missing-inner", current_outer),
+    ("extra-inner", current_outer),
+    ("extra-current-source", current_outer),
+    ("legacy-source", legacy_outer),
+    ("inner-exception", current_outer),
+    ("replace-provenance-authority", current_outer),
+    ("replace-root-authority", current_outer),
+):
+    require_failure(failure_mode, profile)
+
+behavior["mode"] = "normal"
+before_full_source_calls = source_original_calls["count"]
+with admission._legacy_calibration_provenance_cwd_adapters(
+    calibration,
+    repository_root=repository,
+    detached_root=detached,
+    trust_root=trust_root,
+    claim=claim,
+) as observation:
+    for outer_row in claim["outer_profiles"]:
+        for _index in range(outer_row["expected_invocations"]):
+            call_profile(outer_row["profile"])
+    admission._assert_historical_calibration_provenance_observation(claim, observation)
+
+assert boundary["checked"] is True
+assert source_original_calls["count"] - before_full_source_calls == 180
+assert Path.cwd() == detached
+assert admission._HISTORICAL_ROOT_CWD_AUTHORITY.get() is None
+assert admission._HISTORICAL_CALIBRATION_PROVENANCE_AUTHORITY.get() is None
+assert calibration.establish_provenance is establish_provenance
+assert calibration._frozen_context_for_manifest is _frozen_context_for_manifest
+assert contract_module.source_state is source_state
+""",
+    )
+    assert completed.returncode == 0, completed.stderr
+
+
+def test_historical_retry_admission_claim_matches_exact_frozen_artifact() -> None:
+    claim = admission._historical_retry_admission_cwd_claim(admission.REPOSITORY_ROOT)
+    admission._verify_historical_retry_admission_cwd_claim(claim)
+    assert claim["retry_admission"] == {
+        "path": str(admission.REPOSITORY_ROOT / admission.HISTORICAL_CALIBRATION_ADMISSION),
+        "sha256": admission.HISTORICAL_CALIBRATION_ADMISSION_SHA256,
+        "bytes": admission.HISTORICAL_CALIBRATION_ADMISSION_BYTES,
+        "payload_sha256": claim["retry_admission"]["payload_sha256"],
+    }
+    assert claim["expected_invocation_count"] == 1
+    assert claim["expected_canonical_quarantine_root"] == str(
+        admission.REPOSITORY_ROOT / admission.HISTORICAL_CALIBRATION_QUARANTINE_ROOT
+    )
+
+
+def test_retry_admission_loader_scope_rejects_drift_and_restores_on_error(
+    tmp_path: Path,
+) -> None:
+    completed = _run_thread_fs_subprocess(
+        tmp_path,
+        """
+import types
+
+admission._unshare_validating_thread_fs_context(
+    repository_root=repository,
+    detached_root=detached,
+)
+admission._source_state = lambda _root: {
+    "commit": admission.HISTORICAL_RESULT_SOURCE_COMMIT,
+    "dirty": False,
+}
+key = bytes(range(1, 65))
+trust_root = admission.attestation.TrustRoot(
+    key=key,
+    key_id=admission.attestation.derive_key_id(key),
+)
+
+class FrozenContext:
+    def __init__(self, manifest_path, manifest_binding, source):
+        self.manifest_path = manifest_path
+        self.manifest_binding = manifest_binding
+        self.source = source
+
+class ValidatedQuarantineEvidence:
+    pass
+
+class ValidatedRetryAdmission:
+    def __init__(self, *, payload, public_binding, evidence):
+        self.payload = payload
+        self.public_binding = public_binding
+        self.evidence = evidence
+
+current_context = FrozenContext(
+    repository / "current-manifest.json",
+    {"path": str(repository / "current-manifest.json"), "sha256": "1" * 64},
+    {"commit": admission.HISTORICAL_RESULT_SOURCE_COMMIT, "dirty": False},
+)
+legacy_context = FrozenContext(
+    repository / "legacy-manifest.json",
+    {"path": str(repository / "legacy-manifest.json"), "sha256": "2" * 64},
+    {"commit": admission.V1_1_RESULT_SOURCE_COMMIT, "dirty": False},
+)
+evidence = ValidatedQuarantineEvidence()
+evidence.legacy_context = legacy_context
+evidence.legacy_manifest_file_binding = {
+    "path": str(legacy_context.manifest_path),
+    "sha256": "2" * 64,
+    "bytes": 10,
+}
+evidence.matrix_ledger_binding = {"sha256": "3" * 64}
+evidence.claim_binding = {"sha256": "4" * 64}
+evidence.artifact_binding = {"sha256": "5" * 64}
+evidence.training_matrix_binding = {"sha256": "6" * 64}
+evidence.checkpoint_binding = {"sha256": "7" * 64}
+evidence.execution_environment = {"schema_version": 1}
+evidence.matrix_ledger = {"gpu_lease": {"path": "/tmp/fixture-gpu.lock"}}
+incident = {"path": str(repository / "incident.md"), "sha256": "8" * 64, "bytes": 1}
+path = repository / admission.HISTORICAL_CALIBRATION_ADMISSION
+output_root = repository / admission.HISTORICAL_CALIBRATION_ROOT
+profile = admission._historical_retry_admission_argument_profile(
+    path=path,
+    output_root=output_root,
+    context=current_context,
+    evidence=evidence,
+    incident_report_binding=incident,
+    trust_root=trust_root,
+)
+result_payload = {"fixture": "validated-retry-admission"}
+public_binding = {
+    "path": str(path),
+    "sha256": admission.HISTORICAL_CALIBRATION_ADMISSION_SHA256,
+    "bytes": admission.HISTORICAL_CALIBRATION_ADMISSION_BYTES,
+    "payload_sha256": "9" * 64,
+    "attestation_mac": "a" * 64,
+    "admission_id": "fixture-admission",
+    "coordinate": {"fixture": True},
+    "preserved_claim_sha256": "b" * 64,
+    "preserved_artifact_sha256": "c" * 64,
+}
+claim = {
+    "schema_version": 1,
+    "function": "calibration_matrix._load_retry_admission",
+    "cwd_translation": "detached-to-canonical-root-to-detached",
+    "cwd_sensitive_semantic_field": "quarantine_rule.root",
+    "expected_canonical_quarantine_root": str(
+        repository / admission.HISTORICAL_CALIBRATION_QUARANTINE_ROOT
+    ),
+    "retry_admission": {
+        "path": str(path),
+        "sha256": admission.HISTORICAL_CALIBRATION_ADMISSION_SHA256,
+        "bytes": admission.HISTORICAL_CALIBRATION_ADMISSION_BYTES,
+        "payload_sha256": "9" * 64,
+    },
+    "argument_profile": profile,
+    "argument_profile_sha256": admission._json_digest(profile),
+    "expected_result_payload_json_sha256": admission._json_digest(result_payload),
+    "expected_result_public_binding": public_binding,
+    "expected_invocation_count": 1,
+    "callable_identity_restored": True,
+}
+admission._verify_historical_retry_admission_cwd_claim(claim)
+behavior = {"raise": False, "replace_callable": False, "replace_root_authority": False}
+original_calls = {"count": 0}
+
+def _load_retry_admission(**keywords):
+    assert Path.cwd() == repository
+    original_calls["count"] += 1
+    if behavior["replace_callable"]:
+        calibration._load_retry_admission = _load_retry_admission
+    if behavior["replace_root_authority"]:
+        active = admission._HISTORICAL_ROOT_CWD_AUTHORITY.get()
+        replacement = tuple(list(active))
+        assert replacement == active and replacement is not active
+        admission._HISTORICAL_ROOT_CWD_AUTHORITY.set(replacement)
+    if behavior["raise"]:
+        raise RuntimeError("injected retry loader failure")
+    return ValidatedRetryAdmission(
+        payload=result_payload,
+        public_binding=public_binding,
+        evidence=keywords["evidence"],
+    )
+
+calibration = types.SimpleNamespace(
+    training_matrix=types.SimpleNamespace(FrozenContext=FrozenContext),
+    ValidatedQuarantineEvidence=ValidatedQuarantineEvidence,
+    ValidatedRetryAdmission=ValidatedRetryAdmission,
+    _load_retry_admission=_load_retry_admission,
+)
+
+def invoke(**overrides):
+    keywords = {
+        "path": path,
+        "output_root": output_root,
+        "context": current_context,
+        "evidence": evidence,
+        "incident_report_binding": incident,
+        "trust_root": trust_root,
+    }
+    keywords.update(overrides)
+    return calibration._load_retry_admission(**keywords)
+
+def require_failure(call):
+    before = original_calls["count"]
+    try:
+        with admission._legacy_retry_admission_cwd_adapter(
+            calibration,
+            repository_root=repository,
+            detached_root=detached,
+            trust_root=trust_root,
+            claim=claim,
+        ):
+            call()
+    except (RuntimeError, ValueError):
+        pass
+    else:
+        raise AssertionError("retry-admission drift was accepted")
+    assert calibration._load_retry_admission is _load_retry_admission
+    assert admission._HISTORICAL_ROOT_CWD_AUTHORITY.get() is None
+    assert Path.cwd() == detached
+    return original_calls["count"] - before
+
+# Real PosixPath succeeds and original executes only at canonical root.
+with admission._legacy_retry_admission_cwd_adapter(
+    calibration,
+    repository_root=repository,
+    detached_root=detached,
+    trust_root=trust_root,
+    claim=claim,
+) as observed:
+    result = invoke()
+    assert type(result) is ValidatedRetryAdmission
+    assert observed == {claim["argument_profile_sha256"]: 1}
+assert Path.cwd() == detached
+
+# Duplicate attempts remain visible even when the immediate rejection is caught.
+def duplicate_attempt():
+    invoke()
+    try:
+        invoke()
+    except ValueError:
+        pass
+assert require_failure(duplicate_attempt) == 1
+
+# Wrong entry CWD is rejected before the original.
+def root_entry():
+    with admission._scoped_historical_command_resolution_cwd(
+        repository_root=repository,
+        detached_root=detached,
+    ):
+        invoke()
+assert require_failure(root_entry) == 0
+
+assert require_failure(lambda: invoke(path=Path("relative/retry.json"))) == 0
+
+class EqualToEverything:
+    def __eq__(self, _other):
+        return True
+assert require_failure(lambda: invoke(path=EqualToEverything())) == 0
+
+substitute_trust = dataclasses.replace(trust_root)
+assert substitute_trust == trust_root and substitute_trust is not trust_root
+assert require_failure(lambda: invoke(trust_root=substitute_trust)) == 0
+
+class ContextSubclass(FrozenContext):
+    pass
+substitute_context = ContextSubclass(
+    current_context.manifest_path,
+    current_context.manifest_binding,
+    current_context.source,
+)
+assert require_failure(lambda: invoke(context=substitute_context)) == 0
+
+behavior["raise"] = True
+assert require_failure(invoke) == 1
+behavior["raise"] = False
+
+behavior["replace_callable"] = True
+assert require_failure(invoke) == 1
+behavior["replace_callable"] = False
+
+behavior["replace_root_authority"] = True
+assert require_failure(invoke) == 1
+behavior["replace_root_authority"] = False
+
+assert calibration._load_retry_admission is _load_retry_admission
+assert admission._HISTORICAL_ROOT_CWD_AUTHORITY.get() is None
+assert Path.cwd() == detached
+""",
+    )
+    assert completed.returncode == 0, completed.stderr
+
+
+def test_legacy_training_command_adapter_rejects_before_thread_fs_isolation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = tmp_path / "repository"
+    detached = tmp_path / "detached"
+    repository.mkdir()
+    detached.mkdir()
+    monkeypatch.chdir(detached)
+    inventory = _legacy_adapter_inventory(repository)
+    selected = inventory[0]
+    command = ["python", "trainer.py", "--output-dir", selected["recorded_relative_path"]]
+
+    class FixtureContext:
+        manifest_binding = {"experiment_id": "fixture-context"}
+        source = {"commit": "f" * 40, "dirty": False}
+
+    context = FixtureContext()
+    marker = object()
+    checkpoint_marker = object()
+    observed: dict[str, Any] = {}
+
+    def original(raw_command: Any, **arguments: Any) -> object:
+        observed.update(
+            {
+                "cwd": Path.cwd(),
+                "command": raw_command,
+                "context": arguments["context"],
+            }
+        )
+        return marker
+
+    original.__name__ = "_validate_training_command"
+
+    def checkpoint_original(raw_checkpoint: Any, **arguments: Any) -> object:
+        observed["checkpoint_cwd"] = Path.cwd()
+        observed["checkpoint"] = raw_checkpoint
+        observed["expected_path"] = arguments["expected_path"]
+        return checkpoint_marker
+
+    checkpoint_original.__name__ = "_validate_checkpoint"
+
+    class LegacyTrainingMatrix:
+        _validate_training_command: Any
+        _validate_checkpoint: Any
+
+    legacy = LegacyTrainingMatrix()
+    legacy._validate_training_command = original
+    legacy._validate_checkpoint = checkpoint_original
+    with pytest.raises(ValueError, match="private thread fs-isolation"):
+        with admission._legacy_training_command_cwd_adapter(
+            legacy,
+            repository_root=repository,
+            detached_root=detached,
+            inventory=inventory,
+        ):
+            legacy._validate_training_command(
+                command,
+                output_dir=Path(selected["resolved_path"]),
+                scale=selected["scale"],
+                seed=selected["training_seed"],
+                context=context,
+            )
+    assert observed == {}
+    assert Path.cwd() == detached
+    assert legacy._validate_training_command is original
+    assert legacy._validate_checkpoint is checkpoint_original
+
+
+def test_legacy_training_command_adapter_restores_identity_when_capability_missing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = tmp_path / "repository"
+    detached = tmp_path / "detached"
+    repository.mkdir()
+    detached.mkdir()
+    monkeypatch.chdir(detached)
+    inventory = _legacy_adapter_inventory(repository)
+    selected = inventory[0]
+    command = ["python", "trainer.py", "--output-dir", selected["recorded_relative_path"]]
+
+    def failing(_command: Any, **_arguments: Any) -> None:
+        assert Path.cwd() == repository
+        raise RuntimeError("injected validator failure")
+
+    failing.__name__ = "_validate_training_command"
+
+    def checkpoint_original(_checkpoint: Any, **_arguments: Any) -> None:
+        pytest.fail("checkpoint validator was not requested")
+
+    checkpoint_original.__name__ = "_validate_checkpoint"
+
+    class LegacyTrainingMatrix:
+        _validate_training_command: Any
+        _validate_checkpoint: Any
+
+    legacy = LegacyTrainingMatrix()
+    legacy._validate_training_command = failing
+    legacy._validate_checkpoint = checkpoint_original
+
+    class FixtureContext:
+        manifest_binding = {"experiment_id": "fixture-context"}
+        source = {"commit": "f" * 40, "dirty": False}
+
+    context = FixtureContext()
+    with pytest.raises(ValueError, match="private thread fs-isolation"):
+        with admission._legacy_training_command_cwd_adapter(
+            legacy,
+            repository_root=repository,
+            detached_root=detached,
+            inventory=inventory,
+        ):
+            legacy._validate_training_command(
+                command,
+                output_dir=Path(selected["resolved_path"]),
+                scale=selected["scale"],
+                seed=selected["training_seed"],
+                context=context,
+            )
+    assert Path.cwd() == detached
+    assert legacy._validate_training_command is failing
+    assert legacy._validate_checkpoint is checkpoint_original
+
+
+def test_historical_command_cwd_scope_rejects_symlinked_root_before_switch(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = tmp_path / "repository"
+    detached = tmp_path / "detached"
+    repository.mkdir()
+    detached.mkdir()
+    alias = tmp_path / "repository-alias"
+    alias.symlink_to(repository, target_is_directory=True)
+    monkeypatch.chdir(detached)
+    with pytest.raises(ValueError, match="symbolic|exact"):
+        with admission._scoped_historical_command_resolution_cwd(
+            repository_root=alias,
+            detached_root=detached,
+        ):
+            pytest.fail("symlinked root entered the cwd translation scope")
+    assert Path.cwd() == detached
+
+
+@pytest.mark.parametrize("mutation", ("missing", "drifted"))
+def test_historical_receipt_rejects_path_resolution_claim_drift(
+    tmp_path: Path,
+    mutation: str,
+) -> None:
+    trust_root = _trust_root()
+    receipt, _payloads = _historical_receipt(root=tmp_path, trust_root=trust_root)
+    semantic = dict(receipt)
+    semantic.pop("attestation")
+    semantic.pop("payload_sha256")
+    if mutation == "missing":
+        semantic.pop("historical_artifact_command_path_resolution")
+    else:
+        claim = dict(semantic["historical_artifact_command_path_resolution"])
+        claim["adapter_scope"] = "unscoped-loader"
+        semantic["historical_artifact_command_path_resolution"] = claim
+    mutated = admission._attested_payload(
+        semantic,
+        trust_root=trust_root,
+        purpose=admission.HISTORICAL_RECEIPT_PURPOSE,
+    )
+    with pytest.raises(ValueError, match="schema|path-resolution"):
+        admission._verify_historical_receipt(mutated, trust_root=trust_root)
+
+
+def test_historical_receipt_rejects_reattested_self_consistent_thread_semantic_drift(
+    tmp_path: Path,
+) -> None:
+    trust_root = _trust_root()
+    receipt, _payloads = _historical_receipt(root=tmp_path, trust_root=trust_root)
+    semantic = copy.deepcopy(dict(receipt))
+    semantic.pop("attestation")
+    semantic.pop("payload_sha256")
+    claim = semantic["historical_thread_fs_isolation"]
+    claim["dynamic_observation"]["python_thread_count_before_probe"] = 2
+    _rehash_thread_fs_semantic_observation(claim)
+    mutated = admission._attested_payload(
+        semantic,
+        trust_root=trust_root,
+        purpose=admission.HISTORICAL_RECEIPT_PURPOSE,
+    )
+
+    with pytest.raises(ValueError, match="dynamic observation"):
+        admission._verify_historical_receipt(mutated, trust_root=trust_root)
+
+
+@pytest.mark.parametrize("mutation", ("builder-cwd", "provenance-sum-preserving"))
+def test_historical_receipt_rejects_exact_adapter_boundary_drift(
+    tmp_path: Path,
+    mutation: str,
+) -> None:
+    trust_root = _trust_root()
+    receipt, _payloads = _historical_receipt(root=tmp_path, trust_root=trust_root)
+    semantic = copy.deepcopy(dict(receipt))
+    semantic.pop("attestation")
+    semantic.pop("payload_sha256")
+    if mutation == "builder-cwd":
+        builders = semantic["historical_artifact_command_builder_adapter"]["builders"]
+        training = next(
+            row
+            for row in builders
+            if row["builder"] == "training_matrix.build_training_command"
+        )
+        training["original_call_cwd"] = "detached-result-source"
+    else:
+        provenance = semantic["historical_calibration_provenance_cwd_adapter"]
+        current_rows = [
+            row
+            for row in provenance["outer_profiles"]
+            if row["profile"]["entry_cwd_mode"] == "detached"
+        ]
+        current_rows[0]["expected_invocations"] = 5
+        current_rows[1]["expected_invocations"] = 7
+        assert sum(row["expected_invocations"] for row in provenance["outer_profiles"]) == 61
+        provenance["outer_invocation_multiset_sha256"] = admission._json_digest(
+            provenance["outer_profiles"]
+        )
+    mutated = admission._attested_payload(
+        semantic,
+        trust_root=trust_root,
+        purpose=admission.HISTORICAL_RECEIPT_PURPOSE,
+    )
+    with pytest.raises(ValueError, match="builder|calibration-provenance"):
+        admission._verify_historical_receipt(mutated, trust_root=trust_root)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    (
+        ("cwd_translation", "unscoped"),
+        ("expected_invocation_count", 2),
+        ("retry_admission.sha256", "0" * 64),
+    ),
+)
+def test_retry_admission_claim_verifier_rejects_fixed_boundary_drift(
+    tmp_path: Path,
+    field: str,
+    value: Any,
+) -> None:
+    claim = _fixture_retry_admission_cwd_claim(tmp_path)
+    if field == "retry_admission.sha256":
+        claim["retry_admission"]["sha256"] = value
+    else:
+        claim[field] = value
+    with pytest.raises(ValueError, match="retry-admission"):
+        admission._verify_historical_retry_admission_cwd_claim(claim)
+
+
+def test_live_retry_claim_recompute_rejects_self_consistent_profile_mutation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    trust_root = _trust_root()
+    receipt, _payloads = _historical_receipt(root=tmp_path, trust_root=trust_root)
+    signed_retry_claim = copy.deepcopy(receipt["historical_retry_admission_cwd_adapter"])
+    live_retry_claim = copy.deepcopy(signed_retry_claim)
+    live_retry_claim["argument_profile"]["context"] = {"fixture": "different-current"}
+    live_retry_claim["argument_profile_sha256"] = admission._json_digest(
+        live_retry_claim["argument_profile"]
+    )
+    admission._verify_historical_retry_admission_cwd_claim(live_retry_claim)
+
+    marker = object()
+
+    class RetainedContext:
+        def __enter__(self) -> object:
+            return marker
+
+        def __exit__(self, *_arguments: Any) -> None:
+            return None
+
+    monkeypatch.setattr(
+        admission,
+        "_assert_live_inventory_matches_historical",
+        lambda _root: receipt["historical_runtime_inventory"],
+    )
+    monkeypatch.setattr(
+        admission,
+        "_historical_manifest_binding",
+        lambda _root: receipt["historical_manifest"],
+    )
+    monkeypatch.setattr(
+        admission,
+        "_expected_historical_ledger_bindings",
+        lambda _root: receipt["ledgers"],
+    )
+    monkeypatch.setattr(admission, "_historical_training_command_path_inventory", lambda _root: [])
+    monkeypatch.setattr(
+        admission,
+        "_historical_command_path_resolution_claim",
+        lambda _rows: receipt["historical_artifact_command_path_resolution"],
+    )
+    monkeypatch.setattr(
+        admission,
+        "_historical_signed_builder_command_inventory",
+        lambda _root, _rows: {},
+    )
+    monkeypatch.setattr(admission, "_archived_python_runtime_binding", lambda _root: {})
+    monkeypatch.setattr(
+        admission,
+        "_retained_interpreter_spelling",
+        lambda _root, _runtime: RetainedContext(),
+    )
+    monkeypatch.setattr(
+        admission,
+        "_historical_builder_adapter_claim",
+        lambda _retained, _inventories: receipt[
+            "historical_artifact_command_builder_adapter"
+        ],
+    )
+    monkeypatch.setattr(
+        admission,
+        "_historical_calibration_provenance_claim",
+        lambda _root, _rows: receipt["historical_calibration_provenance_cwd_adapter"],
+    )
+    monkeypatch.setattr(
+        admission,
+        "_historical_quarantine_argument_claim",
+        lambda _root: receipt["historical_quarantine_cwd_adapter"],
+    )
+    monkeypatch.setattr(
+        admission,
+        "_historical_retry_admission_cwd_claim",
+        lambda _root: live_retry_claim,
+    )
+    payload = {"historical_validation_receipt": receipt}
+    quality_context = type("FixtureQualityContext", (), {"repository_root": tmp_path})()
+    with pytest.raises(ValueError, match="retry-admission cwd evidence"):
+        admission._verify_historical_evidence_against_receipt(
+            payload,
+            quality_context=quality_context,
+        )
 
 
 @pytest.mark.parametrize("rogue_kind", ("source", "sourceless-pyc"))

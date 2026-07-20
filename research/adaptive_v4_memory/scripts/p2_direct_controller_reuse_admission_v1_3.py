@@ -12,8 +12,11 @@ import stat
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 from collections.abc import Callable, Iterator, Mapping, Sequence
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
@@ -81,6 +84,10 @@ V1_1_RESULT_SOURCE_COMMIT = "95339f4dd5b9757c1b513fc6be391fea206b2bc9"
 V1_1_RESULT_SOURCE_TREE = "9100d2c4cf00a87a39ffbd1e79f671c3e3b8d6b3"
 V1_1_IMPLEMENTATION_SOURCE_COMMIT = "80ef62672ea1f625acd0481e2ae34aa7c4a3f4a3"
 V1_1_IMPLEMENTATION_SOURCE_TREE = "4bacc3be6a50b7fc45234121b26c178837f9b5c5"
+V1_1_MANIFEST_RELATIVE_PATH = Path(
+    "research/adaptive_v4_memory/manifests/p2-post-rank-direct-controller-v1-1.json"
+)
+V1_1_MANIFEST_SHA256 = "1d059f83ca73945b9df5dbee20752fbf3f99c0a24794c533be9c52a4230b4c0b"
 
 HISTORICAL_IMPLEMENTATION_PATHS = (
     "pyproject.toml",
@@ -110,7 +117,12 @@ HISTORICAL_CALIBRATION_QUARANTINE_ROOT = HISTORICAL_ROOT / "calibration"
 HISTORICAL_CALIBRATION_ROOT = HISTORICAL_ROOT / "calibration-v1-2"
 HISTORICAL_TOP_P_ROOT = HISTORICAL_ROOT / "top_p_physical_match"
 HISTORICAL_TRAINING_LEDGER = HISTORICAL_TRAINING_ROOT / "training-matrix-v1-1.summary.json"
+HISTORICAL_SUPERSEDED_TRAINING_LEDGER = HISTORICAL_TRAINING_ROOT / "training-matrix.summary.json"
+HISTORICAL_TRAINING_ADMISSION = HISTORICAL_TRAINING_ROOT / "training-v1-1-preheldout-admission.json"
 HISTORICAL_CALIBRATION_LEDGER = HISTORICAL_CALIBRATION_ROOT / "calibration-matrix-v1-2.summary.json"
+HISTORICAL_CALIBRATION_ADMISSION = (
+    HISTORICAL_CALIBRATION_ROOT / "calibration-v1-2-retry-admission.json"
+)
 HISTORICAL_TOP_P_LEDGER = HISTORICAL_TOP_P_ROOT / "top-p-physical-matrix.summary.json"
 
 HISTORICAL_TRAINING_LEDGER_SHA256 = (
@@ -126,6 +138,7 @@ HISTORICAL_TRAINING_ADMISSION_SHA256 = (
 HISTORICAL_CALIBRATION_ADMISSION_SHA256 = (
     "a860dfc2aa3a6484b47db167fe77b92970fb7b0c5e9c91301dbca178b2af946b"
 )
+HISTORICAL_CALIBRATION_ADMISSION_BYTES = 9711
 HISTORICAL_SUPERSEDED_TRAINING_LEDGER_SHA256 = (
     "dc469a9c22ef295ed61022042fd6f1c4ddbd8544adb144986d590fc0f7b2ef7f"
 )
@@ -186,10 +199,15 @@ FROZEN_EXACT_FILL_ARM_NAMES = (
 )
 
 HISTORICAL_RECEIPT_PURPOSE = "p2-direct-v1.3-historical-validation-receipt-v1"
+HISTORICAL_THREAD_FS_SEMANTIC_OBSERVATION_DOMAIN = (
+    "adaptive-v4-memory:p2-direct-v1.3:historical-thread-fs-isolation:"
+    "semantic-observation:v1"
+)
 NONOBSERVATION_PURPOSE = "p2-direct-v1.3-canonical-nonobservation-v1"
 REUSE_ADMISSION_PURPOSE = "p2-direct-v1.3-reuse-admission-v1"
 PREHELDOUT_GENESIS_PURPOSE = "p2-direct-v1.3-preheldout-genesis-v1"
 LEGACY_CALIBRATION_PURPOSE = "p2-direct-soft-lag-calibration-v1"
+LEGACY_RETRY_ADMISSION_PURPOSE = "p2-direct-calibration-one-shot-retry-admission-v1.2"
 MODULE_ORIGIN_AUDIT_SEMANTICS = (
     "source-only-frozen-inventory-with-sealed-admission-isolated-pycache-and-trusted-venv-v2"
 )
@@ -199,12 +217,120 @@ ARCHIVED_THIRD_PARTY_RUNTIME_CLAIM = (
     "dependency mutation is outside the admission threat model"
 )
 
-RECEIPT_SCHEMA_VERSION = 1
+RECEIPT_SCHEMA_VERSION = 2
 NONOBSERVATION_SCHEMA_VERSION = 1
 ADMISSION_SCHEMA_VERSION = 1
 GENESIS_SCHEMA_VERSION = 1
 SAFE_FILE_MODE = 0o600
 SAFE_DIRECTORY_MODE = 0o700
+HISTORICAL_THREAD_FS_PROBE_TIMEOUT_SECONDS = 10.0
+
+_HISTORICAL_THREAD_FS_SEMANTIC_OBSERVATION_FIELDS = (
+    "python_thread_count_before_probe",
+    "python_thread_count_during_probe",
+    "python_thread_count_after_probe",
+    "native_task_count_before_probe",
+    "native_task_count_during_probe",
+    "native_task_count_after_probe",
+    "preexisting_non_main_native_task_count",
+    "probe_thread_native_task_count",
+    "main_transition",
+    "probe_thread_transition",
+    "preexisting_non_main_transition",
+    "task_set_restored_after_probe",
+    "all_tasks_detached_after_probe",
+)
+
+
+@dataclass(frozen=True)
+class _HistoricalThreadFsIsolationCapability:
+    seal: object
+    repository_root: Path
+    detached_root: Path
+    root_identity: tuple[int, int, int, int, int]
+    detached_identity: tuple[int, int, int, int, int]
+    main_native_id: int
+    baseline_task_ids: tuple[int, ...]
+    baseline_task_cwds: tuple[tuple[int, str, tuple[int, int, int, int, int]], ...]
+    claim_bytes: bytes
+    claim_sha256: str
+
+
+@dataclass(frozen=True)
+class _HistoricalSupersededPathSpellingAuthority:
+    seal: object
+    capability: _HistoricalThreadFsIsolationCapability
+    mode: str
+
+
+@dataclass(frozen=True)
+class _HistoricalCalibrationProvenanceAuthority:
+    seal: object
+    capability: _HistoricalThreadFsIsolationCapability
+    outer_profile_sha256: str
+    expected_inner_profiles: tuple[str, str]
+    observed_inner_attempts: list[None]
+    observed_inner_profiles: list[str]
+
+
+_HISTORICAL_THREAD_FS_ISOLATION_SEAL = object()
+_HISTORICAL_SUPERSEDED_PATH_SPELLING_SEAL = object()
+_HISTORICAL_CALIBRATION_PROVENANCE_SEAL = object()
+_HISTORICAL_THREAD_FS_ISOLATION_CAPABILITY: _HistoricalThreadFsIsolationCapability | None = None
+_HISTORICAL_THREAD_FS_UNSHARE_ATTEMPTED = False
+
+
+def _new_historical_thread_fs_capability_registry() -> tuple[
+    Callable[[_HistoricalThreadFsIsolationCapability], None],
+    Callable[[object], bool],
+    Callable[[], _HistoricalThreadFsIsolationCapability | None],
+]:
+    installed: _HistoricalThreadFsIsolationCapability | None = None
+
+    def install(capability: _HistoricalThreadFsIsolationCapability) -> None:
+        nonlocal installed
+        _require(
+            installed is None and capability.seal is _HISTORICAL_THREAD_FS_ISOLATION_SEAL,
+            "Historical thread fs-isolation capability registry is already installed.",
+        )
+        installed = capability
+
+    def contains(candidate: object) -> bool:
+        return installed is not None and candidate is installed
+
+    def get() -> _HistoricalThreadFsIsolationCapability | None:
+        return installed
+
+    return install, contains, get
+
+
+(
+    _install_historical_thread_fs_capability,
+    _historical_thread_fs_capability_is_installed,
+    _get_installed_historical_thread_fs_capability,
+) = _new_historical_thread_fs_capability_registry()
+_HISTORICAL_ROOT_CWD_AUTHORITY: ContextVar[
+    tuple[
+        _HistoricalThreadFsIsolationCapability,
+        Path,
+        Path,
+        tuple[int, int, int, int, int],
+        tuple[int, int, int, int, int],
+    ]
+    | None
+] = ContextVar("adaptive_v4_historical_root_cwd_authority", default=None)
+_HISTORICAL_SUPERSEDED_PATH_SPELLING_AUTHORITY: ContextVar[
+    _HistoricalSupersededPathSpellingAuthority | None
+] = ContextVar(
+    "adaptive_v4_historical_superseded_path_spelling_authority",
+    default=None,
+)
+_HISTORICAL_CALIBRATION_PROVENANCE_AUTHORITY: ContextVar[
+    _HistoricalCalibrationProvenanceAuthority | None
+] = ContextVar(
+    "adaptive_v4_historical_calibration_provenance_authority",
+    default=None,
+)
 
 ARCHIVED_MODULE_FD_ENV = "ADAPTIVE_V4_V1_3_ARCHIVED_ADMISSION_MODULE_FD"
 ARCHIVED_IMPORT_INVENTORY_FD_ENV = "ADAPTIVE_V4_V1_3_ARCHIVED_IMPORT_INVENTORY_FD"
@@ -822,6 +948,10 @@ def _archived_child_environment(
         "LANG": "C",
         "LC_ALL": "C",
         "PATH": "/usr/bin:/bin",
+        "OMP_NUM_THREADS": "1",
+        "MKL_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1",
+        "NUMEXPR_NUM_THREADS": "1",
         "XDG_CONFIG_HOME": "/nonexistent",
         ARCHIVED_PYTHON_RUNTIME_FD_ENV: str(runtime_fd),
         ARCHIVED_MODULE_FD_ENV: str(module_fd),
@@ -2336,6 +2466,3847 @@ def _expected_historical_ledger_bindings(repository_root: Path) -> dict[str, dic
     return result
 
 
+def _historical_command_option(command: Any, option: str, *, label: str) -> str:
+    _require(
+        isinstance(command, list) and all(isinstance(item, str) for item in command),
+        f"{label} command is invalid.",
+    )
+    positions = [index for index, item in enumerate(command) if item == option]
+    _require(len(positions) == 1, f"{label} command must contain exactly one {option}.")
+    position = positions[0]
+    _require(position + 1 < len(command), f"{label} command has no value for {option}.")
+    return cast(str, command[position + 1])
+
+
+def _resolve_historical_command_relative_path(
+    raw: object,
+    *,
+    repository_root: Path,
+    expected_path: Path,
+    label: str,
+    require_directory: bool = True,
+) -> tuple[str, Path]:
+    root = _exact_path(repository_root, label="Historical command repository root", must_exist=True)
+    _require(root.is_dir(), "Historical command repository root must be a directory.")
+    _require(isinstance(raw, str) and bool(raw), f"{label} must be a non-empty string.")
+    value = cast(str, raw)
+    components = value.split("/")
+    _require(
+        not Path(value).is_absolute()
+        and all(component not in {"", ".", ".."} for component in components),
+        f"{label} must be a canonical repository-relative path without parent traversal.",
+    )
+    candidate = root.joinpath(*components)
+    expected = _exact_path(expected_path, label=f"Expected {label}", must_exist=True)
+    _require(candidate == expected, f"{label} does not name its exact expected artifact path.")
+    resolved = _exact_path(candidate, label=label, must_exist=True)
+    _require(
+        resolved.is_dir() if require_directory else resolved.is_file(),
+        f"{label} must identify an existing {'directory' if require_directory else 'regular file'}.",
+    )
+    return value, resolved
+
+
+def _historical_training_context_profiles(
+    repository_root: Path,
+) -> dict[tuple[str, int], dict[str, Any]]:
+    root = _exact_path(
+        repository_root,
+        label="Historical training-context repository root",
+        must_exist=True,
+    )
+    current_payload, current_opened = _load_json_nofollow(
+        root / HISTORICAL_TRAINING_LEDGER,
+        label="Historical amended training-context ledger",
+    )
+    superseded_payload, superseded_opened = _load_json_nofollow(
+        root / HISTORICAL_SUPERSEDED_TRAINING_LEDGER,
+        label="Historical superseded training-context ledger",
+    )
+    admission_payload, admission_opened = _load_json_nofollow(
+        root / HISTORICAL_TRAINING_ADMISSION,
+        label="Historical training-context admission",
+    )
+    try:
+        current_manifest = current_payload.get("manifest")
+        current_source = current_payload.get("source")
+        superseded_manifest = superseded_payload.get("manifest")
+        superseded_source = superseded_payload.get("source")
+        _require(
+            current_opened.sha256 == HISTORICAL_TRAINING_LEDGER_SHA256
+            and superseded_opened.sha256 == HISTORICAL_SUPERSEDED_TRAINING_LEDGER_SHA256
+            and admission_opened.sha256 == HISTORICAL_TRAINING_ADMISSION_SHA256
+            and isinstance(current_manifest, Mapping)
+            and isinstance(current_source, Mapping)
+            and isinstance(superseded_manifest, Mapping)
+            and isinstance(superseded_source, Mapping)
+            and admission_payload.get("current_manifest") == current_manifest
+            and admission_payload.get("current_source") == current_source
+            and admission_payload.get("superseded_manifest") == superseded_manifest
+            and current_manifest.get("experiment_id") == "p2-post-rank-direct-controller-v1.1"
+            and current_manifest.get("sha256") == V1_1_MANIFEST_SHA256
+            and current_source == {"commit": V1_1_RESULT_SOURCE_COMMIT, "dirty": False}
+            and superseded_manifest.get("experiment_id") == "p2-post-rank-direct-controller-v1"
+            and _is_sha256(superseded_manifest.get("sha256"))
+            and _is_sha256(superseded_manifest.get("implementation_digest"))
+            and _is_git_oid(superseded_manifest.get("implementation_source_commit"))
+            and isinstance(superseded_source.get("commit"), str)
+            and _is_git_oid(superseded_source.get("commit"))
+            and superseded_source.get("dirty") is False,
+            "Historical training context profiles differ from signed admission evidence.",
+        )
+        profiles: dict[tuple[str, int], dict[str, Any]] = {}
+        first_coordinate = (SCALES[0], TRAINING_SEEDS[0])
+        for scale in SCALES:
+            for seed in TRAINING_SEEDS:
+                coordinate = (scale, seed)
+                manifest = (
+                    superseded_manifest if coordinate == first_coordinate else current_manifest
+                )
+                source = superseded_source if coordinate == first_coordinate else current_source
+                profiles[coordinate] = {
+                    "manifest_binding": dict(cast(Mapping[str, Any], manifest)),
+                    "source": dict(cast(Mapping[str, Any], source)),
+                }
+        current_opened.assert_unchanged()
+        superseded_opened.assert_unchanged()
+        admission_opened.assert_unchanged()
+        return profiles
+    finally:
+        admission_opened.close()
+        superseded_opened.close()
+        current_opened.close()
+
+
+def _historical_training_command_path_inventory(
+    repository_root: Path,
+) -> tuple[dict[str, Any], ...]:
+    root = _exact_path(repository_root, label="Historical command repository root", must_exist=True)
+    ledger_path = root / HISTORICAL_TRAINING_LEDGER
+    context_profiles = _historical_training_context_profiles(root)
+    ledger, ledger_opened = _load_json_nofollow(
+        ledger_path,
+        label="Historical training command ledger",
+    )
+    try:
+        runs = ledger.get("runs")
+        _require(
+            ledger_opened.sha256 == HISTORICAL_TRAINING_LEDGER_SHA256
+            and isinstance(runs, list)
+            and len(runs) == len(SCALES) * len(TRAINING_SEEDS),
+            "Historical training command ledger binding or run inventory drifted.",
+        )
+        rows: list[dict[str, Any]] = []
+        coordinates: set[tuple[str, int]] = set()
+        for raw_run in cast(list[Any], runs):
+            _require(isinstance(raw_run, Mapping), "Historical training run is invalid.")
+            run = cast(Mapping[str, Any], raw_run)
+            scale = run.get("scale")
+            seed = run.get("seed")
+            _require(
+                scale in SCALES
+                and seed in TRAINING_SEEDS
+                and (cast(str, scale), cast(int, seed)) not in coordinates,
+                "Historical training command coordinate is invalid or duplicated.",
+            )
+            coordinate = (cast(str, scale), cast(int, seed))
+            coordinates.add(coordinate)
+            output_dir = root / HISTORICAL_TRAINING_ROOT / coordinate[0] / f"seed-{coordinate[1]}"
+            summary_path = output_dir / f"{coordinate[0]}-training.summary.json"
+            summary_binding = run.get("summary")
+            _require(
+                isinstance(summary_binding, Mapping)
+                and summary_binding.get("path") == str(summary_path)
+                and _is_sha256(summary_binding.get("sha256"))
+                and type(summary_binding.get("bytes")) is int
+                and cast(int, summary_binding.get("bytes")) > 0,
+                "Historical training summary binding is invalid.",
+            )
+            binding = cast(Mapping[str, Any], summary_binding)
+            summary, summary_opened = _load_json_nofollow(
+                summary_path,
+                label=f"Historical training summary {coordinate[0]}/{coordinate[1]}",
+            )
+            try:
+                envelope = summary.get("attestation")
+                command = summary.get("command")
+                _require(
+                    summary_opened.sha256 == binding.get("sha256")
+                    and summary_opened.bytes == binding.get("bytes")
+                    and summary.get("payload_sha256") == binding.get("payload_sha256")
+                    and isinstance(envelope, Mapping)
+                    and envelope.get("mac") == binding.get("attestation_mac")
+                    and summary.get("scale") == coordinate[0]
+                    and summary.get("seed") == coordinate[1],
+                    "Historical training summary differs from its exact ledger binding.",
+                )
+                output_dir_value = _historical_command_option(
+                    command,
+                    "--output-dir",
+                    label=f"Historical training summary {coordinate[0]}/{coordinate[1]}",
+                )
+                recorded_command = list(cast(list[str], command))
+                expected_executable = str(root / ARCHIVED_PYTHON_RELATIVE_PATH)
+                _require(
+                    recorded_command[0] == expected_executable,
+                    "Historical training command executable spelling drifted.",
+                )
+                recorded, resolved = _resolve_historical_command_relative_path(
+                    output_dir_value,
+                    repository_root=root,
+                    expected_path=output_dir,
+                    label=(
+                        "Historical training command --output-dir "
+                        f"for {coordinate[0]}/{coordinate[1]}"
+                    ),
+                )
+                checkpoint = summary.get("checkpoint")
+                ledger_checkpoint = run.get("checkpoint")
+                _require(
+                    isinstance(checkpoint, Mapping)
+                    and isinstance(ledger_checkpoint, Mapping)
+                    and checkpoint == ledger_checkpoint
+                    and isinstance(checkpoint.get("path"), str)
+                    and _is_sha256(checkpoint.get("sha256"))
+                    and type(checkpoint.get("bytes")) is int
+                    and cast(int, checkpoint.get("bytes")) > 0,
+                    "Historical training checkpoint binding differs between summary and ledger.",
+                )
+                checkpoint_binding = dict(cast(Mapping[str, Any], checkpoint))
+                expected_checkpoint = output_dir / f"{coordinate[0]}-step-1000.pt"
+                checkpoint_relative, checkpoint_resolved = (
+                    _resolve_historical_command_relative_path(
+                        checkpoint_binding["path"],
+                        repository_root=root,
+                        expected_path=expected_checkpoint,
+                        label=(
+                            "Historical training checkpoint path "
+                            f"for {coordinate[0]}/{coordinate[1]}"
+                        ),
+                        require_directory=False,
+                    )
+                )
+                checkpoint_opened = _open_secure_regular(
+                    checkpoint_resolved,
+                    label=f"Historical training checkpoint {coordinate[0]}/{coordinate[1]}",
+                )
+                try:
+                    _require(
+                        checkpoint_opened.sha256 == checkpoint_binding["sha256"]
+                        and checkpoint_opened.bytes == checkpoint_binding["bytes"],
+                        "Historical training checkpoint bytes differ from signed metadata.",
+                    )
+                    checkpoint_opened.assert_unchanged()
+                finally:
+                    checkpoint_opened.close()
+                rows.append(
+                    {
+                        "option": "--output-dir",
+                        "builder": "training_matrix.build_training_command",
+                        "command_sha256": _json_digest(recorded_command),
+                        "recorded_command": recorded_command,
+                        "recorded_executable": expected_executable,
+                        "recorded_relative_path": recorded,
+                        "resolved_path": str(resolved),
+                        "checkpoint_binding": checkpoint_binding,
+                        "checkpoint_relative_path": checkpoint_relative,
+                        "resolved_checkpoint_path": str(checkpoint_resolved),
+                        "expected_context_profile": context_profiles[coordinate],
+                        "scale": coordinate[0],
+                        "training_seed": coordinate[1],
+                    }
+                )
+                summary_opened.assert_unchanged()
+            finally:
+                summary_opened.close()
+        _require(
+            coordinates == {(scale, seed) for scale in SCALES for seed in TRAINING_SEEDS},
+            "Historical training command coordinate inventory is incomplete.",
+        )
+        ledger_opened.assert_unchanged()
+        return tuple(sorted(rows, key=lambda row: (row["scale"], row["training_seed"])))
+    finally:
+        ledger_opened.close()
+
+
+def _historical_command_path_resolution_claim(
+    inventory: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    rows = [dict(row) for row in inventory]
+    _require(
+        len(rows) == len(SCALES) * len(TRAINING_SEEDS),
+        "Historical relative command-path inventory is incomplete.",
+    )
+    output_directory_paths = [
+        {
+            "scale": row.get("scale"),
+            "training_seed": row.get("training_seed"),
+            "recorded_relative_path": row.get("recorded_relative_path"),
+            "resolved_path": row.get("resolved_path"),
+        }
+        for row in rows
+    ]
+    checkpoint_paths = [
+        {
+            "scale": row.get("scale"),
+            "training_seed": row.get("training_seed"),
+            "checkpoint_binding": row.get("checkpoint_binding"),
+            "recorded_relative_path": row.get("checkpoint_relative_path"),
+            "resolved_path": row.get("resolved_checkpoint_path"),
+        }
+        for row in rows
+    ]
+    return {
+        "schema_version": 1,
+        "adapter_scopes": [
+            "legacy-training-matrix._validate_training_command-only",
+            "legacy-training-matrix._validate_checkpoint-only",
+        ],
+        "relative_path_fields": [
+            {
+                "field": "training-summary.command.--output-dir",
+                "validated_count": len(output_directory_paths),
+                "inventory_sha256": _json_digest(output_directory_paths),
+            },
+            {
+                "field": "training-summary.checkpoint.path",
+                "validated_count": len(checkpoint_paths),
+                "inventory_sha256": _json_digest(checkpoint_paths),
+            },
+        ],
+        "relative_path_base": "canonical-original-repository-root",
+        "source_and_import_validation_cwd": "detached-historical-result-source",
+        "cwd_switch": "exact-directory-fd-to-canonical-repository-root",
+        "cwd_restoration": "exact-directory-fd-to-detached-result-source",
+        "path_values_rewritten": False,
+        "parent_traversal_allowed": False,
+        "symlink_traversal_allowed": False,
+        "validated_relative_path_count": len(rows) * 2,
+        "validated_relative_path_inventory_sha256": _json_digest(
+            {"schema_version": 1, "paths": rows}
+        ),
+    }
+
+
+def _historical_signed_builder_command_inventory(
+    repository_root: Path,
+    training_inventory: Sequence[Mapping[str, Any]],
+) -> dict[str, tuple[dict[str, Any], ...]]:
+    root = _exact_path(repository_root, label="Historical command repository root", must_exist=True)
+    expected_executable = str(root / ARCHIVED_PYTHON_RELATIVE_PATH)
+    training_rows = tuple(dict(row) for row in training_inventory)
+    _require(
+        len(training_rows) == len(SCALES) * len(TRAINING_SEEDS)
+        and all(
+            row.get("builder") == "training_matrix.build_training_command"
+            and row.get("recorded_executable") == expected_executable
+            and _is_sha256(row.get("command_sha256"))
+            and row.get("command_sha256") == _json_digest(row.get("recorded_command"))
+            for row in training_rows
+        ),
+        "Historical signed training command inventory drifted.",
+    )
+
+    def ledger_rows(
+        *,
+        path: Path,
+        expected_sha256: str,
+        collection_name: str,
+        expected_count: int,
+        builder: str,
+        coordinate_fields: tuple[str, ...],
+    ) -> tuple[dict[str, Any], ...]:
+        payload, opened = _load_json_nofollow(path, label=f"Historical {builder} ledger")
+        try:
+            raw_rows = payload.get(collection_name)
+            _require(
+                opened.sha256 == expected_sha256
+                and isinstance(raw_rows, list)
+                and len(raw_rows) == expected_count,
+                f"Historical signed {builder} ledger inventory drifted.",
+            )
+            rows: list[dict[str, Any]] = []
+            coordinates: set[tuple[Any, ...]] = set()
+            for raw_row in cast(list[Any], raw_rows):
+                _require(isinstance(raw_row, Mapping), f"Historical {builder} row is invalid.")
+                artifact = cast(Mapping[str, Any], raw_row)
+                coordinate = tuple(artifact.get(field) for field in coordinate_fields)
+                command = artifact.get("command")
+                _require(
+                    all(value is not None for value in coordinate)
+                    and coordinate not in coordinates
+                    and isinstance(command, list)
+                    and bool(command)
+                    and all(isinstance(item, str) for item in command)
+                    and command[0] == expected_executable,
+                    f"Historical signed {builder} command or coordinate drifted.",
+                )
+                coordinates.add(coordinate)
+                recorded_command = list(cast(list[str], command))
+                rows.append(
+                    {
+                        "builder": builder,
+                        "command_sha256": _json_digest(recorded_command),
+                        "coordinate": list(coordinate),
+                        "recorded_command": recorded_command,
+                        "recorded_executable": expected_executable,
+                    }
+                )
+            opened.assert_unchanged()
+            return tuple(sorted(rows, key=lambda row: canonical_json(row["coordinate"])))
+        finally:
+            opened.close()
+
+    calibration_rows = ledger_rows(
+        path=root / HISTORICAL_CALIBRATION_LEDGER,
+        expected_sha256=HISTORICAL_CALIBRATION_LEDGER_SHA256,
+        collection_name="cells",
+        expected_count=len(SCALES) * len(TRAINING_SEEDS),
+        builder="calibration_matrix.build_calibration_command",
+        coordinate_fields=("scale", "training_seed", "calibration_seed"),
+    )
+    top_p_rows = ledger_rows(
+        path=root / HISTORICAL_TOP_P_LEDGER,
+        expected_sha256=HISTORICAL_TOP_P_LEDGER_SHA256,
+        collection_name="records",
+        expected_count=40,
+        builder="top_p_matrix.build_generator_command",
+        coordinate_fields=("coordinate_key",),
+    )
+    return {
+        "training_matrix.build_training_command": training_rows,
+        "calibration_matrix.build_calibration_command": calibration_rows,
+        "top_p_matrix.build_generator_command": top_p_rows,
+    }
+
+
+def _symlink_chain(path: Path) -> tuple[dict[str, Any], ...]:
+    current = path
+    rows: list[dict[str, Any]] = []
+    visited: set[Path] = set()
+    for _index in range(32):
+        _require(current not in visited, "Archived Python venv alias contains a symlink cycle.")
+        visited.add(current)
+        before = os.lstat(current)
+        if not stat.S_ISLNK(before.st_mode):
+            break
+        target = os.readlink(current)
+        after = os.lstat(current)
+        _require(
+            _directory_identity(before) == _directory_identity(after),
+            "Archived Python venv alias changed while its symlink chain was read.",
+        )
+        rows.append(
+            {
+                "path": str(current),
+                "target": target,
+                "device": before.st_dev,
+                "inode": before.st_ino,
+                "mode": before.st_mode,
+                "uid": before.st_uid,
+                "gid": before.st_gid,
+            }
+        )
+        target_path = Path(target)
+        current = target_path if target_path.is_absolute() else current.parent / target_path
+        current = Path(os.path.abspath(current))
+    else:
+        raise ValueError("Archived Python venv alias symlink chain is too deep.")
+    return tuple(rows)
+
+
+@dataclass(frozen=True)
+class _RetainedInterpreterSpelling:
+    path: Path
+    target: Path
+    file_descriptor: int
+    binding: dict[str, Any]
+
+
+def _interpreter_spelling_binding(
+    repository_root: Path,
+    runtime_binding: Mapping[str, Any],
+    *,
+    file_descriptor: int,
+) -> dict[str, Any]:
+    root = _exact_path(
+        repository_root, label="Interpreter spelling repository root", must_exist=True
+    )
+    spelling = Path(os.path.abspath(root / ARCHIVED_PYTHON_RELATIVE_PATH))
+    spelling_parent = _exact_path(
+        spelling.parent,
+        label="Historical interpreter spelling parent",
+        must_exist=True,
+    )
+    _require(spelling_parent.is_dir(), "Historical interpreter spelling parent is not a directory.")
+    runtime_executable = runtime_binding.get("executable")
+    runtime_metadata = runtime_binding.get("executable_metadata")
+    runtime_sha256 = runtime_binding.get("executable_sha256")
+    _require(
+        runtime_binding.get("venv_executable") == str(spelling)
+        and isinstance(runtime_executable, str)
+        and isinstance(runtime_metadata, Mapping)
+        and _is_sha256(runtime_sha256),
+        "Archived runtime binding cannot authorize the historical interpreter spelling.",
+    )
+    runtime_executable_path = Path(cast(str, runtime_executable))
+    runtime_metadata_map = cast(Mapping[str, Any], runtime_metadata)
+    target = spelling.resolve(strict=True)
+    proc_target = Path("/proc/self/exe").resolve(strict=True)
+    active_target = Path(sys.executable).resolve(strict=True)
+    _require(
+        target == proc_target == active_target == runtime_executable_path,
+        "Historical interpreter spelling does not resolve to the active sealed runtime.",
+    )
+    opened = os.fstat(file_descriptor)
+    current = os.stat(spelling, follow_symlinks=True)
+    metadata = _runtime_metadata(target)
+    _require(
+        _directory_identity(opened) == _directory_identity(current)
+        and metadata == dict(runtime_metadata_map)
+        and metadata["uid"] == 0
+        and metadata["mode"] & (stat.S_IWGRP | stat.S_IWOTH) == 0,
+        "Historical interpreter spelling target metadata differs from the sealed runtime.",
+    )
+    digest = hashlib.sha256()
+    offset = 0
+    while offset < opened.st_size:
+        chunk = os.pread(file_descriptor, min(1 << 20, opened.st_size - offset), offset)
+        _require(bool(chunk), "Historical interpreter target read stalled.")
+        digest.update(chunk)
+        offset += len(chunk)
+    _require(
+        offset == opened.st_size and digest.hexdigest() == runtime_sha256,
+        "Historical interpreter spelling target bytes differ from the sealed runtime.",
+    )
+    return {
+        "schema_version": 1,
+        "recorded_executable": str(spelling),
+        "alias_symlink_chain": list(_symlink_chain(spelling)),
+        "resolved_target": str(target),
+        "target_metadata": metadata,
+        "target_sha256": runtime_sha256,
+    }
+
+
+@contextmanager
+def _retained_interpreter_spelling(
+    repository_root: Path,
+    runtime_binding: Mapping[str, Any],
+) -> Iterator[_RetainedInterpreterSpelling]:
+    root = _exact_path(
+        repository_root, label="Interpreter spelling repository root", must_exist=True
+    )
+    spelling = Path(os.path.abspath(root / ARCHIVED_PYTHON_RELATIVE_PATH))
+    spelling_parent = _exact_path(
+        spelling.parent,
+        label="Historical interpreter spelling parent",
+        must_exist=True,
+    )
+    _require(spelling_parent.is_dir(), "Historical interpreter spelling parent is not a directory.")
+    descriptor = os.open(spelling, os.O_RDONLY | os.O_CLOEXEC)
+    try:
+        binding = _interpreter_spelling_binding(
+            root,
+            runtime_binding,
+            file_descriptor=descriptor,
+        )
+        retained = _RetainedInterpreterSpelling(
+            path=spelling,
+            target=Path(cast(str, binding["resolved_target"])),
+            file_descriptor=descriptor,
+            binding=binding,
+        )
+        try:
+            yield retained
+        finally:
+            _require(
+                _interpreter_spelling_binding(
+                    root,
+                    runtime_binding,
+                    file_descriptor=descriptor,
+                )
+                == binding,
+                "Historical interpreter spelling alias or retained target drifted.",
+            )
+    finally:
+        os.close(descriptor)
+
+
+def _historical_builder_adapter_claim(
+    retained: _RetainedInterpreterSpelling,
+    inventories: Mapping[str, Sequence[Mapping[str, Any]]],
+    *,
+    observed_invocations: Mapping[str, Mapping[str, int]] | None = None,
+) -> dict[str, Any]:
+    expected_counts = {
+        "training_matrix.build_training_command": 10,
+        "calibration_matrix.build_calibration_command": 10,
+        "top_p_matrix.build_generator_command": 40,
+    }
+    expected_coordinate_counts = {
+        (scale, seed): (71 if (scale, seed) == (SCALES[0], TRAINING_SEEDS[0]) else 69)
+        for scale in SCALES
+        for seed in TRAINING_SEEDS
+    }
+    builders: list[dict[str, Any]] = []
+    total_invocations = 0
+    for name in sorted(expected_counts):
+        rows = [dict(row) for row in inventories.get(name, ())]
+        _require(len(rows) == expected_counts[name], f"Historical {name} inventory is incomplete.")
+        expected_invocations: dict[str, int] = {}
+        for row in rows:
+            digest = row.get("command_sha256")
+            _require(_is_sha256(digest), f"Historical {name} command digest is invalid.")
+            count = 1
+            if name == "training_matrix.build_training_command":
+                coordinate = (row.get("scale"), row.get("training_seed"))
+                _require(
+                    coordinate in expected_coordinate_counts,
+                    "Historical training builder coordinate is invalid.",
+                )
+                count = expected_coordinate_counts[cast(tuple[str, int], coordinate)]
+            expected_invocations[cast(str, digest)] = count
+        if observed_invocations is not None:
+            _require(
+                dict(observed_invocations.get(name, {})) == expected_invocations,
+                f"Historical {name} invocation multiplicities drifted.",
+            )
+        invocation_rows = [
+            {"command_sha256": digest, "invocations": count}
+            for digest, count in sorted(expected_invocations.items())
+        ]
+        invocation_count = sum(expected_invocations.values())
+        total_invocations += invocation_count
+        builders.append(
+            {
+                "builder": name,
+                "invocation_entry_cwd": (
+                    "canonical-repository-root"
+                    if name == "training_matrix.build_training_command"
+                    else "detached-result-source"
+                ),
+                "original_call_cwd": (
+                    "canonical-repository-root"
+                    if name
+                    in {
+                        "calibration_matrix.build_calibration_command",
+                        "training_matrix.build_training_command",
+                    }
+                    else "detached-result-source"
+                ),
+                "invocation_exit_cwd": (
+                    "canonical-repository-root"
+                    if name == "training_matrix.build_training_command"
+                    else "detached-result-source"
+                ),
+                "signed_command_count": len(rows),
+                "signed_command_inventory_sha256": _json_digest(
+                    {"schema_version": 1, "commands": rows}
+                ),
+                "expected_invocation_count": invocation_count,
+                "expected_invocation_multiset_sha256": _json_digest(
+                    {"schema_version": 1, "invocations": invocation_rows}
+                ),
+            }
+        )
+    return {
+        "schema_version": 1,
+        "actual_child_process_executable_unchanged": True,
+        "sys_executable_mutated": False,
+        "reexec_performed": False,
+        "adapter_operation": "clone-original-builder-result-and-replace-index-zero-only",
+        "nonzero_argv_bytes_and_order_preserved": True,
+        "builder_replay_policy": "exact-signed-membership-complete-coverage-repeats-allowed",
+        "adapter_context_install_and_restore_cwd": "detached-result-source",
+        "callable_identity_restored": True,
+        "interpreter_spelling": dict(retained.binding),
+        "builders": builders,
+        "signed_command_count": sum(expected_counts.values()),
+        "expected_builder_invocation_count": total_invocations,
+    }
+
+
+@contextmanager
+def _legacy_builder_spelling_adapters(
+    specs: Sequence[tuple[Any, str, str]],
+    *,
+    repository_root: Path,
+    detached_root: Path,
+    retained: _RetainedInterpreterSpelling,
+    inventories: Mapping[str, Sequence[Mapping[str, Any]]],
+) -> Iterator[dict[str, dict[str, int]]]:
+    _require(
+        threading.current_thread() is threading.main_thread() and threading.active_count() == 1,
+        "Legacy builder adapters require an isolated single-threaded archived child.",
+    )
+    originals: list[tuple[Any, str, Callable[..., Any], Callable[..., Any]]] = []
+    validated: dict[str, dict[str, int]] = {}
+    spec_keys = [(id(module), attribute) for module, attribute, _claim_name in specs]
+    claim_names = [claim_name for _module, _attribute, claim_name in specs]
+    expected_claim_names = {
+        "training_matrix.build_training_command",
+        "calibration_matrix.build_calibration_command",
+        "top_p_matrix.build_generator_command",
+    }
+    _require(
+        len(specs) == 3
+        and len(set(spec_keys)) == 3
+        and len(set(claim_names)) == 3
+        and set(claim_names) == expected_claim_names
+        and set(inventories) == expected_claim_names,
+        "Legacy builder adapter specification is not the exact closed three-builder scope.",
+    )
+    try:
+        for module, attribute, claim_name in specs:
+            raw_original = getattr(module, attribute, None)
+            _require(
+                callable(raw_original)
+                and getattr(raw_original, "__name__", None) == attribute
+                and not bool(getattr(raw_original, "_adaptive_v4_archived_builder_adapter", False)),
+                f"Legacy builder {claim_name} is unavailable, aliased, or already adapted.",
+            )
+            original = cast(Callable[..., Any], raw_original)
+            rows = inventories.get(claim_name, ())
+            expected_commands: dict[str, list[str]] = {}
+            for row in rows:
+                digest = row.get("command_sha256")
+                command = row.get("recorded_command")
+                _require(
+                    _is_sha256(digest)
+                    and isinstance(command, list)
+                    and all(isinstance(item, str) for item in command)
+                    and command[0] == str(retained.path)
+                    and digest == _json_digest(command)
+                    and cast(str, digest) not in expected_commands,
+                    f"Legacy builder {claim_name} signed command inventory is invalid.",
+                )
+                expected_commands[cast(str, digest)] = list(cast(list[str], command))
+            _require(
+                bool(expected_commands), f"Legacy builder {claim_name} has no signed commands."
+            )
+            seen: dict[str, int] = {}
+            validated[claim_name] = seen
+
+            def adapter(
+                *arguments: Any,
+                _original: Callable[..., Any] = original,
+                _claim_name: str = claim_name,
+                _expected_commands: Mapping[str, list[str]] = expected_commands,
+                _seen: dict[str, int] = seen,
+                **keywords: Any,
+            ) -> list[str]:
+                _require(
+                    threading.current_thread() is threading.main_thread()
+                    and threading.active_count() == 1
+                    and sys.executable == str(retained.target),
+                    f"Legacy builder {_claim_name} runtime or thread scope drifted.",
+                )
+                expected_entry_mode = (
+                    "canonical-root"
+                    if _claim_name == "training_matrix.build_training_command"
+                    else "detached"
+                )
+                _require(
+                    _historical_cwd_authority_mode(
+                        repository_root=repository_root,
+                        detached_root=detached_root,
+                    )
+                    == expected_entry_mode,
+                    f"Legacy builder {_claim_name} did not enter from its exact invocation cwd.",
+                )
+                before_binding = _interpreter_spelling_binding(
+                    retained.path.parents[2],
+                    {
+                        "executable": str(retained.target),
+                        "venv_executable": str(retained.path),
+                        "executable_metadata": retained.binding["target_metadata"],
+                        "executable_sha256": retained.binding["target_sha256"],
+                    },
+                    file_descriptor=retained.file_descriptor,
+                )
+                try:
+                    if _claim_name == "calibration_matrix.build_calibration_command":
+                        with _scoped_historical_command_resolution_cwd(
+                            repository_root=repository_root,
+                            detached_root=detached_root,
+                        ):
+                            original_result = _original(*arguments, **keywords)
+                    else:
+                        original_result = _original(*arguments, **keywords)
+                finally:
+                    after_binding = _interpreter_spelling_binding(
+                        retained.path.parents[2],
+                        {
+                            "executable": str(retained.target),
+                            "venv_executable": str(retained.path),
+                            "executable_metadata": retained.binding["target_metadata"],
+                            "executable_sha256": retained.binding["target_sha256"],
+                        },
+                        file_descriptor=retained.file_descriptor,
+                    )
+                    _require(
+                        after_binding == before_binding
+                        and sys.executable == str(retained.target)
+                        and threading.current_thread() is threading.main_thread()
+                        and threading.active_count() == 1,
+                        f"Legacy builder {_claim_name} runtime drifted during reconstruction.",
+                    )
+                    _require(
+                        _historical_cwd_authority_mode(
+                            repository_root=repository_root,
+                            detached_root=detached_root,
+                        )
+                        == expected_entry_mode,
+                        f"Legacy builder {_claim_name} did not restore its exact invocation cwd.",
+                    )
+                _require(
+                    isinstance(original_result, list)
+                    and bool(original_result)
+                    and all(isinstance(item, str) for item in original_result)
+                    and original_result[0] == str(retained.target),
+                    f"Legacy builder {_claim_name} did not return the active resolved interpreter.",
+                )
+                original_snapshot = list(cast(list[str], original_result))
+                adapted = list(original_snapshot)
+                adapted[0] = str(retained.path)
+                digest = _json_digest(adapted)
+                _require(
+                    digest in _expected_commands
+                    and adapted == _expected_commands[digest]
+                    and original_result == original_snapshot
+                    and adapted[1:] == original_snapshot[1:],
+                    f"Legacy builder {_claim_name} output differs from signed command evidence.",
+                )
+                _seen[digest] = _seen.get(digest, 0) + 1
+                return adapted
+
+            adapter._adaptive_v4_archived_builder_adapter = True  # type: ignore[attr-defined]
+            setattr(module, attribute, adapter)
+            originals.append((module, attribute, original, adapter))
+        yield validated
+    finally:
+        identities_held = True
+        for module, attribute, original, adapter in reversed(originals):
+            identities_held = identities_held and getattr(module, attribute, None) is adapter
+            setattr(module, attribute, original)
+            identities_held = identities_held and getattr(module, attribute, None) is original
+        _require(
+            identities_held
+            and threading.current_thread() is threading.main_thread()
+            and threading.active_count() == 1
+            and _historical_cwd_authority_mode(
+                repository_root=repository_root,
+                detached_root=detached_root,
+            )
+            == "detached",
+            "Legacy builder adapter callable identity or thread scope drifted.",
+        )
+
+
+def _directory_identity(metadata: os.stat_result) -> tuple[int, int, int, int, int]:
+    return (
+        metadata.st_dev,
+        metadata.st_ino,
+        metadata.st_mode,
+        metadata.st_uid,
+        metadata.st_gid,
+    )
+
+
+def _cwd_matches(path: Path, identity: tuple[int, int, int, int, int]) -> bool:
+    try:
+        return (
+            Path.cwd() == path
+            and _directory_identity(os.stat(".", follow_symlinks=False)) == identity
+        )
+    except OSError:
+        return False
+
+
+def _native_task_ids() -> tuple[int, ...]:
+    try:
+        raw_entries = os.listdir("/proc/self/task")
+    except OSError as error:
+        raise ValueError("Archived child native task inventory is unavailable.") from error
+    _require(
+        bool(raw_entries) and all(entry.isascii() and entry.isdecimal() for entry in raw_entries),
+        "Archived child native task inventory is malformed.",
+    )
+    task_ids = tuple(sorted(int(entry) for entry in raw_entries))
+    _require(
+        len(task_ids) == len(set(task_ids)) and threading.get_native_id() in task_ids,
+        "Archived child native task inventory is inconsistent.",
+    )
+    return task_ids
+
+
+def _native_task_cwd(
+    task_id: int,
+) -> tuple[str, tuple[int, int, int, int, int]]:
+    cwd_link = Path("/proc/self/task") / str(task_id) / "cwd"
+    try:
+        path = os.readlink(cwd_link)
+        metadata = os.stat(cwd_link)
+    except OSError as error:
+        raise ValueError("Archived child native task cwd is unavailable.") from error
+    _require(
+        os.path.isabs(path) and " (deleted)" not in path and stat.S_ISDIR(metadata.st_mode),
+        "Archived child native task cwd is unsafe.",
+    )
+    return path, _directory_identity(metadata)
+
+
+def _native_task_cwd_inventory(
+    task_ids: Sequence[int],
+) -> tuple[tuple[int, str, tuple[int, int, int, int, int]], ...]:
+    _require(
+        tuple(task_ids) == _native_task_ids(),
+        "Archived child native task set drifted during cwd observation.",
+    )
+    return tuple((task_id, *_native_task_cwd(task_id)) for task_id in task_ids)
+
+
+def _require_native_task_cwds(
+    inventory: Sequence[tuple[int, str, tuple[int, int, int, int, int]]],
+    *,
+    expected_path: Path,
+    expected_identity: tuple[int, int, int, int, int],
+    label: str,
+) -> None:
+    _require(
+        bool(inventory)
+        and all(
+            path == str(expected_path) and identity == expected_identity
+            for _task_id, path, identity in inventory
+        ),
+        f"{label} native task cwd inventory drifted.",
+    )
+
+
+def _await_exact_native_task_cwd_inventory(
+    expected_task_ids: tuple[int, ...],
+    *,
+    expected_path: Path,
+    expected_identity: tuple[int, int, int, int, int],
+    label: str,
+) -> tuple[tuple[int, str, tuple[int, int, int, int, int]], ...]:
+    deadline = time.monotonic() + HISTORICAL_THREAD_FS_PROBE_TIMEOUT_SECONDS
+    last_error: BaseException | None = None
+    while True:
+        try:
+            _require(
+                _native_task_ids() == expected_task_ids,
+                f"{label} native task set has not stabilized.",
+            )
+            inventory = _native_task_cwd_inventory(expected_task_ids)
+            _require_native_task_cwds(
+                inventory,
+                expected_path=expected_path,
+                expected_identity=expected_identity,
+                label=label,
+            )
+            return inventory
+        except (OSError, ValueError) as error:
+            last_error = error
+        if time.monotonic() >= deadline:
+            raise ValueError(f"{label} native task inventory did not stabilize.") from last_error
+        time.sleep(0.001)
+
+
+def _historical_thread_fs_isolation_static_policy() -> dict[str, Any]:
+    return {
+        "schema_version": 2,
+        "platform": "linux-procfs-cpython",
+        "api": "os.unshare",
+        "clone_flag_name": "CLONE_FS",
+        "clone_flag_value": 0x200,
+        "unshare_call_count": 1,
+        "ordering": [
+            "capture-detached-native-task-baseline",
+            "start-pre-unshare-python-probe-thread",
+            "unshare-main-thread-fs-context",
+            "move-main-only-to-canonical-root",
+            "observe-probe-and-preexisting-non-main-tasks-at-detached-root",
+            "restore-main-to-detached-root",
+            "join-probe-thread-and-freeze-stable-native-task-baseline",
+            "enter-capability-gated-cwd-scopes",
+        ],
+        "probe_semantics": (
+            "pre-unshare-python-thread-shares-original-fs-struct-and-remains-detached-"
+            "while-unshared-main-enters-canonical-root"
+        ),
+        "capability_semantics": (
+            "private-process-local-object-identity-required-at-entry-during-and-finally-"
+            "for-every-cwd-scope"
+        ),
+        "native_task_boundary": (
+            "exact-post-probe-tid-set-and-cwd-identities-at-every-scope-boundary;"
+            "new-or-exited-native-tasks-are-unsupported-and-fail-closed"
+        ),
+        "dynamic_observation_verification": (
+            "signed-canonical-semantic-observation-digest-parent-recomputed;"
+            "raw-task-and-directory-identities-private-live-capability-only"
+        ),
+    }
+
+
+def _historical_thread_fs_semantic_observation_sha256(
+    observation: Mapping[str, Any],
+) -> str:
+    _require(
+        set(observation) == set(_HISTORICAL_THREAD_FS_SEMANTIC_OBSERVATION_FIELDS),
+        "Historical thread fs-isolation semantic observation schema drifted.",
+    )
+    projected = {
+        field: observation[field] for field in _HISTORICAL_THREAD_FS_SEMANTIC_OBSERVATION_FIELDS
+    }
+    return _json_digest(
+        {
+            "domain": HISTORICAL_THREAD_FS_SEMANTIC_OBSERVATION_DOMAIN,
+            "schema_version": 1,
+            "observation": projected,
+        }
+    )
+
+
+def _verify_historical_thread_fs_isolation_claim(raw: object) -> None:
+    expected_policy = _historical_thread_fs_isolation_static_policy()
+    _require(
+        isinstance(raw, Mapping)
+        and set(raw) == {"schema_version", "static_policy", "dynamic_observation"}
+        and type(raw.get("schema_version")) is int
+        and raw.get("schema_version") == 2
+        and isinstance(raw.get("static_policy"), Mapping)
+        and canonical_json(raw.get("static_policy")) == canonical_json(expected_policy),
+        "Historical thread fs-isolation static claim drifted.",
+    )
+    dynamic = cast(Mapping[str, Any], raw).get("dynamic_observation")
+    _require(
+        isinstance(dynamic, Mapping)
+        and set(dynamic)
+        == {
+            "python_thread_count_before_probe",
+            "python_thread_count_during_probe",
+            "python_thread_count_after_probe",
+            "native_task_count_before_probe",
+            "native_task_count_during_probe",
+            "native_task_count_after_probe",
+            "preexisting_non_main_native_task_count",
+            "probe_thread_native_task_count",
+            "main_transition",
+            "probe_thread_transition",
+            "preexisting_non_main_transition",
+            "task_set_restored_after_probe",
+            "all_tasks_detached_after_probe",
+            "semantic_observation_sha256",
+        },
+        "Historical thread fs-isolation dynamic claim schema drifted.",
+    )
+    dynamic_map = cast(Mapping[str, Any], dynamic)
+    numeric_fields = (
+        "python_thread_count_before_probe",
+        "python_thread_count_during_probe",
+        "python_thread_count_after_probe",
+        "native_task_count_before_probe",
+        "native_task_count_during_probe",
+        "native_task_count_after_probe",
+        "preexisting_non_main_native_task_count",
+        "probe_thread_native_task_count",
+    )
+    before = dynamic_map.get("native_task_count_before_probe")
+    during = dynamic_map.get("native_task_count_during_probe")
+    after = dynamic_map.get("native_task_count_after_probe")
+    main_transition = dynamic_map.get("main_transition")
+    probe_transition = dynamic_map.get("probe_thread_transition")
+    preexisting_transition = dynamic_map.get("preexisting_non_main_transition")
+    semantic_observation = {
+        field: dynamic_map[field]
+        for field in _HISTORICAL_THREAD_FS_SEMANTIC_OBSERVATION_FIELDS
+    }
+    _require(
+        all(type(dynamic_map.get(field)) is int for field in numeric_fields)
+        and type(before) is int
+        and before >= 1
+        and during == before + 1
+        and after == before
+        and dynamic_map.get("python_thread_count_before_probe") == 1
+        and dynamic_map.get("python_thread_count_during_probe") == 2
+        and dynamic_map.get("python_thread_count_after_probe") == 1
+        and dynamic_map.get("preexisting_non_main_native_task_count") == before - 1
+        and dynamic_map.get("probe_thread_native_task_count") == 1
+        and type(main_transition) is list
+        and all(type(item) is str for item in main_transition)
+        and main_transition == ["detached", "canonical-root", "detached"]
+        and type(probe_transition) is list
+        and all(type(item) is str for item in probe_transition)
+        and probe_transition == ["detached", "detached", "detached"]
+        and type(preexisting_transition) is list
+        and all(type(item) is str for item in preexisting_transition)
+        and preexisting_transition == ["detached", "detached", "detached"]
+        and dynamic_map.get("task_set_restored_after_probe") is True
+        and dynamic_map.get("all_tasks_detached_after_probe") is True
+        and type(dynamic_map.get("semantic_observation_sha256")) is str
+        and _is_sha256(dynamic_map.get("semantic_observation_sha256"))
+        and dynamic_map.get("semantic_observation_sha256")
+        == _historical_thread_fs_semantic_observation_sha256(semantic_observation),
+        "Historical thread fs-isolation dynamic observation drifted.",
+    )
+
+
+def _assert_thread_fs_isolation_capability(
+    *,
+    repository_root: Path,
+    detached_root: Path,
+    main_location: str,
+) -> _HistoricalThreadFsIsolationCapability:
+    capability = _HISTORICAL_THREAD_FS_ISOLATION_CAPABILITY
+    _require(
+        _HISTORICAL_THREAD_FS_UNSHARE_ATTEMPTED
+        and type(capability) is _HistoricalThreadFsIsolationCapability
+        and capability.seal is _HISTORICAL_THREAD_FS_ISOLATION_SEAL
+        and _historical_thread_fs_capability_is_installed(capability)
+        and _get_installed_historical_thread_fs_capability() is capability,
+        "Historical cwd scope lacks the private thread fs-isolation capability.",
+    )
+    exact_capability = cast(_HistoricalThreadFsIsolationCapability, capability)
+    try:
+        claim = json.loads(exact_capability.claim_bytes)
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ValueError("Historical cwd capability claim bytes are invalid.") from error
+    _require(
+        bool(exact_capability.claim_bytes)
+        and exact_capability.claim_sha256
+        == hashlib.sha256(exact_capability.claim_bytes).hexdigest()
+        and isinstance(claim, Mapping)
+        and canonical_json(claim) == exact_capability.claim_bytes,
+        "Historical cwd capability claim is not canonical.",
+    )
+    _verify_historical_thread_fs_isolation_claim(claim)
+    _require(
+        main_location in {"detached", "canonical-root"}
+        and repository_root == exact_capability.repository_root
+        and detached_root == exact_capability.detached_root
+        and threading.current_thread() is threading.main_thread()
+        and threading.get_native_id() == exact_capability.main_native_id
+        and threading.active_count() == 1
+        and _native_task_ids() == exact_capability.baseline_task_ids
+        and _directory_identity(os.stat(repository_root, follow_symlinks=False))
+        == exact_capability.root_identity
+        and _directory_identity(os.stat(detached_root, follow_symlinks=False))
+        == exact_capability.detached_identity,
+        "Historical cwd scope thread, native task set, or directory authority drifted.",
+    )
+    expected_main_path = repository_root if main_location == "canonical-root" else detached_root
+    expected_main_identity = (
+        exact_capability.root_identity
+        if main_location == "canonical-root"
+        else exact_capability.detached_identity
+    )
+    current_inventory = _native_task_cwd_inventory(exact_capability.baseline_task_ids)
+    baseline_by_task = {
+        task_id: (path, identity) for task_id, path, identity in exact_capability.baseline_task_cwds
+    }
+    _require(
+        _cwd_matches(expected_main_path, expected_main_identity)
+        and baseline_by_task.get(exact_capability.main_native_id)
+        == (str(detached_root), exact_capability.detached_identity)
+        and all(
+            (
+                path == str(expected_main_path) and identity == expected_main_identity
+                if task_id == exact_capability.main_native_id
+                else baseline_by_task.get(task_id)
+                == (path, identity)
+                == (str(detached_root), exact_capability.detached_identity)
+            )
+            for task_id, path, identity in current_inventory
+        ),
+        "Historical cwd scope per-task cwd authority drifted.",
+    )
+    return exact_capability
+
+
+def _unshare_validating_thread_fs_context(
+    *,
+    repository_root: Path,
+    detached_root: Path,
+) -> dict[str, Any]:
+    global _HISTORICAL_THREAD_FS_ISOLATION_CAPABILITY
+    global _HISTORICAL_THREAD_FS_UNSHARE_ATTEMPTED
+
+    _require(
+        not _HISTORICAL_THREAD_FS_UNSHARE_ATTEMPTED
+        and _HISTORICAL_THREAD_FS_ISOLATION_CAPABILITY is None,
+        "Historical thread fs-isolation may be established exactly once.",
+    )
+    _HISTORICAL_THREAD_FS_UNSHARE_ATTEMPTED = True
+    root = _exact_path(
+        repository_root,
+        label="Historical thread fs-isolation repository root",
+        must_exist=True,
+    )
+    detached = _exact_path(
+        detached_root,
+        label="Historical thread fs-isolation detached root",
+        must_exist=True,
+    )
+    raw_unshare = getattr(os, "unshare", None)
+    clone_fs = getattr(os, "CLONE_FS", None)
+    _require(
+        sys.platform == "linux"
+        and sys.implementation.name == "cpython"
+        and Path("/proc/self/task").is_dir()
+        and callable(raw_unshare)
+        and type(clone_fs) is int
+        and clone_fs == 0x200
+        and root.is_dir()
+        and detached.is_dir()
+        and root != detached
+        and threading.current_thread() is threading.main_thread()
+        and threading.active_count() == 1,
+        "Historical thread fs-isolation platform or Python scope is unsupported.",
+    )
+    no_follow = getattr(os, "O_NOFOLLOW", None)
+    _require(no_follow is not None, "Historical thread fs-isolation requires O_NOFOLLOW.")
+    flags = os.O_RDONLY | os.O_CLOEXEC | getattr(os, "O_DIRECTORY", 0) | cast(int, no_follow)
+    detached_fd = os.open(detached, flags)
+    root_fd = -1
+    probe_thread: threading.Thread | None = None
+    probe_ready = threading.Event()
+    root_probe_requested = threading.Event()
+    root_probe_observed = threading.Event()
+    restoration_requested = threading.Event()
+    probe_finished = threading.Event()
+    probe_errors: list[BaseException] = []
+    probe_observations: list[dict[str, Any]] = []
+    probe_control = {"abort": False}
+    failure: BaseException | None = None
+    unshare_succeeded = False
+    main_entered_root = False
+    main_restored = False
+    initial_task_ids: tuple[int, ...] = ()
+    initial_inventory: tuple[tuple[int, str, tuple[int, int, int, int, int]], ...] = ()
+    during_task_ids: tuple[int, ...] = ()
+    during_inventory: tuple[tuple[int, str, tuple[int, int, int, int, int]], ...] = ()
+    root_phase_inventory: tuple[tuple[int, str, tuple[int, int, int, int, int]], ...] = ()
+    restored_phase_inventory: tuple[tuple[int, str, tuple[int, int, int, int, int]], ...] = ()
+    post_task_ids: tuple[int, ...] = ()
+    post_inventory: tuple[tuple[int, str, tuple[int, int, int, int, int]], ...] = ()
+    main_native_id = threading.get_native_id()
+    try:
+        root_fd = os.open(root, flags)
+        detached_identity = _directory_identity(os.fstat(detached_fd))
+        root_identity = _directory_identity(os.fstat(root_fd))
+        _require(
+            detached_identity == _directory_identity(os.stat(detached, follow_symlinks=False))
+            and root_identity == _directory_identity(os.stat(root, follow_symlinks=False))
+            and stat.S_ISDIR(detached_identity[2])
+            and stat.S_ISDIR(root_identity[2])
+            and _cwd_matches(detached, detached_identity),
+            "Historical thread fs-isolation directory identity is unsafe.",
+        )
+        initial_task_ids = _native_task_ids()
+        initial_inventory = _native_task_cwd_inventory(initial_task_ids)
+        _require_native_task_cwds(
+            initial_inventory,
+            expected_path=detached,
+            expected_identity=detached_identity,
+            label="Pre-probe detached",
+        )
+
+        def probe() -> None:
+            try:
+                probe_native_id = threading.get_native_id()
+                before = _native_task_cwd(probe_native_id)
+                _require(
+                    _cwd_matches(detached, detached_identity)
+                    and before == (str(detached), detached_identity),
+                    "Pre-unshare Python probe did not inherit the detached fs context.",
+                )
+                probe_observations.append(
+                    {"phase": "before-unshare", "task_id": probe_native_id, "cwd": before}
+                )
+                probe_ready.set()
+                _require(
+                    root_probe_requested.wait(timeout=HISTORICAL_THREAD_FS_PROBE_TIMEOUT_SECONDS),
+                    "Pre-unshare Python probe timed out waiting for the root phase.",
+                )
+                if probe_control["abort"]:
+                    return
+                while_root = _native_task_cwd(probe_native_id)
+                _require(
+                    _cwd_matches(detached, detached_identity)
+                    and while_root == (str(detached), detached_identity),
+                    "Pre-unshare Python probe followed the main task into the canonical root.",
+                )
+                probe_observations.append(
+                    {"phase": "main-at-root", "task_id": probe_native_id, "cwd": while_root}
+                )
+                root_probe_observed.set()
+                _require(
+                    restoration_requested.wait(timeout=HISTORICAL_THREAD_FS_PROBE_TIMEOUT_SECONDS),
+                    "Pre-unshare Python probe timed out waiting for main restoration.",
+                )
+                after = _native_task_cwd(probe_native_id)
+                _require(
+                    _cwd_matches(detached, detached_identity)
+                    and after == (str(detached), detached_identity),
+                    "Pre-unshare Python probe drifted after main restoration.",
+                )
+                probe_observations.append(
+                    {"phase": "main-restored", "task_id": probe_native_id, "cwd": after}
+                )
+            except BaseException as error:
+                probe_errors.append(error)
+            finally:
+                probe_ready.set()
+                root_probe_observed.set()
+                probe_finished.set()
+
+        probe_thread = threading.Thread(
+            target=probe,
+            name="adaptive-v4-pre-unshare-fs-probe",
+            daemon=False,
+        )
+        probe_thread.start()
+        _require(
+            probe_ready.wait(timeout=HISTORICAL_THREAD_FS_PROBE_TIMEOUT_SECONDS)
+            and not probe_errors
+            and threading.active_count() == 2,
+            "Pre-unshare Python probe failed to become ready.",
+        )
+        probe_native_id = cast(int, probe_thread.native_id)
+        during_task_ids = _native_task_ids()
+        _require(
+            set(during_task_ids) == set(initial_task_ids) | {probe_native_id}
+            and len(during_task_ids) == len(initial_task_ids) + 1,
+            "Pre-unshare Python probe native task inventory drifted.",
+        )
+        during_inventory = _native_task_cwd_inventory(during_task_ids)
+        _require_native_task_cwds(
+            during_inventory,
+            expected_path=detached,
+            expected_identity=detached_identity,
+            label="Probe-ready detached",
+        )
+        cast(Callable[[int], None], raw_unshare)(cast(int, clone_fs))
+        unshare_succeeded = True
+        os.fchdir(root_fd)
+        main_entered_root = True
+        root_phase_inventory = _native_task_cwd_inventory(during_task_ids)
+        _require(
+            _cwd_matches(root, root_identity)
+            and all(
+                (
+                    path == str(root) and identity == root_identity
+                    if task_id == main_native_id
+                    else path == str(detached) and identity == detached_identity
+                )
+                for task_id, path, identity in root_phase_inventory
+            ),
+            "CLONE_FS probe did not isolate the main native task cwd.",
+        )
+        root_probe_requested.set()
+        _require(
+            root_probe_observed.wait(timeout=HISTORICAL_THREAD_FS_PROBE_TIMEOUT_SECONDS)
+            and not probe_errors,
+            "Pre-unshare Python probe failed during the canonical-root phase.",
+        )
+    except BaseException as error:
+        failure = error
+    finally:
+        if unshare_succeeded:
+            try:
+                os.fchdir(detached_fd)
+                main_restored = _cwd_matches(detached, detached_identity)
+                if during_task_ids:
+                    restored_phase_inventory = _native_task_cwd_inventory(during_task_ids)
+                    _require_native_task_cwds(
+                        restored_phase_inventory,
+                        expected_path=detached,
+                        expected_identity=detached_identity,
+                        label="Restored detached",
+                    )
+            except BaseException as error:
+                main_restored = False
+                if failure is None:
+                    failure = error
+        else:
+            try:
+                main_restored = _cwd_matches(detached, _directory_identity(os.fstat(detached_fd)))
+            except BaseException as error:
+                main_restored = False
+                if failure is None:
+                    failure = error
+        if not main_entered_root:
+            probe_control["abort"] = True
+        for event in (root_probe_requested, restoration_requested):
+            try:
+                event.set()
+            except BaseException as error:
+                if failure is None:
+                    failure = error
+        if probe_thread is not None:
+            try:
+                probe_thread.join(timeout=HISTORICAL_THREAD_FS_PROBE_TIMEOUT_SECONDS)
+                if probe_thread.is_alive() and failure is None:
+                    failure = ValueError("Pre-unshare Python probe did not terminate.")
+            except BaseException as error:
+                if failure is None:
+                    failure = error
+        if root_fd >= 0:
+            try:
+                os.close(root_fd)
+            except BaseException as error:
+                if failure is None:
+                    failure = error
+        try:
+            os.close(detached_fd)
+        except BaseException as error:
+            if failure is None:
+                failure = error
+
+    if failure is not None:
+        raise ValueError("Historical thread fs-isolation probe failed.") from failure
+    _require(
+        unshare_succeeded
+        and main_entered_root
+        and main_restored
+        and probe_finished.is_set()
+        and not probe_errors
+        and len(probe_observations) == 3
+        and threading.active_count() == 1,
+        "Historical thread fs-isolation probe did not complete exactly.",
+    )
+    post_inventory = _await_exact_native_task_cwd_inventory(
+        initial_task_ids,
+        expected_path=detached,
+        expected_identity=detached_identity,
+        label="Post-probe detached",
+    )
+    post_task_ids = tuple(task_id for task_id, _path, _identity in post_inventory)
+    semantic_observation = {
+        "python_thread_count_before_probe": 1,
+        "python_thread_count_during_probe": 2,
+        "python_thread_count_after_probe": 1,
+        "native_task_count_before_probe": len(initial_task_ids),
+        "native_task_count_during_probe": len(during_task_ids),
+        "native_task_count_after_probe": len(post_task_ids),
+        "preexisting_non_main_native_task_count": len(initial_task_ids) - 1,
+        "probe_thread_native_task_count": 1,
+        "main_transition": ["detached", "canonical-root", "detached"],
+        "probe_thread_transition": ["detached", "detached", "detached"],
+        "preexisting_non_main_transition": ["detached", "detached", "detached"],
+        "task_set_restored_after_probe": True,
+        "all_tasks_detached_after_probe": True,
+    }
+    claim = {
+        "schema_version": 2,
+        "static_policy": _historical_thread_fs_isolation_static_policy(),
+        "dynamic_observation": {
+            **semantic_observation,
+            "semantic_observation_sha256": (
+                _historical_thread_fs_semantic_observation_sha256(semantic_observation)
+            ),
+        },
+    }
+    _verify_historical_thread_fs_isolation_claim(claim)
+    claim_bytes = canonical_json(claim)
+    capability = _HistoricalThreadFsIsolationCapability(
+        seal=_HISTORICAL_THREAD_FS_ISOLATION_SEAL,
+        repository_root=root,
+        detached_root=detached,
+        root_identity=root_identity,
+        detached_identity=detached_identity,
+        main_native_id=main_native_id,
+        baseline_task_ids=post_task_ids,
+        baseline_task_cwds=post_inventory,
+        claim_bytes=claim_bytes,
+        claim_sha256=hashlib.sha256(claim_bytes).hexdigest(),
+    )
+    _install_historical_thread_fs_capability(capability)
+    _HISTORICAL_THREAD_FS_ISOLATION_CAPABILITY = capability
+    _assert_thread_fs_isolation_capability(
+        repository_root=root,
+        detached_root=detached,
+        main_location="detached",
+    )
+    return cast(dict[str, Any], json.loads(claim_bytes))
+
+
+@contextmanager
+def _scoped_historical_command_resolution_cwd(
+    *,
+    repository_root: Path,
+    detached_root: Path,
+) -> Iterator[None]:
+    root = _exact_path(repository_root, label="Historical command repository root", must_exist=True)
+    detached = _exact_path(
+        detached_root,
+        label="Detached historical result-source root",
+        must_exist=True,
+    )
+    capability = _assert_thread_fs_isolation_capability(
+        repository_root=root,
+        detached_root=detached,
+        main_location=(
+            "canonical-root" if _HISTORICAL_ROOT_CWD_AUTHORITY.get() is not None else "detached"
+        ),
+    )
+    active_authority = _HISTORICAL_ROOT_CWD_AUTHORITY.get()
+    if active_authority is not None:
+        (
+            active_capability,
+            active_root,
+            active_detached,
+            root_identity,
+            detached_identity,
+        ) = active_authority
+        _require(
+            capability is active_capability
+            and root == active_root
+            and detached == active_detached
+            and _cwd_matches(root, root_identity)
+            and _directory_identity(os.stat(detached, follow_symlinks=False)) == detached_identity
+            and threading.current_thread() is threading.main_thread()
+            and threading.active_count() == 1,
+            "Nested historical command cwd scope lacks exact outer root authority.",
+        )
+        try:
+            yield
+        finally:
+            _assert_thread_fs_isolation_capability(
+                repository_root=root,
+                detached_root=detached,
+                main_location="canonical-root",
+            )
+            _require(
+                _HISTORICAL_ROOT_CWD_AUTHORITY.get() is active_authority
+                and _cwd_matches(root, root_identity)
+                and _directory_identity(os.stat(detached, follow_symlinks=False))
+                == detached_identity
+                and threading.current_thread() is threading.main_thread()
+                and threading.active_count() == 1,
+                "Nested historical command cwd scope drifted from outer authority.",
+            )
+        return
+    _require(
+        root.is_dir()
+        and detached.is_dir()
+        and root != detached
+        and Path.cwd() == detached
+        and active_authority is None
+        and threading.current_thread() is threading.main_thread()
+        and threading.active_count() == 1,
+        "Historical command cwd scope did not start in the exact detached result source.",
+    )
+    no_follow = getattr(os, "O_NOFOLLOW", None)
+    _require(no_follow is not None, "Historical command cwd scope requires O_NOFOLLOW support.")
+    flags = os.O_RDONLY | os.O_CLOEXEC | getattr(os, "O_DIRECTORY", 0) | cast(int, no_follow)
+    detached_fd = os.open(".", flags)
+    root_fd = -1
+    try:
+        root_fd = os.open(root, flags)
+        detached_identity = _directory_identity(os.fstat(detached_fd))
+        root_identity = _directory_identity(os.fstat(root_fd))
+        _require(
+            detached_identity == _directory_identity(os.stat(detached, follow_symlinks=False))
+            and root_identity == _directory_identity(os.stat(root, follow_symlinks=False))
+            and stat.S_ISDIR(detached_identity[2])
+            and stat.S_ISDIR(root_identity[2]),
+            "Historical command cwd directory identity is unsafe.",
+        )
+        authority_token: Any | None = None
+        authority_value = (capability, root, detached, root_identity, detached_identity)
+        entered_root = False
+        cleanup_errors: list[BaseException] = []
+        try:
+            os.fchdir(root_fd)
+            entered_root = True
+            authority_token = _HISTORICAL_ROOT_CWD_AUTHORITY.set(authority_value)
+            _assert_thread_fs_isolation_capability(
+                repository_root=root,
+                detached_root=detached,
+                main_location="canonical-root",
+            )
+            _require(
+                _cwd_matches(root, root_identity),
+                "Historical command cwd did not enter the exact canonical repository root.",
+            )
+            yield
+        finally:
+            canonical_root_held = _cwd_matches(root, root_identity)
+            authority_held = False
+            try:
+                authority_held = _HISTORICAL_ROOT_CWD_AUTHORITY.get() is authority_value
+            except BaseException as error:
+                cleanup_errors.append(error)
+            if entered_root:
+                try:
+                    _assert_thread_fs_isolation_capability(
+                        repository_root=root,
+                        detached_root=detached,
+                        main_location="canonical-root",
+                    )
+                except BaseException as error:
+                    cleanup_errors.append(error)
+            if authority_token is not None:
+                try:
+                    _HISTORICAL_ROOT_CWD_AUTHORITY.reset(authority_token)
+                except BaseException as error:
+                    cleanup_errors.append(error)
+            elif entered_root:
+                cleanup_errors.append(
+                    ValueError("Historical command cwd authority was not established.")
+                )
+            if _HISTORICAL_ROOT_CWD_AUTHORITY.get() is not None:
+                try:
+                    _HISTORICAL_ROOT_CWD_AUTHORITY.set(None)
+                except BaseException as error:
+                    cleanup_errors.append(error)
+            authority_cleared = _HISTORICAL_ROOT_CWD_AUTHORITY.get() is None
+            try:
+                os.fchdir(detached_fd)
+            except BaseException as error:
+                cleanup_errors.append(error)
+            restored = _cwd_matches(detached, detached_identity)
+            if restored:
+                try:
+                    _assert_thread_fs_isolation_capability(
+                        repository_root=root,
+                        detached_root=detached,
+                        main_location="detached",
+                    )
+                except BaseException as error:
+                    cleanup_errors.append(error)
+            if not (
+                entered_root
+                and canonical_root_held
+                and authority_held
+                and authority_cleared
+                and restored
+            ):
+                cleanup_errors.append(
+                    ValueError(
+                        "Historical command cwd drifted or failed exact detached-root restoration."
+                    )
+                )
+            if cleanup_errors:
+                raise ValueError(
+                    "Historical command cwd cleanup failed closed after exact restoration attempts."
+                ) from cleanup_errors[0]
+    finally:
+        if root_fd >= 0:
+            os.close(root_fd)
+        os.close(detached_fd)
+
+
+@contextmanager
+def _scoped_historical_source_validation_cwd(
+    *,
+    repository_root: Path,
+    detached_root: Path,
+) -> Iterator[None]:
+    root = _exact_path(
+        repository_root,
+        label="Historical source-validation repository root",
+        must_exist=True,
+    )
+    detached = _exact_path(
+        detached_root,
+        label="Historical source-validation detached root",
+        must_exist=True,
+    )
+    _require(
+        _historical_cwd_authority_mode(
+            repository_root=root,
+            detached_root=detached,
+        )
+        == "canonical-root",
+        "Historical source validation requires active canonical-root authority.",
+    )
+    saved_authority = _HISTORICAL_ROOT_CWD_AUTHORITY.get()
+    capability = _get_installed_historical_thread_fs_capability()
+    _require(
+        type(saved_authority) is tuple
+        and len(saved_authority) == 5
+        and capability is not None
+        and saved_authority[0] is capability,
+        "Historical source validation lacks the installed root capability.",
+    )
+    exact_capability = cast(_HistoricalThreadFsIsolationCapability, capability)
+    no_follow = getattr(os, "O_NOFOLLOW", None)
+    _require(no_follow is not None, "Historical source validation requires O_NOFOLLOW.")
+    flags = os.O_RDONLY | os.O_CLOEXEC | getattr(os, "O_DIRECTORY", 0) | cast(int, no_follow)
+    root_fd = os.open(".", flags)
+    detached_fd = -1
+    try:
+        detached_fd = os.open(detached, flags)
+        root_identity = _directory_identity(os.fstat(root_fd))
+        detached_identity = _directory_identity(os.fstat(detached_fd))
+        _require(
+            root_identity == exact_capability.root_identity
+            and detached_identity == exact_capability.detached_identity
+            and _cwd_matches(root, root_identity),
+            "Historical source-validation directory identities drifted.",
+        )
+        entered_detached = False
+        cleanup_errors: list[BaseException] = []
+        try:
+            os.fchdir(detached_fd)
+            entered_detached = True
+            _assert_thread_fs_isolation_capability(
+                repository_root=root,
+                detached_root=detached,
+                main_location="detached",
+            )
+            yield
+        finally:
+            detached_held = entered_detached and _cwd_matches(detached, detached_identity)
+            root_authority_held = _HISTORICAL_ROOT_CWD_AUTHORITY.get() is saved_authority
+            if entered_detached:
+                try:
+                    _assert_thread_fs_isolation_capability(
+                        repository_root=root,
+                        detached_root=detached,
+                        main_location="detached",
+                    )
+                except BaseException as error:
+                    cleanup_errors.append(error)
+            try:
+                os.fchdir(root_fd)
+            except BaseException as error:
+                cleanup_errors.append(error)
+            if _HISTORICAL_ROOT_CWD_AUTHORITY.get() is not saved_authority:
+                try:
+                    _HISTORICAL_ROOT_CWD_AUTHORITY.set(saved_authority)
+                except BaseException as error:
+                    cleanup_errors.append(error)
+            authority_restored = _HISTORICAL_ROOT_CWD_AUTHORITY.get() is saved_authority
+            root_restored = _cwd_matches(root, root_identity)
+            if root_restored and authority_restored:
+                try:
+                    _assert_thread_fs_isolation_capability(
+                        repository_root=root,
+                        detached_root=detached,
+                        main_location="canonical-root",
+                    )
+                except BaseException as error:
+                    cleanup_errors.append(error)
+            if not (
+                entered_detached
+                and detached_held
+                and root_authority_held
+                and root_restored
+                and authority_restored
+            ):
+                cleanup_errors.append(
+                    ValueError("Historical source-validation cwd or authority restoration drifted.")
+                )
+            if cleanup_errors:
+                raise ValueError(
+                    "Historical source-validation cleanup failed after restoration attempts."
+                ) from cleanup_errors[0]
+    finally:
+        if detached_fd >= 0:
+            os.close(detached_fd)
+        os.close(root_fd)
+
+
+@contextmanager
+def _legacy_training_command_cwd_adapter(
+    training_matrix: Any,
+    *,
+    repository_root: Path,
+    detached_root: Path,
+    inventory: Sequence[Mapping[str, Any]],
+) -> Iterator[dict[str, Any]]:
+    raw_command_original = getattr(training_matrix, "_validate_training_command", None)
+    raw_checkpoint_original = getattr(training_matrix, "_validate_checkpoint", None)
+    _require(
+        callable(raw_command_original)
+        and getattr(raw_command_original, "__name__", None) == "_validate_training_command"
+        and callable(raw_checkpoint_original)
+        and getattr(raw_checkpoint_original, "__name__", None) == "_validate_checkpoint",
+        "Legacy training relative-path validators are unavailable or aliased.",
+    )
+    command_original = cast(Callable[..., Any], raw_command_original)
+    checkpoint_original = cast(Callable[..., Any], raw_checkpoint_original)
+    rows: dict[tuple[str, int], Mapping[str, Any]] = {}
+    for row in inventory:
+        key = (cast(str, row.get("scale")), cast(int, row.get("training_seed")))
+        _require(
+            key[0] in SCALES and key[1] in TRAINING_SEEDS and key not in rows,
+            "Legacy training command adapter inventory is invalid.",
+        )
+        rows[key] = row
+    expected = {(scale, seed) for scale in SCALES for seed in TRAINING_SEEDS}
+    _require(set(rows) == expected, "Legacy training command adapter inventory is incomplete.")
+    validated_commands: dict[tuple[str, int], int] = {}
+    validated_checkpoints: dict[tuple[str, int], int] = {}
+    validated_command_profiles: dict[str, int] = {}
+    validated_checkpoint_profiles: dict[str, int] = {}
+    validated = {
+        "training_command": validated_commands,
+        "training_checkpoint": validated_checkpoints,
+        "training_command_profiles": validated_command_profiles,
+        "training_checkpoint_profiles": validated_checkpoint_profiles,
+    }
+
+    def adapter(command: Any, **arguments: Any) -> Any:
+        scale = arguments.get("scale")
+        seed = arguments.get("seed")
+        key = (cast(str, scale), cast(int, seed))
+        _require(
+            key in rows,
+            "Legacy training command adapter call drifted.",
+        )
+        row = rows[key]
+        output_dir = arguments.get("output_dir")
+        _historical_cwd_authority_mode(
+            repository_root=repository_root,
+            detached_root=detached_root,
+        )
+        path_spelling_mode = _historical_training_path_spelling_mode()
+        expected_output_dir = (
+            Path(cast(str, row.get("resolved_path")))
+            if path_spelling_mode == "absolute"
+            else Path(cast(str, row.get("recorded_relative_path")))
+        )
+        context = arguments.get("context")
+        expected_context = row.get("expected_context_profile")
+        _require(
+            _historical_command_option(
+                command,
+                "--output-dir",
+                label=f"Legacy training command {key[0]}/{key[1]}",
+            )
+            == row.get("recorded_relative_path")
+            and isinstance(output_dir, Path)
+            and output_dir == expected_output_dir,
+            "Legacy training command adapter arguments differ from signed preflight.",
+        )
+        _require(
+            isinstance(expected_context, Mapping)
+            and getattr(context, "manifest_binding", None)
+            == expected_context.get("manifest_binding")
+            and getattr(context, "source", None) == expected_context.get("source"),
+            "Legacy training command context differs from its signed coordinate profile.",
+        )
+        profile_sha256 = _json_digest(
+            {
+                "coordinate": {"scale": key[0], "training_seed": key[1]},
+                "command_sha256": row.get("command_sha256"),
+                "context_profile_sha256": _json_digest(expected_context),
+                "path_spelling_mode": path_spelling_mode,
+            }
+        )
+        with _scoped_historical_command_resolution_cwd(
+            repository_root=repository_root,
+            detached_root=detached_root,
+        ):
+            result = command_original(command, **arguments)
+        validated_commands[key] = validated_commands.get(key, 0) + 1
+        validated_command_profiles[profile_sha256] = (
+            validated_command_profiles.get(profile_sha256, 0) + 1
+        )
+        return result
+
+    def checkpoint_adapter(checkpoint: Any, **arguments: Any) -> Any:
+        scale = arguments.get("scale")
+        seed = arguments.get("seed")
+        key = (cast(str, scale), cast(int, seed))
+        _require(
+            key in rows,
+            "Legacy training checkpoint adapter call drifted.",
+        )
+        row = rows[key]
+        expected_path = arguments.get("expected_path")
+        _historical_cwd_authority_mode(
+            repository_root=repository_root,
+            detached_root=detached_root,
+        )
+        path_spelling_mode = _historical_training_path_spelling_mode()
+        expected_checkpoint_path = (
+            Path(cast(str, row.get("resolved_checkpoint_path")))
+            if path_spelling_mode == "absolute"
+            else Path(cast(str, row.get("checkpoint_relative_path")))
+        )
+        context = arguments.get("context")
+        expected_context = row.get("expected_context_profile")
+        return_raw = arguments.get("return_raw", False)
+        _require(
+            isinstance(checkpoint, dict)
+            and checkpoint == row.get("checkpoint_binding")
+            and isinstance(expected_path, Path)
+            and expected_path == expected_checkpoint_path,
+            "Legacy training checkpoint adapter arguments differ from signed preflight.",
+        )
+        _require(
+            isinstance(expected_context, Mapping)
+            and getattr(context, "manifest_binding", None)
+            == expected_context.get("manifest_binding")
+            and getattr(context, "source", None) == expected_context.get("source")
+            and type(return_raw) is bool,
+            "Legacy training checkpoint context or raw mode differs from signed preflight.",
+        )
+        profile_sha256 = _json_digest(
+            {
+                "coordinate": {"scale": key[0], "training_seed": key[1]},
+                "context_profile_sha256": _json_digest(expected_context),
+                "path_spelling_mode": path_spelling_mode,
+                "return_raw": cast(bool, return_raw),
+            }
+        )
+        with _scoped_historical_command_resolution_cwd(
+            repository_root=repository_root,
+            detached_root=detached_root,
+        ):
+            result = checkpoint_original(checkpoint, **arguments)
+        validated_checkpoints[key] = validated_checkpoints.get(key, 0) + 1
+        validated_checkpoint_profiles[profile_sha256] = (
+            validated_checkpoint_profiles.get(profile_sha256, 0) + 1
+        )
+        return result
+
+    training_matrix._validate_training_command = adapter
+    training_matrix._validate_checkpoint = checkpoint_adapter
+    try:
+        yield validated
+    finally:
+        adapters_held = (
+            getattr(training_matrix, "_validate_training_command", None) is adapter
+            and getattr(training_matrix, "_validate_checkpoint", None) is checkpoint_adapter
+        )
+        training_matrix._validate_checkpoint = checkpoint_original
+        training_matrix._validate_training_command = command_original
+        _require(
+            adapters_held
+            and getattr(training_matrix, "_validate_training_command", None) is command_original
+            and getattr(training_matrix, "_validate_checkpoint", None) is checkpoint_original,
+            "Legacy training relative-path validator adapter identity drifted.",
+        )
+
+
+def _historical_superseded_bundle_argument_claim(repository_root: Path) -> dict[str, Any]:
+    root = _exact_path(
+        repository_root,
+        label="Historical superseded-bundle repository root",
+        must_exist=True,
+    )
+    payload, opened = _load_json_nofollow(
+        root / HISTORICAL_TRAINING_LEDGER,
+        label="Historical superseded-bundle training ledger",
+    )
+    try:
+        trainer_binding = payload.get("canonical_trainer")
+        execution_environment = payload.get("execution_environment")
+        _require(
+            opened.sha256 == HISTORICAL_TRAINING_LEDGER_SHA256
+            and isinstance(trainer_binding, Mapping)
+            and isinstance(execution_environment, Mapping),
+            "Historical superseded-bundle argument evidence is invalid.",
+        )
+        result = {
+            "schema_version": 1,
+            "function": "training_matrix._validate_superseded_training_bundle",
+            "output_root": str(root / HISTORICAL_TRAINING_ROOT),
+            "trainer_binding": dict(cast(Mapping[str, Any], trainer_binding)),
+            "signed_execution_environment": dict(cast(Mapping[str, Any], execution_environment)),
+            "allowed_return_raw_checkpoint": [False, True],
+        }
+        opened.assert_unchanged()
+        return result
+    finally:
+        opened.close()
+
+
+def _historical_cwd_authority_mode(
+    *,
+    repository_root: Path,
+    detached_root: Path,
+) -> str:
+    authority = _HISTORICAL_ROOT_CWD_AUTHORITY.get()
+    if authority is None:
+        _assert_thread_fs_isolation_capability(
+            repository_root=repository_root,
+            detached_root=detached_root,
+            main_location="detached",
+        )
+        return "detached"
+    _require(
+        type(authority) is tuple
+        and len(authority) == 5
+        and authority[1] == repository_root
+        and authority[2] == detached_root,
+        "Historical nested cwd authority is malformed or bound to different roots.",
+    )
+    capability = _assert_thread_fs_isolation_capability(
+        repository_root=repository_root,
+        detached_root=detached_root,
+        main_location="canonical-root",
+    )
+    _require(
+        authority[0] is capability
+        and authority[3] == capability.root_identity
+        and authority[4] == capability.detached_identity,
+        "Historical nested cwd authority does not hold the installed capability.",
+    )
+    return "canonical-root"
+
+
+def _historical_training_path_spelling_mode() -> str:
+    authority = _HISTORICAL_SUPERSEDED_PATH_SPELLING_AUTHORITY.get()
+    if authority is None:
+        return "absolute"
+    installed = _get_installed_historical_thread_fs_capability()
+    _require(
+        type(authority) is _HistoricalSupersededPathSpellingAuthority
+        and authority.seal is _HISTORICAL_SUPERSEDED_PATH_SPELLING_SEAL
+        and installed is not None
+        and authority.capability is installed
+        and _historical_thread_fs_capability_is_installed(authority.capability)
+        and authority.mode in {"absolute", "recorded-relative"},
+        "Historical training path-spelling authority is forged or invalid.",
+    )
+    return authority.mode
+
+
+@contextmanager
+def _legacy_superseded_bundle_cwd_adapter(
+    training_matrix: Any,
+    *,
+    repository_root: Path,
+    detached_root: Path,
+    trust_root: attestation.TrustRoot,
+    argument_claim: Mapping[str, Any],
+) -> Iterator[dict[str, int]]:
+    raw_original = getattr(training_matrix, "_validate_superseded_training_bundle", None)
+    _require(
+        callable(raw_original)
+        and getattr(raw_original, "__name__", None) == "_validate_superseded_training_bundle"
+        and not bool(getattr(raw_original, "_adaptive_v4_superseded_bundle_adapter", False)),
+        "Legacy superseded-bundle validator is unavailable, aliased, or already adapted.",
+    )
+    original = cast(Callable[..., Any], raw_original)
+    expected_keys = {
+        "output_root",
+        "trust_root",
+        "trainer_binding",
+        "expected_execution_environment",
+        "return_raw_checkpoint",
+    }
+    invocations: dict[str, int] = {}
+
+    def adapter(*arguments: Any, **keywords: Any) -> Any:
+        entry_mode = _historical_cwd_authority_mode(
+            repository_root=repository_root,
+            detached_root=detached_root,
+        )
+        output_root = keywords.get("output_root")
+        absolute_output_root = Path(cast(str, argument_claim.get("output_root")))
+        path_spelling_mode = (
+            "absolute"
+            if isinstance(output_root, Path) and output_root == absolute_output_root
+            else "recorded-relative"
+            if entry_mode == "canonical-root"
+            and isinstance(output_root, Path)
+            and output_root == HISTORICAL_TRAINING_ROOT
+            else "invalid"
+        )
+        _require(
+            not arguments
+            and set(keywords) == expected_keys
+            and type(keywords.get("return_raw_checkpoint")) is bool
+            and keywords.get("return_raw_checkpoint")
+            in argument_claim.get("allowed_return_raw_checkpoint", ())
+            and path_spelling_mode in {"absolute", "recorded-relative"}
+            and keywords.get("trust_root") is trust_root
+            and keywords.get("trainer_binding") == argument_claim.get("trainer_binding")
+            and keywords.get("expected_execution_environment")
+            in (None, argument_claim.get("signed_execution_environment"))
+            and threading.current_thread() is threading.main_thread()
+            and threading.active_count() == 1
+            and _source_state(detached_root)
+            == {"commit": HISTORICAL_RESULT_SOURCE_COMMIT, "dirty": False},
+            "Legacy superseded-bundle adapter arguments, thread, or detached source drifted.",
+        )
+        invocation = {
+            "return_raw_checkpoint": cast(bool, keywords["return_raw_checkpoint"]),
+            "execution_environment_mode": (
+                "none"
+                if keywords["expected_execution_environment"] is None
+                else "exact-signed-training-ledger"
+            ),
+            "path_spelling_mode": path_spelling_mode,
+        }
+        invocation_sha256 = _json_digest(invocation)
+        capability = _get_installed_historical_thread_fs_capability()
+        _require(
+            capability is not None
+            and _historical_thread_fs_capability_is_installed(capability)
+            and _HISTORICAL_SUPERSEDED_PATH_SPELLING_AUTHORITY.get() is None,
+            "Legacy superseded-bundle path-spelling authority is already active.",
+        )
+        spelling_authority = _HistoricalSupersededPathSpellingAuthority(
+            seal=_HISTORICAL_SUPERSEDED_PATH_SPELLING_SEAL,
+            capability=cast(_HistoricalThreadFsIsolationCapability, capability),
+            mode=path_spelling_mode,
+        )
+        entry_token = _HISTORICAL_SUPERSEDED_PATH_SPELLING_AUTHORITY.set(spelling_authority)
+        cleanup_errors: list[BaseException] = []
+        authority_held = False
+        try:
+            with _scoped_historical_command_resolution_cwd(
+                repository_root=repository_root,
+                detached_root=detached_root,
+            ):
+                result = original(**keywords)
+        finally:
+            authority_held = (
+                _HISTORICAL_SUPERSEDED_PATH_SPELLING_AUTHORITY.get() is spelling_authority
+            )
+            try:
+                _HISTORICAL_SUPERSEDED_PATH_SPELLING_AUTHORITY.reset(entry_token)
+            except BaseException as error:
+                cleanup_errors.append(error)
+            if _HISTORICAL_SUPERSEDED_PATH_SPELLING_AUTHORITY.get() is not None:
+                try:
+                    _HISTORICAL_SUPERSEDED_PATH_SPELLING_AUTHORITY.set(None)
+                except BaseException as error:
+                    cleanup_errors.append(error)
+            authority_cleared = _HISTORICAL_SUPERSEDED_PATH_SPELLING_AUTHORITY.get() is None
+            if not (authority_held and authority_cleared):
+                cleanup_errors.append(
+                    ValueError("Legacy superseded-bundle path-spelling authority drifted.")
+                )
+            if cleanup_errors:
+                raise ValueError(
+                    "Legacy superseded-bundle path-spelling authority cleanup failed."
+                ) from cleanup_errors[0]
+        _require(
+            _historical_cwd_authority_mode(
+                repository_root=repository_root,
+                detached_root=detached_root,
+            )
+            == entry_mode
+            and _source_state(detached_root)
+            == {"commit": HISTORICAL_RESULT_SOURCE_COMMIT, "dirty": False},
+            "Legacy superseded-bundle adapter did not restore the detached source.",
+        )
+        invocations[invocation_sha256] = invocations.get(invocation_sha256, 0) + 1
+        return result
+
+    adapter._adaptive_v4_superseded_bundle_adapter = True  # type: ignore[attr-defined]
+    training_matrix._validate_superseded_training_bundle = adapter
+    try:
+        yield invocations
+    finally:
+        adapter_held = (
+            getattr(training_matrix, "_validate_superseded_training_bundle", None) is adapter
+        )
+        training_matrix._validate_superseded_training_bundle = original
+        _require(
+            adapter_held
+            and getattr(training_matrix, "_validate_superseded_training_bundle", None) is original
+            and _HISTORICAL_SUPERSEDED_PATH_SPELLING_AUTHORITY.get() is None
+            and _historical_cwd_authority_mode(
+                repository_root=repository_root,
+                detached_root=detached_root,
+            )
+            == "detached"
+            and _source_state(detached_root)
+            == {"commit": HISTORICAL_RESULT_SOURCE_COMMIT, "dirty": False},
+            "Legacy superseded-bundle callable identity or detached source drifted.",
+        )
+
+
+def _historical_ledger_record_inventory(
+    records: Mapping[tuple[str, int], Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    expected = {(scale, seed) for scale in SCALES for seed in TRAINING_SEEDS}
+    _require(
+        set(records) == expected
+        and all(isinstance(record, Mapping) for record in records.values()),
+        "Historical training ledger-record inventory is incomplete.",
+    )
+    return [
+        {
+            "scale": scale,
+            "training_seed": seed,
+            "record": dict(records[(scale, seed)]),
+        }
+        for scale in SCALES
+        for seed in TRAINING_SEEDS
+    ]
+
+
+def _historical_quarantine_argument_claim(repository_root: Path) -> dict[str, Any]:
+    root = _exact_path(
+        repository_root,
+        label="Historical quarantine repository root",
+        must_exist=True,
+    )
+    training_payload, training_opened = _load_json_nofollow(
+        root / HISTORICAL_TRAINING_LEDGER,
+        label="Historical quarantine training ledger",
+    )
+    try:
+        runs = training_payload.get("runs")
+        manifest = training_payload.get("manifest")
+        trainer = training_payload.get("canonical_trainer")
+        _require(
+            training_opened.sha256 == HISTORICAL_TRAINING_LEDGER_SHA256
+            and isinstance(runs, list)
+            and len(runs) == len(SCALES) * len(TRAINING_SEEDS)
+            and all(isinstance(run, Mapping) for run in runs)
+            and isinstance(manifest, Mapping)
+            and manifest.get("path") == str(root / V1_1_MANIFEST_RELATIVE_PATH)
+            and manifest.get("sha256") == V1_1_MANIFEST_SHA256
+            and isinstance(trainer, Mapping),
+            "Historical quarantine signed argument evidence is invalid.",
+        )
+        records: dict[tuple[str, int], Mapping[str, Any]] = {}
+        for raw_run in cast(list[Any], runs):
+            run = cast(Mapping[str, Any], raw_run)
+            coordinate = (run.get("scale"), run.get("seed"))
+            _require(
+                coordinate[0] in SCALES
+                and coordinate[1] in TRAINING_SEEDS
+                and coordinate not in records,
+                "Historical quarantine training run coordinate is invalid.",
+            )
+            records[cast(tuple[str, int], coordinate)] = run
+        record_inventory = _historical_ledger_record_inventory(records)
+        invocation_profile = {
+            "function": "calibration_matrix._validate_quarantine_evidence",
+            "keyword_names": [
+                "ledger_records",
+                "legacy_context",
+                "trainer_binding",
+                "training_matrix_payload",
+                "training_matrix_summary_path",
+                "trust_root",
+            ],
+            "cwd_translation": "detached-to-canonical-root-to-detached",
+            "training_ledger_mode": "exact-signed-v1.1-ledger",
+            "legacy_context_mode": "exact-signed-v1.1-manifest-and-source",
+        }
+        result = {
+            "schema_version": 1,
+            "function": "calibration_matrix._validate_quarantine_evidence",
+            "quarantine_root": str(root / HISTORICAL_CALIBRATION_QUARANTINE_ROOT),
+            "training_matrix_summary_path": str(root / HISTORICAL_TRAINING_LEDGER),
+            "training_matrix_payload_sha256": _json_digest(training_payload),
+            "trainer_binding": dict(cast(Mapping[str, Any], trainer)),
+            "ledger_record_count": len(record_inventory),
+            "ledger_record_inventory_sha256": _json_digest(
+                {"schema_version": 1, "records": record_inventory}
+            ),
+            "legacy_source": {"commit": V1_1_RESULT_SOURCE_COMMIT, "dirty": False},
+            "legacy_manifest": dict(cast(Mapping[str, Any], manifest)),
+            "expected_invocation_count": 1,
+            "expected_invocation_profile_sha256": _json_digest(invocation_profile),
+        }
+        training_opened.assert_unchanged()
+        return result
+    finally:
+        training_opened.close()
+
+
+def _verify_historical_quarantine_argument_claim(raw: object) -> None:
+    _require(
+        isinstance(raw, Mapping)
+        and set(raw)
+        == {
+            "schema_version",
+            "function",
+            "quarantine_root",
+            "training_matrix_summary_path",
+            "training_matrix_payload_sha256",
+            "trainer_binding",
+            "ledger_record_count",
+            "ledger_record_inventory_sha256",
+            "legacy_source",
+            "legacy_manifest",
+            "expected_invocation_count",
+            "expected_invocation_profile_sha256",
+        }
+        and raw.get("schema_version") == 1
+        and raw.get("function") == "calibration_matrix._validate_quarantine_evidence"
+        and isinstance(raw.get("quarantine_root"), str)
+        and Path(cast(str, raw.get("quarantine_root"))).is_absolute()
+        and isinstance(raw.get("training_matrix_summary_path"), str)
+        and Path(cast(str, raw.get("training_matrix_summary_path"))).is_absolute()
+        and _is_sha256(raw.get("training_matrix_payload_sha256"))
+        and isinstance(raw.get("trainer_binding"), Mapping)
+        and raw.get("ledger_record_count") == len(SCALES) * len(TRAINING_SEEDS)
+        and _is_sha256(raw.get("ledger_record_inventory_sha256"))
+        and raw.get("legacy_source") == {"commit": V1_1_RESULT_SOURCE_COMMIT, "dirty": False}
+        and isinstance(raw.get("legacy_manifest"), Mapping)
+        and cast(Mapping[str, Any], raw.get("legacy_manifest")).get("sha256")
+        == V1_1_MANIFEST_SHA256
+        and raw.get("expected_invocation_count") == 1
+        and _is_sha256(raw.get("expected_invocation_profile_sha256")),
+        "Historical quarantine cwd-adapter claim drifted.",
+    )
+
+
+def _historical_relative_path_adapter_claim(
+    training_inventory: Sequence[Mapping[str, Any]],
+    superseded_argument_claim: Mapping[str, Any],
+    quarantine_argument_claim: Mapping[str, Any],
+    *,
+    observed_training: Mapping[str, Any] | None = None,
+    observed_superseded: Mapping[str, int] | None = None,
+    observed_quarantine: Mapping[str, int] | None = None,
+) -> dict[str, Any]:
+    rows = [dict(row) for row in training_inventory]
+    _require(
+        len(rows) == len(SCALES) * len(TRAINING_SEEDS),
+        "Historical relative-path adapter training inventory is incomplete.",
+    )
+    command_profiles: dict[str, int] = {}
+    checkpoint_profiles: dict[str, int] = {}
+    coordinate_counts: dict[tuple[str, int], int] = {}
+    for row in rows:
+        coordinate = (row.get("scale"), row.get("training_seed"))
+        context_profile = row.get("expected_context_profile")
+        _require(
+            coordinate[0] in SCALES
+            and coordinate[1] in TRAINING_SEEDS
+            and isinstance(context_profile, Mapping)
+            and isinstance(context_profile.get("manifest_binding"), Mapping)
+            and isinstance(context_profile.get("source"), Mapping)
+            and _is_sha256(row.get("command_sha256")),
+            "Historical relative-path adapter coordinate context is invalid.",
+        )
+        key = cast(tuple[str, int], coordinate)
+        _require(key not in coordinate_counts, "Historical relative-path coordinate is duplicated.")
+        invocation_count = 71 if key == (SCALES[0], TRAINING_SEEDS[0]) else 69
+        coordinate_counts[key] = invocation_count
+        context_sha256 = _json_digest(context_profile)
+        command_mode_counts = (
+            {"absolute": 70, "recorded-relative": 1}
+            if key == (SCALES[0], TRAINING_SEEDS[0])
+            else {"absolute": 69}
+        )
+        for path_spelling_mode, count in command_mode_counts.items():
+            command_sha256 = _json_digest(
+                {
+                    "coordinate": {"scale": key[0], "training_seed": key[1]},
+                    "command_sha256": row["command_sha256"],
+                    "context_profile_sha256": context_sha256,
+                    "path_spelling_mode": path_spelling_mode,
+                }
+            )
+            command_profiles[command_sha256] = count
+        checkpoint_modes = (
+            ((False, "absolute", 62), (True, "absolute", 8), (True, "recorded-relative", 1))
+            if key == (SCALES[0], TRAINING_SEEDS[0])
+            else ((False, "absolute", 62), (True, "absolute", 7))
+        )
+        for return_raw, path_spelling_mode, count in checkpoint_modes:
+            checkpoint_sha256 = _json_digest(
+                {
+                    "coordinate": {"scale": key[0], "training_seed": key[1]},
+                    "context_profile_sha256": context_sha256,
+                    "path_spelling_mode": path_spelling_mode,
+                    "return_raw": return_raw,
+                }
+            )
+            checkpoint_profiles[checkpoint_sha256] = count
+    superseded_profiles = {
+        _json_digest(
+            {
+                "return_raw_checkpoint": False,
+                "execution_environment_mode": "exact-signed-training-ledger",
+                "path_spelling_mode": "absolute",
+            }
+        ): 62,
+        _json_digest(
+            {
+                "return_raw_checkpoint": True,
+                "execution_environment_mode": "none",
+                "path_spelling_mode": "absolute",
+            }
+        ): 1,
+        _json_digest(
+            {
+                "return_raw_checkpoint": True,
+                "execution_environment_mode": "none",
+                "path_spelling_mode": "recorded-relative",
+            }
+        ): 1,
+        _json_digest(
+            {
+                "return_raw_checkpoint": True,
+                "execution_environment_mode": "exact-signed-training-ledger",
+                "path_spelling_mode": "absolute",
+            }
+        ): 7,
+    }
+    _require(
+        superseded_argument_claim.get("function")
+        == "training_matrix._validate_superseded_training_bundle"
+        and quarantine_argument_claim.get("function")
+        == "calibration_matrix._validate_quarantine_evidence"
+        and quarantine_argument_claim.get("expected_invocation_count") == 1
+        and _is_sha256(quarantine_argument_claim.get("expected_invocation_profile_sha256")),
+        "Historical relative-path superseded or quarantine claim is invalid.",
+    )
+    quarantine_profiles = {
+        cast(str, quarantine_argument_claim["expected_invocation_profile_sha256"]): 1
+    }
+    if observed_training is not None:
+        _require(
+            observed_training.get("training_command") == coordinate_counts
+            and observed_training.get("training_checkpoint") == coordinate_counts
+            and observed_training.get("training_command_profiles") == command_profiles
+            and observed_training.get("training_checkpoint_profiles") == checkpoint_profiles,
+            "Historical training relative-path invocation multiset drifted.",
+        )
+    if observed_superseded is not None:
+        _require(
+            dict(observed_superseded) == superseded_profiles,
+            "Historical superseded-bundle invocation multiset drifted.",
+        )
+    if observed_quarantine is not None:
+        _require(
+            dict(observed_quarantine) == quarantine_profiles,
+            "Historical quarantine invocation multiset drifted.",
+        )
+
+    def function_claim(
+        function: str,
+        profiles: Mapping[str, int],
+    ) -> dict[str, Any]:
+        invocation_rows = [
+            {"profile_sha256": profile_sha256, "invocations": count}
+            for profile_sha256, count in sorted(profiles.items())
+        ]
+        return {
+            "function": function,
+            "expected_profile_count": len(invocation_rows),
+            "expected_invocation_count": sum(profiles.values()),
+            "expected_invocation_multiset_sha256": _json_digest(
+                {"schema_version": 1, "invocations": invocation_rows}
+            ),
+        }
+
+    functions = [
+        function_claim("calibration_matrix._validate_quarantine_evidence", quarantine_profiles),
+        function_claim("training_matrix._validate_checkpoint", checkpoint_profiles),
+        function_claim("training_matrix._validate_superseded_training_bundle", superseded_profiles),
+        function_claim("training_matrix._validate_training_command", command_profiles),
+    ]
+    return {
+        "schema_version": 1,
+        "cwd_isolation": "CLONE_FS-private-main-task-exact-directory-fd-scopes",
+        "callable_identity_restored": True,
+        "exact_invocation_multiplicities_required": True,
+        "functions": functions,
+        "expected_invocation_count": sum(
+            cast(int, function["expected_invocation_count"]) for function in functions
+        ),
+    }
+
+
+def _verify_historical_relative_path_adapter_claim(raw: object) -> None:
+    _require(
+        isinstance(raw, Mapping)
+        and set(raw)
+        == {
+            "schema_version",
+            "cwd_isolation",
+            "callable_identity_restored",
+            "exact_invocation_multiplicities_required",
+            "functions",
+            "expected_invocation_count",
+        }
+        and raw.get("schema_version") == 1
+        and raw.get("cwd_isolation") == "CLONE_FS-private-main-task-exact-directory-fd-scopes"
+        and raw.get("callable_identity_restored") is True
+        and raw.get("exact_invocation_multiplicities_required") is True
+        and raw.get("expected_invocation_count") == 1456
+        and isinstance(raw.get("functions"), list),
+        "Historical relative-path adapter invocation claim drifted.",
+    )
+    functions = cast(Mapping[str, Any], raw).get("functions")
+    rows = [cast(Mapping[str, Any], row) for row in cast(list[Any], functions)]
+    _require(
+        len(rows) == 4
+        and all(
+            isinstance(row, Mapping)
+            and set(row)
+            == {
+                "function",
+                "expected_profile_count",
+                "expected_invocation_count",
+                "expected_invocation_multiset_sha256",
+            }
+            and _is_sha256(row.get("expected_invocation_multiset_sha256"))
+            for row in rows
+        )
+        and [
+            (
+                row.get("function"),
+                row.get("expected_profile_count"),
+                row.get("expected_invocation_count"),
+            )
+            for row in rows
+        ]
+        == [
+            ("calibration_matrix._validate_quarantine_evidence", 1, 1),
+            ("training_matrix._validate_checkpoint", 21, 692),
+            ("training_matrix._validate_superseded_training_bundle", 4, 71),
+            ("training_matrix._validate_training_command", 11, 692),
+        ],
+        "Historical relative-path adapter function multiset claim drifted.",
+    )
+
+
+def _historical_retry_admission_argument_profile(
+    *,
+    path: Path,
+    output_root: Path,
+    context: Any,
+    evidence: Any,
+    incident_report_binding: Mapping[str, Any],
+    trust_root: attestation.TrustRoot,
+) -> dict[str, Any]:
+    manifest_binding = getattr(context, "manifest_binding", None)
+    source = getattr(context, "source", None)
+    manifest_path = getattr(context, "manifest_path", None)
+    legacy_context = getattr(evidence, "legacy_context", None)
+    legacy_manifest_binding = getattr(legacy_context, "manifest_binding", None)
+    legacy_source = getattr(legacy_context, "source", None)
+    legacy_manifest_path = getattr(legacy_context, "manifest_path", None)
+    matrix_ledger = getattr(evidence, "matrix_ledger", None)
+    _require(
+        isinstance(path, Path)
+        and path.is_absolute()
+        and isinstance(output_root, Path)
+        and output_root.is_absolute()
+        and isinstance(manifest_path, Path)
+        and manifest_path.is_absolute()
+        and isinstance(manifest_binding, Mapping)
+        and isinstance(source, Mapping)
+        and isinstance(legacy_manifest_path, Path)
+        and legacy_manifest_path.is_absolute()
+        and isinstance(legacy_manifest_binding, Mapping)
+        and isinstance(legacy_source, Mapping)
+        and isinstance(matrix_ledger, Mapping)
+        and isinstance(matrix_ledger.get("gpu_lease"), Mapping)
+        and isinstance(incident_report_binding, Mapping)
+        and type(trust_root) is attestation.TrustRoot,
+        "Historical retry-admission semantic arguments are malformed.",
+    )
+
+    def evidence_mapping(name: str) -> dict[str, Any]:
+        value = getattr(evidence, name, None)
+        _require(
+            isinstance(value, Mapping),
+            f"Historical retry-admission evidence {name} is malformed.",
+        )
+        return dict(cast(Mapping[str, Any], value))
+
+    matrix_ledger_map = cast(Mapping[str, Any], matrix_ledger)
+    return {
+        "path": str(path),
+        "output_root": str(output_root),
+        "context": {
+            "manifest_path": str(manifest_path),
+            "manifest_binding": dict(cast(Mapping[str, Any], manifest_binding)),
+            "source": dict(cast(Mapping[str, Any], source)),
+        },
+        "evidence": {
+            "legacy_context": {
+                "manifest_path": str(legacy_manifest_path),
+                "manifest_binding": dict(
+                    cast(Mapping[str, Any], legacy_manifest_binding)
+                ),
+                "source": dict(cast(Mapping[str, Any], legacy_source)),
+            },
+            "legacy_manifest_file_binding": evidence_mapping(
+                "legacy_manifest_file_binding"
+            ),
+            "matrix_ledger_binding": evidence_mapping("matrix_ledger_binding"),
+            "claim_binding": evidence_mapping("claim_binding"),
+            "artifact_binding": evidence_mapping("artifact_binding"),
+            "training_matrix_binding": evidence_mapping("training_matrix_binding"),
+            "checkpoint_binding": evidence_mapping("checkpoint_binding"),
+            "execution_environment": evidence_mapping("execution_environment"),
+            "matrix_ledger_gpu_lease": dict(
+                cast(Mapping[str, Any], matrix_ledger_map["gpu_lease"])
+            ),
+        },
+        "incident_report_binding": dict(incident_report_binding),
+        "trust_root_key_id": trust_root.key_id,
+    }
+
+
+def _historical_retry_admission_cwd_claim(repository_root: Path) -> dict[str, Any]:
+    root = _exact_path(
+        repository_root,
+        label="Historical retry-admission repository root",
+        must_exist=True,
+    )
+    admission_path = root / HISTORICAL_CALIBRATION_ADMISSION
+    payload, opened = _load_json_nofollow(
+        admission_path,
+        label="Historical retry admission",
+        require_canonical_pretty_bytes=True,
+    )
+    try:
+        current_manifest = payload.get("current_manifest")
+        current_source = payload.get("current_source")
+        superseded_manifest = payload.get("superseded_manifest")
+        retry_rule = payload.get("retry_rule")
+        incident_report = payload.get("incident_report")
+        envelope = payload.get("attestation")
+        attested_semantic = dict(payload)
+        attested_semantic.pop("attestation", None)
+        _require(
+            opened.sha256 == HISTORICAL_CALIBRATION_ADMISSION_SHA256
+            and opened.bytes == HISTORICAL_CALIBRATION_ADMISSION_BYTES
+            and payload.get("schema_version") == 1
+            and payload.get("admission_id")
+            == "p2-direct-calibration-one-shot-retry-admission-v1.2"
+            and payload.get("status") == "terminal"
+            and isinstance(current_manifest, Mapping)
+            and isinstance(current_source, Mapping)
+            and isinstance(superseded_manifest, Mapping)
+            and isinstance(retry_rule, Mapping)
+            and isinstance(retry_rule.get("failed_attempt_gpu_lease"), Mapping)
+            and isinstance(incident_report, Mapping)
+            and isinstance(envelope, Mapping)
+            and envelope.get("purpose") == LEGACY_RETRY_ADMISSION_PURPOSE
+            and _is_sha256(envelope.get("key_id"))
+            and _is_sha256(envelope.get("mac"))
+            and envelope.get("payload_sha256") == _json_digest(attested_semantic),
+            "Historical retry-admission artifact binding is invalid.",
+        )
+        base_semantic = dict(payload)
+        base_semantic.pop("attestation")
+        base_semantic.pop("payload_sha256")
+        _require(
+            payload.get("payload_sha256") == _json_digest(base_semantic),
+            "Historical retry-admission payload digest drifted.",
+        )
+
+        def without_bytes(value: Mapping[str, Any]) -> dict[str, Any]:
+            result = dict(value)
+            result.pop("bytes", None)
+            return result
+
+        current_manifest_map = cast(Mapping[str, Any], current_manifest)
+        superseded_manifest_map = cast(Mapping[str, Any], superseded_manifest)
+        retry_rule_map = cast(Mapping[str, Any], retry_rule)
+        expected_profile = {
+            "path": str(admission_path),
+            "output_root": str(root / HISTORICAL_CALIBRATION_ROOT),
+            "context": {
+                "manifest_path": current_manifest_map["path"],
+                "manifest_binding": without_bytes(current_manifest_map),
+                "source": dict(cast(Mapping[str, Any], current_source)),
+            },
+            "evidence": {
+                "legacy_context": {
+                    "manifest_path": superseded_manifest_map["path"],
+                    "manifest_binding": without_bytes(superseded_manifest_map),
+                    "source": {"commit": V1_1_RESULT_SOURCE_COMMIT, "dirty": False},
+                },
+                "legacy_manifest_file_binding": {
+                    "path": superseded_manifest_map["path"],
+                    "sha256": superseded_manifest_map["sha256"],
+                    "bytes": superseded_manifest_map["bytes"],
+                },
+                "matrix_ledger_binding": dict(
+                    cast(Mapping[str, Any], payload["superseded_matrix_ledger"])
+                ),
+                "claim_binding": dict(
+                    cast(Mapping[str, Any], payload["preserved_claim"])
+                ),
+                "artifact_binding": dict(
+                    cast(Mapping[str, Any], payload["preserved_calibration_artifact"])
+                ),
+                "training_matrix_binding": dict(
+                    cast(Mapping[str, Any], payload["terminal_training_matrix_ledger"])
+                ),
+                "checkpoint_binding": dict(
+                    cast(Mapping[str, Any], payload["checkpoint"])
+                ),
+                "execution_environment": dict(
+                    cast(Mapping[str, Any], payload["execution_environment"])
+                ),
+                "matrix_ledger_gpu_lease": dict(
+                    cast(Mapping[str, Any], retry_rule_map["failed_attempt_gpu_lease"])
+                ),
+            },
+            "incident_report_binding": dict(cast(Mapping[str, Any], incident_report)),
+            "trust_root_key_id": cast(Mapping[str, Any], envelope)["key_id"],
+        }
+        public_binding = {
+            "path": str(admission_path),
+            "sha256": opened.sha256,
+            "bytes": opened.bytes,
+            "payload_sha256": payload["payload_sha256"],
+            "attestation_mac": cast(Mapping[str, Any], envelope)["mac"],
+            "admission_id": payload["admission_id"],
+            "coordinate": payload["coordinate"],
+            "preserved_claim_sha256": cast(Mapping[str, Any], payload["preserved_claim"])[
+                "sha256"
+            ],
+            "preserved_artifact_sha256": cast(
+                Mapping[str, Any], payload["preserved_calibration_artifact"]
+            )["sha256"],
+        }
+        result = {
+            "schema_version": 1,
+            "function": "calibration_matrix._load_retry_admission",
+            "cwd_translation": "detached-to-canonical-root-to-detached",
+            "cwd_sensitive_semantic_field": "quarantine_rule.root",
+            "expected_canonical_quarantine_root": str(
+                root / HISTORICAL_CALIBRATION_QUARANTINE_ROOT
+            ),
+            "retry_admission": {
+                "path": str(admission_path),
+                "sha256": opened.sha256,
+                "bytes": opened.bytes,
+                "payload_sha256": payload["payload_sha256"],
+            },
+            "argument_profile": expected_profile,
+            "argument_profile_sha256": _json_digest(expected_profile),
+            "expected_result_payload_json_sha256": _json_digest(payload),
+            "expected_result_public_binding": public_binding,
+            "expected_invocation_count": 1,
+            "callable_identity_restored": True,
+        }
+        opened.assert_unchanged()
+        return result
+    finally:
+        opened.close()
+
+
+def _verify_historical_retry_admission_cwd_claim(raw: object) -> None:
+    _require(
+        isinstance(raw, Mapping)
+        and set(raw)
+        == {
+            "schema_version",
+            "function",
+            "cwd_translation",
+            "cwd_sensitive_semantic_field",
+            "expected_canonical_quarantine_root",
+            "retry_admission",
+            "argument_profile",
+            "argument_profile_sha256",
+            "expected_result_payload_json_sha256",
+            "expected_result_public_binding",
+            "expected_invocation_count",
+            "callable_identity_restored",
+        }
+        and raw.get("schema_version") == 1
+        and raw.get("function") == "calibration_matrix._load_retry_admission"
+        and raw.get("cwd_translation") == "detached-to-canonical-root-to-detached"
+        and raw.get("cwd_sensitive_semantic_field") == "quarantine_rule.root"
+        and raw.get("expected_invocation_count") == 1
+        and raw.get("callable_identity_restored") is True
+        and isinstance(raw.get("expected_canonical_quarantine_root"), str)
+        and Path(cast(str, raw.get("expected_canonical_quarantine_root"))).is_absolute()
+        and isinstance(raw.get("retry_admission"), Mapping)
+        and isinstance(raw.get("argument_profile"), Mapping)
+        and _is_sha256(raw.get("argument_profile_sha256"))
+        and raw.get("argument_profile_sha256") == _json_digest(raw.get("argument_profile"))
+        and _is_sha256(raw.get("expected_result_payload_json_sha256"))
+        and isinstance(raw.get("expected_result_public_binding"), Mapping),
+        "Historical retry-admission cwd-adapter claim drifted.",
+    )
+    claim = cast(Mapping[str, Any], raw)
+    retry_binding = cast(Mapping[str, Any], claim["retry_admission"])
+    profile = cast(Mapping[str, Any], claim["argument_profile"])
+    result_binding = cast(Mapping[str, Any], claim["expected_result_public_binding"])
+    _require(
+        set(retry_binding) == {"path", "sha256", "bytes", "payload_sha256"}
+        and isinstance(retry_binding.get("path"), str)
+        and Path(cast(str, retry_binding.get("path"))).is_absolute()
+        and retry_binding.get("sha256") == HISTORICAL_CALIBRATION_ADMISSION_SHA256
+        and retry_binding.get("bytes") == HISTORICAL_CALIBRATION_ADMISSION_BYTES
+        and _is_sha256(retry_binding.get("payload_sha256"))
+        and set(profile)
+        == {
+            "path",
+            "output_root",
+            "context",
+            "evidence",
+            "incident_report_binding",
+            "trust_root_key_id",
+        }
+        and profile.get("path") == retry_binding.get("path")
+        and isinstance(profile.get("output_root"), str)
+        and Path(cast(str, profile.get("output_root"))).is_absolute()
+        and isinstance(profile.get("context"), Mapping)
+        and isinstance(profile.get("evidence"), Mapping)
+        and isinstance(profile.get("incident_report_binding"), Mapping)
+        and _is_sha256(profile.get("trust_root_key_id"))
+        and set(result_binding)
+        == {
+            "path",
+            "sha256",
+            "bytes",
+            "payload_sha256",
+            "attestation_mac",
+            "admission_id",
+            "coordinate",
+            "preserved_claim_sha256",
+            "preserved_artifact_sha256",
+        }
+        and result_binding.get("path") == retry_binding.get("path")
+        and result_binding.get("sha256") == retry_binding.get("sha256")
+        and result_binding.get("bytes") == retry_binding.get("bytes")
+        and result_binding.get("payload_sha256") == retry_binding.get("payload_sha256"),
+        "Historical retry-admission profile or result binding drifted.",
+    )
+
+
+@contextmanager
+def _legacy_retry_admission_cwd_adapter(
+    calibration_matrix: Any,
+    *,
+    repository_root: Path,
+    detached_root: Path,
+    trust_root: attestation.TrustRoot,
+    claim: Mapping[str, Any],
+) -> Iterator[dict[str, int]]:
+    _verify_historical_retry_admission_cwd_claim(claim)
+    raw_original = getattr(calibration_matrix, "_load_retry_admission", None)
+    training_matrix = getattr(calibration_matrix, "training_matrix", None)
+    context_type = getattr(training_matrix, "FrozenContext", None)
+    evidence_type = getattr(calibration_matrix, "ValidatedQuarantineEvidence", None)
+    result_type = getattr(calibration_matrix, "ValidatedRetryAdmission", None)
+    _require(
+        callable(raw_original)
+        and getattr(raw_original, "__name__", None) == "_load_retry_admission"
+        and not bool(getattr(raw_original, "_adaptive_v4_retry_admission_cwd_adapter", False))
+        and isinstance(context_type, type)
+        and isinstance(evidence_type, type)
+        and isinstance(result_type, type),
+        "Legacy retry-admission loader or exact result types are unavailable.",
+    )
+    original = cast(Callable[..., Any], raw_original)
+    expected_profile = cast(Mapping[str, Any], claim["argument_profile"])
+    expected_profile_sha256 = cast(str, claim["argument_profile_sha256"])
+    expected_result_binding = cast(
+        Mapping[str, Any], claim["expected_result_public_binding"]
+    )
+    attempts = 0
+    successes = 0
+    observed: dict[str, int] = {}
+
+    def adapter(*arguments: Any, **keywords: Any) -> Any:
+        nonlocal attempts, successes
+        attempts += 1
+        expected_keys = {
+            "path",
+            "output_root",
+            "context",
+            "evidence",
+            "incident_report_binding",
+            "trust_root",
+        }
+        _require(
+            attempts == 1
+            and not arguments
+            and set(keywords) == expected_keys
+            and isinstance(keywords.get("path"), Path)
+            and isinstance(keywords.get("output_root"), Path)
+            and type(keywords.get("context")) is context_type
+            and type(keywords.get("evidence")) is evidence_type
+            and isinstance(keywords.get("incident_report_binding"), Mapping)
+            and keywords.get("trust_root") is trust_root
+            and type(trust_root) is attestation.TrustRoot
+            and _historical_cwd_authority_mode(
+                repository_root=repository_root,
+                detached_root=detached_root,
+            )
+            == "detached"
+            and _source_state(detached_root)
+            == {"commit": HISTORICAL_RESULT_SOURCE_COMMIT, "dirty": False},
+            "Legacy retry-admission loader arguments or detached authority drifted.",
+        )
+        path = cast(Path, keywords["path"])
+        output_root = cast(Path, keywords["output_root"])
+        context = keywords["context"]
+        evidence = keywords["evidence"]
+        profile = _historical_retry_admission_argument_profile(
+            path=path,
+            output_root=output_root,
+            context=context,
+            evidence=evidence,
+            incident_report_binding=cast(
+                Mapping[str, Any], keywords["incident_report_binding"]
+            ),
+            trust_root=trust_root,
+        )
+        _require(
+            profile == expected_profile
+            and _json_digest(profile) == expected_profile_sha256
+            and path == repository_root / HISTORICAL_CALIBRATION_ADMISSION
+            and output_root == repository_root / HISTORICAL_CALIBRATION_ROOT,
+            "Legacy retry-admission loader semantic input profile drifted.",
+        )
+        with _scoped_historical_command_resolution_cwd(
+            repository_root=repository_root,
+            detached_root=detached_root,
+        ):
+            result = original(**keywords)
+        _require(
+            type(result) is result_type
+            and getattr(result, "evidence", None) is evidence
+            and isinstance(getattr(result, "payload", None), Mapping)
+            and _json_digest(result.payload)
+            == claim.get("expected_result_payload_json_sha256")
+            and getattr(result, "public_binding", None) == expected_result_binding
+            and _historical_cwd_authority_mode(
+                repository_root=repository_root,
+                detached_root=detached_root,
+            )
+            == "detached"
+            and _source_state(detached_root)
+            == {"commit": HISTORICAL_RESULT_SOURCE_COMMIT, "dirty": False},
+            "Legacy retry-admission result binding or detached restoration drifted.",
+        )
+        successes += 1
+        observed[expected_profile_sha256] = observed.get(expected_profile_sha256, 0) + 1
+        return result
+
+    adapter._adaptive_v4_retry_admission_cwd_adapter = True  # type: ignore[attr-defined]
+    calibration_matrix._load_retry_admission = adapter
+    try:
+        yield observed
+    finally:
+        adapter_held = getattr(calibration_matrix, "_load_retry_admission", None) is adapter
+        calibration_matrix._load_retry_admission = original
+        _require(
+            adapter_held
+            and getattr(calibration_matrix, "_load_retry_admission", None) is original
+            and attempts == successes == claim.get("expected_invocation_count") == 1
+            and observed == {expected_profile_sha256: 1}
+            and _HISTORICAL_ROOT_CWD_AUTHORITY.get() is None
+            and _historical_cwd_authority_mode(
+                repository_root=repository_root,
+                detached_root=detached_root,
+            )
+            == "detached"
+            and _source_state(detached_root)
+            == {"commit": HISTORICAL_RESULT_SOURCE_COMMIT, "dirty": False},
+            "Legacy retry-admission callable, count, or cwd restoration drifted.",
+        )
+
+
+def _historical_frozen_context_profile(
+    repository_root: Path,
+    *,
+    name: str,
+    manifest_relative_path: Path,
+    expected_manifest_sha256: str,
+    source: Mapping[str, Any],
+) -> dict[str, Any]:
+    root = _exact_path(
+        repository_root,
+        label=f"Historical {name} context repository root",
+        must_exist=True,
+    )
+    manifest_path = root / manifest_relative_path
+    payload, opened = _load_json_nofollow(
+        manifest_path,
+        label=f"Historical {name} context manifest",
+    )
+    try:
+        implementation = payload.get("implementation")
+        attestation_binding = payload.get("attestation")
+        _require(
+            opened.sha256 == expected_manifest_sha256
+            and isinstance(implementation, Mapping)
+            and _is_sha256(implementation.get("tree_digest"))
+            and _is_git_oid(implementation.get("source_commit"))
+            and isinstance(attestation_binding, Mapping)
+            and attestation_binding.get("key_id")
+            == "67f433c02a291f9b1c9e65218171b6da46ef019567ee24406b4738c2ddf765bf"
+            and isinstance(payload.get("experiment_id"), str)
+            and source.get("dirty") is False
+            and _is_git_oid(source.get("commit")),
+            f"Historical {name} frozen-context evidence is invalid.",
+        )
+        implementation_map = cast(Mapping[str, Any], implementation)
+        profile = {
+            "name": name,
+            "manifest_path": str(manifest_path),
+            "manifest_binding": {
+                "path": str(manifest_path),
+                "sha256": opened.sha256,
+                "experiment_id": payload["experiment_id"],
+                "implementation_digest": implementation_map["tree_digest"],
+                "implementation_source_commit": implementation_map["source_commit"],
+                "attestation": dict(cast(Mapping[str, Any], attestation_binding)),
+            },
+            "source": dict(source),
+        }
+        opened.assert_unchanged()
+        return {**profile, "profile_sha256": _json_digest(profile)}
+    finally:
+        opened.close()
+
+
+def _historical_calibration_provenance_claim(
+    repository_root: Path,
+    training_inventory: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    root = _exact_path(
+        repository_root,
+        label="Historical calibration-provenance repository root",
+        must_exist=True,
+    )
+    rows = [dict(row) for row in training_inventory]
+    _require(
+        len(rows) == len(SCALES) * len(TRAINING_SEEDS),
+        "Historical calibration-provenance training inventory is incomplete.",
+    )
+    current_context = _historical_frozen_context_profile(
+        root,
+        name="current-v1.2",
+        manifest_relative_path=HISTORICAL_MANIFEST_RELATIVE_PATH,
+        expected_manifest_sha256=HISTORICAL_MANIFEST_SHA256,
+        source={"commit": HISTORICAL_RESULT_SOURCE_COMMIT, "dirty": False},
+    )
+    training_context = _historical_frozen_context_profile(
+        root,
+        name="training-v1.1",
+        manifest_relative_path=V1_1_MANIFEST_RELATIVE_PATH,
+        expected_manifest_sha256=V1_1_MANIFEST_SHA256,
+        source={"commit": V1_1_RESULT_SOURCE_COMMIT, "dirty": False},
+    )
+    context_profiles = [current_context, training_context]
+    current_context_sha256 = cast(str, current_context["profile_sha256"])
+    training_context_sha256 = cast(str, training_context["profile_sha256"])
+    current_manifest_path = cast(str, current_context["manifest_path"])
+    training_manifest_path = cast(str, training_context["manifest_path"])
+    outer_profiles: list[dict[str, Any]] = []
+    row_by_coordinate: dict[tuple[str, int], Mapping[str, Any]] = {}
+    for row in rows:
+        coordinate = (row.get("scale"), row.get("training_seed"))
+        _require(
+            coordinate[0] in SCALES
+            and coordinate[1] in TRAINING_SEEDS
+            and coordinate not in row_by_coordinate,
+            "Historical calibration-provenance coordinate is invalid.",
+        )
+        key = cast(tuple[str, int], coordinate)
+        row_by_coordinate[key] = row
+        profile = {
+            "coordinate": {"scale": key[0], "training_seed": key[1]},
+            "entry_cwd_mode": "detached",
+            "checkpoint_path": row.get("checkpoint_relative_path"),
+            "manifest_path": current_manifest_path,
+            "training_manifest_path": training_manifest_path,
+            "training_summary_path": str(
+                Path(cast(str, row.get("resolved_path"))) / f"{key[0]}-training.summary.json"
+            ),
+            "training_matrix_summary_path": str(root / HISTORICAL_TRAINING_LEDGER),
+            "optional_path_arguments": "all-explicit",
+            "ordered_inner_context_profiles": [
+                current_context_sha256,
+                training_context_sha256,
+            ],
+        }
+        outer_profiles.append(
+            {
+                "profile": profile,
+                "profile_sha256": _json_digest(profile),
+                "expected_invocations": 6,
+            }
+        )
+    first = row_by_coordinate[(SCALES[0], TRAINING_SEEDS[0])]
+    legacy_profile = {
+        "coordinate": {"scale": SCALES[0], "training_seed": TRAINING_SEEDS[0]},
+        "entry_cwd_mode": "canonical-root",
+        "checkpoint_path": first.get("checkpoint_relative_path"),
+        "manifest_path": training_manifest_path,
+        "training_manifest_path": training_manifest_path,
+        "training_summary_path": str(
+            Path(cast(str, first.get("resolved_path"))) / f"{SCALES[0]}-training.summary.json"
+        ),
+        "training_matrix_summary_path": str(root / HISTORICAL_TRAINING_LEDGER),
+        "optional_path_arguments": "all-explicit",
+        "ordered_inner_context_profiles": [
+            training_context_sha256,
+            training_context_sha256,
+        ],
+    }
+    outer_profiles.append(
+        {
+            "profile": legacy_profile,
+            "profile_sha256": _json_digest(legacy_profile),
+            "expected_invocations": 1,
+        }
+    )
+    outer_profiles.sort(key=lambda row: cast(str, row["profile_sha256"]))
+    ordered_pairs = [
+        {
+            "ordered_context_profile_sha256": [
+                current_context_sha256,
+                training_context_sha256,
+            ],
+            "expected_invocations": 60,
+        },
+        {
+            "ordered_context_profile_sha256": [
+                training_context_sha256,
+                training_context_sha256,
+            ],
+            "expected_invocations": 1,
+        },
+    ]
+    ordered_pairs.sort(key=lambda row: _json_digest(row["ordered_context_profile_sha256"]))
+    context_invocations = [
+        {"profile_sha256": current_context_sha256, "expected_invocations": 60},
+        {"profile_sha256": training_context_sha256, "expected_invocations": 62},
+    ]
+    context_invocations.sort(key=lambda row: cast(str, row["profile_sha256"]))
+    return {
+        "schema_version": 1,
+        "functions": {
+            "outer": "calibration.establish_provenance",
+            "inner": "calibration._frozen_context_for_manifest",
+        },
+        "cwd_translation": {
+            "outer": "detached-or-authorized-root-to-canonical-root-to-same-entry",
+            "inner": "authorized-root-to-detached-source-validation-to-authorized-root",
+        },
+        "callable_identity_restored": True,
+        "outer_profiles": outer_profiles,
+        "outer_profile_count": 11,
+        "outer_invocation_count": 61,
+        "ordered_inner_pairs": ordered_pairs,
+        "ordered_inner_pair_count": 2,
+        "inner_context_invocations": context_invocations,
+        "inner_invocation_count": 122,
+        "implicit_v1_2_source_state_invocation_count": 180,
+        "outer_invocation_multiset_sha256": _json_digest(outer_profiles),
+        "ordered_inner_pair_multiset_sha256": _json_digest(ordered_pairs),
+        "inner_context_invocation_multiset_sha256": _json_digest(context_invocations),
+        "context_profiles": context_profiles,
+    }
+
+
+def _verify_historical_calibration_provenance_claim(raw: object) -> None:
+    _require(
+        isinstance(raw, Mapping)
+        and set(raw)
+        == {
+            "schema_version",
+            "functions",
+            "cwd_translation",
+            "callable_identity_restored",
+            "outer_profiles",
+            "outer_profile_count",
+            "outer_invocation_count",
+            "ordered_inner_pairs",
+            "ordered_inner_pair_count",
+            "inner_context_invocations",
+            "inner_invocation_count",
+            "implicit_v1_2_source_state_invocation_count",
+            "outer_invocation_multiset_sha256",
+            "ordered_inner_pair_multiset_sha256",
+            "inner_context_invocation_multiset_sha256",
+            "context_profiles",
+        }
+        and raw.get("schema_version") == 1
+        and raw.get("functions")
+        == {
+            "outer": "calibration.establish_provenance",
+            "inner": "calibration._frozen_context_for_manifest",
+        }
+        and raw.get("cwd_translation")
+        == {
+            "outer": "detached-or-authorized-root-to-canonical-root-to-same-entry",
+            "inner": "authorized-root-to-detached-source-validation-to-authorized-root",
+        }
+        and raw.get("callable_identity_restored") is True
+        and raw.get("outer_profile_count") == 11
+        and raw.get("outer_invocation_count") == 61
+        and raw.get("ordered_inner_pair_count") == 2
+        and raw.get("inner_invocation_count") == 122
+        and raw.get("implicit_v1_2_source_state_invocation_count") == 180
+        and _is_sha256(raw.get("outer_invocation_multiset_sha256"))
+        and _is_sha256(raw.get("ordered_inner_pair_multiset_sha256"))
+        and _is_sha256(raw.get("inner_context_invocation_multiset_sha256")),
+        "Historical calibration-provenance adapter claim drifted.",
+    )
+    raw_mapping = cast(Mapping[str, Any], raw)
+    raw_outer_profiles = raw_mapping.get("outer_profiles")
+    raw_ordered_pairs = raw_mapping.get("ordered_inner_pairs")
+    raw_inner_invocations = raw_mapping.get("inner_context_invocations")
+    raw_context_profiles = raw_mapping.get("context_profiles")
+    _require(
+        isinstance(raw_outer_profiles, list)
+        and isinstance(raw_ordered_pairs, list)
+        and isinstance(raw_inner_invocations, list)
+        and isinstance(raw_context_profiles, list),
+        "Historical calibration-provenance profile inventory is malformed.",
+    )
+    outer_profiles = cast(list[Any], raw_outer_profiles)
+    ordered_pairs = cast(list[Any], raw_ordered_pairs)
+    inner_invocations = cast(list[Any], raw_inner_invocations)
+    context_profiles = cast(list[Any], raw_context_profiles)
+    _require(
+        len(outer_profiles) == 11
+        and all(
+            isinstance(row, Mapping)
+            and set(row) == {"profile", "profile_sha256", "expected_invocations"}
+            and isinstance(row.get("profile"), Mapping)
+            and row.get("profile_sha256") == _json_digest(row.get("profile"))
+            and type(row.get("expected_invocations")) is int
+            for row in outer_profiles
+        )
+        and sum(
+            cast(int, cast(Mapping[str, Any], row)["expected_invocations"])
+            for row in outer_profiles
+        )
+        == 61
+        and len(ordered_pairs) == 2
+        and all(
+            isinstance(row, Mapping)
+            and set(row) == {"ordered_context_profile_sha256", "expected_invocations"}
+            and isinstance(row.get("ordered_context_profile_sha256"), list)
+            and len(cast(list[Any], row.get("ordered_context_profile_sha256"))) == 2
+            and all(
+                _is_sha256(item)
+                for item in cast(list[Any], row.get("ordered_context_profile_sha256"))
+            )
+            and type(row.get("expected_invocations")) is int
+            for row in ordered_pairs
+        )
+        and sorted(
+            cast(int, cast(Mapping[str, Any], row)["expected_invocations"])
+            for row in ordered_pairs
+        )
+        == [1, 60]
+        and len(inner_invocations) == 2
+        and all(
+            isinstance(row, Mapping)
+            and set(row) == {"profile_sha256", "expected_invocations"}
+            and _is_sha256(row.get("profile_sha256"))
+            and type(row.get("expected_invocations")) is int
+            for row in inner_invocations
+        )
+        and sorted(
+            cast(int, cast(Mapping[str, Any], row)["expected_invocations"])
+            for row in inner_invocations
+        )
+        == [60, 62]
+        and len(context_profiles) == 2
+        and all(
+            isinstance(row, Mapping)
+            and set(row)
+            == {"name", "manifest_path", "manifest_binding", "source", "profile_sha256"}
+            and isinstance(row.get("manifest_binding"), Mapping)
+            and isinstance(row.get("source"), Mapping)
+            and row.get("profile_sha256")
+            == _json_digest({key: value for key, value in row.items() if key != "profile_sha256"})
+            for row in context_profiles
+        )
+        and raw_mapping.get("outer_invocation_multiset_sha256") == _json_digest(outer_profiles)
+        and raw_mapping.get("ordered_inner_pair_multiset_sha256") == _json_digest(ordered_pairs)
+        and raw_mapping.get("inner_context_invocation_multiset_sha256")
+        == _json_digest(inner_invocations),
+        "Historical calibration-provenance profile inventory drifted.",
+    )
+    exact_context_rows = [cast(Mapping[str, Any], row) for row in context_profiles]
+    context_by_name = {cast(str, row.get("name")): row for row in exact_context_rows}
+    _require(
+        set(context_by_name) == {"current-v1.2", "training-v1.1"}
+        and context_by_name["current-v1.2"].get("source")
+        == {"commit": HISTORICAL_RESULT_SOURCE_COMMIT, "dirty": False}
+        and context_by_name["training-v1.1"].get("source")
+        == {"commit": V1_1_RESULT_SOURCE_COMMIT, "dirty": False}
+        and all(
+            isinstance(row.get("manifest_path"), str)
+            and Path(cast(str, row.get("manifest_path"))).is_absolute()
+            and _is_sha256(row.get("profile_sha256"))
+            for row in exact_context_rows
+        ),
+        "Historical calibration-provenance frozen contexts drifted.",
+    )
+    current_context = context_by_name["current-v1.2"]
+    training_context = context_by_name["training-v1.1"]
+    current_sha256 = cast(str, current_context["profile_sha256"])
+    training_sha256 = cast(str, training_context["profile_sha256"])
+    current_manifest_path = cast(str, current_context["manifest_path"])
+    training_manifest_path = cast(str, training_context["manifest_path"])
+    exact_outer_rows = [cast(Mapping[str, Any], row) for row in outer_profiles]
+    detached_outer_rows = [
+        row
+        for row in exact_outer_rows
+        if cast(Mapping[str, Any], row["profile"]).get("entry_cwd_mode") == "detached"
+    ]
+    root_outer_rows = [
+        row
+        for row in exact_outer_rows
+        if cast(Mapping[str, Any], row["profile"]).get("entry_cwd_mode")
+        == "canonical-root"
+    ]
+    expected_coordinates = {(scale, seed) for scale in SCALES for seed in TRAINING_SEEDS}
+    _require(
+        len(detached_outer_rows) == 10
+        and len(root_outer_rows) == 1
+        and len({cast(str, row["profile_sha256"]) for row in exact_outer_rows}) == 11
+        and {
+            (
+                cast(Mapping[str, Any], cast(Mapping[str, Any], row["profile"])["coordinate"])[
+                    "scale"
+                ],
+                cast(Mapping[str, Any], cast(Mapping[str, Any], row["profile"])["coordinate"])[
+                    "training_seed"
+                ],
+            )
+            for row in detached_outer_rows
+        }
+        == expected_coordinates
+        and all(
+            row.get("expected_invocations") == 6
+            and set(cast(Mapping[str, Any], row["profile"]))
+            == {
+                "coordinate",
+                "entry_cwd_mode",
+                "checkpoint_path",
+                "manifest_path",
+                "training_manifest_path",
+                "training_summary_path",
+                "training_matrix_summary_path",
+                "optional_path_arguments",
+                "ordered_inner_context_profiles",
+            }
+            and cast(Mapping[str, Any], row["profile"]).get("manifest_path")
+            == current_manifest_path
+            and cast(Mapping[str, Any], row["profile"]).get("training_manifest_path")
+            == training_manifest_path
+            and cast(Mapping[str, Any], row["profile"]).get("optional_path_arguments")
+            == "all-explicit"
+            and cast(Mapping[str, Any], row["profile"]).get("ordered_inner_context_profiles")
+            == [current_sha256, training_sha256]
+            and all(
+                isinstance(cast(Mapping[str, Any], row["profile"]).get(field), str)
+                for field in (
+                    "checkpoint_path",
+                    "training_summary_path",
+                    "training_matrix_summary_path",
+                )
+            )
+            for row in detached_outer_rows
+        ),
+        "Historical calibration-provenance current outer profiles drifted.",
+    )
+    legacy_row = root_outer_rows[0]
+    legacy_profile = cast(Mapping[str, Any], legacy_row["profile"])
+    _require(
+        legacy_row.get("expected_invocations") == 1
+        and set(legacy_profile)
+        == {
+            "coordinate",
+            "entry_cwd_mode",
+            "checkpoint_path",
+            "manifest_path",
+            "training_manifest_path",
+            "training_summary_path",
+            "training_matrix_summary_path",
+            "optional_path_arguments",
+            "ordered_inner_context_profiles",
+        }
+        and legacy_profile.get("coordinate")
+        == {"scale": SCALES[0], "training_seed": TRAINING_SEEDS[0]}
+        and legacy_profile.get("manifest_path") == training_manifest_path
+        and legacy_profile.get("training_manifest_path") == training_manifest_path
+        and legacy_profile.get("optional_path_arguments") == "all-explicit"
+        and legacy_profile.get("ordered_inner_context_profiles")
+        == [training_sha256, training_sha256]
+        and all(
+            isinstance(legacy_profile.get(field), str)
+            for field in (
+                "checkpoint_path",
+                "training_summary_path",
+                "training_matrix_summary_path",
+            )
+        ),
+        "Historical calibration-provenance legacy outer profile drifted.",
+    )
+    exact_pair_rows = [cast(Mapping[str, Any], row) for row in ordered_pairs]
+    exact_inner_rows = [cast(Mapping[str, Any], row) for row in inner_invocations]
+    _require(
+        {
+            tuple(cast(list[str], row["ordered_context_profile_sha256"])): row[
+                "expected_invocations"
+            ]
+            for row in exact_pair_rows
+        }
+        == {
+            (current_sha256, training_sha256): 60,
+            (training_sha256, training_sha256): 1,
+        }
+        and {row["profile_sha256"]: row["expected_invocations"] for row in exact_inner_rows}
+        == {current_sha256: 60, training_sha256: 62},
+        "Historical calibration-provenance inner multiset semantics drifted.",
+    )
+
+
+def _assert_historical_calibration_provenance_observation(
+    claim: Mapping[str, Any],
+    observation: Mapping[str, Any],
+) -> None:
+    outer_expected = {
+        cast(str, row["profile_sha256"]): cast(int, row["expected_invocations"])
+        for row in cast(list[Mapping[str, Any]], claim["outer_profiles"])
+    }
+    ordered_expected = {
+        _json_digest(row["ordered_context_profile_sha256"]): cast(int, row["expected_invocations"])
+        for row in cast(list[Mapping[str, Any]], claim["ordered_inner_pairs"])
+    }
+    inner_expected = {
+        cast(str, row["profile_sha256"]): cast(int, row["expected_invocations"])
+        for row in cast(list[Mapping[str, Any]], claim["inner_context_invocations"])
+    }
+    _require(
+        set(observation)
+        == {
+            "outer_profiles",
+            "ordered_inner_pairs",
+            "inner_context_profiles",
+            "implicit_v1_2_source_state",
+        }
+        and observation.get("outer_profiles") == outer_expected
+        and observation.get("ordered_inner_pairs") == ordered_expected
+        and observation.get("inner_context_profiles") == inner_expected
+        and observation.get("implicit_v1_2_source_state")
+        == claim.get("implicit_v1_2_source_state_invocation_count"),
+        "Historical calibration-provenance observed invocation multiset drifted.",
+    )
+
+
+@contextmanager
+def _legacy_calibration_provenance_cwd_adapters(
+    calibration: Any,
+    *,
+    repository_root: Path,
+    detached_root: Path,
+    trust_root: attestation.TrustRoot,
+    claim: Mapping[str, Any],
+) -> Iterator[dict[str, Any]]:
+    _verify_historical_calibration_provenance_claim(claim)
+    raw_outer = getattr(calibration, "establish_provenance", None)
+    raw_inner = getattr(calibration, "_frozen_context_for_manifest", None)
+    training_matrix = getattr(calibration, "training_matrix", None)
+    contract_module = getattr(training_matrix, "contract", None)
+    raw_source_state = getattr(contract_module, "source_state", None)
+    _require(
+        callable(raw_outer)
+        and getattr(raw_outer, "__name__", None) == "establish_provenance"
+        and not bool(getattr(raw_outer, "_adaptive_v4_provenance_outer_adapter", False))
+        and callable(raw_inner)
+        and getattr(raw_inner, "__name__", None) == "_frozen_context_for_manifest"
+        and not bool(getattr(raw_inner, "_adaptive_v4_provenance_inner_adapter", False))
+        and callable(raw_source_state)
+        and getattr(raw_source_state, "__name__", None) == "source_state",
+        "Legacy calibration provenance callables are unavailable, aliased, or already adapted.",
+    )
+    outer_original = cast(Callable[..., Any], raw_outer)
+    inner_original = cast(Callable[..., Any], raw_inner)
+    source_state_original = cast(Callable[..., Any], raw_source_state)
+    outer_rows = {
+        cast(str, row["profile_sha256"]): row
+        for row in cast(list[Mapping[str, Any]], claim["outer_profiles"])
+    }
+    context_rows = {
+        cast(str, row["profile_sha256"]): row
+        for row in cast(list[Mapping[str, Any]], claim["context_profiles"])
+    }
+    exact_contract_module = cast(Any, contract_module)
+    context_by_path = {
+        cast(str, row["manifest_path"]): profile_sha256
+        for profile_sha256, row in context_rows.items()
+    }
+    observed_outer: dict[str, int] = {}
+    observed_pairs: dict[str, int] = {}
+    observed_inner: dict[str, int] = {}
+    observed = {
+        "outer_profiles": observed_outer,
+        "ordered_inner_pairs": observed_pairs,
+        "inner_context_profiles": observed_inner,
+        "implicit_v1_2_source_state": 0,
+    }
+
+    def inner_adapter(*arguments: Any, **keywords: Any) -> Any:
+        authority = _HISTORICAL_CALIBRATION_PROVENANCE_AUTHORITY.get()
+        _require(
+            type(authority) is _HistoricalCalibrationProvenanceAuthority
+            and authority.seal is _HISTORICAL_CALIBRATION_PROVENANCE_SEAL
+            and _historical_thread_fs_capability_is_installed(authority.capability),
+            "Legacy calibration inner provenance call lacks exact outer authority.",
+        )
+        exact_authority = cast(_HistoricalCalibrationProvenanceAuthority, authority)
+        exact_authority.observed_inner_attempts.append(None)
+        _require(
+            len(exact_authority.observed_inner_attempts) <= 2
+            and len(arguments) == 1
+            and isinstance(arguments[0], Path)
+            and set(keywords) == {"trust_root"}
+            and keywords.get("trust_root") is trust_root
+            and len(exact_authority.observed_inner_profiles) < 2
+            and _historical_cwd_authority_mode(
+                repository_root=repository_root,
+                detached_root=detached_root,
+            )
+            == "canonical-root",
+            "Legacy calibration inner provenance call lacks exact outer authority.",
+        )
+        manifest_path = cast(Path, arguments[0])
+        profile_sha256 = context_by_path.get(str(manifest_path))
+        index = len(exact_authority.observed_inner_profiles)
+        _require(
+            profile_sha256 is not None
+            and profile_sha256 == exact_authority.expected_inner_profiles[index]
+            and exact_contract_module.source_state is source_state_original,
+            "Legacy calibration frozen-context order or manifest path drifted.",
+        )
+        exact_profile_sha256 = cast(str, profile_sha256)
+        context_row = context_rows[exact_profile_sha256]
+        source_state_calls = 0
+        expected_source_state_calls = 3 if context_row.get("name") == "current-v1.2" else 0
+
+        def source_state_adapter(*source_arguments: Any, **source_keywords: Any) -> Any:
+            nonlocal source_state_calls
+            source_state_calls += 1
+            _require(
+                not source_arguments
+                and not source_keywords
+                and source_state_calls <= expected_source_state_calls
+                and _HISTORICAL_CALIBRATION_PROVENANCE_AUTHORITY.get() is exact_authority
+                and _cwd_matches(
+                    detached_root,
+                    exact_authority.capability.detached_identity,
+                ),
+                "Historical source-state call escaped its exact detached provenance profile.",
+            )
+            state = source_state_original()
+            _require(
+                state == {"commit": HISTORICAL_RESULT_SOURCE_COMMIT, "dirty": False},
+                "Historical implicit source-state result drifted.",
+            )
+            return state
+
+        source_state_adapter.__name__ = "source_state"
+        exact_contract_module.source_state = source_state_adapter
+        try:
+            with _scoped_historical_source_validation_cwd(
+                repository_root=repository_root,
+                detached_root=detached_root,
+            ):
+                result = inner_original(*arguments, **keywords)
+        finally:
+            source_identity_held = exact_contract_module.source_state is source_state_adapter
+            exact_contract_module.source_state = source_state_original
+            source_identity_held = (
+                source_identity_held
+                and exact_contract_module.source_state is source_state_original
+            )
+            _require(
+                source_identity_held and source_state_calls == expected_source_state_calls,
+                "Historical source-state invocation count or callable identity drifted.",
+            )
+        _require(
+            getattr(result, "manifest_path", None) == Path(cast(str, context_row["manifest_path"]))
+            and getattr(result, "manifest_binding", None) == context_row.get("manifest_binding")
+            and getattr(result, "source", None) == context_row.get("source")
+            and _historical_cwd_authority_mode(
+                repository_root=repository_root,
+                detached_root=detached_root,
+            )
+            == "canonical-root",
+            "Historical calibration frozen context or root restoration drifted.",
+        )
+        exact_authority.observed_inner_profiles.append(exact_profile_sha256)
+        observed_inner[exact_profile_sha256] = observed_inner.get(exact_profile_sha256, 0) + 1
+        observed["implicit_v1_2_source_state"] = (
+            cast(int, observed["implicit_v1_2_source_state"]) + source_state_calls
+        )
+        return result
+
+    def outer_adapter(*arguments: Any, **keywords: Any) -> Any:
+        entry_mode = _historical_cwd_authority_mode(
+            repository_root=repository_root,
+            detached_root=detached_root,
+        )
+        expected_keys = {
+            "scale",
+            "training_seed",
+            "manifest_path",
+            "training_manifest_path",
+            "training_summary_path",
+            "training_matrix_summary_path",
+            "trust_root",
+        }
+        _require(
+            len(arguments) == 1
+            and isinstance(arguments[0], Path)
+            and set(keywords) == expected_keys
+            and keywords.get("scale") in SCALES
+            and keywords.get("training_seed") in TRAINING_SEEDS
+            and all(
+                isinstance(keywords.get(name), Path)
+                for name in (
+                    "manifest_path",
+                    "training_manifest_path",
+                    "training_summary_path",
+                    "training_matrix_summary_path",
+                )
+            )
+            and keywords.get("trust_root") is trust_root,
+            "Legacy calibration provenance arguments are incomplete or invalid.",
+        )
+        profile = {
+            "coordinate": {
+                "scale": keywords["scale"],
+                "training_seed": keywords["training_seed"],
+            },
+            "entry_cwd_mode": entry_mode,
+            "checkpoint_path": str(arguments[0]),
+            "manifest_path": str(keywords["manifest_path"]),
+            "training_manifest_path": str(keywords["training_manifest_path"]),
+            "training_summary_path": str(keywords["training_summary_path"]),
+            "training_matrix_summary_path": str(keywords["training_matrix_summary_path"]),
+            "optional_path_arguments": "all-explicit",
+            "ordered_inner_context_profiles": [],
+        }
+        matching = [
+            (profile_sha256, row)
+            for profile_sha256, row in outer_rows.items()
+            if {
+                key: value
+                for key, value in cast(Mapping[str, Any], row["profile"]).items()
+                if key != "ordered_inner_context_profiles"
+            }
+            == {
+                key: value
+                for key, value in profile.items()
+                if key != "ordered_inner_context_profiles"
+            }
+        ]
+        _require(
+            len(matching) == 1,
+            "Legacy calibration provenance arguments differ from signed profiles.",
+        )
+        profile_sha256, profile_row = matching[0]
+        expected_inner = tuple(
+            cast(Mapping[str, Any], profile_row["profile"])["ordered_inner_context_profiles"]
+        )
+        _require(
+            len(expected_inner) == 2
+            and all(_is_sha256(item) for item in expected_inner)
+            and _HISTORICAL_CALIBRATION_PROVENANCE_AUTHORITY.get() is None,
+            "Legacy calibration provenance inner profile authority is invalid.",
+        )
+        capability = _get_installed_historical_thread_fs_capability()
+        _require(
+            capability is not None and _historical_thread_fs_capability_is_installed(capability),
+            "Legacy calibration provenance lacks installed cwd isolation.",
+        )
+        authority = _HistoricalCalibrationProvenanceAuthority(
+            seal=_HISTORICAL_CALIBRATION_PROVENANCE_SEAL,
+            capability=cast(_HistoricalThreadFsIsolationCapability, capability),
+            outer_profile_sha256=profile_sha256,
+            expected_inner_profiles=cast(tuple[str, str], expected_inner),
+            observed_inner_attempts=[],
+            observed_inner_profiles=[],
+        )
+        with _scoped_historical_command_resolution_cwd(
+            repository_root=repository_root,
+            detached_root=detached_root,
+        ):
+            provenance_token = _HISTORICAL_CALIBRATION_PROVENANCE_AUTHORITY.set(authority)
+            cleanup_errors: list[BaseException] = []
+            original_error: BaseException | None = None
+            try:
+                result = outer_original(*arguments, **keywords)
+            except BaseException as error:
+                original_error = error
+                raise
+            finally:
+                authority_held = _HISTORICAL_CALIBRATION_PROVENANCE_AUTHORITY.get() is authority
+                inner_complete = (
+                    len(authority.observed_inner_attempts) == 2
+                    and tuple(authority.observed_inner_profiles)
+                    == cast(tuple[str, str], expected_inner)
+                )
+                try:
+                    _HISTORICAL_CALIBRATION_PROVENANCE_AUTHORITY.reset(provenance_token)
+                except BaseException as error:
+                    cleanup_errors.append(error)
+                if _HISTORICAL_CALIBRATION_PROVENANCE_AUTHORITY.get() is not None:
+                    try:
+                        _HISTORICAL_CALIBRATION_PROVENANCE_AUTHORITY.set(None)
+                    except BaseException as error:
+                        cleanup_errors.append(error)
+                authority_cleared = _HISTORICAL_CALIBRATION_PROVENANCE_AUTHORITY.get() is None
+                if not (authority_held and inner_complete and authority_cleared):
+                    cleanup_errors.append(
+                        ValueError("Legacy calibration provenance authority or order drifted.")
+                    )
+                if cleanup_errors:
+                    raise ValueError(
+                        "Legacy calibration provenance cleanup failed closed."
+                    ) from (original_error or cleanup_errors[0])
+        _require(
+            _historical_cwd_authority_mode(
+                repository_root=repository_root,
+                detached_root=detached_root,
+            )
+            == entry_mode
+            and _HISTORICAL_CALIBRATION_PROVENANCE_AUTHORITY.get() is None,
+            "Legacy calibration provenance did not restore its entry cwd authority.",
+        )
+        observed_outer[profile_sha256] = observed_outer.get(profile_sha256, 0) + 1
+        pair_sha256 = _json_digest(list(expected_inner))
+        observed_pairs[pair_sha256] = observed_pairs.get(pair_sha256, 0) + 1
+        return result
+
+    outer_adapter.__name__ = "establish_provenance"
+    inner_adapter.__name__ = "_frozen_context_for_manifest"
+    outer_adapter._adaptive_v4_provenance_outer_adapter = True  # type: ignore[attr-defined]
+    inner_adapter._adaptive_v4_provenance_inner_adapter = True  # type: ignore[attr-defined]
+    calibration.establish_provenance = outer_adapter
+    calibration._frozen_context_for_manifest = inner_adapter
+    try:
+        yield observed
+    finally:
+        identities_held = (
+            calibration.establish_provenance is outer_adapter
+            and calibration._frozen_context_for_manifest is inner_adapter
+            and exact_contract_module.source_state is source_state_original
+        )
+        calibration._frozen_context_for_manifest = inner_original
+        calibration.establish_provenance = outer_original
+        _require(
+            identities_held
+            and calibration.establish_provenance is outer_original
+            and calibration._frozen_context_for_manifest is inner_original
+            and exact_contract_module.source_state is source_state_original
+            and _HISTORICAL_CALIBRATION_PROVENANCE_AUTHORITY.get() is None
+            and _HISTORICAL_SUPERSEDED_PATH_SPELLING_AUTHORITY.get() is None
+            and _historical_cwd_authority_mode(
+                repository_root=repository_root,
+                detached_root=detached_root,
+            )
+            == "detached",
+            "Legacy calibration provenance callable identity or cwd authority drifted.",
+        )
+
+
+@contextmanager
+def _legacy_quarantine_cwd_adapter(
+    calibration_matrix: Any,
+    *,
+    repository_root: Path,
+    detached_root: Path,
+    trust_root: attestation.TrustRoot,
+    argument_claim: Mapping[str, Any],
+) -> Iterator[dict[str, int]]:
+    raw_original = getattr(calibration_matrix, "_validate_quarantine_evidence", None)
+    _require(
+        callable(raw_original)
+        and getattr(raw_original, "__name__", None) == "_validate_quarantine_evidence"
+        and not bool(getattr(raw_original, "_adaptive_v4_quarantine_cwd_adapter", False)),
+        "Legacy quarantine validator is unavailable, aliased, or already adapted.",
+    )
+    original = cast(Callable[..., Any], raw_original)
+    expected_keys = {
+        "legacy_context",
+        "trust_root",
+        "training_matrix_summary_path",
+        "training_matrix_payload",
+        "trainer_binding",
+        "ledger_records",
+    }
+    invocations: dict[str, int] = {}
+
+    def adapter(*arguments: Any, **keywords: Any) -> Any:
+        legacy_context = keywords.get("legacy_context")
+        training_payload = keywords.get("training_matrix_payload")
+        ledger_records = keywords.get("ledger_records")
+        _require(
+            not arguments
+            and set(keywords) == expected_keys
+            and keywords.get("trust_root") is trust_root
+            and keywords.get("training_matrix_summary_path")
+            == Path(cast(str, argument_claim.get("training_matrix_summary_path")))
+            and isinstance(training_payload, Mapping)
+            and _json_digest(training_payload)
+            == argument_claim.get("training_matrix_payload_sha256")
+            and keywords.get("trainer_binding") == argument_claim.get("trainer_binding")
+            and isinstance(ledger_records, Mapping)
+            and _json_digest(
+                {
+                    "schema_version": 1,
+                    "records": _historical_ledger_record_inventory(
+                        cast(Mapping[tuple[str, int], Mapping[str, Any]], ledger_records)
+                    ),
+                }
+            )
+            == argument_claim.get("ledger_record_inventory_sha256")
+            and getattr(legacy_context, "source", None) == argument_claim.get("legacy_source")
+            and getattr(legacy_context, "manifest_binding", None)
+            == argument_claim.get("legacy_manifest")
+            and getattr(legacy_context, "manifest_path", None)
+            == Path(cast(str, cast(Mapping[str, Any], argument_claim["legacy_manifest"])["path"]))
+            and threading.current_thread() is threading.main_thread()
+            and threading.active_count() == 1
+            and Path.cwd() == detached_root
+            and _source_state(detached_root)
+            == {"commit": HISTORICAL_RESULT_SOURCE_COMMIT, "dirty": False},
+            "Legacy quarantine adapter arguments, thread, or detached source drifted.",
+        )
+        profile_sha256 = cast(str, argument_claim.get("expected_invocation_profile_sha256"))
+        _require(_is_sha256(profile_sha256), "Legacy quarantine invocation profile is invalid.")
+        with _scoped_historical_command_resolution_cwd(
+            repository_root=repository_root,
+            detached_root=detached_root,
+        ):
+            result = original(**keywords)
+        _require(
+            Path.cwd() == detached_root
+            and _source_state(detached_root)
+            == {"commit": HISTORICAL_RESULT_SOURCE_COMMIT, "dirty": False},
+            "Legacy quarantine adapter did not restore the detached source.",
+        )
+        invocations[profile_sha256] = invocations.get(profile_sha256, 0) + 1
+        return result
+
+    adapter._adaptive_v4_quarantine_cwd_adapter = True  # type: ignore[attr-defined]
+    calibration_matrix._validate_quarantine_evidence = adapter
+    try:
+        yield invocations
+    finally:
+        adapter_held = getattr(calibration_matrix, "_validate_quarantine_evidence", None) is adapter
+        calibration_matrix._validate_quarantine_evidence = original
+        _require(
+            adapter_held
+            and getattr(calibration_matrix, "_validate_quarantine_evidence", None) is original
+            and Path.cwd() == detached_root
+            and _source_state(detached_root)
+            == {"commit": HISTORICAL_RESULT_SOURCE_COMMIT, "dirty": False},
+            "Legacy quarantine callable identity or detached source drifted.",
+        )
+
+
 def _archived_validation_payload(
     *,
     trust_root: attestation.TrustRoot,
@@ -2345,26 +6316,43 @@ def _archived_validation_payload(
     # touch CUDA, or import either the old or new controller evaluator.
     import run_p2_direct_top_p_physical_matrix as top_p_matrix
 
-    detached_state = _source_state(Path.cwd())
+    detached_root = _exact_path(
+        Path.cwd(),
+        label="Detached historical result-source root",
+        must_exist=True,
+    )
+    detached_state = _source_state(detached_root)
     _require(
         detached_state == {"commit": HISTORICAL_RESULT_SOURCE_COMMIT, "dirty": False},
         "Archived child is not running in the exact detached result source.",
     )
-    _assert_tree_object(Path.cwd(), HISTORICAL_RESULT_SOURCE_COMMIT, HISTORICAL_RESULT_SOURCE_TREE)
     _assert_tree_object(
-        Path.cwd(),
+        detached_root,
+        HISTORICAL_RESULT_SOURCE_COMMIT,
+        HISTORICAL_RESULT_SOURCE_TREE,
+    )
+    _assert_tree_object(
+        detached_root,
         HISTORICAL_IMPLEMENTATION_SOURCE_COMMIT,
         HISTORICAL_IMPLEMENTATION_SOURCE_TREE,
     )
-    _assert_tree_object(Path.cwd(), V1_1_RESULT_SOURCE_COMMIT, V1_1_RESULT_SOURCE_TREE)
+    _assert_tree_object(detached_root, V1_1_RESULT_SOURCE_COMMIT, V1_1_RESULT_SOURCE_TREE)
     _assert_tree_object(
-        Path.cwd(), V1_1_IMPLEMENTATION_SOURCE_COMMIT, V1_1_IMPLEMENTATION_SOURCE_TREE
+        detached_root,
+        V1_1_IMPLEMENTATION_SOURCE_COMMIT,
+        V1_1_IMPLEMENTATION_SOURCE_TREE,
     )
     _assert_ancestor(
-        Path.cwd(), HISTORICAL_IMPLEMENTATION_SOURCE_COMMIT, HISTORICAL_RESULT_SOURCE_COMMIT
+        detached_root,
+        HISTORICAL_IMPLEMENTATION_SOURCE_COMMIT,
+        HISTORICAL_RESULT_SOURCE_COMMIT,
     )
-    _assert_ancestor(Path.cwd(), V1_1_IMPLEMENTATION_SOURCE_COMMIT, V1_1_RESULT_SOURCE_COMMIT)
-    _assert_ancestor(Path.cwd(), V1_1_RESULT_SOURCE_COMMIT, HISTORICAL_RESULT_SOURCE_COMMIT)
+    _assert_ancestor(
+        detached_root,
+        V1_1_IMPLEMENTATION_SOURCE_COMMIT,
+        V1_1_RESULT_SOURCE_COMMIT,
+    )
+    _assert_ancestor(detached_root, V1_1_RESULT_SOURCE_COMMIT, HISTORICAL_RESULT_SOURCE_COMMIT)
     inventory = _assert_live_inventory_matches_historical(repository_root)
     manifest_binding = _historical_manifest_binding(repository_root)
 
@@ -2386,55 +6374,193 @@ def _archived_validation_payload(
 
     attestation.trust_root_from_environment = cast(Any, sealed_transport)
 
-    prerequisites = top_p_matrix.load_and_validate_prerequisites(
-        manifest_path=repository_root / HISTORICAL_MANIFEST_RELATIVE_PATH,
-        training_output_root=repository_root / HISTORICAL_TRAINING_ROOT,
-        calibration_output_root=repository_root / HISTORICAL_CALIBRATION_ROOT,
-        output_root=repository_root / HISTORICAL_TOP_P_ROOT,
-        attestation_key_path=None,
+    runtime_binding = _archived_python_runtime_binding(repository_root)
+    command_path_inventory = _historical_training_command_path_inventory(repository_root)
+    builder_inventories = _historical_signed_builder_command_inventory(
+        repository_root,
+        command_path_inventory,
+    )
+    calibration_provenance_claim = _historical_calibration_provenance_claim(
+        repository_root,
+        command_path_inventory,
     )
     _require(
-        prerequisites.context.source == {"commit": HISTORICAL_RESULT_SOURCE_COMMIT, "dirty": False},
-        "Archived prerequisite context is not bound to 8c884.",
+        top_p_matrix.training_matrix is top_p_matrix.calibration_matrix.training_matrix
+        and top_p_matrix.calibration_program is top_p_matrix.calibration_matrix.calibration,
+        "Archived prerequisite modules do not share the exact legacy training validator.",
     )
-    generator = top_p_matrix._canonical_generator(top_p_matrix.GENERATOR_SCRIPT)
-    opened_generator, generator_snapshot = top_p_matrix._open_generator(generator)
-    opened_generator.close()
-    top_p_path = repository_root / HISTORICAL_TOP_P_LEDGER
-    top_p_payload, top_p_opened = _load_json_nofollow(
-        top_p_path, label="Historical top-p matrix ledger"
+    expected_training_coordinates = {(scale, seed) for scale in SCALES for seed in TRAINING_SEEDS}
+    _require(
+        Path.cwd() == detached_root
+        and top_p_matrix.contract.source_state()
+        == {"commit": HISTORICAL_RESULT_SOURCE_COMMIT, "dirty": False},
+        "Archived implicit source state drifted before prerequisite validation.",
     )
-    try:
-        records = top_p_matrix.validate_matrix_summary_archived(
-            top_p_payload,
-            output_root=repository_root / HISTORICAL_TOP_P_ROOT,
-            prerequisites=prerequisites,
-            generator_script=generator,
-            generator_binding=generator_snapshot.public_binding,
-            matrix_lock_binding=top_p_matrix._matrix_lock_binding(
-                top_p_matrix._matrix_lock_path(repository_root / HISTORICAL_TOP_P_ROOT)
+    superseded_argument_claim = _historical_superseded_bundle_argument_claim(repository_root)
+    quarantine_argument_claim = _historical_quarantine_argument_claim(repository_root)
+    retry_admission_cwd_claim = _historical_retry_admission_cwd_claim(repository_root)
+    thread_fs_isolation_claim = _unshare_validating_thread_fs_context(
+        repository_root=repository_root,
+        detached_root=detached_root,
+    )
+    with _retained_interpreter_spelling(repository_root, runtime_binding) as retained_interpreter:
+        builder_specs = (
+            (
+                top_p_matrix.training_matrix,
+                "build_training_command",
+                "training_matrix.build_training_command",
             ),
-            verify_artifacts=True,
+            (
+                top_p_matrix.calibration_matrix,
+                "build_calibration_command",
+                "calibration_matrix.build_calibration_command",
+            ),
+            (
+                top_p_matrix,
+                "build_generator_command",
+                "top_p_matrix.build_generator_command",
+            ),
         )
-        top_p_matrix._preflight_output_tree(
-            output_root=repository_root / HISTORICAL_TOP_P_ROOT,
-            matrix_summary=top_p_path,
-            completed_cells=len(records),
-        )
-        _require(
-            top_p_opened.sha256 == HISTORICAL_TOP_P_LEDGER_SHA256
-            and top_p_payload.get("status") == "terminal"
-            and top_p_payload.get("terminal_decision") == "NO-GO"
-            and top_p_payload.get("completed_cells") == 40
-            and top_p_payload.get("go_cells") == 0
-            and top_p_payload.get("no_go_cells") == 40
-            and len(records) == 40
-            and all(record.get("terminal_decision") == "NO-GO" for record in records),
-            "Historical top-p matrix is not the exact terminal 0/40 GO result.",
-        )
-        top_p_opened.assert_unchanged()
-    finally:
-        top_p_opened.close()
+        with ExitStack() as adapter_stack:
+            validated_builder_commands = adapter_stack.enter_context(
+                _legacy_builder_spelling_adapters(
+                    builder_specs,
+                    repository_root=repository_root,
+                    detached_root=detached_root,
+                    retained=retained_interpreter,
+                    inventories=builder_inventories,
+                )
+            )
+            superseded_invocations = adapter_stack.enter_context(
+                _legacy_superseded_bundle_cwd_adapter(
+                    top_p_matrix.training_matrix,
+                    repository_root=repository_root,
+                    detached_root=detached_root,
+                    trust_root=trust_root,
+                    argument_claim=superseded_argument_claim,
+                )
+            )
+            validated_training_paths = adapter_stack.enter_context(
+                _legacy_training_command_cwd_adapter(
+                    top_p_matrix.training_matrix,
+                    repository_root=repository_root,
+                    detached_root=detached_root,
+                    inventory=command_path_inventory,
+                )
+            )
+            validated_calibration_provenance = adapter_stack.enter_context(
+                _legacy_calibration_provenance_cwd_adapters(
+                    top_p_matrix.calibration_program,
+                    repository_root=repository_root,
+                    detached_root=detached_root,
+                    trust_root=trust_root,
+                    claim=calibration_provenance_claim,
+                )
+            )
+            adapter_stack.enter_context(
+                _legacy_retry_admission_cwd_adapter(
+                    top_p_matrix.calibration_matrix,
+                    repository_root=repository_root,
+                    detached_root=detached_root,
+                    trust_root=trust_root,
+                    claim=retry_admission_cwd_claim,
+                )
+            )
+            quarantine_invocations = adapter_stack.enter_context(
+                _legacy_quarantine_cwd_adapter(
+                    top_p_matrix.calibration_matrix,
+                    repository_root=repository_root,
+                    detached_root=detached_root,
+                    trust_root=trust_root,
+                    argument_claim=quarantine_argument_claim,
+                )
+            )
+            prerequisites = top_p_matrix.load_and_validate_prerequisites(
+                manifest_path=repository_root / HISTORICAL_MANIFEST_RELATIVE_PATH,
+                training_output_root=repository_root / HISTORICAL_TRAINING_ROOT,
+                calibration_output_root=repository_root / HISTORICAL_CALIBRATION_ROOT,
+                output_root=repository_root / HISTORICAL_TOP_P_ROOT,
+                attestation_key_path=None,
+            )
+            _require(
+                Path.cwd() == detached_root
+                and top_p_matrix.contract.source_state()
+                == {"commit": HISTORICAL_RESULT_SOURCE_COMMIT, "dirty": False}
+                and _source_state(detached_root)
+                == {"commit": HISTORICAL_RESULT_SOURCE_COMMIT, "dirty": False},
+                "Archived implicit source state or detached cwd drifted after command validation.",
+            )
+            _require(
+                prerequisites.context.source
+                == {"commit": HISTORICAL_RESULT_SOURCE_COMMIT, "dirty": False},
+                "Archived prerequisite context is not bound to 8c884.",
+            )
+            generator = top_p_matrix._canonical_generator(top_p_matrix.GENERATOR_SCRIPT)
+            opened_generator, generator_snapshot = top_p_matrix._open_generator(generator)
+            opened_generator.close()
+            top_p_path = repository_root / HISTORICAL_TOP_P_LEDGER
+            top_p_payload, top_p_opened = _load_json_nofollow(
+                top_p_path, label="Historical top-p matrix ledger"
+            )
+            try:
+                records = top_p_matrix.validate_matrix_summary_archived(
+                    top_p_payload,
+                    output_root=repository_root / HISTORICAL_TOP_P_ROOT,
+                    prerequisites=prerequisites,
+                    generator_script=generator,
+                    generator_binding=generator_snapshot.public_binding,
+                    matrix_lock_binding=top_p_matrix._matrix_lock_binding(
+                        top_p_matrix._matrix_lock_path(repository_root / HISTORICAL_TOP_P_ROOT)
+                    ),
+                    verify_artifacts=True,
+                )
+                top_p_matrix._preflight_output_tree(
+                    output_root=repository_root / HISTORICAL_TOP_P_ROOT,
+                    matrix_summary=top_p_path,
+                    completed_cells=len(records),
+                )
+                _require(
+                    top_p_opened.sha256 == HISTORICAL_TOP_P_LEDGER_SHA256
+                    and top_p_payload.get("status") == "terminal"
+                    and top_p_payload.get("terminal_decision") == "NO-GO"
+                    and top_p_payload.get("completed_cells") == 40
+                    and top_p_payload.get("go_cells") == 0
+                    and top_p_payload.get("no_go_cells") == 40
+                    and len(records) == 40
+                    and all(record.get("terminal_decision") == "NO-GO" for record in records),
+                    "Historical top-p matrix is not the exact terminal 0/40 GO result.",
+                )
+                top_p_opened.assert_unchanged()
+            finally:
+                top_p_opened.close()
+            expected_training_path_counts = {
+                coordinate: (71 if coordinate == (SCALES[0], TRAINING_SEEDS[0]) else 69)
+                for coordinate in expected_training_coordinates
+            }
+            _require(
+                validated_training_paths.get("training_command") == expected_training_path_counts
+                and validated_training_paths.get("training_checkpoint")
+                == expected_training_path_counts,
+                "Archived legacy path validation invocation multiplicities drifted.",
+            )
+            relative_path_adapter_claim = _historical_relative_path_adapter_claim(
+                command_path_inventory,
+                superseded_argument_claim,
+                quarantine_argument_claim,
+                observed_training=validated_training_paths,
+                observed_superseded=superseded_invocations,
+                observed_quarantine=quarantine_invocations,
+            )
+            builder_adapter_claim = _historical_builder_adapter_claim(
+                retained_interpreter,
+                builder_inventories,
+                observed_invocations=validated_builder_commands,
+            )
+            _assert_historical_calibration_provenance_observation(
+                calibration_provenance_claim,
+                validated_calibration_provenance,
+            )
+    command_path_resolution = _historical_command_path_resolution_claim(command_path_inventory)
 
     calibrations: list[dict[str, Any]] = []
     checkpoints: list[dict[str, Any]] = []
@@ -2543,13 +6669,22 @@ def _archived_validation_payload(
     absent = _assert_canonical_nonobservation_paths_absent(repository_root=repository_root)
     module_origin_audit = _audit_loaded_repo_module_origins(
         repository_root=repository_root,
-        detached_root=Path.cwd(),
+        detached_root=detached_root,
         allowed_inventory=_commit_inventory(
             repository_root,
             HISTORICAL_RESULT_SOURCE_COMMIT,
             HISTORICAL_IMPLEMENTATION_PATHS,
         ),
         sealed_admission=_sealed_admission_module_binding(),
+    )
+    thread_fs_capability = _assert_thread_fs_isolation_capability(
+        repository_root=repository_root,
+        detached_root=detached_root,
+        main_location="detached",
+    )
+    _require(
+        canonical_json(thread_fs_isolation_claim) == thread_fs_capability.claim_bytes,
+        "Historical thread fs-isolation receipt claim drifted from its private capability.",
     )
     return _attested_payload(
         {
@@ -2600,6 +6735,13 @@ def _archived_validation_payload(
             "quality_rng_initialized": False,
             "validation_mode": "stored-only-detached-result-source-no-cuda",
             "legacy_key_transport_override": "sealed-fd-only-loader-adapter",
+            "historical_artifact_command_path_resolution": command_path_resolution,
+            "historical_artifact_command_builder_adapter": builder_adapter_claim,
+            "historical_calibration_provenance_cwd_adapter": calibration_provenance_claim,
+            "historical_quarantine_cwd_adapter": quarantine_argument_claim,
+            "historical_retry_admission_cwd_adapter": retry_admission_cwd_claim,
+            "historical_relative_path_adapter_invocations": relative_path_adapter_claim,
+            "historical_thread_fs_isolation": thread_fs_isolation_claim,
             "module_origin_audit": module_origin_audit,
             "scientific_subprocesses_started": 0,
             "quality_evaluator_imported": False,
@@ -2893,6 +7035,13 @@ def _verify_historical_receipt(
         "quality_rng_initialized",
         "validation_mode",
         "legacy_key_transport_override",
+        "historical_artifact_command_path_resolution",
+        "historical_artifact_command_builder_adapter",
+        "historical_calibration_provenance_cwd_adapter",
+        "historical_quarantine_cwd_adapter",
+        "historical_retry_admission_cwd_adapter",
+        "historical_relative_path_adapter_invocations",
+        "historical_thread_fs_isolation",
         "module_origin_audit",
         "scientific_subprocesses_started",
         "quality_evaluator_imported",
@@ -2916,7 +7065,191 @@ def _verify_historical_receipt(
     top_p = payload.get("top_p")
     calibrations = payload.get("calibrations")
     checkpoints = payload.get("checkpoints")
+    command_path_resolution = payload.get("historical_artifact_command_path_resolution")
+    builder_adapter = payload.get("historical_artifact_command_builder_adapter")
+    _verify_historical_calibration_provenance_claim(
+        payload.get("historical_calibration_provenance_cwd_adapter")
+    )
+    _verify_historical_quarantine_argument_claim(payload.get("historical_quarantine_cwd_adapter"))
+    _verify_historical_retry_admission_cwd_claim(
+        payload.get("historical_retry_admission_cwd_adapter")
+    )
+    _verify_historical_relative_path_adapter_claim(
+        payload.get("historical_relative_path_adapter_invocations")
+    )
+    _verify_historical_thread_fs_isolation_claim(payload.get("historical_thread_fs_isolation"))
     _verify_module_origin_audit(payload.get("module_origin_audit"))
+    _require(
+        isinstance(command_path_resolution, Mapping)
+        and set(command_path_resolution)
+        == {
+            "schema_version",
+            "adapter_scopes",
+            "relative_path_fields",
+            "relative_path_base",
+            "source_and_import_validation_cwd",
+            "cwd_switch",
+            "cwd_restoration",
+            "path_values_rewritten",
+            "parent_traversal_allowed",
+            "symlink_traversal_allowed",
+            "validated_relative_path_count",
+            "validated_relative_path_inventory_sha256",
+        }
+        and command_path_resolution.get("schema_version") == 1
+        and command_path_resolution.get("adapter_scopes")
+        == [
+            "legacy-training-matrix._validate_training_command-only",
+            "legacy-training-matrix._validate_checkpoint-only",
+        ]
+        and isinstance(command_path_resolution.get("relative_path_fields"), list)
+        and [
+            (row.get("field"), row.get("validated_count"))
+            for row in cast(list[Any], command_path_resolution.get("relative_path_fields"))
+            if isinstance(row, Mapping)
+        ]
+        == [
+            ("training-summary.command.--output-dir", 10),
+            ("training-summary.checkpoint.path", 10),
+        ]
+        and all(
+            isinstance(row, Mapping)
+            and set(row) == {"field", "validated_count", "inventory_sha256"}
+            and _is_sha256(row.get("inventory_sha256"))
+            for row in cast(list[Any], command_path_resolution.get("relative_path_fields"))
+        )
+        and command_path_resolution.get("relative_path_base")
+        == "canonical-original-repository-root"
+        and command_path_resolution.get("source_and_import_validation_cwd")
+        == "detached-historical-result-source"
+        and command_path_resolution.get("cwd_switch")
+        == "exact-directory-fd-to-canonical-repository-root"
+        and command_path_resolution.get("cwd_restoration")
+        == "exact-directory-fd-to-detached-result-source"
+        and command_path_resolution.get("path_values_rewritten") is False
+        and command_path_resolution.get("parent_traversal_allowed") is False
+        and command_path_resolution.get("symlink_traversal_allowed") is False
+        and command_path_resolution.get("validated_relative_path_count")
+        == 2 * len(SCALES) * len(TRAINING_SEEDS)
+        and _is_sha256(command_path_resolution.get("validated_relative_path_inventory_sha256")),
+        "Historical artifact command path-resolution claim drifted.",
+    )
+    _require(
+        isinstance(builder_adapter, Mapping)
+        and set(builder_adapter)
+        == {
+            "schema_version",
+            "actual_child_process_executable_unchanged",
+            "sys_executable_mutated",
+            "reexec_performed",
+            "adapter_operation",
+            "nonzero_argv_bytes_and_order_preserved",
+            "builder_replay_policy",
+            "adapter_context_install_and_restore_cwd",
+            "callable_identity_restored",
+            "interpreter_spelling",
+            "builders",
+            "signed_command_count",
+            "expected_builder_invocation_count",
+        }
+        and builder_adapter.get("schema_version") == 1
+        and builder_adapter.get("actual_child_process_executable_unchanged") is True
+        and builder_adapter.get("sys_executable_mutated") is False
+        and builder_adapter.get("reexec_performed") is False
+        and builder_adapter.get("adapter_operation")
+        == "clone-original-builder-result-and-replace-index-zero-only"
+        and builder_adapter.get("nonzero_argv_bytes_and_order_preserved") is True
+        and builder_adapter.get("builder_replay_policy")
+        == "exact-signed-membership-complete-coverage-repeats-allowed"
+        and builder_adapter.get("adapter_context_install_and_restore_cwd")
+        == "detached-result-source"
+        and builder_adapter.get("callable_identity_restored") is True
+        and builder_adapter.get("signed_command_count") == 60
+        and builder_adapter.get("expected_builder_invocation_count") == 742,
+        "Historical artifact command builder-adapter claim drifted.",
+    )
+    interpreter_spelling = cast(Mapping[str, Any], builder_adapter).get("interpreter_spelling")
+    builders = cast(Mapping[str, Any], builder_adapter).get("builders")
+    _require(
+        isinstance(interpreter_spelling, Mapping)
+        and set(interpreter_spelling)
+        == {
+            "schema_version",
+            "recorded_executable",
+            "alias_symlink_chain",
+            "resolved_target",
+            "target_metadata",
+            "target_sha256",
+        }
+        and interpreter_spelling.get("schema_version") == 1
+        and isinstance(interpreter_spelling.get("recorded_executable"), str)
+        and Path(cast(str, interpreter_spelling.get("recorded_executable"))).is_absolute()
+        and isinstance(interpreter_spelling.get("resolved_target"), str)
+        and Path(cast(str, interpreter_spelling.get("resolved_target"))).is_absolute()
+        and isinstance(interpreter_spelling.get("alias_symlink_chain"), list)
+        and bool(interpreter_spelling.get("alias_symlink_chain"))
+        and isinstance(interpreter_spelling.get("target_metadata"), Mapping)
+        and _is_sha256(interpreter_spelling.get("target_sha256"))
+        and isinstance(builders, list)
+        and len(builders) == 3
+        and all(isinstance(row, Mapping) for row in builders),
+        "Historical interpreter spelling or legacy builder inventory claim drifted.",
+    )
+    builder_rows = [cast(Mapping[str, Any], row) for row in cast(list[Any], builders)]
+    _require(
+        [(row.get("builder"), row.get("signed_command_count")) for row in builder_rows]
+        == [
+            ("calibration_matrix.build_calibration_command", 10),
+            ("top_p_matrix.build_generator_command", 40),
+            ("training_matrix.build_training_command", 10),
+        ]
+        and all(
+            set(row)
+            == {
+                "builder",
+                "invocation_entry_cwd",
+                "original_call_cwd",
+                "invocation_exit_cwd",
+                "signed_command_count",
+                "signed_command_inventory_sha256",
+                "expected_invocation_count",
+                "expected_invocation_multiset_sha256",
+            }
+            and _is_sha256(row.get("signed_command_inventory_sha256"))
+            and _is_sha256(row.get("expected_invocation_multiset_sha256"))
+            for row in builder_rows
+        )
+        and [row.get("expected_invocation_count") for row in builder_rows] == [10, 40, 692],
+        "Historical legacy builder command inventory claim drifted.",
+    )
+    _require(
+        [
+            (
+                row.get("invocation_entry_cwd"),
+                row.get("original_call_cwd"),
+                row.get("invocation_exit_cwd"),
+            )
+            for row in builder_rows
+        ]
+        == [
+            (
+                "detached-result-source",
+                "canonical-repository-root",
+                "detached-result-source",
+            ),
+            (
+                "detached-result-source",
+                "detached-result-source",
+                "detached-result-source",
+            ),
+            (
+                "canonical-repository-root",
+                "canonical-repository-root",
+                "canonical-repository-root",
+            ),
+        ],
+        "Historical legacy builder original-call cwd policy drifted.",
+    )
     _require(
         payload.get("schema_version") == RECEIPT_SCHEMA_VERSION
         and payload.get("artifact_type") == "direct-controller-historical-validation-receipt"
@@ -3202,6 +7535,70 @@ def _verify_historical_evidence_against_receipt(
         _expected_historical_ledger_bindings(quality_context.repository_root)
         == receipt.get("ledgers"),
         "Historical ledgers differ from the signed receipt.",
+    )
+    current_training_commands = _historical_training_command_path_inventory(
+        quality_context.repository_root
+    )
+    current_command_path_resolution = _historical_command_path_resolution_claim(
+        current_training_commands
+    )
+    _require(
+        current_command_path_resolution
+        == receipt.get("historical_artifact_command_path_resolution"),
+        "Historical artifact command path-resolution evidence differs from the signed receipt.",
+    )
+    current_builder_inventories = _historical_signed_builder_command_inventory(
+        quality_context.repository_root,
+        current_training_commands,
+    )
+    current_runtime_binding = _archived_python_runtime_binding(quality_context.repository_root)
+    with _retained_interpreter_spelling(
+        quality_context.repository_root,
+        current_runtime_binding,
+    ) as retained_interpreter:
+        current_builder_adapter = _historical_builder_adapter_claim(
+            retained_interpreter,
+            current_builder_inventories,
+        )
+    _require(
+        current_builder_adapter == receipt.get("historical_artifact_command_builder_adapter"),
+        "Historical command builder-adapter evidence differs from the signed receipt.",
+    )
+    current_calibration_provenance = _historical_calibration_provenance_claim(
+        quality_context.repository_root,
+        current_training_commands,
+    )
+    _require(
+        current_calibration_provenance
+        == receipt.get("historical_calibration_provenance_cwd_adapter"),
+        "Historical calibration provenance evidence differs from the signed receipt.",
+    )
+    current_quarantine_claim = _historical_quarantine_argument_claim(
+        quality_context.repository_root
+    )
+    _require(
+        current_quarantine_claim == receipt.get("historical_quarantine_cwd_adapter"),
+        "Historical quarantine cwd-adapter evidence differs from the signed receipt.",
+    )
+    current_retry_admission_claim = _historical_retry_admission_cwd_claim(
+        quality_context.repository_root
+    )
+    _require(
+        current_retry_admission_claim
+        == receipt.get("historical_retry_admission_cwd_adapter"),
+        "Historical retry-admission cwd evidence differs from the signed receipt.",
+    )
+    current_superseded_claim = _historical_superseded_bundle_argument_claim(
+        quality_context.repository_root
+    )
+    _require(
+        _historical_relative_path_adapter_claim(
+            current_training_commands,
+            current_superseded_claim,
+            current_quarantine_claim,
+        )
+        == receipt.get("historical_relative_path_adapter_invocations"),
+        "Historical relative-path invocation evidence differs from the signed receipt.",
     )
     closed_world = receipt.get("closed_world")
     _require(isinstance(closed_world, Mapping), "Signed historical closed-world view is missing.")
