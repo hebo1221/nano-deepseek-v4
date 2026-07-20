@@ -24,6 +24,13 @@ resident on the accelerator.
   supersedes that proposal's priority after a frontier, novelty, and systems
   red-team: it defines HCA--CSA conditional-sufficiency, adaptive-order, timing,
   and exact-baseline kill gates before any new runtime build.
+- [`hca_csa_h0_protocol.md`](hca_csa_h0_protocol.md) freezes the minimal H0
+  observation contract and records the fail-closed finding that the preserved
+  48--80-token Tier-S checkpoints never trained their 128:1 HCA paths.
+- The [`HCA--CSA H0 pilot report`](reports/2026-07-20-hca-csa-h0-pilot.md)
+  records a bounded negative result: HCA adds tiny layer-local deviance signal
+  but no reproducible two-scale recall lift over the prior-token/prior-CSA
+  anchor, so HCA-driven directory/prefetch work is stopped.
 - [`experimental_protocol.md`](experimental_protocol.md) fixes the baselines,
   workloads, metrics, statistical analysis, artifacts, and phase gates before
   implementation begins.
