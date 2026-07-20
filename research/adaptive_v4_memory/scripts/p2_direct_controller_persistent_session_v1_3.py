@@ -24,27 +24,27 @@ RECEIPT_MESSAGE_TYPE = contract.PERSISTENT_SESSION_RECEIPT_MESSAGE_TYPE
 LAUNCH_ARTIFACT_TYPE = contract.PERSISTENT_SESSION_LAUNCH_ARTIFACT_TYPE
 TERMINAL_ARTIFACT_TYPE = contract.PERSISTENT_SESSION_TERMINAL_ARTIFACT_TYPE
 
-PLAN_ATTESTATION_PURPOSE = contract.V1_3_2_PERSISTENT_SESSION_PLAN_ATTESTATION_PURPOSE
-WORK_ATTESTATION_PURPOSE = contract.V1_3_2_PERSISTENT_SESSION_WORK_ATTESTATION_PURPOSE
-RESULT_ATTESTATION_PURPOSE = contract.V1_3_2_PERSISTENT_SESSION_RESULT_ATTESTATION_PURPOSE
-RECEIPT_ATTESTATION_PURPOSE = contract.V1_3_2_PERSISTENT_SESSION_RECEIPT_ATTESTATION_PURPOSE
+PLAN_ATTESTATION_PURPOSE = contract.V1_3_3_PERSISTENT_SESSION_PLAN_ATTESTATION_PURPOSE
+WORK_ATTESTATION_PURPOSE = contract.V1_3_3_PERSISTENT_SESSION_WORK_ATTESTATION_PURPOSE
+RESULT_ATTESTATION_PURPOSE = contract.V1_3_3_PERSISTENT_SESSION_RESULT_ATTESTATION_PURPOSE
+RECEIPT_ATTESTATION_PURPOSE = contract.V1_3_3_PERSISTENT_SESSION_RECEIPT_ATTESTATION_PURPOSE
 LAUNCH_LEDGER_ATTESTATION_PURPOSE = (
-    contract.V1_3_2_PERSISTENT_SESSION_LAUNCH_LEDGER_ATTESTATION_PURPOSE
+    contract.V1_3_3_PERSISTENT_SESSION_LAUNCH_LEDGER_ATTESTATION_PURPOSE
 )
 TERMINAL_LEDGER_ATTESTATION_PURPOSE = (
-    contract.V1_3_2_PERSISTENT_SESSION_TERMINAL_LEDGER_ATTESTATION_PURPOSE
+    contract.V1_3_3_PERSISTENT_SESSION_TERMINAL_LEDGER_ATTESTATION_PURPOSE
 )
-_CANONICAL_OUTPUT_ROOT = contract.V1_3_2_OUTPUT_ROOT
-_CANONICAL_SESSION_LEDGER_ROOT = contract.V1_3_2_PERSISTENT_SESSION_LEDGER_ROOT
+_CANONICAL_OUTPUT_ROOT = contract.V1_3_3_OUTPUT_ROOT
+_CANONICAL_SESSION_LEDGER_ROOT = contract.V1_3_3_PERSISTENT_SESSION_LEDGER_ROOT
 _CANONICAL_SESSION_LEDGER_LOCK_PATH = (
-    contract.V1_3_2_PERSISTENT_SESSION_LEDGER_LOCK_PATH
+    contract.V1_3_3_PERSISTENT_SESSION_LEDGER_LOCK_PATH
 )
 SESSION_LEDGER_ROOT_SUFFIX = _CANONICAL_SESSION_LEDGER_ROOT.name.removeprefix(
     f".{_CANONICAL_OUTPUT_ROOT.name}."
 )
 _require_suffix = f".{_CANONICAL_OUTPUT_ROOT.name}.{SESSION_LEDGER_ROOT_SUFFIX}"
 if _CANONICAL_SESSION_LEDGER_ROOT.name != _require_suffix:
-    raise RuntimeError("Canonical v1.3.2 persistent-session ledger layout drifted.")
+    raise RuntimeError("Canonical v1.3.3 persistent-session ledger layout drifted.")
 del _require_suffix
 
 MAXIMUM_PLAN_BYTES = 4 << 20
@@ -52,8 +52,8 @@ MAXIMUM_JSONL_MESSAGE_BYTES = 1 << 20
 MAXIMUM_LEDGER_BYTES = 8 << 20
 CHILD_FULL_HISTORICAL_EVIDENCE_REPLAY_COUNT = 0
 MODEL_LOADS_PER_SESSION = 1
-READY_ONLY_PREFLIGHT_SESSION_ROLE = contract.V1_3_2_READY_ONLY_PREFLIGHT_SESSION_ROLE
-QUALITY_SESSION_ROLE = contract.V1_3_2_QUALITY_SESSION_ROLE
+READY_ONLY_PREFLIGHT_SESSION_ROLE = contract.V1_3_3_READY_ONLY_PREFLIGHT_SESSION_ROLE
+QUALITY_SESSION_ROLE = contract.V1_3_3_QUALITY_SESSION_ROLE
 if READY_ONLY_PREFLIGHT_SESSION_ROLE == QUALITY_SESSION_ROLE:
     raise RuntimeError("Ready-only and quality persistent session roles must be distinct.")
 SESSION_ROLES = frozenset(
@@ -63,13 +63,13 @@ SESSION_ROLES = frozenset(
 # Frozen planning constants. Durable receipts below distinguish launch-time
 # upper bounds from model loads that actually reached the ready boundary.
 NORMAL_PATH_UNIQUE_MODEL_COHORTS = (
-    contract.V1_3_2_QUALITY_SESSION_NORMAL_PATH_MODEL_LOADS
+    contract.V1_3_3_QUALITY_SESSION_NORMAL_PATH_MODEL_LOADS
 )
 READY_ONLY_PREFLIGHT_MODEL_LOAD_UPPER_BOUND = (
-    contract.V1_3_2_READY_ONLY_PREFLIGHT_MODEL_LOADS
+    contract.V1_3_3_READY_ONLY_PREFLIGHT_MODEL_LOADS
 )
 SINGLE_WORKER_TOTAL_MODEL_LOAD_UPPER_BOUND = (
-    contract.V1_3_2_TOTAL_NORMAL_PATH_CHECKPOINT_MODEL_LOADS
+    contract.V1_3_3_TOTAL_NORMAL_PATH_CHECKPOINT_MODEL_LOADS
 )
 if SINGLE_WORKER_TOTAL_MODEL_LOAD_UPPER_BOUND != (
     READY_ONLY_PREFLIGHT_MODEL_LOAD_UPPER_BOUND + NORMAL_PATH_UNIQUE_MODEL_COHORTS
@@ -1012,7 +1012,7 @@ def create_sealed_plan_fd(plan: Mapping[str, Any]) -> int:
         "Persistent plan transport requires sealed memfd support.",
     )
     descriptor = cast(Any, create)(
-        "adaptive-v4-direct-exact-fill-v1-3-2-persistent-plan",
+        "adaptive-v4-direct-exact-fill-v1-3-3-persistent-plan",
         cast(int, getattr(os, "MFD_CLOEXEC", 0)) | cast(int, allow_sealing),
     )
     try:
@@ -1074,7 +1074,7 @@ def session_ledger_root(output_root: Path) -> Path:
         canonical_ledger_root = Path(os.path.abspath(_CANONICAL_SESSION_LEDGER_ROOT))
         _require(
             canonical_ledger_root.parent == root.parent,
-            "Canonical v1.3.2 persistent-session ledger root drifted.",
+            "Canonical v1.3.3 persistent-session ledger root drifted.",
         )
         return canonical_ledger_root
     return root.parent / f".{root.name}.{SESSION_LEDGER_ROOT_SUFFIX}"
@@ -1099,7 +1099,7 @@ def session_ledger_lock_path(output_root: Path) -> Path:
         canonical_lock = Path(os.path.abspath(_CANONICAL_SESSION_LEDGER_LOCK_PATH))
         _require(
             canonical_lock == root.parent / f"{root.name}.lock",
-            "Canonical v1.3.2 persistent-session ledger lock drifted.",
+            "Canonical v1.3.3 persistent-session ledger lock drifted.",
         )
         return canonical_lock
     return root.parent / f"{root.name}.lock"

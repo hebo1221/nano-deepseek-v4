@@ -54,7 +54,7 @@ def _imports(source: str) -> set[str]:
 def _sealed_common_provenance() -> tuple[dict[str, object], dict[str, object], dict[str, object]]:
     authority: dict[str, object] = {
         "schema_version": 1,
-        "launcher": "p2-direct-controller-git-object-launcher-v1-3-2",
+        "launcher": "p2-direct-controller-git-object-launcher-v1-3-3",
         "sealed_runner": True,
         "sealed_inventory": True,
     }
@@ -73,7 +73,7 @@ def _sealed_common_provenance() -> tuple[dict[str, object], dict[str, object], d
     }
     source: dict[str, object] = {
         "schema_version": 1,
-        "launcher": "p2-direct-controller-git-object-launcher-v1-3-2",
+        "launcher": "p2-direct-controller-git-object-launcher-v1-3-3",
         "repository_root": str(REPOSITORY_ROOT.resolve()),
         "bundle_sha256": "2" * 64,
         "pinned_head_oid": "3" * 40,
@@ -92,7 +92,7 @@ def _sealed_route(selector: str, *, sha_digit: str = "6") -> dict[str, object]:
     }
     return {
         "schema_version": 1,
-        "launcher": "p2-direct-controller-git-object-launcher-v1-3-2",
+        "launcher": "p2-direct-controller-git-object-launcher-v1-3-3",
         "entrypoint_selector": selector,
         "entrypoint_relative_path": paths[selector],
         "source_bundle_sha256": "2" * 64,
@@ -118,15 +118,22 @@ def test_generator_reproduces_all_committed_v1_3_sources() -> None:
     )
     assert all("V1_3_1" not in source for source in expected.values())
     assert all("v1-3-1" not in source for source in expected.values())
-    assert all("V1_3_2_1" not in source for source in expected.values())
-    assert all("v1_3_2_1" not in source for source in expected.values())
+    assert all("V1_3_3_1" not in source for source in expected.values())
+    assert all("v1_3_3_1" not in source for source in expected.values())
     evaluator_source = expected[GENERATED_PATHS["evaluator"]]
     matrix_source = expected[GENERATED_PATHS["matrix"]]
-    assert 'globals().get("SEALED_SOURCE_PROVENANCE_V1_3_2")' in evaluator_source
-    assert 'globals().get("SEALED_LAUNCH_ROUTING_V1_3_2")' in evaluator_source
-    assert 'globals().get("SEALED_LAUNCH_ROUTING_V1_3_2")' in matrix_source
+    assert 'globals().get("SEALED_SOURCE_PROVENANCE_V1_3_3")' in evaluator_source
+    assert 'globals().get("SEALED_LAUNCH_ROUTING_V1_3_3")' in evaluator_source
+    assert 'globals().get("SEALED_LAUNCH_ROUTING_V1_3_3")' in matrix_source
     assert "exact-fill-v1-3-worker-" not in matrix_source
-    assert "exact-fill-v1-3-2-worker-" in matrix_source
+    assert "exact-fill-v1-3-3-worker-" in matrix_source
+
+
+def test_generated_operational_sources_contain_no_v1_3_2_namespace() -> None:
+    stale_tokens = ("V1_3_2", "v1_3_2", "V1.3.2", "v1.3.2", "V1-3-2", "v1-3-2")
+    for path, source in generator.generated_sources().items():
+        for token in stale_tokens:
+            assert token not in source, f"stale operational namespace {token!r} in {path}"
 
 
 def test_generator_pins_and_preserves_every_v1_2_source_byte_for_byte() -> None:
@@ -136,27 +143,27 @@ def test_generator_pins_and_preserves_every_v1_2_source_byte_for_byte() -> None:
 
 
 def test_generated_module_identity_and_paths_are_contract_derived() -> None:
-    assert evaluator.EXPERIMENT_ID == contract.V1_3_2_SHARD_EXPERIMENT_ID
-    assert evaluator.ATTESTATION_PURPOSE == contract.V1_3_2_SHARD_ATTESTATION_PURPOSE
-    assert matrix.EXPERIMENT_ID == contract.V1_3_2_MATRIX_EXPERIMENT_ID
-    assert matrix.WORKER_EXPERIMENT_ID == contract.V1_3_2_WORKER_LEDGER_EXPERIMENT_ID
-    assert matrix.MATRIX_ATTESTATION_PURPOSE == contract.V1_3_2_MATRIX_ATTESTATION_PURPOSE
-    assert matrix.WORKER_ATTESTATION_PURPOSE == contract.V1_3_2_WORKER_LEDGER_ATTESTATION_PURPOSE
-    assert audit.EXPERIMENT_ID == contract.V1_3_2_INTEGRITY_EXPERIMENT_ID
-    assert audit.ATTESTATION_PURPOSE == contract.V1_3_2_INTEGRITY_ATTESTATION_PURPOSE
-    assert summary.EXPERIMENT_ID == contract.V1_3_2_SUMMARY_EXPERIMENT_ID
-    assert summary.ATTESTATION_PURPOSE == contract.V1_3_2_SUMMARY_ATTESTATION_PURPOSE
-    assert matrix.OUTPUT_ROOT == contract.V1_3_2_OUTPUT_ROOT
+    assert evaluator.EXPERIMENT_ID == contract.V1_3_3_SHARD_EXPERIMENT_ID
+    assert evaluator.ATTESTATION_PURPOSE == contract.V1_3_3_SHARD_ATTESTATION_PURPOSE
+    assert matrix.EXPERIMENT_ID == contract.V1_3_3_MATRIX_EXPERIMENT_ID
+    assert matrix.WORKER_EXPERIMENT_ID == contract.V1_3_3_WORKER_LEDGER_EXPERIMENT_ID
+    assert matrix.MATRIX_ATTESTATION_PURPOSE == contract.V1_3_3_MATRIX_ATTESTATION_PURPOSE
+    assert matrix.WORKER_ATTESTATION_PURPOSE == contract.V1_3_3_WORKER_LEDGER_ATTESTATION_PURPOSE
+    assert audit.EXPERIMENT_ID == contract.V1_3_3_INTEGRITY_EXPERIMENT_ID
+    assert audit.ATTESTATION_PURPOSE == contract.V1_3_3_INTEGRITY_ATTESTATION_PURPOSE
+    assert summary.EXPERIMENT_ID == contract.V1_3_3_SUMMARY_EXPERIMENT_ID
+    assert summary.ATTESTATION_PURPOSE == contract.V1_3_3_SUMMARY_ATTESTATION_PURPOSE
+    assert matrix.OUTPUT_ROOT == contract.V1_3_3_OUTPUT_ROOT
     assert matrix.MATRIX_SUMMARY_NAME == contract.MATRIX_SUMMARY_NAME
-    assert matrix.MATRIX_SUMMARY == contract.V1_3_2_MATRIX_SUMMARY_PATH
-    assert matrix._matrix_lock_path(matrix.OUTPUT_ROOT) == contract.V1_3_2_ACTIVATION_MATRIX_LOCK_PATH.resolve()
-    assert matrix._worker_ledger_root(matrix.OUTPUT_ROOT) == contract.V1_3_2_WORKER_LEDGER_ROOT.resolve()
-    assert matrix.REUSE_ADMISSION_PATH == contract.V1_3_2_REUSE_ADMISSION_PATH
-    assert matrix.PREHELDOUT_GENESIS_PATH == contract.V1_3_2_PREHELDOUT_GENESIS_PATH
-    assert contract.V1_3_2_ADMISSION_ROOT.parent == contract.V1_3_2_OUTPUT_ROOT.parent
-    assert contract.V1_3_2_ADMISSION_ROOT != contract.V1_3_2_OUTPUT_ROOT
-    assert not contract.V1_3_2_REUSE_ADMISSION_PATH.is_relative_to(contract.V1_3_2_OUTPUT_ROOT)
-    assert not contract.V1_3_2_PREHELDOUT_GENESIS_PATH.is_relative_to(contract.V1_3_2_OUTPUT_ROOT)
+    assert matrix.MATRIX_SUMMARY == contract.V1_3_3_MATRIX_SUMMARY_PATH
+    assert matrix._matrix_lock_path(matrix.OUTPUT_ROOT) == contract.V1_3_3_ACTIVATION_MATRIX_LOCK_PATH.resolve()
+    assert matrix._worker_ledger_root(matrix.OUTPUT_ROOT) == contract.V1_3_3_WORKER_LEDGER_ROOT.resolve()
+    assert matrix.REUSE_ADMISSION_PATH == contract.V1_3_3_REUSE_ADMISSION_PATH
+    assert matrix.PREHELDOUT_GENESIS_PATH == contract.V1_3_3_PREHELDOUT_GENESIS_PATH
+    assert contract.V1_3_3_ADMISSION_ROOT.parent == contract.V1_3_3_OUTPUT_ROOT.parent
+    assert contract.V1_3_3_ADMISSION_ROOT != contract.V1_3_3_OUTPUT_ROOT
+    assert not contract.V1_3_3_REUSE_ADMISSION_PATH.is_relative_to(contract.V1_3_3_OUTPUT_ROOT)
+    assert not contract.V1_3_3_PREHELDOUT_GENESIS_PATH.is_relative_to(contract.V1_3_3_OUTPUT_ROOT)
 
 
 def test_generated_modules_import_only_the_v1_3_controller_pipeline() -> None:
@@ -355,7 +362,7 @@ def test_admission_failure_precedes_every_evaluator_cuda_probe(
     monkeypatch.setattr(evaluator, "_assert_repository_import_origins", lambda: None)
     monkeypatch.setattr(
         evaluator.admission,
-        "establish_v1_3_2_quality_context",
+        "establish_v1_3_3_quality_context",
         lambda *_a, **_k: context,
     )
     monkeypatch.setattr(
@@ -592,13 +599,13 @@ def test_child_uses_fresh_pycache_prefix_and_rejects_rogue_package_origin(
         )
         monkeypatch.setattr(
             evaluator,
-            "_ADAPTIVE_V4_SEALED_SITE_PACKAGES_V1_3_2",
+            "_ADAPTIVE_V4_SEALED_SITE_PACKAGES_V1_3_3",
             str(site_packages),
             raising=False,
         )
         monkeypatch.setattr(
             evaluator.contract,
-            "v1_3_2_implementation_file_paths",
+            "v1_3_3_implementation_file_paths",
             lambda: (
                 "research/adaptive_v4_memory/scripts/evaluate_p2_direct_controller_shard_v1_3.py",
             ),
@@ -704,7 +711,7 @@ def test_child_uses_fresh_pycache_prefix_and_rejects_rogue_package_origin(
     sealed_global_result = run_bootstrap(
         root=tmp_path,
         files=[inventory_row(tmp_path, bootstrap_global_helper)],
-        source=b"print(_ADAPTIVE_V4_SEALED_SITE_PACKAGES_V1_3_2)\n",
+        source=b"print(_ADAPTIVE_V4_SEALED_SITE_PACKAGES_V1_3_3)\n",
         script=tmp_path / "sealed_evaluator.py",
     )
     assert sealed_global_result.returncode == 0, sealed_global_result.stderr
@@ -838,14 +845,14 @@ def test_runtime_import_guard_accepts_only_exact_sealed_site_packages(
     assert Path(str(typing_extensions.__file__)).resolve().is_relative_to(site_packages)
     monkeypatch.setattr(
         evaluator.contract,
-        "v1_3_2_implementation_file_paths",
+        "v1_3_3_implementation_file_paths",
         lambda: (
             "research/adaptive_v4_memory/scripts/evaluate_p2_direct_controller_shard_v1_3.py",
         ),
     )
     monkeypatch.setattr(
         evaluator,
-        "_ADAPTIVE_V4_SEALED_SITE_PACKAGES_V1_3_2",
+        "_ADAPTIVE_V4_SEALED_SITE_PACKAGES_V1_3_3",
         str(site_packages),
         raising=False,
     )
@@ -873,7 +880,7 @@ def test_runtime_import_guard_accepts_only_exact_sealed_site_packages(
 
     monkeypatch.setattr(
         evaluator,
-        "_ADAPTIVE_V4_SEALED_SITE_PACKAGES_V1_3_2",
+        "_ADAPTIVE_V4_SEALED_SITE_PACKAGES_V1_3_3",
         str(REPOSITORY_ROOT.resolve()),
     )
     with pytest.raises(ValueError, match="not the exact verified runtime root"):
@@ -881,7 +888,7 @@ def test_runtime_import_guard_accepts_only_exact_sealed_site_packages(
 
     monkeypatch.setattr(
         evaluator,
-        "_ADAPTIVE_V4_SEALED_SITE_PACKAGES_V1_3_2",
+        "_ADAPTIVE_V4_SEALED_SITE_PACKAGES_V1_3_3",
         str(site_packages.parent / ".." / site_packages.parent.name / site_packages.name),
     )
     with pytest.raises(ValueError, match="not the exact verified runtime root"):
@@ -891,8 +898,8 @@ def test_runtime_import_guard_accepts_only_exact_sealed_site_packages(
 def test_summary_cli_defaults_cannot_fall_back_to_the_v1_2_output_tree() -> None:
     source = _source("summary")
     assert "default=integrity_audit.INTEGRITY_OUTPUT" in source
-    assert "default=contract.V1_3_2_MATRIX_SUMMARY_PATH" in source
-    assert "default=contract.V1_3_2_OUTPUT_ROOT" in source
+    assert "default=contract.V1_3_3_MATRIX_SUMMARY_PATH" in source
+    assert "default=contract.V1_3_3_OUTPUT_ROOT" in source
     assert "confirmatory_comparator_rule" in source
     assert "strongest_fixed_comparator_rule" not in source
 
@@ -910,7 +917,7 @@ def test_entrypoint_clis_forward_explicit_key_path_with_sanitized_environment(
     def fake_run_matrix(**kwargs: object) -> dict[str, object]:
         matrix_call.update(kwargs)
         return {
-            "experiment_id": contract.V1_3_2_MATRIX_EXPERIMENT_ID,
+            "experiment_id": contract.V1_3_3_MATRIX_EXPERIMENT_ID,
             "status": "terminal",
             "integrity_status": "INTEGRITY-PASS",
             "completed_shards": matrix.EXPECTED_SHARDS,
@@ -999,7 +1006,7 @@ def test_prerequisites_only_cli_has_a_dedicated_nonledger_result_schema(
         matrix,
         "run_matrix",
         lambda **_kwargs: {
-            "experiment_id": contract.V1_3_2_MATRIX_EXPERIMENT_ID,
+            "experiment_id": contract.V1_3_3_MATRIX_EXPERIMENT_ID,
             "status": "prerequisites_validated",
             "expected_shards": matrix.EXPECTED_SHARDS,
         },
@@ -1008,7 +1015,7 @@ def test_prerequisites_only_cli_has_a_dedicated_nonledger_result_schema(
         sys,
         "argv",
         [
-            "matrix-v1-3-2",
+            "matrix-v1-3-3",
             "--attestation-key-path",
             str(key_path),
             "--start-mode",
@@ -1017,7 +1024,7 @@ def test_prerequisites_only_cli_has_a_dedicated_nonledger_result_schema(
     )
     assert matrix.main() == 0
     assert json.loads(capsys.readouterr().out) == {
-        "experiment_id": contract.V1_3_2_MATRIX_EXPERIMENT_ID,
+        "experiment_id": contract.V1_3_3_MATRIX_EXPERIMENT_ID,
         "expected_shards": matrix.EXPECTED_SHARDS,
         "status": "prerequisites_validated",
     }
@@ -1126,7 +1133,7 @@ def test_quality_start_mode_and_stop_limit_truth_table_precedes_layout(
             matrix.run_matrix(start_mode=start_mode, max_new_cells=limit)
 
 
-def test_v1_3_2_single_worker_topology_rejects_before_any_mutating_lock(
+def test_v1_3_3_single_worker_topology_rejects_before_any_mutating_lock(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(matrix, "_require_launcher_authority", lambda: {})
@@ -1442,7 +1449,7 @@ def test_runner_rejects_nested_coordinate_scoped_activation_promotion() -> None:
         bundles={},
         public_binding=public_binding,
     )
-    scoped = matrix.admission.ValidatedQualityStartActivationV1_3_2(
+    scoped = matrix.admission.ValidatedQualityStartActivationV1_3_3(
         _seal=object(),
         payload={"base_prerequisites_binding": public_binding},
         public_binding={"activation": "binding"},
@@ -1451,6 +1458,7 @@ def test_runner_rejects_nested_coordinate_scoped_activation_promotion() -> None:
         preheldout_genesis=SimpleNamespace(),
         superseded_empty_lineage=SimpleNamespace(),
         superseded_failure_lineage=SimpleNamespace(),
+        superseded_prerequisite_failure_lineage=SimpleNamespace(),
         consumer_coordinate=(contract.SCALES[0], contract.TRAINING_SEEDS[0]),
         root_identity={},
         matrix_lock_binding={},
@@ -1539,7 +1547,7 @@ def test_mutating_lock_paths_reject_authority_key_and_hardlink_aliases(
         )
     with pytest.raises(ValueError, match="overlaps"):
         matrix._validate_quality_mutating_lock_path(
-            matrix.admission.V1_3_2_ACTIVATION_BOOTSTRAP_LOCK_PATH,
+            matrix.admission.V1_3_3_ACTIVATION_BOOTSTRAP_LOCK_PATH,
             layout=layout,
             manifest_path=manifest_path,
             attestation_key_path=None,
@@ -1589,7 +1597,7 @@ def test_source_provenance_distinguishes_pinned_head_from_frozen_source_commit(
     ).encode()
     provenance = {
         "schema_version": 1,
-        "launcher": "p2-direct-controller-git-object-launcher-v1-3-2",
+        "launcher": "p2-direct-controller-git-object-launcher-v1-3-3",
         "repository_root": str(REPOSITORY_ROOT.resolve()),
         "bundle_sha256": "4" * 64,
         "pinned_head_oid": pinned_head,
@@ -1604,13 +1612,13 @@ def test_source_provenance_distinguishes_pinned_head_from_frozen_source_commit(
             "source_base64": base64.b64encode(manifest_source).decode("ascii"),
         },
     }
-    monkeypatch.setattr(matrix, "SEALED_SOURCE_PROVENANCE_V1_3_2", provenance)
+    monkeypatch.setattr(matrix, "SEALED_SOURCE_PROVENANCE_V1_3_3", provenance)
     assert matrix._validated_source_provenance() == provenance
     assert source_commit != pinned_head
 
     mismatched = dict(provenance)
     mismatched["frozen_source_commit"] = "6" * 40
-    monkeypatch.setattr(matrix, "SEALED_SOURCE_PROVENANCE_V1_3_2", mismatched)
+    monkeypatch.setattr(matrix, "SEALED_SOURCE_PROVENANCE_V1_3_3", mismatched)
     with pytest.raises(ValueError, match="decoded HEAD manifest implementation"):
         matrix._validated_source_provenance()
 
@@ -1623,15 +1631,15 @@ def test_audit_and_summary_routes_are_active_only_for_their_own_entrypoint(
     summary_route = _sealed_route("summary")
     alternate_audit_route = _sealed_route("audit", sha_digit="8")
     for module in (audit, summary):
-        monkeypatch.setattr(module, "SEALED_LAUNCH_AUTHORITY_V1_3_2", authority)
-        monkeypatch.setattr(module, "SEALED_PYTHON_RUNTIME_V1_3_2", runtime)
-        monkeypatch.setattr(module, "SEALED_SOURCE_PROVENANCE_V1_3_2", source_provenance)
-    monkeypatch.setattr(matrix, "SEALED_LAUNCH_AUTHORITY_V1_3_2", None)
-    monkeypatch.setattr(matrix, "SEALED_PYTHON_RUNTIME_V1_3_2", None)
-    monkeypatch.setattr(matrix, "SEALED_SOURCE_PROVENANCE_V1_3_2", None)
-    monkeypatch.setattr(matrix, "SEALED_LAUNCH_ROUTING_V1_3_2", None)
+        monkeypatch.setattr(module, "SEALED_LAUNCH_AUTHORITY_V1_3_3", authority)
+        monkeypatch.setattr(module, "SEALED_PYTHON_RUNTIME_V1_3_3", runtime)
+        monkeypatch.setattr(module, "SEALED_SOURCE_PROVENANCE_V1_3_3", source_provenance)
+    monkeypatch.setattr(matrix, "SEALED_LAUNCH_AUTHORITY_V1_3_3", None)
+    monkeypatch.setattr(matrix, "SEALED_PYTHON_RUNTIME_V1_3_3", None)
+    monkeypatch.setattr(matrix, "SEALED_SOURCE_PROVENANCE_V1_3_3", None)
+    monkeypatch.setattr(matrix, "SEALED_LAUNCH_ROUTING_V1_3_3", None)
 
-    monkeypatch.setattr(audit, "SEALED_LAUNCH_ROUTING_V1_3_2", audit_route)
+    monkeypatch.setattr(audit, "SEALED_LAUNCH_ROUTING_V1_3_3", audit_route)
     assert audit._active_audit_launch_routing() == audit_route
     assert (
         audit._validate_audit_launch_routing_snapshot(
@@ -1644,7 +1652,7 @@ def test_audit_and_summary_routes_are_active_only_for_their_own_entrypoint(
             alternate_audit_route, source_provenance=source_provenance
         )
 
-    monkeypatch.setattr(audit, "SEALED_LAUNCH_ROUTING_V1_3_2", None)
+    monkeypatch.setattr(audit, "SEALED_LAUNCH_ROUTING_V1_3_3", None)
     assert (
         audit._validate_audit_launch_routing_snapshot(
             alternate_audit_route, source_provenance=source_provenance
@@ -1656,10 +1664,10 @@ def test_audit_and_summary_routes_are_active_only_for_their_own_entrypoint(
             summary_route, source_provenance=source_provenance
         )
 
-    monkeypatch.setattr(summary, "SEALED_LAUNCH_ROUTING_V1_3_2", summary_route)
+    monkeypatch.setattr(summary, "SEALED_LAUNCH_ROUTING_V1_3_3", summary_route)
     assert summary._active_summary_launch_routing() == summary_route
-    assert audit.SEALED_LAUNCH_ROUTING_V1_3_2 is None
-    assert matrix.SEALED_LAUNCH_ROUTING_V1_3_2 is None
+    assert audit.SEALED_LAUNCH_ROUTING_V1_3_3 is None
+    assert matrix.SEALED_LAUNCH_ROUTING_V1_3_3 is None
 
 
 def test_matrix_session_crosscheck_binds_actual_argv_and_recovered_eof() -> None:
@@ -2387,7 +2395,7 @@ def test_evaluator_ready_only_role_accepts_only_eof_before_any_work_or_publicati
     output = output_root / "forbidden-envelope.json"
     plan = {
         "session_nonce": "1" * 64,
-        "session_role": contract.V1_3_2_READY_ONLY_PREFLIGHT_SESSION_ROLE,
+        "session_role": contract.V1_3_3_READY_ONLY_PREFLIGHT_SESSION_ROLE,
         "scale": coordinate["scale"],
         "training_seed": coordinate["training_seed"],
         "coordinates": [coordinate],

@@ -83,104 +83,104 @@ def _insert_generated_header(text: str) -> str:
     return text.replace(f"{marker}\n", f"{marker}\n{GENERATED_HEADER}", 1)
 
 
-def _upgrade_generated_contract_to_v1_3_2(text: str) -> str:
-    """Move every generated quality authority reference into the v1.3.2 namespace."""
+def _upgrade_generated_contract_to_v1_3_3(text: str) -> str:
+    """Move every generated quality authority reference into the v1.3.3 namespace."""
 
     replacements = (
-        ("contract.SHARD_EXPERIMENT_ID", "contract.V1_3_2_SHARD_EXPERIMENT_ID"),
-        ("contract.MATRIX_EXPERIMENT_ID", "contract.V1_3_2_MATRIX_EXPERIMENT_ID"),
+        ("contract.SHARD_EXPERIMENT_ID", "contract.V1_3_3_SHARD_EXPERIMENT_ID"),
+        ("contract.MATRIX_EXPERIMENT_ID", "contract.V1_3_3_MATRIX_EXPERIMENT_ID"),
         (
             "contract.WORKER_LEDGER_EXPERIMENT_ID",
-            "contract.V1_3_2_WORKER_LEDGER_EXPERIMENT_ID",
+            "contract.V1_3_3_WORKER_LEDGER_EXPERIMENT_ID",
         ),
-        ("contract.INTEGRITY_EXPERIMENT_ID", "contract.V1_3_2_INTEGRITY_EXPERIMENT_ID"),
-        ("contract.SUMMARY_EXPERIMENT_ID", "contract.V1_3_2_SUMMARY_EXPERIMENT_ID"),
-        ("contract.SHARD_ATTESTATION_PURPOSE", "contract.V1_3_2_SHARD_ATTESTATION_PURPOSE"),
-        ("contract.MATRIX_ATTESTATION_PURPOSE", "contract.V1_3_2_MATRIX_ATTESTATION_PURPOSE"),
+        ("contract.INTEGRITY_EXPERIMENT_ID", "contract.V1_3_3_INTEGRITY_EXPERIMENT_ID"),
+        ("contract.SUMMARY_EXPERIMENT_ID", "contract.V1_3_3_SUMMARY_EXPERIMENT_ID"),
+        ("contract.SHARD_ATTESTATION_PURPOSE", "contract.V1_3_3_SHARD_ATTESTATION_PURPOSE"),
+        ("contract.MATRIX_ATTESTATION_PURPOSE", "contract.V1_3_3_MATRIX_ATTESTATION_PURPOSE"),
         (
             "contract.WORKER_LEDGER_ATTESTATION_PURPOSE",
-            "contract.V1_3_2_WORKER_LEDGER_ATTESTATION_PURPOSE",
+            "contract.V1_3_3_WORKER_LEDGER_ATTESTATION_PURPOSE",
         ),
         (
             "contract.INTEGRITY_ATTESTATION_PURPOSE",
-            "contract.V1_3_2_INTEGRITY_ATTESTATION_PURPOSE",
+            "contract.V1_3_3_INTEGRITY_ATTESTATION_PURPOSE",
         ),
-        ("contract.SUMMARY_ATTESTATION_PURPOSE", "contract.V1_3_2_SUMMARY_ATTESTATION_PURPOSE"),
-        ("contract.INTEGRITY_OUTPUT_PATH", "contract.V1_3_2_INTEGRITY_OUTPUT_PATH"),
-        ("contract.SUMMARY_OUTPUT_PATH", "contract.V1_3_2_SUMMARY_OUTPUT_PATH"),
-        ("contract.MATRIX_SUMMARY_PATH", "contract.V1_3_2_MATRIX_SUMMARY_PATH"),
-        ("contract.REUSE_ADMISSION_PATH", "contract.V1_3_2_REUSE_ADMISSION_PATH"),
+        ("contract.SUMMARY_ATTESTATION_PURPOSE", "contract.V1_3_3_SUMMARY_ATTESTATION_PURPOSE"),
+        ("contract.INTEGRITY_OUTPUT_PATH", "contract.V1_3_3_INTEGRITY_OUTPUT_PATH"),
+        ("contract.SUMMARY_OUTPUT_PATH", "contract.V1_3_3_SUMMARY_OUTPUT_PATH"),
+        ("contract.MATRIX_SUMMARY_PATH", "contract.V1_3_3_MATRIX_SUMMARY_PATH"),
+        ("contract.REUSE_ADMISSION_PATH", "contract.V1_3_3_REUSE_ADMISSION_PATH"),
         (
             "contract.PREHELDOUT_GENESIS_PATH",
-            "contract.V1_3_2_PREHELDOUT_GENESIS_PATH",
+            "contract.V1_3_3_PREHELDOUT_GENESIS_PATH",
         ),
-        ("contract.IMPLEMENTATION_PATHS", "contract.V1_3_2_IMPLEMENTATION_PATHS"),
-        ("contract.MANIFEST_PATH", "contract.V1_3_2_MANIFEST_PATH"),
-        ("contract.OUTPUT_ROOT", "contract.V1_3_2_OUTPUT_ROOT"),
-        ("contract.EXPERIMENT_ID", "contract.V1_3_2_EXPERIMENT_ID"),
+        ("contract.IMPLEMENTATION_PATHS", "contract.V1_3_3_IMPLEMENTATION_PATHS"),
+        ("contract.MANIFEST_PATH", "contract.V1_3_3_MANIFEST_PATH"),
+        ("contract.OUTPUT_ROOT", "contract.V1_3_3_OUTPUT_ROOT"),
+        ("contract.EXPERIMENT_ID", "contract.V1_3_3_EXPERIMENT_ID"),
         (
             "contract.implementation_tree_digest()",
-            "contract.v1_3_2_implementation_tree_digest()",
+            "contract.v1_3_3_implementation_tree_digest()",
         ),
         (
             "contract.implementation_file_paths()",
-            "contract.v1_3_2_implementation_file_paths()",
+            "contract.v1_3_3_implementation_file_paths()",
         ),
     )
     for old, new in replacements:
         text = text.replace(old, new)
     # Fragments added by v1.3.1 must be retagged before the broader V1_3
     # compatibility names below are upgraded.  Otherwise the prefix replacement
-    # turns ``V1_3_1`` into the malformed and unsealed ``V1_3_2_1`` namespace.
+    # turns ``V1_3_1`` into the malformed and unsealed ``V1_3_3_1`` namespace.
     for old, new in (
-        ("V1_3_1", "V1_3_2"),
-        ("v1_3_1", "v1_3_2"),
-        ("V1.3.1", "V1.3.2"),
-        ("v1.3.1", "v1.3.2"),
-        ("V1-3-1", "V1-3-2"),
-        ("v1-3-1", "v1-3-2"),
+        ("V1_3_1", "V1_3_3"),
+        ("v1_3_1", "v1_3_3"),
+        ("V1.3.1", "V1.3.3"),
+        ("v1.3.1", "v1.3.3"),
+        ("V1-3-1", "V1-3-3"),
+        ("v1-3-1", "v1-3-3"),
     ):
         text = text.replace(old, new)
 
     global_upgrades = (
-        ("SEALED_LAUNCH_AUTHORITY_V1_3", "SEALED_LAUNCH_AUTHORITY_V1_3_2"),
-        ("SEALED_PYTHON_RUNTIME_V1_3", "SEALED_PYTHON_RUNTIME_V1_3_2"),
-        ("SEALED_SOURCE_PROVENANCE_V1_3", "SEALED_SOURCE_PROVENANCE_V1_3_2"),
-        ("SEALED_LAUNCH_ROUTING_V1_3", "SEALED_LAUNCH_ROUTING_V1_3_2"),
+        ("SEALED_LAUNCH_AUTHORITY_V1_3", "SEALED_LAUNCH_AUTHORITY_V1_3_3"),
+        ("SEALED_PYTHON_RUNTIME_V1_3", "SEALED_PYTHON_RUNTIME_V1_3_3"),
+        ("SEALED_SOURCE_PROVENANCE_V1_3", "SEALED_SOURCE_PROVENANCE_V1_3_3"),
+        ("SEALED_LAUNCH_ROUTING_V1_3", "SEALED_LAUNCH_ROUTING_V1_3_3"),
     )
     for index, (old, new) in enumerate(global_upgrades):
-        placeholder = f"__PRESERVED_V1_3_2_GLOBAL_{index}__"
+        placeholder = f"__PRESERVED_V1_3_3_GLOBAL_{index}__"
         text = text.replace(new, placeholder)
         text = text.replace(old, new)
         text = text.replace(placeholder, new)
     for old, new in (
         (
             "ADAPTIVE_V4_CANONICAL_DIRECT_EXACT_FILL_V1_3_EVALUATOR_FD",
-            "ADAPTIVE_V4_CANONICAL_DIRECT_EXACT_FILL_V1_3_2_EVALUATOR_FD",
+            "ADAPTIVE_V4_CANONICAL_DIRECT_EXACT_FILL_V1_3_3_EVALUATOR_FD",
         ),
         (
             "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_IMPORT_INVENTORY_FD",
-            "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_2_IMPORT_INVENTORY_FD",
+            "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_3_IMPORT_INVENTORY_FD",
         ),
         (
             "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_PERSISTENT_PLAN_FD",
-            "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_2_PERSISTENT_PLAN_FD",
+            "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_3_PERSISTENT_PLAN_FD",
         ),
         (
             "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_PROJECTED_REMAINING_SHARDS",
-            "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_2_PROJECTED_REMAINING_SHARDS",
+            "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_3_PROJECTED_REMAINING_SHARDS",
         ),
         (
             "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_PROJECTED_REMAINING_TOKEN_ROWS",
-            "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_2_PROJECTED_REMAINING_TOKEN_ROWS",
+            "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_3_PROJECTED_REMAINING_TOKEN_ROWS",
         ),
-        ("exact-fill-v1-3-cell.claim", "exact-fill-v1-3-2-cell.claim"),
-        ("exact-fill-v1-3-import-inventory", "exact-fill-v1-3-2-import-inventory"),
-        ("exact-fill-v1-3-pycache", "exact-fill-v1-3-2-pycache"),
-        ("exact-fill-v1-3-matrix", "exact-fill-v1-3-2-matrix"),
-        ("paper-grade v1.3 exact-fill", "paper-grade v1.3.2 exact-fill"),
-        ("live v1.3 quality context", "live v1.3.2 quality context"),
-        ("Bound v1.3 manifest", "Bound v1.3.2 manifest"),
+        ("exact-fill-v1-3-cell.claim", "exact-fill-v1-3-3-cell.claim"),
+        ("exact-fill-v1-3-import-inventory", "exact-fill-v1-3-3-import-inventory"),
+        ("exact-fill-v1-3-pycache", "exact-fill-v1-3-3-pycache"),
+        ("exact-fill-v1-3-matrix", "exact-fill-v1-3-3-matrix"),
+        ("paper-grade v1.3 exact-fill", "paper-grade v1.3.3 exact-fill"),
+        ("live v1.3 quality context", "live v1.3.3 quality context"),
+        ("Bound v1.3 manifest", "Bound v1.3.3 manifest"),
     ):
         text = text.replace(old, new)
     return text
@@ -188,15 +188,15 @@ def _upgrade_generated_contract_to_v1_3_2(text: str) -> str:
 
 def _sealed_entrypoint_preamble(*, selector: str, relative_path: str) -> str:
     return f'''if __name__ == "__main__":
-    _launcher_sentinel = globals().get("_ADAPTIVE_V4_GIT_OBJECT_LAUNCH_SENTINEL_V1_3_2")
+    _launcher_sentinel = globals().get("_ADAPTIVE_V4_GIT_OBJECT_LAUNCH_SENTINEL_V1_3_3")
     if _launcher_sentinel != {{
         "schema_version": 1,
-        "launcher": "p2-direct-controller-git-object-launcher-v1-3-2",
+        "launcher": "p2-direct-controller-git-object-launcher-v1-3-3",
         "sealed_runner": True,
         "sealed_inventory": True,
     }}:
         raise RuntimeError("Direct controller sealed launcher sentinel drifted.")
-    _python_runtime = globals().get("_ADAPTIVE_V4_GIT_OBJECT_PYTHON_RUNTIME_V1_3_2")
+    _python_runtime = globals().get("_ADAPTIVE_V4_GIT_OBJECT_PYTHON_RUNTIME_V1_3_3")
     if not isinstance(_python_runtime, dict) or set(_python_runtime) != {{
         "schema_version", "implementation", "cache_tag", "version", "executable",
         "venv_executable", "resolved_executable", "executable_sha256",
@@ -204,7 +204,7 @@ def _sealed_entrypoint_preamble(*, selector: str, relative_path: str) -> str:
     }}:
         raise RuntimeError("Direct controller sealed Python runtime binding is missing.")
     _source_provenance = globals().get(
-        "_ADAPTIVE_V4_GIT_OBJECT_SOURCE_PROVENANCE_V1_3_2"
+        "_ADAPTIVE_V4_GIT_OBJECT_SOURCE_PROVENANCE_V1_3_3"
     )
     if not isinstance(_source_provenance, dict) or set(_source_provenance) != {{
         "schema_version", "launcher", "repository_root", "bundle_sha256",
@@ -212,7 +212,7 @@ def _sealed_entrypoint_preamble(*, selector: str, relative_path: str) -> str:
         "head_manifest",
     }}:
         raise RuntimeError("Direct controller sealed source provenance is missing.")
-    _launch_routing = globals().get("_ADAPTIVE_V4_GIT_OBJECT_LAUNCH_ROUTING_V1_3_2")
+    _launch_routing = globals().get("_ADAPTIVE_V4_GIT_OBJECT_LAUNCH_ROUTING_V1_3_3")
     if not isinstance(_launch_routing, dict) or set(_launch_routing) != {{
         "schema_version", "launcher", "entrypoint_selector", "entrypoint_relative_path",
         "source_bundle_sha256", "git_mode", "git_blob_oid", "sha256", "bytes",
@@ -224,7 +224,7 @@ def _sealed_entrypoint_preamble(*, selector: str, relative_path: str) -> str:
     if (
         _launch_routing.get("schema_version") != 1
         or _launch_routing.get("launcher")
-        != "p2-direct-controller-git-object-launcher-v1-3-2"
+        != "p2-direct-controller-git-object-launcher-v1-3-3"
         or _launch_routing.get("entrypoint_selector") != {selector!r}
         or _launch_routing.get("entrypoint_relative_path") != {relative_path!r}
         or _launch_routing.get("source_bundle_sha256")
@@ -239,16 +239,16 @@ def _sealed_entrypoint_preamble(*, selector: str, relative_path: str) -> str:
         or globals().get("__file__") != _expected_entrypoint
     ):
         raise RuntimeError("Direct controller sealed launch routing drifted.")
-    SEALED_LAUNCH_AUTHORITY_V1_3_2 = dict(_launcher_sentinel)
-    SEALED_PYTHON_RUNTIME_V1_3_2 = dict(_python_runtime)
-    SEALED_SOURCE_PROVENANCE_V1_3_2 = dict(_source_provenance)
-    SEALED_LAUNCH_ROUTING_V1_3_2 = dict(_launch_routing)
+    SEALED_LAUNCH_AUTHORITY_V1_3_3 = dict(_launcher_sentinel)
+    SEALED_PYTHON_RUNTIME_V1_3_3 = dict(_python_runtime)
+    SEALED_SOURCE_PROVENANCE_V1_3_3 = dict(_source_provenance)
+    SEALED_LAUNCH_ROUTING_V1_3_3 = dict(_launch_routing)
     del _launcher_sentinel, _python_runtime, _source_provenance, _launch_routing
     del _expected_entrypoint
-    globals().pop("_ADAPTIVE_V4_GIT_OBJECT_LAUNCH_SENTINEL_V1_3_2", None)
-    globals().pop("_ADAPTIVE_V4_GIT_OBJECT_PYTHON_RUNTIME_V1_3_2", None)
-    globals().pop("_ADAPTIVE_V4_GIT_OBJECT_SOURCE_PROVENANCE_V1_3_2", None)
-    globals().pop("_ADAPTIVE_V4_GIT_OBJECT_LAUNCH_ROUTING_V1_3_2", None)
+    globals().pop("_ADAPTIVE_V4_GIT_OBJECT_LAUNCH_SENTINEL_V1_3_3", None)
+    globals().pop("_ADAPTIVE_V4_GIT_OBJECT_PYTHON_RUNTIME_V1_3_3", None)
+    globals().pop("_ADAPTIVE_V4_GIT_OBJECT_SOURCE_PROVENANCE_V1_3_3", None)
+    globals().pop("_ADAPTIVE_V4_GIT_OBJECT_LAUNCH_ROUTING_V1_3_3", None)
 
 '''
 
@@ -934,11 +934,11 @@ def arm_execution_order(schedule_index: int) -> tuple[str, ...]:
 
 
 EVALUATOR_IMPORT_GUARD = r'''
-def _sealed_site_packages_root_v1_3_2() -> Path:
-    raw = globals().get("_ADAPTIVE_V4_SEALED_SITE_PACKAGES_V1_3_2")
+def _sealed_site_packages_root_v1_3_3() -> Path:
+    raw = globals().get("_ADAPTIVE_V4_SEALED_SITE_PACKAGES_V1_3_3")
     _require(
         isinstance(raw, str) and bool(raw),
-        "Sealed v1.3.2 site-packages authority is missing.",
+        "Sealed v1.3.3 site-packages authority is missing.",
     )
     sealed = cast(str, raw)
     repository_root = REPOSITORY_ROOT.resolve(strict=True)
@@ -956,7 +956,7 @@ def _sealed_site_packages_root_v1_3_2() -> Path:
         resolved = lexical.resolve(strict=True)
         expected_resolved = expected.resolve(strict=True)
     except (OSError, RuntimeError) as error:
-        raise ValueError("Sealed v1.3.2 site-packages authority is not exact.") from error
+        raise ValueError("Sealed v1.3.3 site-packages authority is not exact.") from error
     _require(
         sealed == str(lexical)
         and lexical == resolved
@@ -964,7 +964,7 @@ def _sealed_site_packages_root_v1_3_2() -> Path:
         and expected == expected_resolved
         and lexical.is_dir()
         and not lexical.is_symlink(),
-        "Sealed v1.3.2 site-packages authority is not the exact verified runtime root.",
+        "Sealed v1.3.3 site-packages authority is not the exact verified runtime root.",
     )
     return lexical
 
@@ -973,7 +973,7 @@ def _assert_repository_import_origins(
     modules: Mapping[str, Any] | None = None,
 ) -> None:
     repository_root = REPOSITORY_ROOT.resolve(strict=True)
-    site_packages_root = _sealed_site_packages_root_v1_3_2()
+    site_packages_root = _sealed_site_packages_root_v1_3_3()
     allowed_files = {
         (repository_root / relative).resolve(strict=True)
         for relative in contract.implementation_file_paths()
@@ -1801,7 +1801,7 @@ g = {
     "__name__": "__main__",
     "__file__": p,
     "__package__": None,
-    "_ADAPTIVE_V4_SEALED_SITE_PACKAGES_V1_3_2": site_packages,
+    "_ADAPTIVE_V4_SEALED_SITE_PACKAGES_V1_3_3": site_packages,
 }
 exec(compile(data, p, "exec"), g, g)
 '''
@@ -4568,7 +4568,7 @@ def _ensure_ready_only_preflight(
     evaluator_snapshot: CanonicalEvaluatorSnapshot,
     evaluator_binding: Mapping[str, Any],
     prerequisites: FrozenPrerequisites,
-    activation_lease: admission.QualityStartActivationLeaseV1_3_2,
+    activation_lease: admission.QualityStartActivationLeaseV1_3_3,
     launch_authority_nonce: str,
     gpu_lease_binding: Mapping[str, Any],
     gpu_lease: GPULockLease,
@@ -6040,7 +6040,7 @@ def _generate_evaluator(source: str) -> str:
     _require("top_p_match" not in text, "Evaluator retained a top-p match input.")
     _require("validate_calibration_artifact" not in text, "Evaluator retained live v1.2 validation.")
     _require("establish_provenance" not in text, "Evaluator retained live v1.2 provenance.")
-    return _insert_generated_header(_upgrade_generated_contract_to_v1_3_2(text))
+    return _insert_generated_header(_upgrade_generated_contract_to_v1_3_3(text))
 
 
 def _generate_runner(source: str) -> str:
@@ -7525,7 +7525,7 @@ def _generate_runner(source: str) -> str:
     )
     text = text.replace(
         'f"p2-direct-controller-worker-{worker_index}-of-{worker_count}"',
-        'f"p2-direct-controller-exact-fill-v1-3-2-worker-{worker_index}-of-{worker_count}"',
+        'f"p2-direct-controller-exact-fill-v1-3-3-worker-{worker_index}-of-{worker_count}"',
     )
     text = text.replace(
         '"p2-direct-controller-matrix-single"',
@@ -7632,7 +7632,7 @@ def _generate_runner(source: str) -> str:
                 gpu_lease.assert_held()
                 device_context = _capture_selected_device_context(gpu_lease)
                 device_guard_lease = _acquire_selected_device_guard(
-                    label=f"p2-direct-controller-exact-fill-v1-3-2-worker-{worker_index}-of-{worker_count}",
+                    label=f"p2-direct-controller-exact-fill-v1-3-3-worker-{worker_index}-of-{worker_count}",
                     device_context=device_context,
                     scheduler_lease=gpu_lease,
                 )
@@ -7664,7 +7664,7 @@ def _generate_runner(source: str) -> str:
                 gpu_lease.assert_held()
                 device_context = _capture_selected_device_context(gpu_lease)
                 device_guard_lease = _acquire_selected_device_guard(
-                    label=f"p2-direct-controller-exact-fill-v1-3-2-worker-{worker_index}-of-{worker_count}",
+                    label=f"p2-direct-controller-exact-fill-v1-3-3-worker-{worker_index}-of-{worker_count}",
                     device_context=device_context,
                     scheduler_lease=gpu_lease,
                 )
@@ -8121,7 +8121,7 @@ def _generate_runner(source: str) -> str:
         'help="Unsupported by the frozen v1.3.1 single-worker topology.",',
     )
     _require("top_p" not in text.lower(), "Runner retained a top-p prerequisite or identifier.")
-    generated = _insert_generated_header(_upgrade_generated_contract_to_v1_3_2(text))
+    generated = _insert_generated_header(_upgrade_generated_contract_to_v1_3_3(text))
     return _insert_sealed_entrypoint_preamble(
         generated,
         selector="matrix",
@@ -8708,7 +8708,7 @@ def _integrity_payload(
         count=1,
     )
     _require("top_p" not in text.lower(), "Audit retained a top-p prerequisite or identifier.")
-    generated = _insert_generated_header(_upgrade_generated_contract_to_v1_3_2(text))
+    generated = _insert_generated_header(_upgrade_generated_contract_to_v1_3_3(text))
     return _insert_sealed_entrypoint_preamble(
         generated,
         selector="audit",
@@ -9257,7 +9257,7 @@ def _register_external_bindings(
         count=1,
     )
     _require("top_p" not in text.lower(), "Summary retained top-p quality data or schema.")
-    generated = _insert_generated_header(_upgrade_generated_contract_to_v1_3_2(text))
+    generated = _insert_generated_header(_upgrade_generated_contract_to_v1_3_3(text))
     return _insert_sealed_entrypoint_preamble(
         generated,
         selector="summary",

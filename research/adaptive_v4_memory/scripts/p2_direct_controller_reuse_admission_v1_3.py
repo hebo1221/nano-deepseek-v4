@@ -123,6 +123,109 @@ V1_3_2_REUSE_ADMISSION_PURPOSE = "p2-direct-v1.3.2-reuse-admission-v1"
 V1_3_2_PREHELDOUT_GENESIS_PURPOSE = "p2-direct-v1.3.2-preheldout-genesis-v1"
 V1_3_2_QUALITY_START_ACTIVATION_PURPOSE = "p2-direct-v1.3.2-quality-start-activation-v1"
 
+# Prospective v1.3.3 admission-view-schema amendment.  The immutable v1.3.2
+# exact-two static bundle below is an authenticated failed prerequisite, never
+# an active v1.3.3 admission and never a publication target.
+V1_3_3_QUALITY_EXPERIMENT_ID = "p2-post-rank-direct-controller-exact-fill-v1.3.3"
+V1_3_3_MANIFEST_RELATIVE_PATH = Path(
+    "research/adaptive_v4_memory/manifests/p2-post-rank-direct-controller-exact-fill-v1-3-3.json"
+)
+V1_3_3_QUALITY_OUTPUT_ROOT = Path(
+    "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-3"
+)
+V1_3_3_ADMISSION_ROOT = V1_3_3_QUALITY_OUTPUT_ROOT.parent / "controller-exact-fill-v1-3-3-admission"
+V1_3_3_DEFAULT_ADMISSION_PATH = V1_3_3_ADMISSION_ROOT / "historical-reuse-admission.json"
+V1_3_3_DEFAULT_GENESIS_PATH = V1_3_3_ADMISSION_ROOT / "preheldout-genesis.json"
+V1_3_3_ACTIVATION_ROOT = (
+    V1_3_3_QUALITY_OUTPUT_ROOT.parent / "controller-exact-fill-v1-3-3-activation"
+)
+V1_3_3_ACTIVATION_MATRIX_LOCK_PATH = V1_3_3_ACTIVATION_ROOT / "matrix.lock"
+V1_3_3_QUALITY_START_ACTIVATION_PATH = V1_3_3_ACTIVATION_ROOT / "quality-start-activation.json"
+V1_3_3_MATRIX_SUMMARY_PATH = V1_3_3_QUALITY_OUTPUT_ROOT / "controller-matrix.summary.json"
+V1_3_3_INTEGRITY_OUTPUT_PATH = (
+    V1_3_3_QUALITY_OUTPUT_ROOT.parent / "controller-exact-fill-v1-3-3.integrity.json"
+)
+V1_3_3_SUMMARY_OUTPUT_PATH = (
+    V1_3_3_QUALITY_OUTPUT_ROOT.parent / "controller-exact-fill-v1-3-3.summary.json"
+)
+V1_3_3_WORKER_LEDGER_ROOT = V1_3_3_QUALITY_OUTPUT_ROOT.parent / (
+    f".{V1_3_3_QUALITY_OUTPUT_ROOT.name}.p2-direct-controller-workers-v1-3-3"
+)
+V1_3_3_PERSISTENT_SESSION_LEDGER_ROOT = V1_3_3_QUALITY_OUTPUT_ROOT.parent / (
+    f".{V1_3_3_QUALITY_OUTPUT_ROOT.name}.p2-direct-controller-persistent-sessions-v1-3-3"
+)
+V1_3_3_PERSISTENT_SESSION_LEDGER_LOCK_PATH = (
+    V1_3_3_PERSISTENT_SESSION_LEDGER_ROOT.parent
+    / f"{V1_3_3_PERSISTENT_SESSION_LEDGER_ROOT.name}.lock"
+)
+V1_3_3_PROSPECTIVE_QUALITY_PATHS = (
+    V1_3_3_QUALITY_OUTPUT_ROOT,
+    V1_3_3_MATRIX_SUMMARY_PATH,
+    V1_3_3_WORKER_LEDGER_ROOT,
+    V1_3_3_PERSISTENT_SESSION_LEDGER_ROOT,
+    V1_3_3_PERSISTENT_SESSION_LEDGER_LOCK_PATH,
+    V1_3_3_INTEGRITY_OUTPUT_PATH,
+    V1_3_3_SUMMARY_OUTPUT_PATH,
+)
+V1_3_3_ADMISSION_STAGING_PREFIX = ".controller-exact-fill-v1-3-3-admission.staging-"
+V1_3_3_ACTIVATION_STAGING_PREFIX = ".controller-exact-fill-v1-3-3-activation.staging-"
+V1_3_3_ACTIVATION_BOOTSTRAP_LOCK_PATH = Path(
+    "/tmp/adaptive-v4-direct-controller-v1-3-3-activation-bootstrap.lock"
+)
+V1_3_3_ACTIVATION_MATRIX_LOCK_SEMANTICS = (
+    "activation-root-precreated-inode-flock-exclusive-process-owner-v1"
+)
+V1_3_3_CANONICAL_GIT_OBJECT_LAUNCHER_ID = "p2-direct-controller-git-object-launcher-v1-3-3"
+V1_3_3_REUSE_ADMISSION_PURPOSE = "p2-direct-v1.3.3-reuse-admission-v1"
+V1_3_3_PREHELDOUT_GENESIS_PURPOSE = "p2-direct-v1.3.3-preheldout-genesis-v1"
+V1_3_3_QUALITY_START_ACTIVATION_PURPOSE = "p2-direct-v1.3.3-quality-start-activation-v1"
+
+# Byte-exact v1.3.2 static-only failure anchors.  C3 contains the
+# implementation; C4 adds only the frozen v1.3.2 manifest.  Validation uses
+# Git objects directly so a later clean v1.3.3 index is neither confused with
+# nor required to equal either historical commit.
+V1_3_2_SUPERSEDED_IMPLEMENTATION_SOURCE_COMMIT = (
+    "92dec29cf6b9e4a4763a80d97e1ccd4569bfa5d6"
+)
+V1_3_2_SUPERSEDED_IMPLEMENTATION_SOURCE_TREE = (
+    "ba3a154a33871f07304a9ce572ae1d144d48b329"
+)
+V1_3_2_SUPERSEDED_IMPLEMENTATION_DIGEST = (
+    "a08c59347d57bcbbb5856739664aaeb3f8ece072e1e9760fd9992f638156e0d0"
+)
+V1_3_2_SUPERSEDED_RESULT_SOURCE_COMMIT = "62f33e9809f76e31c3f7a216b7621d31469488a4"
+V1_3_2_SUPERSEDED_RESULT_SOURCE_TREE = "0ab4c3d64c67e7cf82d5c3d54259eff76738f9f4"
+V1_3_2_SUPERSEDED_MANIFEST_SHA256 = (
+    "14c45f4efd2d0fdde9619944908fa22994524a36e22ec85e3fa596108f7f2056"
+)
+V1_3_2_SUPERSEDED_MANIFEST_BYTES = 70_859
+V1_3_2_SUPERSEDED_ADMISSION_SHA256 = (
+    "5ae8f4d7bc67752ff491db2781b2a8e5130bc6b26cc49648428da3aba886393d"
+)
+V1_3_2_SUPERSEDED_ADMISSION_BYTES = 42_717
+V1_3_2_SUPERSEDED_ADMISSION_PAYLOAD_SHA256 = (
+    "1a635d667dbd96a1380299076b13ce0bf8fcf3a6d236059ff05ee74a39055e8e"
+)
+V1_3_2_SUPERSEDED_ADMISSION_ATTESTATION_PAYLOAD_SHA256 = (
+    "680d7a31d552d6edddc376d9b039276721eb0aeb36657f6915b36dcf3dbf4c89"
+)
+V1_3_2_SUPERSEDED_ADMISSION_ATTESTATION_MAC = (
+    "52a84b079605e19e04ccd59ef08219463aafdeca2e744727feb1ad379aaf0e5f"
+)
+V1_3_2_SUPERSEDED_GENESIS_SHA256 = (
+    "05363b86f5a9cdba0097dfbdb8b9af7810a851c01d7bbe872e71fffa62e28beb"
+)
+V1_3_2_SUPERSEDED_GENESIS_BYTES = 42_281
+V1_3_2_SUPERSEDED_GENESIS_PAYLOAD_SHA256 = (
+    "3d15609f88c17dbc1d60114b1c18374c39cfa1455b973841befca5cbc51a3762"
+)
+V1_3_2_SUPERSEDED_GENESIS_ATTESTATION_PAYLOAD_SHA256 = (
+    "8bf3a8774055b92661c19f8e8548b0302057302c6d85cadefe78392b4d1159d2"
+)
+V1_3_2_SUPERSEDED_GENESIS_ATTESTATION_MAC = (
+    "28e56183c9ea93398dca5b19f08012d16703d1316eb1f04dfa1f09ce3395cbfe"
+)
+
 # Byte-exact v1.3 signed-empty lineage.  Validation below checks every value,
 # both HMAC domains, and live absence of every superseded prospective path.
 V1_3_SUPERSEDED_RESULT_SOURCE_COMMIT = "62ba095614f9614cb85a06f1a043a89a21f7f1dd"
@@ -504,6 +607,9 @@ GENESIS_SCHEMA_VERSION = 1
 V1_3_2_ADMISSION_SCHEMA_VERSION = 1
 V1_3_2_GENESIS_SCHEMA_VERSION = 1
 V1_3_2_ACTIVATION_SCHEMA_VERSION = 1
+V1_3_3_ADMISSION_SCHEMA_VERSION = 1
+V1_3_3_GENESIS_SCHEMA_VERSION = 1
+V1_3_3_ACTIVATION_SCHEMA_VERSION = 1
 SAFE_FILE_MODE = 0o600
 SAFE_DIRECTORY_MODE = 0o700
 HISTORICAL_THREAD_FS_PROBE_TIMEOUT_SECONDS = 10.0
@@ -1577,18 +1683,28 @@ class SupersededZeroQualityFailureLineageV1_3_1:
 
 
 @dataclass(frozen=True)
-class PrestartQualityAuthorityV1_3_2:
+class SupersededStaticOnlyFailureLineageV1_3_2:
+    _seal: object
+    manifest: dict[str, Any]
+    reuse_admission: dict[str, Any]
+    preheldout_genesis: dict[str, Any]
+    public_binding: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class PrestartQualityAuthorityV1_3_3:
     _seal: object
     quality_context: QualityContext
     reuse_admission: ValidatedReuseAdmission
     preheldout_genesis: ValidatedPreheldoutGenesis
     superseded_empty_lineage: SupersededEmptyLineageV1_3
     superseded_failure_lineage: SupersededZeroQualityFailureLineageV1_3_1
+    superseded_prerequisite_failure_lineage: SupersededStaticOnlyFailureLineageV1_3_2
     absence_witness: dict[str, Any]
 
 
 @dataclass(frozen=True)
-class ValidatedQualityStartActivationV1_3_2:
+class ValidatedQualityStartActivationV1_3_3:
     _seal: object
     payload: dict[str, Any]
     public_binding: dict[str, Any]
@@ -1597,22 +1713,23 @@ class ValidatedQualityStartActivationV1_3_2:
     preheldout_genesis: ValidatedPreheldoutGenesis
     superseded_empty_lineage: SupersededEmptyLineageV1_3
     superseded_failure_lineage: SupersededZeroQualityFailureLineageV1_3_1
+    superseded_prerequisite_failure_lineage: SupersededStaticOnlyFailureLineageV1_3_2
     consumer_coordinate: tuple[str, int] | None
     root_identity: dict[str, Any]
     matrix_lock_binding: dict[str, Any]
 
 
 @dataclass(frozen=True)
-class ActivatedConsumerAuthorityV1_3_2:
+class ActivatedConsumerAuthorityV1_3_3:
     _seal: object
-    activation: ValidatedQualityStartActivationV1_3_2
+    activation: ValidatedQualityStartActivationV1_3_3
     reuse_admission: ValidatedReuseAdmission
     preheldout_genesis: ValidatedPreheldoutGenesis
     coordinate: tuple[str, int]
 
 
 @dataclass(frozen=True)
-class _ActivatedConsumerScopeV1_3_2:
+class _ActivatedConsumerScopeV1_3_3:
     _seal: object
     coordinate: tuple[str, int]
     calibration_binding: dict[str, Any]
@@ -1621,17 +1738,18 @@ class _ActivatedConsumerScopeV1_3_2:
 
 _SUPERSEDED_EMPTY_LINEAGE_SEAL = object()
 _SUPERSEDED_ZERO_QUALITY_FAILURE_LINEAGE_V1_3_1_SEAL = object()
-_PRESTART_QUALITY_AUTHORITY_V1_3_2_SEAL = object()
-_VALIDATED_QUALITY_START_ACTIVATION_V1_3_2_SEAL = object()
-_QUALITY_START_ACTIVATION_LEASE_V1_3_2_SEAL = object()
-_ACTIVATED_CONSUMER_AUTHORITY_V1_3_2_SEAL = object()
-_ACTIVATED_CONSUMER_SCOPE_V1_3_2_SEAL = object()
-_ACTIVE_V1_3_2_ACTIVATION_LEASE_FDS: set[int] = set()
-_PENDING_V1_3_2_ACTIVATION_LEASE_IDENTITIES: set[tuple[int, int]] = set()
-_ACTIVE_V1_3_2_ACTIVATION_LEASES_GUARD = threading.Lock()
+_SUPERSEDED_STATIC_ONLY_FAILURE_LINEAGE_V1_3_2_SEAL = object()
+_PRESTART_QUALITY_AUTHORITY_V1_3_3_SEAL = object()
+_VALIDATED_QUALITY_START_ACTIVATION_V1_3_3_SEAL = object()
+_QUALITY_START_ACTIVATION_LEASE_V1_3_3_SEAL = object()
+_ACTIVATED_CONSUMER_AUTHORITY_V1_3_3_SEAL = object()
+_ACTIVATED_CONSUMER_SCOPE_V1_3_3_SEAL = object()
+_ACTIVE_V1_3_3_ACTIVATION_LEASE_FDS: set[int] = set()
+_PENDING_V1_3_3_ACTIVATION_LEASE_IDENTITIES: set[tuple[int, int]] = set()
+_ACTIVE_V1_3_3_ACTIVATION_LEASES_GUARD = threading.Lock()
 
 
-class QualityStartActivationLeaseV1_3_2:
+class QualityStartActivationLeaseV1_3_3:
     """Own the activation-root matrix flock without exposing any key bytes."""
 
     __slots__ = ("_seal", "activation", "_descriptor", "_closed")
@@ -1639,13 +1757,13 @@ class QualityStartActivationLeaseV1_3_2:
     def __init__(
         self,
         seal: object,
-        activation: ValidatedQualityStartActivationV1_3_2,
+        activation: ValidatedQualityStartActivationV1_3_3,
         descriptor: int,
     ) -> None:
         _require(
-            seal is _QUALITY_START_ACTIVATION_LEASE_V1_3_2_SEAL
-            and type(activation) is ValidatedQualityStartActivationV1_3_2
-            and activation._seal is _VALIDATED_QUALITY_START_ACTIVATION_V1_3_2_SEAL
+            seal is _QUALITY_START_ACTIVATION_LEASE_V1_3_3_SEAL
+            and type(activation) is ValidatedQualityStartActivationV1_3_3
+            and activation._seal is _VALIDATED_QUALITY_START_ACTIVATION_V1_3_3_SEAL
             and activation.consumer_coordinate is None
             and type(descriptor) is int
             and descriptor >= 0,
@@ -1655,12 +1773,12 @@ class QualityStartActivationLeaseV1_3_2:
         self.activation = activation
         self._descriptor = descriptor
         self._closed = False
-        with _ACTIVE_V1_3_2_ACTIVATION_LEASES_GUARD:
+        with _ACTIVE_V1_3_3_ACTIVATION_LEASES_GUARD:
             _require(
-                descriptor not in _ACTIVE_V1_3_2_ACTIVATION_LEASE_FDS,
+                descriptor not in _ACTIVE_V1_3_3_ACTIVATION_LEASE_FDS,
                 "Quality-start activation lease descriptor is already registered.",
             )
-            _ACTIVE_V1_3_2_ACTIVATION_LEASE_FDS.add(descriptor)
+            _ACTIVE_V1_3_3_ACTIVATION_LEASE_FDS.add(descriptor)
 
     def fileno(self) -> int:
         self.assert_held()
@@ -1668,12 +1786,12 @@ class QualityStartActivationLeaseV1_3_2:
 
     def assert_held(self) -> None:
         _require(
-            self._seal is _QUALITY_START_ACTIVATION_LEASE_V1_3_2_SEAL and not self._closed,
+            self._seal is _QUALITY_START_ACTIVATION_LEASE_V1_3_3_SEAL and not self._closed,
             "Quality-start activation lease is closed or invalid.",
         )
-        with _ACTIVE_V1_3_2_ACTIVATION_LEASES_GUARD:
+        with _ACTIVE_V1_3_3_ACTIVATION_LEASES_GUARD:
             _require(
-                self._descriptor in _ACTIVE_V1_3_2_ACTIVATION_LEASE_FDS,
+                self._descriptor in _ACTIVE_V1_3_3_ACTIVATION_LEASE_FDS,
                 "Quality-start activation lease is not registered.",
             )
         metadata = os.fstat(self._descriptor)
@@ -1698,12 +1816,12 @@ class QualityStartActivationLeaseV1_3_2:
             self.assert_held()
             fcntl.flock(self._descriptor, fcntl.LOCK_UN)
         finally:
-            with _ACTIVE_V1_3_2_ACTIVATION_LEASES_GUARD:
-                _ACTIVE_V1_3_2_ACTIVATION_LEASE_FDS.discard(self._descriptor)
+            with _ACTIVE_V1_3_3_ACTIVATION_LEASES_GUARD:
+                _ACTIVE_V1_3_3_ACTIVATION_LEASE_FDS.discard(self._descriptor)
             os.close(self._descriptor)
             self._closed = True
 
-    def __enter__(self) -> QualityStartActivationLeaseV1_3_2:
+    def __enter__(self) -> QualityStartActivationLeaseV1_3_3:
         self.assert_held()
         return self
 
@@ -2528,6 +2646,120 @@ def establish_v1_3_2_quality_context(
             "sha256": opened.sha256,
             "bytes": opened.bytes,
             "experiment_id": V1_3_2_QUALITY_EXPERIMENT_ID,
+            "implementation_source_commit": source_commit,
+            "implementation_digest": tree_digest,
+            "live_implementation_inventory_digest": live_inventory["digest"],
+            "live_implementation_file_count": live_inventory["file_count"],
+            "attestation": expected_contract,
+        }
+        opened.assert_unchanged()
+    finally:
+        opened.close()
+    context = QualityContext(
+        manifest_path=path,
+        manifest_binding=binding,
+        source={"commit": cast(str, source["commit"]), "dirty": False},
+        implementation_paths=paths,
+        repository_root=root,
+    )
+    assert_quality_context_unchanged(context)
+    return context
+
+
+def establish_v1_3_3_quality_context(
+    manifest_path: Path,
+    *,
+    implementation_paths: Sequence[str],
+    repository_root: Path = REPOSITORY_ROOT,
+) -> QualityContext:
+    """Establish only the prospective v1.3.3 context from a clean checkout."""
+
+    root = _exact_path(repository_root, label="Repository root", must_exist=True)
+    _require(root.is_dir(), "Repository root is not a directory.")
+    source = _source_state(root)
+    _require(source["dirty"] is False, "Quality context requires a clean result-source checkout.")
+    path = _exact_path(
+        manifest_path,
+        label="Final v1.3.3 manifest",
+        repository_root=root,
+        must_exist=True,
+    )
+    payload, opened = _load_json_nofollow(
+        path,
+        label="Final v1.3.3 manifest",
+        require_canonical_pretty_bytes=True,
+    )
+    try:
+        contract = importlib.import_module("p2_direct_controller_contract_v1_3")
+        raw_validator = getattr(contract, "validate_v1_3_3_manifest_payload", None)
+        canonical_paths = getattr(contract, "V1_3_3_IMPLEMENTATION_PATHS", None)
+        canonical_experiment_id = getattr(contract, "V1_3_3_EXPERIMENT_ID", None)
+        canonical_manifest_path = getattr(contract, "V1_3_3_MANIFEST_PATH", None)
+        _require(callable(raw_validator), "Canonical v1.3.3 manifest validator is unavailable.")
+        _require(
+            canonical_experiment_id == V1_3_3_QUALITY_EXPERIMENT_ID
+            and tuple(canonical_paths or ()) == tuple(implementation_paths)
+            and canonical_manifest_path == V1_3_3_MANIFEST_RELATIVE_PATH,
+            "Caller boundary differs from the canonical v1.3.3 contract.",
+        )
+        validator = cast(Callable[..., Any], raw_validator)
+        validated_manifest = validator(dict(payload), verify_implementation=True)
+        _require(
+            validated_manifest == payload,
+            "Canonical v1.3.3 validator changed or rejected the manifest.",
+        )
+        _require(
+            payload.get("experiment_id") == V1_3_3_QUALITY_EXPERIMENT_ID,
+            "Wrong v1.3.3 experiment manifest.",
+        )
+        implementation = payload.get("implementation")
+        _require(isinstance(implementation, Mapping), "Manifest implementation is missing.")
+        paths = tuple(implementation_paths)
+        implementation_map = cast(Mapping[str, Any], implementation)
+        _require(
+            tuple(implementation_map.get("paths", ())) == paths,
+            "Manifest implementation inventory differs from the caller inventory.",
+        )
+        source_commit = implementation_map.get("source_commit")
+        tree_digest = implementation_map.get("tree_digest")
+        _require(_is_git_oid(source_commit), "Manifest implementation commit is invalid.")
+        _require(_is_sha256(tree_digest), "Manifest implementation digest is invalid.")
+        current_entries = _index_inventory(root, paths)
+        _require(
+            _implementation_index_digest(paths, current_entries) == tree_digest,
+            "Current v1.3.3 implementation differs from the manifest.",
+        )
+        frozen_inventory = _commit_inventory(root, cast(str, source_commit), paths)
+        _require(
+            _commit_inventory_digest(frozen_inventory, paths) == tree_digest,
+            "V1.3.3 source commit does not reproduce its tree digest.",
+        )
+        live_inventory = _quality_live_implementation_inventory(
+            root,
+            paths=paths,
+            source_commit=cast(str, source_commit),
+            expected_digest=cast(str, tree_digest),
+        )
+        _assert_ancestor(root, cast(str, source_commit), cast(str, source["commit"]))
+        _assert_ancestor(
+            root,
+            V1_3_2_SUPERSEDED_RESULT_SOURCE_COMMIT,
+            cast(str, source["commit"]),
+        )
+        public_attestation = payload.get("attestation")
+        _require(isinstance(public_attestation, Mapping), "Manifest attestation is missing.")
+        expected_contract = attestation.public_manifest_contract(
+            str(cast(Mapping[str, Any], public_attestation).get("key_id", ""))
+        )
+        _require(
+            dict(cast(Mapping[str, Any], public_attestation)) == expected_contract,
+            "Manifest attestation contract drifted.",
+        )
+        binding = {
+            "path": str(path),
+            "sha256": opened.sha256,
+            "bytes": opened.bytes,
+            "experiment_id": V1_3_3_QUALITY_EXPERIMENT_ID,
             "implementation_source_commit": source_commit,
             "implementation_digest": tree_digest,
             "live_implementation_inventory_digest": live_inventory["digest"],
@@ -9302,7 +9534,29 @@ def _assert_v1_3_2_activation_root_absent(*, repository_root: Path) -> str:
     root = _absolute(V1_3_2_ACTIVATION_ROOT, repository_root=repository_root)
     _require(
         not os.path.lexists(root),
-        f"V1.3.1 activation root already exists: {root}",
+        f"V1.3.2 activation root already exists: {root}",
+    )
+    return str(root)
+
+
+def _assert_v1_3_3_quality_paths_absent(*, repository_root: Path) -> tuple[str, ...]:
+    paths = tuple(
+        _absolute(path, repository_root=repository_root)
+        for path in V1_3_3_PROSPECTIVE_QUALITY_PATHS
+    )
+    for path in paths:
+        _require(
+            not os.path.lexists(path),
+            f"Prospective v1.3.3 quality path exists before activation: {path}",
+        )
+    return tuple(str(path) for path in paths)
+
+
+def _assert_v1_3_3_activation_root_absent(*, repository_root: Path) -> str:
+    root = _absolute(V1_3_3_ACTIVATION_ROOT, repository_root=repository_root)
+    _require(
+        not os.path.lexists(root),
+        f"V1.3.3 activation root already exists: {root}",
     )
     return str(root)
 
@@ -10313,7 +10567,6 @@ def load_superseded_zero_quality_failure_lineage_v1_3_1(
         manifest_opened.assert_unchanged()
     finally:
         manifest_opened.close()
-
     admission_root = _absolute(V1_3_1_SUPERSEDED_ADMISSION_ROOT, repository_root=root)
     admission_path = _absolute(V1_3_1_SUPERSEDED_ADMISSION_PATH, repository_root=root)
     genesis_path = _absolute(V1_3_1_SUPERSEDED_GENESIS_PATH, repository_root=root)
@@ -10950,16 +11203,539 @@ def load_superseded_zero_quality_failure_lineage_v1_3_1(
     )
 
 
-def _require_v1_3_2_context(
+def _expected_v1_3_2_static_failure_projection() -> dict[str, Any]:
+    contract = importlib.import_module("p2_direct_controller_contract_v1_3")
+    builder = getattr(contract, "expected_v1_3_3_superseded_static_failure_lineage", None)
+    _require(
+        callable(builder),
+        "The v1.3.3 superseded-static-failure contract builder is unavailable.",
+    )
+    raw = cast(Callable[[], object], builder)()
+    _require(isinstance(raw, Mapping), "The v1.3.2 static-failure projection is invalid.")
+    projection = dict(cast(Mapping[str, Any], raw))
+    source = {key: value for key, value in projection.items() if key != "projection_sha256"}
+    diagnosis = projection.get("source_bound_failure_diagnosis")
+    expected_public_fields = (
+        "path",
+        "sha256",
+        "bytes",
+        "experiment_id",
+        "payload_sha256",
+        "attestation_mac",
+        "historical_receipt_sha256",
+        "canonical_nonobservation_sha256",
+        "superseded_failure_lineage_sha256",
+        "superseded_failure_lineage_projection_sha256",
+    )
+    _require(
+        projection.get("projection_sha256") == _json_digest(source)
+        and projection.get("schema_version") == 1
+        and projection.get("lineage_type")
+        == "signed-superseded-zero-quality-preactivation-static-publication"
+        and projection.get("experiment_id") == V1_3_2_QUALITY_EXPERIMENT_ID
+        and projection.get("result_source_commit")
+        == V1_3_2_SUPERSEDED_RESULT_SOURCE_COMMIT
+        and projection.get("result_source_tree") == V1_3_2_SUPERSEDED_RESULT_SOURCE_TREE
+        and isinstance(diagnosis, Mapping)
+        and tuple(cast(Mapping[str, Any], diagnosis).get("consumer_expected_fields", ()))
+        == expected_public_fields[:-2]
+        and tuple(cast(Mapping[str, Any], diagnosis).get("producer_observed_fields", ()))
+        == expected_public_fields
+        and tuple(cast(Mapping[str, Any], diagnosis).get("unexpected_fields", ()))
+        == expected_public_fields[-2:]
+        and cast(Mapping[str, Any], diagnosis).get("stage")
+        == "first-arm-construction-after-static-bundle-validation"
+        and cast(Mapping[str, Any], diagnosis).get("activation_published") is False
+        and cast(Mapping[str, Any], diagnosis).get("signed_terminal_failure_receipt_published")
+        is False
+        and cast(Mapping[str, Any], diagnosis).get("exception_type") == "ValueError"
+        and cast(Mapping[str, Any], diagnosis).get("exception_message")
+        == "Reuse-admission public binding schema drifted.",
+        "The v1.3.2 static-failure diagnosis or projection digest drifted.",
+    )
+    return projection
+
+
+def _v1_3_2_static_admission_public_binding(
+    *, path: Path, payload: Mapping[str, Any], sha256: str, byte_count: int
+) -> dict[str, Any]:
+    envelope = payload.get("attestation")
+    empty_lineage = payload.get("superseded_empty_lineage")
+    failure_lineage = payload.get("superseded_zero_quality_failure_lineage")
+    _require(
+        isinstance(envelope, Mapping)
+        and isinstance(empty_lineage, Mapping)
+        and isinstance(failure_lineage, Mapping),
+        "Superseded v1.3.2 admission public-binding inputs are invalid.",
+    )
+    old_admission = cast(Mapping[str, Any], empty_lineage).get("reuse_admission")
+    _require(
+        isinstance(old_admission, Mapping),
+        "Superseded v1.3.2 inherited admission binding is missing.",
+    )
+    return {
+        "path": str(path),
+        "sha256": sha256,
+        "bytes": byte_count,
+        "experiment_id": payload.get("experiment_id"),
+        "payload_sha256": payload.get("payload_sha256"),
+        "attestation_mac": cast(Mapping[str, Any], envelope).get("mac"),
+        "historical_receipt_sha256": cast(Mapping[str, Any], empty_lineage).get(
+            "historical_receipt_payload_sha256"
+        ),
+        "canonical_nonobservation_sha256": cast(Mapping[str, Any], empty_lineage).get(
+            "canonical_nonobservation_payload_sha256"
+        ),
+        "superseded_failure_lineage_sha256": cast(Mapping[str, Any], failure_lineage).get(
+            "lineage_sha256"
+        ),
+        "superseded_failure_lineage_projection_sha256": payload.get(
+            "superseded_zero_quality_failure_lineage_projection_sha256"
+        ),
+    }
+
+
+def _v1_3_2_static_genesis_public_binding(
+    *, path: Path, payload: Mapping[str, Any], sha256: str, byte_count: int
+) -> dict[str, Any]:
+    envelope = payload.get("attestation")
+    reuse_admission = payload.get("reuse_admission")
+    failure_lineage = payload.get("superseded_zero_quality_failure_lineage")
+    _require(
+        isinstance(envelope, Mapping)
+        and isinstance(reuse_admission, Mapping)
+        and isinstance(failure_lineage, Mapping),
+        "Superseded v1.3.2 genesis public-binding inputs are invalid.",
+    )
+    return {
+        "path": str(path),
+        "sha256": sha256,
+        "bytes": byte_count,
+        "experiment_id": payload.get("experiment_id"),
+        "payload_sha256": payload.get("payload_sha256"),
+        "attestation_mac": cast(Mapping[str, Any], envelope).get("mac"),
+        "reuse_admission_sha256": cast(Mapping[str, Any], reuse_admission).get("sha256"),
+        "expected_shards": payload.get("expected_shards"),
+        "coordinate_digest": payload.get("coordinate_digest"),
+        "superseded_failure_lineage_sha256": cast(Mapping[str, Any], failure_lineage).get(
+            "lineage_sha256"
+        ),
+        "superseded_failure_lineage_projection_sha256": payload.get(
+            "superseded_zero_quality_failure_lineage_projection_sha256"
+        ),
+    }
+
+
+def _assert_v1_3_2_static_failure_absence(
+    *, repository_root: Path, projection: Mapping[str, Any]
+) -> tuple[str, ...]:
+    raw_paths = projection.get("absent_paths")
+    raw_prefixes = projection.get("absent_staging_prefixes")
+    _require(
+        isinstance(raw_paths, list)
+        and all(isinstance(path, str) for path in raw_paths)
+        and isinstance(raw_prefixes, list)
+        and raw_prefixes
+        == [V1_3_2_ADMISSION_STAGING_PREFIX, V1_3_2_ACTIVATION_STAGING_PREFIX],
+        "Superseded v1.3.2 absence projection drifted.",
+    )
+    paths = tuple(
+        _absolute(Path(raw), repository_root=repository_root)
+        for raw in cast(list[str], raw_paths)
+    )
+    for path in paths:
+        _require(
+            not os.path.lexists(path),
+            f"Forbidden v1.3.2 post-static artifact exists: {path}",
+        )
+    parent = _absolute(V1_3_2_ADMISSION_ROOT, repository_root=repository_root).parent
+    with os.scandir(parent) as iterator:
+        staging = sorted(
+            entry.name
+            for entry in iterator
+            if any(entry.name.startswith(prefix) for prefix in cast(list[str], raw_prefixes))
+        )
+    _require(not staging, f"Superseded v1.3.2 staging evidence exists: {staging}")
+    return tuple(str(path) for path in paths)
+
+
+def load_superseded_static_only_failure_lineage_v1_3_2(
+    *,
+    trust_root: attestation.TrustRoot,
+    repository_root: Path = REPOSITORY_ROOT,
+    superseded_empty_lineage: SupersededEmptyLineageV1_3 | None = None,
+    superseded_failure_lineage: SupersededZeroQualityFailureLineageV1_3_1 | None = None,
+) -> SupersededStaticOnlyFailureLineageV1_3_2:
+    """Authenticate immutable v1.3.2 static evidence without pinning the live index to C3/C4."""
+
+    _require(
+        type(trust_root) is attestation.TrustRoot
+        and trust_root.key_id == V1_3_SUPERSEDED_ATTESTATION_KEY_ID,
+        "Superseded v1.3.2 lineage requires its exact historical trust root.",
+    )
+    root = _exact_path(repository_root, label="Repository root", must_exist=True)
+    current_commit = cast(str, _source_state(root)["commit"])
+    _assert_tree_object(
+        root,
+        V1_3_2_SUPERSEDED_IMPLEMENTATION_SOURCE_COMMIT,
+        V1_3_2_SUPERSEDED_IMPLEMENTATION_SOURCE_TREE,
+    )
+    _assert_tree_object(
+        root,
+        V1_3_2_SUPERSEDED_RESULT_SOURCE_COMMIT,
+        V1_3_2_SUPERSEDED_RESULT_SOURCE_TREE,
+    )
+    _assert_ancestor(
+        root,
+        V1_3_2_SUPERSEDED_IMPLEMENTATION_SOURCE_COMMIT,
+        V1_3_2_SUPERSEDED_RESULT_SOURCE_COMMIT,
+    )
+    _assert_ancestor(root, V1_3_2_SUPERSEDED_RESULT_SOURCE_COMMIT, current_commit)
+    projection = _expected_v1_3_2_static_failure_projection()
+    implementation_projection = projection.get("implementation")
+    manifest_projection = projection.get("manifest")
+    _require(
+        isinstance(implementation_projection, Mapping)
+        and cast(Mapping[str, Any], implementation_projection).get("source_commit")
+        == V1_3_2_SUPERSEDED_IMPLEMENTATION_SOURCE_COMMIT
+        and cast(Mapping[str, Any], implementation_projection).get("source_tree")
+        == V1_3_2_SUPERSEDED_IMPLEMENTATION_SOURCE_TREE
+        and cast(Mapping[str, Any], implementation_projection).get("tree_digest")
+        == V1_3_2_SUPERSEDED_IMPLEMENTATION_DIGEST
+        and isinstance(manifest_projection, Mapping),
+        "Superseded v1.3.2 Git or implementation projection drifted.",
+    )
+
+    manifest_path = _absolute(V1_3_2_MANIFEST_RELATIVE_PATH, repository_root=root)
+    manifest, manifest_opened = _load_json_nofollow(
+        manifest_path,
+        label="Superseded v1.3.2 manifest",
+        require_canonical_pretty_bytes=True,
+    )
+    try:
+        frozen_manifest = cast(
+            bytes,
+            _git(
+                root,
+                [
+                    "show",
+                    f"{V1_3_2_SUPERSEDED_RESULT_SOURCE_COMMIT}:"
+                    f"{V1_3_2_MANIFEST_RELATIVE_PATH}",
+                ],
+                text=False,
+            ).stdout,
+        )
+        implementation = manifest.get("implementation")
+        expected_attestation = attestation.public_manifest_contract(trust_root.key_id)
+        _require(
+            manifest_opened.read_bytes() == frozen_manifest
+            and manifest_opened.sha256 == V1_3_2_SUPERSEDED_MANIFEST_SHA256
+            and manifest_opened.bytes == V1_3_2_SUPERSEDED_MANIFEST_BYTES
+            and manifest.get("schema_version") == 1
+            and manifest.get("experiment_id") == V1_3_2_QUALITY_EXPERIMENT_ID
+            and manifest.get("status")
+            == (
+                "frozen_v1_3_2_import_boundary_amendment_after_signed_v1_3_1_"
+                "zero_quality_launch_failure_before_any_held_out_quality"
+            )
+            and isinstance(implementation, Mapping)
+            and cast(Mapping[str, Any], implementation).get("source_commit")
+            == V1_3_2_SUPERSEDED_IMPLEMENTATION_SOURCE_COMMIT
+            and cast(Mapping[str, Any], implementation).get("tree_digest")
+            == V1_3_2_SUPERSEDED_IMPLEMENTATION_DIGEST
+            and manifest.get("attestation") == expected_attestation,
+            "Superseded v1.3.2 manifest or frozen C4 bytes drifted.",
+        )
+        implementation_paths = tuple(cast(Mapping[str, Any], implementation).get("paths", ()))
+        _require(
+            bool(implementation_paths)
+            and all(type(path) is str for path in implementation_paths)
+            and _commit_inventory_digest(
+                _commit_inventory(
+                    root,
+                    V1_3_2_SUPERSEDED_IMPLEMENTATION_SOURCE_COMMIT,
+                    cast(tuple[str, ...], implementation_paths),
+                ),
+                cast(tuple[str, ...], implementation_paths),
+            )
+            == V1_3_2_SUPERSEDED_IMPLEMENTATION_DIGEST,
+            "Superseded v1.3.2 C3 implementation inventory digest drifted.",
+        )
+        manifest_binding = {
+            "path": str(manifest_path),
+            "sha256": manifest_opened.sha256,
+            "bytes": manifest_opened.bytes,
+            "experiment_id": V1_3_2_QUALITY_EXPERIMENT_ID,
+            "implementation_source_commit": V1_3_2_SUPERSEDED_IMPLEMENTATION_SOURCE_COMMIT,
+            "implementation_digest": V1_3_2_SUPERSEDED_IMPLEMENTATION_DIGEST,
+            "live_implementation_inventory_digest": cast(Mapping[str, Any], implementation_projection).get(
+                "live_inventory_digest"
+            ),
+            "live_implementation_file_count": cast(Mapping[str, Any], implementation_projection).get(
+                "live_file_count"
+            ),
+            "attestation": expected_attestation,
+        }
+        manifest_opened.assert_unchanged()
+    finally:
+        manifest_opened.close()
+    manifest_file_binding = _v1_3_1_exact_regular_binding(
+        manifest_path,
+        expected_sha256=V1_3_2_SUPERSEDED_MANIFEST_SHA256,
+        expected_bytes=V1_3_2_SUPERSEDED_MANIFEST_BYTES,
+        label="Superseded v1.3.2 manifest",
+    )
+
+    inherited_empty = (
+        load_superseded_empty_lineage_v1_3(trust_root=trust_root, repository_root=root)
+        if superseded_empty_lineage is None
+        else _require_superseded_lineage(superseded_empty_lineage)
+    )
+    inherited_failure = (
+        load_superseded_zero_quality_failure_lineage_v1_3_1(
+            trust_root=trust_root,
+            repository_root=root,
+            superseded_empty_lineage=inherited_empty,
+        )
+        if superseded_failure_lineage is None
+        else _require_superseded_failure_lineage(superseded_failure_lineage)
+    )
+    static_root = _absolute(V1_3_2_ADMISSION_ROOT, repository_root=root)
+    expected_directories = {"."}
+    expected_files = {
+        V1_3_2_DEFAULT_ADMISSION_PATH.name,
+        V1_3_2_DEFAULT_GENESIS_PATH.name,
+    }
+    static_inventory = _v1_3_1_closed_world_inventory(
+        static_root,
+        expected_directories=expected_directories,
+        expected_files=expected_files,
+        label="Superseded v1.3.2 static admission root",
+    )
+    admission_path = _absolute(V1_3_2_DEFAULT_ADMISSION_PATH, repository_root=root)
+    genesis_path = _absolute(V1_3_2_DEFAULT_GENESIS_PATH, repository_root=root)
+    admission_payload, admission_file_binding = _v1_3_1_exact_attested_json(
+        admission_path,
+        trust_root=trust_root,
+        expected_sha256=V1_3_2_SUPERSEDED_ADMISSION_SHA256,
+        expected_bytes=V1_3_2_SUPERSEDED_ADMISSION_BYTES,
+        expected_payload_sha256=V1_3_2_SUPERSEDED_ADMISSION_PAYLOAD_SHA256,
+        expected_attestation_payload_sha256=(
+            V1_3_2_SUPERSEDED_ADMISSION_ATTESTATION_PAYLOAD_SHA256
+        ),
+        expected_attestation_mac=V1_3_2_SUPERSEDED_ADMISSION_ATTESTATION_MAC,
+        purpose=V1_3_2_REUSE_ADMISSION_PURPOSE,
+        label="Superseded v1.3.2 reuse admission",
+    )
+    admission_binding = _v1_3_2_static_admission_public_binding(
+        path=admission_path,
+        payload=admission_payload,
+        sha256=V1_3_2_SUPERSEDED_ADMISSION_SHA256,
+        byte_count=V1_3_2_SUPERSEDED_ADMISSION_BYTES,
+    )
+    genesis_payload, genesis_file_binding = _v1_3_1_exact_attested_json(
+        genesis_path,
+        trust_root=trust_root,
+        expected_sha256=V1_3_2_SUPERSEDED_GENESIS_SHA256,
+        expected_bytes=V1_3_2_SUPERSEDED_GENESIS_BYTES,
+        expected_payload_sha256=V1_3_2_SUPERSEDED_GENESIS_PAYLOAD_SHA256,
+        expected_attestation_payload_sha256=(
+            V1_3_2_SUPERSEDED_GENESIS_ATTESTATION_PAYLOAD_SHA256
+        ),
+        expected_attestation_mac=V1_3_2_SUPERSEDED_GENESIS_ATTESTATION_MAC,
+        purpose=V1_3_2_PREHELDOUT_GENESIS_PURPOSE,
+        label="Superseded v1.3.2 pre-heldout genesis",
+    )
+    genesis_binding = _v1_3_2_static_genesis_public_binding(
+        path=genesis_path,
+        payload=genesis_payload,
+        sha256=V1_3_2_SUPERSEDED_GENESIS_SHA256,
+        byte_count=V1_3_2_SUPERSEDED_GENESIS_BYTES,
+    )
+    zero_admission_fields = (
+        "evaluation_inputs_materialized",
+        "quality_predictions_materialized",
+        "quality_outcomes_materialized",
+        "quality_aggregates_materialized",
+        "active_claim_count",
+        "worker_ledger_count",
+        "top_p_quality_input_count",
+        "scientific_subprocesses_started_during_admission",
+    )
+    zero_genesis_fields = (
+        "completed_shards",
+        "evaluation_inputs_materialized",
+        "quality_predictions_materialized",
+        "quality_outcomes_materialized",
+        "quality_aggregates_materialized",
+        "active_claim_count",
+        "worker_ledger_count",
+        "top_p_quality_input_count",
+    )
+    expected_v1_3_2_absent = [
+        str(_absolute(path, repository_root=root))
+        for path in V1_3_2_PROSPECTIVE_QUALITY_PATHS
+    ]
+    expected_v1_3_2_activation = str(
+        _absolute(V1_3_2_ACTIVATION_ROOT, repository_root=root)
+    )
+    _require(
+        admission_payload.get("schema_version") == V1_3_2_ADMISSION_SCHEMA_VERSION
+        and admission_payload.get("artifact_type")
+        == "direct-controller-v1-3-2-historical-reuse-admission"
+        and admission_payload.get("experiment_id") == V1_3_2_QUALITY_EXPERIMENT_ID
+        and admission_payload.get("status") == "terminal"
+        and admission_payload.get("canonical_path") == str(admission_path)
+        and admission_payload.get("quality_source")
+        == {"commit": V1_3_2_SUPERSEDED_RESULT_SOURCE_COMMIT, "dirty": False}
+        and admission_payload.get("quality_manifest") == manifest_binding
+        and admission_payload.get("superseded_empty_lineage")
+        == inherited_empty.public_binding
+        and admission_payload.get("superseded_zero_quality_failure_lineage")
+        == inherited_failure.public_binding
+        and admission_payload.get(
+            "superseded_zero_quality_failure_lineage_projection_sha256"
+        )
+        == _superseded_failure_projection_sha256(inherited_failure)
+        and admission_payload.get("prospective_quality_absent_paths")
+        == expected_v1_3_2_absent
+        and admission_payload.get("activation_root_absent_path")
+        == expected_v1_3_2_activation
+        and admission_payload.get("quality_evaluation_started") is False
+        and admission_payload.get("evaluation_seed_used_to_initialize_quality_rng") is False
+        and admission_payload.get("quality_rng_initialized") is False
+        and admission_payload.get("historical_artifacts_rewritten_or_reattested") is False
+        and all(admission_payload.get(field) == 0 for field in zero_admission_fields),
+        "Superseded v1.3.2 admission is not the exact signed zero-quality prerequisite.",
+    )
+    _require(
+        genesis_payload.get("schema_version") == V1_3_2_GENESIS_SCHEMA_VERSION
+        and genesis_payload.get("artifact_type") == "direct-controller-v1-3-2-preheldout-genesis"
+        and genesis_payload.get("experiment_id") == V1_3_2_QUALITY_EXPERIMENT_ID
+        and genesis_payload.get("status") == "in_progress"
+        and genesis_payload.get("canonical_path") == str(genesis_path)
+        and genesis_payload.get("quality_source")
+        == {"commit": V1_3_2_SUPERSEDED_RESULT_SOURCE_COMMIT, "dirty": False}
+        and genesis_payload.get("quality_manifest") == manifest_binding
+        and genesis_payload.get("reuse_admission") == admission_binding
+        and genesis_payload.get("superseded_empty_lineage") == inherited_empty.public_binding
+        and genesis_payload.get("superseded_zero_quality_failure_lineage")
+        == inherited_failure.public_binding
+        and genesis_payload.get(
+            "superseded_zero_quality_failure_lineage_projection_sha256"
+        )
+        == _superseded_failure_projection_sha256(inherited_failure)
+        and genesis_payload.get("activation_root") == expected_v1_3_2_activation
+        and genesis_payload.get("activation_matrix_lock_path")
+        == str(_absolute(V1_3_2_ACTIVATION_MATRIX_LOCK_PATH, repository_root=root))
+        and genesis_payload.get("expected_shards") == EXPECTED_QUALITY_SHARDS
+        and genesis_payload.get("coordinate_digest") == QUALITY_COORDINATE_DIGEST
+        and tuple(genesis_payload.get("exact_fill_arm_names", ())) == FROZEN_EXACT_FILL_ARM_NAMES
+        and genesis_payload.get("records") == []
+        and genesis_payload.get("quality_evaluation_started") is False
+        and genesis_payload.get("evaluation_seed_used_to_initialize_quality_rng") is False
+        and genesis_payload.get("quality_rng_initialized") is False
+        and all(genesis_payload.get(field) == 0 for field in zero_genesis_fields),
+        "Superseded v1.3.2 genesis is not the exact signed zero-quality prerequisite.",
+    )
+
+    projected_admission = projection.get("reuse_admission")
+    projected_genesis = projection.get("preheldout_genesis")
+    _require(
+        isinstance(projected_admission, Mapping)
+        and isinstance(projected_genesis, Mapping)
+        and {
+            key: (str(V1_3_2_DEFAULT_ADMISSION_PATH) if key == "path" else value)
+            for key, value in admission_binding.items()
+        }
+        == {
+            key: value
+            for key, value in cast(Mapping[str, Any], projected_admission).items()
+            if key not in {"attestation_payload_sha256", "attestation_purpose"}
+        }
+        and {
+            key: (str(V1_3_2_DEFAULT_GENESIS_PATH) if key == "path" else value)
+            for key, value in genesis_binding.items()
+        }
+        == {
+            key: value
+            for key, value in cast(Mapping[str, Any], projected_genesis).items()
+            if key not in {"attestation_payload_sha256", "attestation_purpose"}
+        },
+        "Superseded v1.3.2 static public bindings differ from the contract projection.",
+    )
+    absent_paths = _assert_v1_3_2_static_failure_absence(
+        repository_root=root,
+        projection=projection,
+    )
+    quality_state = dict(cast(Mapping[str, Any], projection["quality_state"]))
+    source = {
+        "schema_version": 1,
+        "lineage_type": "signed-superseded-zero-quality-preactivation-static-failure",
+        "experiment_id": V1_3_2_QUALITY_EXPERIMENT_ID,
+        "result_source_commit": V1_3_2_SUPERSEDED_RESULT_SOURCE_COMMIT,
+        "result_source_tree": V1_3_2_SUPERSEDED_RESULT_SOURCE_TREE,
+        "implementation_source_commit": V1_3_2_SUPERSEDED_IMPLEMENTATION_SOURCE_COMMIT,
+        "implementation_source_tree": V1_3_2_SUPERSEDED_IMPLEMENTATION_SOURCE_TREE,
+        "implementation_digest": V1_3_2_SUPERSEDED_IMPLEMENTATION_DIGEST,
+        "manifest": manifest_binding,
+        "reuse_admission": admission_binding,
+        "preheldout_genesis": genesis_binding,
+        "inherited_v1_3_empty_lineage_sha256": inherited_empty.public_binding[
+            "lineage_sha256"
+        ],
+        "inherited_v1_3_1_failure_lineage_sha256": inherited_failure.public_binding[
+            "lineage_sha256"
+        ],
+        "absent_paths": list(absent_paths),
+        "attestation_key_id": trust_root.key_id,
+        "quality_state": quality_state,
+        "normalized_contract_projection": projection,
+        "normalized_contract_projection_sha256": projection["projection_sha256"],
+    }
+    _v1_3_1_revalidate_regular_binding(
+        manifest_file_binding,
+        label="Superseded v1.3.2 manifest",
+    )
+    _v1_3_1_revalidate_attested_binding(
+        admission_file_binding,
+        admission_payload,
+        trust_root=trust_root,
+        label="Superseded v1.3.2 reuse admission",
+    )
+    _v1_3_1_revalidate_attested_binding(
+        genesis_file_binding,
+        genesis_payload,
+        trust_root=trust_root,
+        label="Superseded v1.3.2 pre-heldout genesis",
+    )
+    _v1_3_1_revalidate_closed_world_inventory(
+        static_inventory,
+        expected_directories=expected_directories,
+        expected_files=expected_files,
+        label="Superseded v1.3.2 static admission root",
+    )
+    _assert_v1_3_2_static_failure_absence(repository_root=root, projection=projection)
+    public_binding = {**source, "lineage_sha256": _json_digest(source)}
+    return SupersededStaticOnlyFailureLineageV1_3_2(
+        _seal=_SUPERSEDED_STATIC_ONLY_FAILURE_LINEAGE_V1_3_2_SEAL,
+        manifest=manifest,
+        reuse_admission=admission_payload,
+        preheldout_genesis=genesis_payload,
+        public_binding=public_binding,
+    )
+
+
+def _require_v1_3_3_context(
     quality_context: QualityContext, *, trust_root: attestation.TrustRoot
 ) -> None:
     _require(type(quality_context) is QualityContext, "Quality context must be canonical.")
     _require(
-        quality_context.manifest_binding.get("experiment_id") == V1_3_2_QUALITY_EXPERIMENT_ID
+        quality_context.manifest_binding.get("experiment_id") == V1_3_3_QUALITY_EXPERIMENT_ID
         and quality_context.manifest_binding.get("attestation", {}).get("key_id")
         == trust_root.key_id
         == V1_3_SUPERSEDED_ATTESTATION_KEY_ID,
-        "Quality context is not the canonical v1.3.2 trust boundary.",
+        "Quality context is not the canonical v1.3.3 trust boundary.",
     )
     assert_quality_context_unchanged(quality_context)
 
@@ -11012,28 +11788,68 @@ def _superseded_failure_projection_sha256(
     return cast(str, checked.public_binding["normalized_contract_projection_sha256"])
 
 
-def _v1_3_2_prestart_absent_paths(*, repository_root: Path) -> tuple[str, ...]:
+def _require_superseded_prerequisite_failure_lineage(
+    lineage: SupersededStaticOnlyFailureLineageV1_3_2,
+) -> SupersededStaticOnlyFailureLineageV1_3_2:
+    _require(
+        type(lineage) is SupersededStaticOnlyFailureLineageV1_3_2
+        and lineage._seal is _SUPERSEDED_STATIC_ONLY_FAILURE_LINEAGE_V1_3_2_SEAL,
+        "Superseded v1.3.2 prerequisite-failure capability is invalid.",
+    )
+    source = {
+        key: value for key, value in lineage.public_binding.items() if key != "lineage_sha256"
+    }
+    projection = lineage.public_binding.get("normalized_contract_projection")
+    expected_projection = _expected_v1_3_2_static_failure_projection()
+    _require(
+        lineage.public_binding.get("lineage_sha256") == _json_digest(source)
+        and projection == expected_projection
+        and lineage.public_binding.get("normalized_contract_projection_sha256")
+        == expected_projection["projection_sha256"],
+        "Superseded v1.3.2 prerequisite-failure projection drifted.",
+    )
+    return lineage
+
+
+def _superseded_prerequisite_failure_projection_sha256(
+    lineage: SupersededStaticOnlyFailureLineageV1_3_2,
+) -> str:
+    checked = _require_superseded_prerequisite_failure_lineage(lineage)
+    return cast(str, checked.public_binding["normalized_contract_projection_sha256"])
+
+
+def _v1_3_3_prestart_absent_paths(*, repository_root: Path) -> tuple[str, ...]:
     return (
-        *_assert_v1_3_2_quality_paths_absent(repository_root=repository_root),
-        _assert_v1_3_2_activation_root_absent(repository_root=repository_root),
+        *_assert_v1_3_3_quality_paths_absent(repository_root=repository_root),
+        _assert_v1_3_3_activation_root_absent(repository_root=repository_root),
     )
 
 
-def _v1_3_2_reuse_admission_public_binding(
+def _v1_3_3_reuse_admission_public_binding(
     *, path: Path, payload: Mapping[str, Any], sha256: str, byte_count: int
 ) -> dict[str, Any]:
     envelope = payload.get("attestation")
     lineage = payload.get("superseded_empty_lineage")
     failure_lineage = payload.get("superseded_zero_quality_failure_lineage")
+    prerequisite_failure = payload.get(
+        "superseded_zero_quality_prerequisite_failure_lineage"
+    )
     _require(
         isinstance(envelope, Mapping)
         and isinstance(lineage, Mapping)
         and isinstance(failure_lineage, Mapping)
+        and isinstance(prerequisite_failure, Mapping)
         and payload.get("superseded_zero_quality_failure_lineage_projection_sha256")
         == cast(Mapping[str, Any], failure_lineage).get(
             "normalized_contract_projection_sha256"
+        )
+        and payload.get(
+            "superseded_zero_quality_prerequisite_failure_lineage_projection_sha256"
+        )
+        == cast(Mapping[str, Any], prerequisite_failure).get(
+            "normalized_contract_projection_sha256"
         ),
-        "V1.3.2 reuse-admission binding inputs are invalid.",
+        "V1.3.3 reuse-admission binding inputs are invalid.",
     )
     lineage_map = cast(Mapping[str, Any], lineage)
     old_admission = lineage_map.get("reuse_admission")
@@ -11049,45 +11865,54 @@ def _v1_3_2_reuse_admission_public_binding(
         "canonical_nonobservation_sha256": lineage_map.get(
             "canonical_nonobservation_payload_sha256"
         ),
-        "superseded_failure_lineage_sha256": cast(Mapping[str, Any], failure_lineage).get(
+        "superseded_failure_lineage_sha256": cast(
+            Mapping[str, Any], prerequisite_failure
+        ).get(
             "lineage_sha256"
         ),
         "superseded_failure_lineage_projection_sha256": payload.get(
-            "superseded_zero_quality_failure_lineage_projection_sha256"
+            "superseded_zero_quality_prerequisite_failure_lineage_projection_sha256"
         ),
     }
 
 
-def build_v1_3_2_reuse_admission_payload(
+def build_v1_3_3_reuse_admission_payload(
     *,
     quality_context: QualityContext,
     trust_root: attestation.TrustRoot,
     superseded_empty_lineage: SupersededEmptyLineageV1_3,
     superseded_failure_lineage: SupersededZeroQualityFailureLineageV1_3_1,
+    superseded_prerequisite_failure_lineage: SupersededStaticOnlyFailureLineageV1_3_2,
     admission_nonce: str | None = None,
 ) -> dict[str, Any]:
-    _require_v1_3_2_context(quality_context, trust_root=trust_root)
+    _require_v1_3_3_context(quality_context, trust_root=trust_root)
     lineage = _require_superseded_lineage(superseded_empty_lineage)
     failure_lineage = _require_superseded_failure_lineage(superseded_failure_lineage)
     failure_projection_sha256 = _superseded_failure_projection_sha256(failure_lineage)
+    prerequisite_failure = _require_superseded_prerequisite_failure_lineage(
+        superseded_prerequisite_failure_lineage
+    )
+    prerequisite_projection_sha256 = _superseded_prerequisite_failure_projection_sha256(
+        prerequisite_failure
+    )
     nonce = secrets.token_hex(32) if admission_nonce is None else admission_nonce
-    _require(_is_sha256(nonce), "V1.3.2 admission nonce must contain 256 random bits.")
+    _require(_is_sha256(nonce), "V1.3.3 admission nonce must contain 256 random bits.")
     path = _absolute(
-        V1_3_2_DEFAULT_ADMISSION_PATH,
+        V1_3_3_DEFAULT_ADMISSION_PATH,
         repository_root=quality_context.repository_root,
     )
     _require(
         not os.path.lexists(path),
-        "V1.3.2 reuse-admission creation refuses an existing final path.",
+        "V1.3.3 reuse-admission creation refuses an existing final path.",
     )
-    absent = _v1_3_2_prestart_absent_paths(repository_root=quality_context.repository_root)
+    absent = _v1_3_3_prestart_absent_paths(repository_root=quality_context.repository_root)
     old_projection = lineage.reuse_admission.get("execution_environment_projection")
     _require(isinstance(old_projection, Mapping), "Superseded execution projection is missing.")
     return _attested_payload(
         {
-            "schema_version": V1_3_2_ADMISSION_SCHEMA_VERSION,
-            "artifact_type": "direct-controller-v1-3-2-historical-reuse-admission",
-            "experiment_id": V1_3_2_QUALITY_EXPERIMENT_ID,
+            "schema_version": V1_3_3_ADMISSION_SCHEMA_VERSION,
+            "artifact_type": "direct-controller-v1-3-3-historical-reuse-admission",
+            "experiment_id": V1_3_3_QUALITY_EXPERIMENT_ID,
             "status": "terminal",
             "canonical_path": str(path),
             "admission_nonce": nonce,
@@ -11097,6 +11922,12 @@ def build_v1_3_2_reuse_admission_payload(
             "superseded_zero_quality_failure_lineage": failure_lineage.public_binding,
             "superseded_zero_quality_failure_lineage_projection_sha256": (
                 failure_projection_sha256
+            ),
+            "superseded_zero_quality_prerequisite_failure_lineage": (
+                prerequisite_failure.public_binding
+            ),
+            "superseded_zero_quality_prerequisite_failure_lineage_projection_sha256": (
+                prerequisite_projection_sha256
             ),
             "prospective_quality_absent_paths": list(absent[:-1]),
             "activation_root_absent_path": absent[-1],
@@ -11119,11 +11950,11 @@ def build_v1_3_2_reuse_admission_payload(
             "scientific_subprocesses_started_during_admission": 0,
         },
         trust_root=trust_root,
-        purpose=V1_3_2_REUSE_ADMISSION_PURPOSE,
+        purpose=V1_3_3_REUSE_ADMISSION_PURPOSE,
     )
 
 
-def _v1_3_2_admission_entries(
+def _v1_3_3_admission_entries(
     lineage: SupersededEmptyLineageV1_3, *, quality_context: QualityContext
 ) -> tuple[
     dict[tuple[str, int], AdmittedCalibration],
@@ -11132,7 +11963,7 @@ def _v1_3_2_admission_entries(
     return _admission_entries(lineage.reuse_admission, quality_context=quality_context)
 
 
-def _validate_v1_3_2_reuse_admission_internal(
+def _validate_v1_3_3_reuse_admission_internal(
     payload: Mapping[str, Any],
     *,
     admission_path: Path,
@@ -11141,9 +11972,9 @@ def _validate_v1_3_2_reuse_admission_internal(
     require_prestart_absence: bool,
     trust_root: attestation.TrustRoot,
     quality_context: QualityContext,
-    consumer_scope: _ActivatedConsumerScopeV1_3_2 | None = None,
+    consumer_scope: _ActivatedConsumerScopeV1_3_3 | None = None,
 ) -> ValidatedReuseAdmission:
-    _require_v1_3_2_context(quality_context, trust_root=trust_root)
+    _require_v1_3_3_context(quality_context, trust_root=trust_root)
     lineage = load_superseded_empty_lineage_v1_3(
         trust_root=trust_root,
         repository_root=quality_context.repository_root,
@@ -11152,6 +11983,12 @@ def _validate_v1_3_2_reuse_admission_internal(
         trust_root=trust_root,
         repository_root=quality_context.repository_root,
         superseded_empty_lineage=lineage,
+    )
+    prerequisite_failure = load_superseded_static_only_failure_lineage_v1_3_2(
+        trust_root=trust_root,
+        repository_root=quality_context.repository_root,
+        superseded_empty_lineage=lineage,
+        superseded_failure_lineage=failure_lineage,
     )
     expected_fields = {
         "schema_version",
@@ -11165,6 +12002,8 @@ def _validate_v1_3_2_reuse_admission_internal(
         "superseded_empty_lineage",
         "superseded_zero_quality_failure_lineage",
         "superseded_zero_quality_failure_lineage_projection_sha256",
+        "superseded_zero_quality_prerequisite_failure_lineage",
+        "superseded_zero_quality_prerequisite_failure_lineage_projection_sha256",
         "prospective_quality_absent_paths",
         "activation_root_absent_path",
         "execution_environment_projection",
@@ -11187,29 +12026,29 @@ def _validate_v1_3_2_reuse_admission_internal(
         "payload_sha256",
         "attestation",
     }
-    _require(set(payload) == expected_fields, "V1.3.2 reuse-admission schema drifted.")
+    _require(set(payload) == expected_fields, "V1.3.3 reuse-admission schema drifted.")
     _verify_attested_payload(
         payload,
         trust_root=trust_root,
-        purpose=V1_3_2_REUSE_ADMISSION_PURPOSE,
-        label="V1.3.2 reuse admission",
+        purpose=V1_3_3_REUSE_ADMISSION_PURPOSE,
+        label="V1.3.3 reuse admission",
     )
     canonical_path = _absolute(
-        V1_3_2_DEFAULT_ADMISSION_PATH,
+        V1_3_3_DEFAULT_ADMISSION_PATH,
         repository_root=quality_context.repository_root,
     )
     path = _exact_path(
         admission_path,
-        label="Canonical v1.3.2 reuse admission",
+        label="Canonical v1.3.3 reuse admission",
         repository_root=quality_context.repository_root,
         must_exist=require_final_root,
     )
     if require_final_root:
         final_admission, _final_genesis = _validate_admission_bundle_root(
-            _absolute(V1_3_2_ADMISSION_ROOT, repository_root=quality_context.repository_root),
-            label="Final v1.3.2 admission root",
+            _absolute(V1_3_3_ADMISSION_ROOT, repository_root=quality_context.repository_root),
+            label="Final v1.3.3 admission root",
         )
-        _require(path == final_admission, "V1.3.2 reuse-admission final path drifted.")
+        _require(path == final_admission, "V1.3.3 reuse-admission final path drifted.")
     old_projection = lineage.reuse_admission.get("execution_environment_projection")
     zero_fields = (
         "evaluation_inputs_materialized",
@@ -11223,16 +12062,16 @@ def _validate_v1_3_2_reuse_admission_internal(
     )
     expected_absent = tuple(
         str(_absolute(item, repository_root=quality_context.repository_root))
-        for item in V1_3_2_PROSPECTIVE_QUALITY_PATHS
+        for item in V1_3_3_PROSPECTIVE_QUALITY_PATHS
     )
     expected_activation = str(
-        _absolute(V1_3_2_ACTIVATION_ROOT, repository_root=quality_context.repository_root)
+        _absolute(V1_3_3_ACTIVATION_ROOT, repository_root=quality_context.repository_root)
     )
     _require(
         path == canonical_path
-        and payload.get("schema_version") == V1_3_2_ADMISSION_SCHEMA_VERSION
-        and payload.get("artifact_type") == "direct-controller-v1-3-2-historical-reuse-admission"
-        and payload.get("experiment_id") == V1_3_2_QUALITY_EXPERIMENT_ID
+        and payload.get("schema_version") == V1_3_3_ADMISSION_SCHEMA_VERSION
+        and payload.get("artifact_type") == "direct-controller-v1-3-3-historical-reuse-admission"
+        and payload.get("experiment_id") == V1_3_3_QUALITY_EXPERIMENT_ID
         and payload.get("status") == "terminal"
         and payload.get("canonical_path") == str(canonical_path)
         and _is_sha256(payload.get("admission_nonce"))
@@ -11243,6 +12082,12 @@ def _validate_v1_3_2_reuse_admission_internal(
         == failure_lineage.public_binding
         and payload.get("superseded_zero_quality_failure_lineage_projection_sha256")
         == _superseded_failure_projection_sha256(failure_lineage)
+        and payload.get("superseded_zero_quality_prerequisite_failure_lineage")
+        == prerequisite_failure.public_binding
+        and payload.get(
+            "superseded_zero_quality_prerequisite_failure_lineage_projection_sha256"
+        )
+        == _superseded_prerequisite_failure_projection_sha256(prerequisite_failure)
         and tuple(payload.get("prospective_quality_absent_paths", ())) == expected_absent
         and payload.get("activation_root_absent_path") == expected_activation
         and isinstance(old_projection, Mapping)
@@ -11256,24 +12101,24 @@ def _validate_v1_3_2_reuse_admission_internal(
         and payload.get("quality_rng_initialized") is False
         and all(payload.get(field) == 0 for field in zero_fields)
         and payload.get("historical_artifacts_rewritten_or_reattested") is False,
-        "V1.3.2 reuse-admission scientific or lineage contract drifted.",
+        "V1.3.3 reuse-admission scientific or lineage contract drifted.",
     )
     if require_prestart_absence:
-        _v1_3_2_prestart_absent_paths(repository_root=quality_context.repository_root)
+        _v1_3_3_prestart_absent_paths(repository_root=quality_context.repository_root)
     storage = _exact_path(
         storage_path,
-        label="V1.3.2 reuse-admission storage",
+        label="V1.3.3 reuse-admission storage",
         repository_root=quality_context.repository_root,
         must_exist=True,
     )
     disk, opened = _load_json_nofollow(
         storage,
-        label="V1.3.2 reuse admission",
+        label="V1.3.3 reuse admission",
         require_canonical_pretty_bytes=True,
     )
     try:
-        _require(disk == dict(payload), "V1.3.2 admission differs from exact disk bytes.")
-        public_binding = _v1_3_2_reuse_admission_public_binding(
+        _require(disk == dict(payload), "V1.3.3 admission differs from exact disk bytes.")
+        public_binding = _v1_3_3_reuse_admission_public_binding(
             path=canonical_path,
             payload=payload,
             sha256=opened.sha256,
@@ -11282,7 +12127,7 @@ def _validate_v1_3_2_reuse_admission_internal(
         opened.assert_unchanged()
     finally:
         opened.close()
-    calibrations, checkpoints = _v1_3_2_admission_entries(
+    calibrations, checkpoints = _v1_3_3_admission_entries(
         lineage,
         quality_context=quality_context,
     )
@@ -11299,8 +12144,8 @@ def _validate_v1_3_2_reuse_admission_internal(
         coordinates_to_validate = tuple(sorted(calibrations))
     else:
         _require(
-            type(consumer_scope) is _ActivatedConsumerScopeV1_3_2
-            and consumer_scope._seal is _ACTIVATED_CONSUMER_SCOPE_V1_3_2_SEAL
+            type(consumer_scope) is _ActivatedConsumerScopeV1_3_3
+            and consumer_scope._seal is _ACTIVATED_CONSUMER_SCOPE_V1_3_3_SEAL
             and consumer_scope.coordinate in calibrations
             and consumer_scope.coordinate in checkpoints,
             "Activated consumer scope is invalid or unregistered.",
@@ -11328,7 +12173,7 @@ def _validate_v1_3_2_reuse_admission_internal(
     for coordinate in coordinates_to_validate:
         calibration_payload, calibration_opened = _load_json_nofollow(
             calibrations[coordinate].path,
-            label="V1.3.2 inherited admitted calibration",
+            label="V1.3.3 inherited admitted calibration",
         )
         calibration_opened.close()
         validate_admitted_calibration(
@@ -11340,7 +12185,7 @@ def _validate_v1_3_2_reuse_admission_internal(
         )
         _validate_file_binding(
             checkpoints[coordinate].public_binding,
-            label="V1.3.2 inherited admitted checkpoint",
+            label="V1.3.3 inherited admitted checkpoint",
             repository_root=quality_context.repository_root,
         )
     if consumer_scope is not None:
@@ -11357,21 +12202,31 @@ def _validate_v1_3_2_reuse_admission_internal(
     return result
 
 
-def _v1_3_2_genesis_public_binding(
+def _v1_3_3_genesis_public_binding(
     *, path: Path, payload: Mapping[str, Any], sha256: str, byte_count: int
 ) -> dict[str, Any]:
     envelope = payload.get("attestation")
     reuse_admission = payload.get("reuse_admission")
     failure_lineage = payload.get("superseded_zero_quality_failure_lineage")
+    prerequisite_failure = payload.get(
+        "superseded_zero_quality_prerequisite_failure_lineage"
+    )
     _require(
         isinstance(envelope, Mapping)
         and isinstance(reuse_admission, Mapping)
         and isinstance(failure_lineage, Mapping)
+        and isinstance(prerequisite_failure, Mapping)
         and payload.get("superseded_zero_quality_failure_lineage_projection_sha256")
         == cast(Mapping[str, Any], failure_lineage).get(
             "normalized_contract_projection_sha256"
+        )
+        and payload.get(
+            "superseded_zero_quality_prerequisite_failure_lineage_projection_sha256"
+        )
+        == cast(Mapping[str, Any], prerequisite_failure).get(
+            "normalized_contract_projection_sha256"
         ),
-        "V1.3.2 genesis binding inputs are invalid.",
+        "V1.3.3 genesis binding inputs are invalid.",
     )
     return {
         "path": str(path),
@@ -11383,46 +12238,55 @@ def _v1_3_2_genesis_public_binding(
         "reuse_admission_sha256": cast(Mapping[str, Any], reuse_admission).get("sha256"),
         "expected_shards": payload.get("expected_shards"),
         "coordinate_digest": payload.get("coordinate_digest"),
-        "superseded_failure_lineage_sha256": cast(Mapping[str, Any], failure_lineage).get(
+        "superseded_failure_lineage_sha256": cast(
+            Mapping[str, Any], prerequisite_failure
+        ).get(
             "lineage_sha256"
         ),
         "superseded_failure_lineage_projection_sha256": payload.get(
-            "superseded_zero_quality_failure_lineage_projection_sha256"
+            "superseded_zero_quality_prerequisite_failure_lineage_projection_sha256"
         ),
     }
 
 
-def build_v1_3_2_preheldout_genesis_payload(
+def build_v1_3_3_preheldout_genesis_payload(
     *,
     admission: ValidatedReuseAdmission,
     trust_root: attestation.TrustRoot,
     superseded_empty_lineage: SupersededEmptyLineageV1_3,
     superseded_failure_lineage: SupersededZeroQualityFailureLineageV1_3_1,
+    superseded_prerequisite_failure_lineage: SupersededStaticOnlyFailureLineageV1_3_2,
     expected_shards: int,
     coordinate_digest: str,
     exact_fill_arm_names: Sequence[str],
 ) -> dict[str, Any]:
-    _require(type(admission) is ValidatedReuseAdmission, "V1.3.2 genesis requires admission.")
-    _require_v1_3_2_context(admission.quality_context, trust_root=trust_root)
+    _require(type(admission) is ValidatedReuseAdmission, "V1.3.3 genesis requires admission.")
+    _require_v1_3_3_context(admission.quality_context, trust_root=trust_root)
     lineage = _require_superseded_lineage(superseded_empty_lineage)
     failure_lineage = _require_superseded_failure_lineage(superseded_failure_lineage)
     failure_projection_sha256 = _superseded_failure_projection_sha256(failure_lineage)
+    prerequisite_failure = _require_superseded_prerequisite_failure_lineage(
+        superseded_prerequisite_failure_lineage
+    )
+    prerequisite_projection_sha256 = _superseded_prerequisite_failure_projection_sha256(
+        prerequisite_failure
+    )
     arms = _validate_quality_genesis_registration(
         expected_shards=expected_shards,
         coordinate_digest=coordinate_digest,
         exact_fill_arm_names=exact_fill_arm_names,
     )
     path = _absolute(
-        V1_3_2_DEFAULT_GENESIS_PATH,
+        V1_3_3_DEFAULT_GENESIS_PATH,
         repository_root=admission.quality_context.repository_root,
     )
-    _require(not os.path.lexists(path), "V1.3.2 genesis refuses an existing final path.")
-    _v1_3_2_prestart_absent_paths(repository_root=admission.quality_context.repository_root)
+    _require(not os.path.lexists(path), "V1.3.3 genesis refuses an existing final path.")
+    _v1_3_3_prestart_absent_paths(repository_root=admission.quality_context.repository_root)
     return _attested_payload(
         {
-            "schema_version": V1_3_2_GENESIS_SCHEMA_VERSION,
-            "artifact_type": "direct-controller-v1-3-2-preheldout-genesis",
-            "experiment_id": V1_3_2_QUALITY_EXPERIMENT_ID,
+            "schema_version": V1_3_3_GENESIS_SCHEMA_VERSION,
+            "artifact_type": "direct-controller-v1-3-3-preheldout-genesis",
+            "experiment_id": V1_3_3_QUALITY_EXPERIMENT_ID,
             "status": "in_progress",
             "canonical_path": str(path),
             "quality_source": admission.quality_context.source,
@@ -11433,15 +12297,21 @@ def build_v1_3_2_preheldout_genesis_payload(
             "superseded_zero_quality_failure_lineage_projection_sha256": (
                 failure_projection_sha256
             ),
+            "superseded_zero_quality_prerequisite_failure_lineage": (
+                prerequisite_failure.public_binding
+            ),
+            "superseded_zero_quality_prerequisite_failure_lineage_projection_sha256": (
+                prerequisite_projection_sha256
+            ),
             "activation_root": str(
                 _absolute(
-                    V1_3_2_ACTIVATION_ROOT,
+                    V1_3_3_ACTIVATION_ROOT,
                     repository_root=admission.quality_context.repository_root,
                 )
             ),
             "activation_matrix_lock_path": str(
                 _absolute(
-                    V1_3_2_ACTIVATION_MATRIX_LOCK_PATH,
+                    V1_3_3_ACTIVATION_MATRIX_LOCK_PATH,
                     repository_root=admission.quality_context.repository_root,
                 )
             ),
@@ -11462,11 +12332,11 @@ def build_v1_3_2_preheldout_genesis_payload(
             "top_p_quality_input_count": 0,
         },
         trust_root=trust_root,
-        purpose=V1_3_2_PREHELDOUT_GENESIS_PURPOSE,
+        purpose=V1_3_3_PREHELDOUT_GENESIS_PURPOSE,
     )
 
 
-def _validate_v1_3_2_preheldout_genesis_internal(
+def _validate_v1_3_3_preheldout_genesis_internal(
     payload: Mapping[str, Any],
     *,
     genesis_path: Path,
@@ -11476,15 +12346,19 @@ def _validate_v1_3_2_preheldout_genesis_internal(
     admission: ValidatedReuseAdmission,
     superseded_empty_lineage: SupersededEmptyLineageV1_3,
     superseded_failure_lineage: SupersededZeroQualityFailureLineageV1_3_1,
+    superseded_prerequisite_failure_lineage: SupersededStaticOnlyFailureLineageV1_3_2,
     trust_root: attestation.TrustRoot,
     expected_shards: int,
     coordinate_digest: str,
     exact_fill_arm_names: Sequence[str],
 ) -> ValidatedPreheldoutGenesis:
-    _require(type(admission) is ValidatedReuseAdmission, "V1.3.2 genesis requires admission.")
-    _require_v1_3_2_context(admission.quality_context, trust_root=trust_root)
+    _require(type(admission) is ValidatedReuseAdmission, "V1.3.3 genesis requires admission.")
+    _require_v1_3_3_context(admission.quality_context, trust_root=trust_root)
     lineage = _require_superseded_lineage(superseded_empty_lineage)
     failure_lineage = _require_superseded_failure_lineage(superseded_failure_lineage)
+    prerequisite_failure = _require_superseded_prerequisite_failure_lineage(
+        superseded_prerequisite_failure_lineage
+    )
     arms = _validate_quality_genesis_registration(
         expected_shards=expected_shards,
         coordinate_digest=coordinate_digest,
@@ -11502,6 +12376,8 @@ def _validate_v1_3_2_preheldout_genesis_internal(
         "superseded_empty_lineage",
         "superseded_zero_quality_failure_lineage",
         "superseded_zero_quality_failure_lineage_projection_sha256",
+        "superseded_zero_quality_prerequisite_failure_lineage",
+        "superseded_zero_quality_prerequisite_failure_lineage_projection_sha256",
         "activation_root",
         "activation_matrix_lock_path",
         "expected_shards",
@@ -11522,32 +12398,32 @@ def _validate_v1_3_2_preheldout_genesis_internal(
         "payload_sha256",
         "attestation",
     }
-    _require(set(payload) == expected_fields, "V1.3.2 genesis schema drifted.")
+    _require(set(payload) == expected_fields, "V1.3.3 genesis schema drifted.")
     _verify_attested_payload(
         payload,
         trust_root=trust_root,
-        purpose=V1_3_2_PREHELDOUT_GENESIS_PURPOSE,
-        label="V1.3.2 pre-heldout genesis",
+        purpose=V1_3_3_PREHELDOUT_GENESIS_PURPOSE,
+        label="V1.3.3 pre-heldout genesis",
     )
     canonical_path = _absolute(
-        V1_3_2_DEFAULT_GENESIS_PATH,
+        V1_3_3_DEFAULT_GENESIS_PATH,
         repository_root=admission.quality_context.repository_root,
     )
     path = _exact_path(
         genesis_path,
-        label="Canonical v1.3.2 pre-heldout genesis",
+        label="Canonical v1.3.3 pre-heldout genesis",
         repository_root=admission.quality_context.repository_root,
         must_exist=require_final_root,
     )
     if require_final_root:
         _final_admission, final_genesis = _validate_admission_bundle_root(
             _absolute(
-                V1_3_2_ADMISSION_ROOT,
+                V1_3_3_ADMISSION_ROOT,
                 repository_root=admission.quality_context.repository_root,
             ),
-            label="Final v1.3.2 admission root",
+            label="Final v1.3.3 admission root",
         )
-        _require(path == final_genesis, "V1.3.2 genesis final path drifted.")
+        _require(path == final_genesis, "V1.3.3 genesis final path drifted.")
     zero_fields = (
         "completed_shards",
         "evaluation_inputs_materialized",
@@ -11561,9 +12437,9 @@ def _validate_v1_3_2_preheldout_genesis_internal(
     root = admission.quality_context.repository_root
     _require(
         path == canonical_path
-        and payload.get("schema_version") == V1_3_2_GENESIS_SCHEMA_VERSION
-        and payload.get("artifact_type") == "direct-controller-v1-3-2-preheldout-genesis"
-        and payload.get("experiment_id") == V1_3_2_QUALITY_EXPERIMENT_ID
+        and payload.get("schema_version") == V1_3_3_GENESIS_SCHEMA_VERSION
+        and payload.get("artifact_type") == "direct-controller-v1-3-3-preheldout-genesis"
+        and payload.get("experiment_id") == V1_3_3_QUALITY_EXPERIMENT_ID
         and payload.get("status") == "in_progress"
         and payload.get("canonical_path") == str(canonical_path)
         and payload.get("quality_source") == admission.quality_context.source
@@ -11574,10 +12450,16 @@ def _validate_v1_3_2_preheldout_genesis_internal(
         == failure_lineage.public_binding
         and payload.get("superseded_zero_quality_failure_lineage_projection_sha256")
         == _superseded_failure_projection_sha256(failure_lineage)
+        and payload.get("superseded_zero_quality_prerequisite_failure_lineage")
+        == prerequisite_failure.public_binding
+        and payload.get(
+            "superseded_zero_quality_prerequisite_failure_lineage_projection_sha256"
+        )
+        == _superseded_prerequisite_failure_projection_sha256(prerequisite_failure)
         and payload.get("activation_root")
-        == str(_absolute(V1_3_2_ACTIVATION_ROOT, repository_root=root))
+        == str(_absolute(V1_3_3_ACTIVATION_ROOT, repository_root=root))
         and payload.get("activation_matrix_lock_path")
-        == str(_absolute(V1_3_2_ACTIVATION_MATRIX_LOCK_PATH, repository_root=root))
+        == str(_absolute(V1_3_3_ACTIVATION_MATRIX_LOCK_PATH, repository_root=root))
         and payload.get("expected_shards") == expected_shards
         and payload.get("coordinate_digest") == coordinate_digest
         and tuple(payload.get("exact_fill_arm_names", ())) == arms
@@ -11586,24 +12468,24 @@ def _validate_v1_3_2_preheldout_genesis_internal(
         and payload.get("evaluation_seed_used_to_initialize_quality_rng") is False
         and payload.get("quality_rng_initialized") is False
         and all(payload.get(field) == 0 for field in zero_fields),
-        "V1.3.2 genesis zero-prefix or lineage contract drifted.",
+        "V1.3.3 genesis zero-prefix or lineage contract drifted.",
     )
     if require_prestart_absence:
-        _v1_3_2_prestart_absent_paths(repository_root=root)
+        _v1_3_3_prestart_absent_paths(repository_root=root)
     storage = _exact_path(
         storage_path,
-        label="V1.3.2 genesis storage",
+        label="V1.3.3 genesis storage",
         repository_root=root,
         must_exist=True,
     )
     disk, opened = _load_json_nofollow(
         storage,
-        label="V1.3.2 pre-heldout genesis",
+        label="V1.3.3 pre-heldout genesis",
         require_canonical_pretty_bytes=True,
     )
     try:
-        _require(disk == dict(payload), "V1.3.2 genesis differs from exact disk bytes.")
-        public_binding = _v1_3_2_genesis_public_binding(
+        _require(disk == dict(payload), "V1.3.3 genesis differs from exact disk bytes.")
+        public_binding = _v1_3_3_genesis_public_binding(
             path=canonical_path,
             payload=payload,
             sha256=opened.sha256,
@@ -11616,13 +12498,13 @@ def _validate_v1_3_2_preheldout_genesis_internal(
     return ValidatedPreheldoutGenesis(payload=dict(payload), public_binding=public_binding)
 
 
-def _recover_v1_3_2_admission_staging(parent: Path) -> None:
+def _recover_v1_3_3_admission_staging(parent: Path) -> None:
     recovered = False
     with os.scandir(parent) as iterator:
         candidates = sorted(
             Path(entry.path)
             for entry in iterator
-            if entry.name.startswith(V1_3_2_ADMISSION_STAGING_PREFIX)
+            if entry.name.startswith(V1_3_3_ADMISSION_STAGING_PREFIX)
         )
     for candidate in candidates:
         _remove_safe_staging_directory(candidate)
@@ -11631,7 +12513,7 @@ def _recover_v1_3_2_admission_staging(parent: Path) -> None:
         _fsync_directory(parent)
 
 
-def publish_v1_3_2_admission_genesis_bundle(
+def publish_v1_3_3_admission_genesis_bundle(
     *,
     quality_context: QualityContext,
     trust_root: attestation.TrustRoot,
@@ -11641,7 +12523,7 @@ def publish_v1_3_2_admission_genesis_bundle(
 ) -> tuple[ValidatedReuseAdmission, ValidatedPreheldoutGenesis]:
     """Publish the new static pair; never mutate or relabel the v1.3 pair."""
 
-    _require_v1_3_2_context(quality_context, trust_root=trust_root)
+    _require_v1_3_3_context(quality_context, trust_root=trust_root)
     arms = _validate_quality_genesis_registration(
         expected_shards=expected_shards,
         coordinate_digest=coordinate_digest,
@@ -11656,13 +12538,13 @@ def publish_v1_3_2_admission_genesis_bundle(
         repository_root=quality_context.repository_root,
         superseded_empty_lineage=lineage,
     )
-    root = _absolute(V1_3_2_ADMISSION_ROOT, repository_root=quality_context.repository_root)
-    parent = _exact_path(root.parent, label="V1.3.2 admission parent", must_exist=True)
-    _v1_3_2_prestart_absent_paths(repository_root=quality_context.repository_root)
+    root = _absolute(V1_3_3_ADMISSION_ROOT, repository_root=quality_context.repository_root)
+    parent = _exact_path(root.parent, label="V1.3.3 admission parent", must_exist=True)
+    _v1_3_3_prestart_absent_paths(repository_root=quality_context.repository_root)
     from adaptive_v4_gpu_lock import acquire_gpu_lock
 
     bootstrap = acquire_gpu_lock(
-        "p2-direct-controller-v1.3.2-admission-publication",
+        "p2-direct-controller-v1.3.3-admission-publication",
         path=DIRECT_GPU_SCHEDULER_LOCK_PATH,
     )
     staging: Path | None = None
@@ -11670,27 +12552,34 @@ def publish_v1_3_2_admission_genesis_bundle(
     try:
         bootstrap.assert_held()
         _fsync_directory(parent)
-        _require(not os.path.lexists(root), "V1.3.2 final admission root is immutable.")
-        _recover_v1_3_2_admission_staging(parent)
-        _require(not os.path.lexists(root), "V1.3.2 admission root appeared during recovery.")
-        _v1_3_2_prestart_absent_paths(repository_root=quality_context.repository_root)
-        admission_payload = build_v1_3_2_reuse_admission_payload(
+        _require(not os.path.lexists(root), "V1.3.3 final admission root is immutable.")
+        _recover_v1_3_3_admission_staging(parent)
+        _require(not os.path.lexists(root), "V1.3.3 admission root appeared during recovery.")
+        _v1_3_3_prestart_absent_paths(repository_root=quality_context.repository_root)
+        prerequisite_failure = load_superseded_static_only_failure_lineage_v1_3_2(
+            trust_root=trust_root,
+            repository_root=quality_context.repository_root,
+            superseded_empty_lineage=lineage,
+            superseded_failure_lineage=failure_lineage,
+        )
+        admission_payload = build_v1_3_3_reuse_admission_payload(
             quality_context=quality_context,
             trust_root=trust_root,
             superseded_empty_lineage=lineage,
             superseded_failure_lineage=failure_lineage,
+            superseded_prerequisite_failure_lineage=prerequisite_failure,
         )
         admission_bytes = canonical_pretty_json(admission_payload)
-        admission_binding = _v1_3_2_reuse_admission_public_binding(
+        admission_binding = _v1_3_3_reuse_admission_public_binding(
             path=_absolute(
-                V1_3_2_DEFAULT_ADMISSION_PATH,
+                V1_3_3_DEFAULT_ADMISSION_PATH,
                 repository_root=quality_context.repository_root,
             ),
             payload=admission_payload,
             sha256=hashlib.sha256(admission_bytes).hexdigest(),
             byte_count=len(admission_bytes),
         )
-        calibrations, checkpoints = _v1_3_2_admission_entries(
+        calibrations, checkpoints = _v1_3_3_admission_entries(
             lineage,
             quality_context=quality_context,
         )
@@ -11704,27 +12593,28 @@ def publish_v1_3_2_admission_genesis_bundle(
                 cast(Mapping[str, Any], admission_payload["execution_environment_projection"])
             ),
         )
-        genesis_payload = build_v1_3_2_preheldout_genesis_payload(
+        genesis_payload = build_v1_3_3_preheldout_genesis_payload(
             admission=provisional,
             trust_root=trust_root,
             superseded_empty_lineage=lineage,
             superseded_failure_lineage=failure_lineage,
+            superseded_prerequisite_failure_lineage=prerequisite_failure,
             expected_shards=expected_shards,
             coordinate_digest=coordinate_digest,
             exact_fill_arm_names=arms,
         )
         genesis_bytes = canonical_pretty_json(genesis_payload)
-        staging = parent / f"{V1_3_2_ADMISSION_STAGING_PREFIX}{secrets.token_hex(16)}"
+        staging = parent / f"{V1_3_3_ADMISSION_STAGING_PREFIX}{secrets.token_hex(16)}"
         os.mkdir(staging, SAFE_DIRECTORY_MODE)
         os.chmod(staging, SAFE_DIRECTORY_MODE)
-        _write_exclusive_durable(staging / V1_3_2_DEFAULT_ADMISSION_PATH.name, admission_bytes)
-        _write_exclusive_durable(staging / V1_3_2_DEFAULT_GENESIS_PATH.name, genesis_bytes)
+        _write_exclusive_durable(staging / V1_3_3_DEFAULT_ADMISSION_PATH.name, admission_bytes)
+        _write_exclusive_durable(staging / V1_3_3_DEFAULT_GENESIS_PATH.name, genesis_bytes)
         _fsync_directory(staging, exact_mode=SAFE_DIRECTORY_MODE)
-        _validate_admission_bundle_root(staging, label="Staged v1.3.2 admission root")
-        staged_admission = _validate_v1_3_2_reuse_admission_internal(
+        _validate_admission_bundle_root(staging, label="Staged v1.3.3 admission root")
+        staged_admission = _validate_v1_3_3_reuse_admission_internal(
             admission_payload,
-            admission_path=root / V1_3_2_DEFAULT_ADMISSION_PATH.name,
-            storage_path=staging / V1_3_2_DEFAULT_ADMISSION_PATH.name,
+            admission_path=root / V1_3_3_DEFAULT_ADMISSION_PATH.name,
+            storage_path=staging / V1_3_3_DEFAULT_ADMISSION_PATH.name,
             require_final_root=False,
             require_prestart_absence=True,
             trust_root=trust_root,
@@ -11732,37 +12622,51 @@ def publish_v1_3_2_admission_genesis_bundle(
         )
         _require(
             staged_admission.public_binding == admission_binding,
-            "Staged v1.3.2 admission differs from its provisional binding.",
+            "Staged v1.3.3 admission differs from its provisional binding.",
         )
-        staged_genesis = _validate_v1_3_2_preheldout_genesis_internal(
+        staged_genesis = _validate_v1_3_3_preheldout_genesis_internal(
             genesis_payload,
-            genesis_path=root / V1_3_2_DEFAULT_GENESIS_PATH.name,
-            storage_path=staging / V1_3_2_DEFAULT_GENESIS_PATH.name,
+            genesis_path=root / V1_3_3_DEFAULT_GENESIS_PATH.name,
+            storage_path=staging / V1_3_3_DEFAULT_GENESIS_PATH.name,
             require_final_root=False,
             require_prestart_absence=True,
             admission=staged_admission,
             superseded_empty_lineage=lineage,
             superseded_failure_lineage=failure_lineage,
+            superseded_prerequisite_failure_lineage=prerequisite_failure,
             trust_root=trust_root,
             expected_shards=expected_shards,
             coordinate_digest=coordinate_digest,
             exact_fill_arm_names=arms,
         )
         bootstrap.assert_held()
-        _v1_3_2_prestart_absent_paths(repository_root=quality_context.repository_root)
-        _require(not os.path.lexists(root), "V1.3.2 admission root appeared before publish.")
+        _v1_3_3_prestart_absent_paths(repository_root=quality_context.repository_root)
+        final_prerequisite_failure = (
+            load_superseded_static_only_failure_lineage_v1_3_2(
+                trust_root=trust_root,
+                repository_root=quality_context.repository_root,
+                superseded_empty_lineage=lineage,
+                superseded_failure_lineage=failure_lineage,
+            )
+        )
+        _require(
+            final_prerequisite_failure.public_binding
+            == prerequisite_failure.public_binding,
+            "Superseded v1.3.2 static lineage changed before v1.3.3 publication.",
+        )
+        _require(not os.path.lexists(root), "V1.3.3 admission root appeared before publish.")
         _rename_directory_noreplace(staging, root)
         published = True
         _fsync_directory(parent)
-        _validate_admission_bundle_root(root, label="Final v1.3.2 admission root")
+        _validate_admission_bundle_root(root, label="Final v1.3.3 admission root")
         _validate_file_binding(
             staged_admission.public_binding,
-            label="Published v1.3.2 reuse admission",
+            label="Published v1.3.3 reuse admission",
             repository_root=quality_context.repository_root,
         )
         _validate_file_binding(
             staged_genesis.public_binding,
-            label="Published v1.3.2 genesis",
+            label="Published v1.3.3 genesis",
             repository_root=quality_context.repository_root,
         )
         bootstrap.assert_held()
@@ -11776,7 +12680,7 @@ def publish_v1_3_2_admission_genesis_bundle(
             bootstrap.close()
 
 
-def _load_v1_3_2_static_bundle(
+def _load_v1_3_3_static_bundle(
     *,
     quality_context: QualityContext,
     trust_root: attestation.TrustRoot,
@@ -11784,25 +12688,26 @@ def _load_v1_3_2_static_bundle(
     coordinate_digest: str,
     exact_fill_arm_names: Sequence[str],
     require_prestart_absence: bool,
-    consumer_scope: _ActivatedConsumerScopeV1_3_2 | None = None,
+    consumer_scope: _ActivatedConsumerScopeV1_3_3 | None = None,
 ) -> tuple[
     ValidatedReuseAdmission,
     ValidatedPreheldoutGenesis,
     SupersededEmptyLineageV1_3,
     SupersededZeroQualityFailureLineageV1_3_1,
+    SupersededStaticOnlyFailureLineageV1_3_2,
 ]:
-    root = _absolute(V1_3_2_ADMISSION_ROOT, repository_root=quality_context.repository_root)
+    root = _absolute(V1_3_3_ADMISSION_ROOT, repository_root=quality_context.repository_root)
     admission_path, genesis_path = _validate_admission_bundle_root(
         root,
-        label="Final v1.3.2 admission root",
+        label="Final v1.3.3 admission root",
     )
     admission_payload, admission_opened = _load_json_nofollow(
         admission_path,
-        label="V1.3.2 reuse admission",
+        label="V1.3.3 reuse admission",
         require_canonical_pretty_bytes=True,
     )
     admission_opened.close()
-    validated_admission = _validate_v1_3_2_reuse_admission_internal(
+    validated_admission = _validate_v1_3_3_reuse_admission_internal(
         admission_payload,
         admission_path=admission_path,
         storage_path=admission_path,
@@ -11821,13 +12726,19 @@ def _load_v1_3_2_static_bundle(
         repository_root=quality_context.repository_root,
         superseded_empty_lineage=lineage,
     )
+    prerequisite_failure = load_superseded_static_only_failure_lineage_v1_3_2(
+        trust_root=trust_root,
+        repository_root=quality_context.repository_root,
+        superseded_empty_lineage=lineage,
+        superseded_failure_lineage=failure_lineage,
+    )
     genesis_payload, genesis_opened = _load_json_nofollow(
         genesis_path,
-        label="V1.3.2 pre-heldout genesis",
+        label="V1.3.3 pre-heldout genesis",
         require_canonical_pretty_bytes=True,
     )
     genesis_opened.close()
-    validated_genesis = _validate_v1_3_2_preheldout_genesis_internal(
+    validated_genesis = _validate_v1_3_3_preheldout_genesis_internal(
         genesis_payload,
         genesis_path=genesis_path,
         storage_path=genesis_path,
@@ -11836,12 +12747,19 @@ def _load_v1_3_2_static_bundle(
         admission=validated_admission,
         superseded_empty_lineage=lineage,
         superseded_failure_lineage=failure_lineage,
+        superseded_prerequisite_failure_lineage=prerequisite_failure,
         trust_root=trust_root,
         expected_shards=expected_shards,
         coordinate_digest=coordinate_digest,
         exact_fill_arm_names=exact_fill_arm_names,
     )
-    return validated_admission, validated_genesis, lineage, failure_lineage
+    return (
+        validated_admission,
+        validated_genesis,
+        lineage,
+        failure_lineage,
+        prerequisite_failure,
+    )
 
 
 def load_prestart_quality_authority(
@@ -11851,21 +12769,23 @@ def load_prestart_quality_authority(
     expected_shards: int,
     coordinate_digest: str,
     exact_fill_arm_names: Sequence[str],
-) -> PrestartQualityAuthorityV1_3_2:
+) -> PrestartQualityAuthorityV1_3_3:
     """Create a typed live-absence witness before activation exists."""
 
-    admission, genesis, lineage, failure_lineage = _load_v1_3_2_static_bundle(
+    admission, genesis, lineage, failure_lineage, prerequisite_failure = (
+        _load_v1_3_3_static_bundle(
         quality_context=quality_context,
         trust_root=trust_root,
         expected_shards=expected_shards,
         coordinate_digest=coordinate_digest,
         exact_fill_arm_names=exact_fill_arm_names,
         require_prestart_absence=True,
+        )
     )
-    absent = _v1_3_2_prestart_absent_paths(repository_root=quality_context.repository_root)
+    absent = _v1_3_3_prestart_absent_paths(repository_root=quality_context.repository_root)
     source = {
         "schema_version": 1,
-        "authority_type": "v1.3.2-live-prestart-absence",
+        "authority_type": "v1.3.3-live-prestart-absence",
         "quality_source": quality_context.source,
         "quality_manifest": quality_context.manifest_binding,
         "reuse_admission": admission.public_binding,
@@ -11874,17 +12794,21 @@ def load_prestart_quality_authority(
         "superseded_failure_lineage_sha256": failure_lineage.public_binding[
             "lineage_sha256"
         ],
+        "superseded_prerequisite_failure_lineage_sha256": (
+            prerequisite_failure.public_binding["lineage_sha256"]
+        ),
         "absent_paths": list(absent),
         "quality_state": _superseded_empty_quality_state(),
     }
     witness = {**source, "witness_sha256": _json_digest(source)}
-    return PrestartQualityAuthorityV1_3_2(
-        _seal=_PRESTART_QUALITY_AUTHORITY_V1_3_2_SEAL,
+    return PrestartQualityAuthorityV1_3_3(
+        _seal=_PRESTART_QUALITY_AUTHORITY_V1_3_3_SEAL,
         quality_context=quality_context,
         reuse_admission=admission,
         preheldout_genesis=genesis,
         superseded_empty_lineage=lineage,
         superseded_failure_lineage=failure_lineage,
+        superseded_prerequisite_failure_lineage=prerequisite_failure,
         absence_witness=witness,
     )
 
@@ -11897,17 +12821,18 @@ def _validate_prestart_absence_witness(
     preheldout_genesis: ValidatedPreheldoutGenesis,
     superseded_empty_lineage: SupersededEmptyLineageV1_3,
     superseded_failure_lineage: SupersededZeroQualityFailureLineageV1_3_1,
+    superseded_prerequisite_failure_lineage: SupersededStaticOnlyFailureLineageV1_3_2,
 ) -> dict[str, Any]:
     """Validate the signed historical absence claim without reasserting live absence."""
 
     expected_absent_paths = [
         str(_absolute(path, repository_root=quality_context.repository_root))
-        for path in V1_3_2_PROSPECTIVE_QUALITY_PATHS
+        for path in V1_3_3_PROSPECTIVE_QUALITY_PATHS
     ]
     expected_absent_paths.append(
         str(
             _absolute(
-                V1_3_2_ACTIVATION_ROOT,
+                V1_3_3_ACTIVATION_ROOT,
                 repository_root=quality_context.repository_root,
             )
         )
@@ -11925,12 +12850,13 @@ def _validate_prestart_absence_witness(
             "preheldout_genesis",
             "superseded_empty_lineage_sha256",
             "superseded_failure_lineage_sha256",
+            "superseded_prerequisite_failure_lineage_sha256",
             "absent_paths",
             "quality_state",
             "witness_sha256",
         }
         and checked.get("schema_version") == 1
-        and checked.get("authority_type") == "v1.3.2-live-prestart-absence"
+        and checked.get("authority_type") == "v1.3.3-live-prestart-absence"
         and checked.get("quality_source") == quality_context.source
         and checked.get("quality_manifest") == quality_context.manifest_binding
         and checked.get("reuse_admission") == reuse_admission.public_binding
@@ -11939,22 +12865,26 @@ def _validate_prestart_absence_witness(
         == superseded_empty_lineage.public_binding["lineage_sha256"]
         and checked.get("superseded_failure_lineage_sha256")
         == superseded_failure_lineage.public_binding["lineage_sha256"]
+        and checked.get("superseded_prerequisite_failure_lineage_sha256")
+        == superseded_prerequisite_failure_lineage.public_binding["lineage_sha256"]
         and checked.get("absent_paths") == expected_absent_paths
         and checked.get("quality_state") == _superseded_empty_quality_state()
         and checked.get("witness_sha256") == _json_digest(source),
-        "V1.3.2 prestart absence witness drifted.",
+        "V1.3.3 prestart absence witness drifted.",
     )
     return checked
 
 
 def _require_prestart_authority(
-    prestart: PrestartQualityAuthorityV1_3_2,
-) -> PrestartQualityAuthorityV1_3_2:
+    prestart: PrestartQualityAuthorityV1_3_3,
+) -> PrestartQualityAuthorityV1_3_3:
     _require(
-        type(prestart) is PrestartQualityAuthorityV1_3_2
-        and prestart._seal is _PRESTART_QUALITY_AUTHORITY_V1_3_2_SEAL
+        type(prestart) is PrestartQualityAuthorityV1_3_3
+        and prestart._seal is _PRESTART_QUALITY_AUTHORITY_V1_3_3_SEAL
         and type(prestart.reuse_admission) is ValidatedReuseAdmission
         and type(prestart.preheldout_genesis) is ValidatedPreheldoutGenesis
+        and type(prestart.superseded_prerequisite_failure_lineage)
+        is SupersededStaticOnlyFailureLineageV1_3_2
         and isinstance(prestart.absence_witness, Mapping),
         "Prestart quality authority is raw, stale, or duck-typed.",
     )
@@ -11965,12 +12895,15 @@ def _require_prestart_authority(
         preheldout_genesis=prestart.preheldout_genesis,
         superseded_empty_lineage=prestart.superseded_empty_lineage,
         superseded_failure_lineage=prestart.superseded_failure_lineage,
+        superseded_prerequisite_failure_lineage=(
+            prestart.superseded_prerequisite_failure_lineage
+        ),
     )
     return prestart
 
 
 def _revalidate_cached_static_bundle(
-    authority: PrestartQualityAuthorityV1_3_2 | ValidatedQualityStartActivationV1_3_2,
+    authority: PrestartQualityAuthorityV1_3_3 | ValidatedQualityStartActivationV1_3_3,
     *,
     quality_context: QualityContext,
     trust_root: attestation.TrustRoot,
@@ -11983,25 +12916,30 @@ def _revalidate_cached_static_bundle(
     ValidatedPreheldoutGenesis,
     SupersededEmptyLineageV1_3,
     SupersededZeroQualityFailureLineageV1_3_1,
+    SupersededStaticOnlyFailureLineageV1_3_2,
 ]:
     """Recheck a sealed full-grid capability without rehashing every checkpoint."""
 
-    if type(authority) is PrestartQualityAuthorityV1_3_2:
+    if type(authority) is PrestartQualityAuthorityV1_3_3:
         checked = _require_prestart_authority(authority)
         cached_context = checked.quality_context
         reuse_admission = checked.reuse_admission
         preheldout_genesis = checked.preheldout_genesis
         lineage = checked.superseded_empty_lineage
         failure_lineage = checked.superseded_failure_lineage
+        prerequisite_failure = checked.superseded_prerequisite_failure_lineage
     else:
         checked_activation = _require_full_activation_authority(
-            cast(ValidatedQualityStartActivationV1_3_2, authority)
+            cast(ValidatedQualityStartActivationV1_3_3, authority)
         )
         cached_context = checked_activation.quality_context
         reuse_admission = checked_activation.reuse_admission
         preheldout_genesis = checked_activation.preheldout_genesis
         lineage = checked_activation.superseded_empty_lineage
         failure_lineage = checked_activation.superseded_failure_lineage
+        prerequisite_failure = (
+            checked_activation.superseded_prerequisite_failure_lineage
+        )
     expected_coordinates = {
         (scale, training_seed)
         for scale in SCALES
@@ -12018,33 +12956,46 @@ def _revalidate_cached_static_bundle(
         == tuple(exact_fill_arm_names),
         "Cached full-grid static authority registration drifted.",
     )
-    _require_v1_3_2_context(quality_context, trust_root=trust_root)
+    _require_v1_3_3_context(quality_context, trust_root=trust_root)
     _verify_attested_payload(
         reuse_admission.payload,
         trust_root=trust_root,
-        purpose=V1_3_2_REUSE_ADMISSION_PURPOSE,
-        label="Cached v1.3.2 reuse admission",
+        purpose=V1_3_3_REUSE_ADMISSION_PURPOSE,
+        label="Cached v1.3.3 reuse admission",
     )
     _verify_attested_payload(
         preheldout_genesis.payload,
         trust_root=trust_root,
-        purpose=V1_3_2_PREHELDOUT_GENESIS_PURPOSE,
-        label="Cached v1.3.2 pre-heldout genesis",
+        purpose=V1_3_3_PREHELDOUT_GENESIS_PURPOSE,
+        label="Cached v1.3.3 pre-heldout genesis",
     )
     _require_superseded_lineage(lineage)
     _require_superseded_failure_lineage(failure_lineage)
+    _require_superseded_prerequisite_failure_lineage(prerequisite_failure)
+    fresh_prerequisite_failure = load_superseded_static_only_failure_lineage_v1_3_2(
+        trust_root=trust_root,
+        repository_root=quality_context.repository_root,
+        superseded_empty_lineage=lineage,
+        superseded_failure_lineage=failure_lineage,
+    )
     _require(
         reuse_admission.payload.get("superseded_empty_lineage")
         in (None, lineage.public_binding)
         and reuse_admission.payload.get("superseded_zero_quality_failure_lineage")
         in (None, failure_lineage.public_binding)
+        and reuse_admission.payload.get(
+            "superseded_zero_quality_prerequisite_failure_lineage"
+        )
+        in (None, prerequisite_failure.public_binding)
+        and fresh_prerequisite_failure.public_binding
+        == prerequisite_failure.public_binding
         and preheldout_genesis.payload.get("reuse_admission")
         in (None, reuse_admission.public_binding),
-        "Cached v1.3.2 static lineage binding drifted.",
+        "Cached v1.3.3 static lineage binding drifted.",
     )
     for binding, label in (
-        (reuse_admission.public_binding, "Cached v1.3.2 reuse admission"),
-        (preheldout_genesis.public_binding, "Cached v1.3.2 pre-heldout genesis"),
+        (reuse_admission.public_binding, "Cached v1.3.3 reuse admission"),
+        (preheldout_genesis.public_binding, "Cached v1.3.3 pre-heldout genesis"),
     ):
         _validate_file_binding(
             binding,
@@ -12052,19 +13003,25 @@ def _revalidate_cached_static_bundle(
             repository_root=quality_context.repository_root,
         )
     if require_live_prestart_absence:
-        _v1_3_2_prestart_absent_paths(repository_root=quality_context.repository_root)
+        _v1_3_3_prestart_absent_paths(repository_root=quality_context.repository_root)
     assert_quality_context_unchanged(quality_context)
-    return reuse_admission, preheldout_genesis, lineage, failure_lineage
+    return (
+        reuse_admission,
+        preheldout_genesis,
+        lineage,
+        failure_lineage,
+        prerequisite_failure,
+    )
 
 
 def _revalidate_prestart_quality_authority(
-    prestart: PrestartQualityAuthorityV1_3_2,
+    prestart: PrestartQualityAuthorityV1_3_3,
     *,
     trust_root: attestation.TrustRoot,
     expected_shards: int,
     coordinate_digest: str,
     exact_fill_arm_names: Sequence[str],
-) -> PrestartQualityAuthorityV1_3_2:
+) -> PrestartQualityAuthorityV1_3_3:
     checked = _require_prestart_authority(prestart)
     _revalidate_cached_static_bundle(
         checked,
@@ -12081,7 +13038,7 @@ def _revalidate_prestart_quality_authority(
 def _validate_base_prerequisites_binding(
     binding: Mapping[str, Any],
     *,
-    prestart: PrestartQualityAuthorityV1_3_2,
+    prestart: PrestartQualityAuthorityV1_3_3,
     sealed_source_provenance: Mapping[str, Any],
 ) -> dict[str, Any]:
     return _validate_base_prerequisites_components(
@@ -12142,7 +13099,7 @@ def _validate_base_prerequisites_components(
     return checked
 
 
-def _validate_sealed_source_provenance_v1_3_2(
+def _validate_sealed_source_provenance_v1_3_3(
     value: Mapping[str, Any], *, quality_context: QualityContext
 ) -> dict[str, Any]:
     checked = dict(value)
@@ -12160,7 +13117,7 @@ def _validate_sealed_source_provenance_v1_3_2(
     _require(
         set(checked) == expected_fields
         and checked.get("schema_version") == 1
-        and checked.get("launcher") == V1_3_2_CANONICAL_GIT_OBJECT_LAUNCHER_ID
+        and checked.get("launcher") == V1_3_3_CANONICAL_GIT_OBJECT_LAUNCHER_ID
         and checked.get("repository_root") == str(quality_context.repository_root)
         and _is_sha256(checked.get("bundle_sha256"))
         and checked.get("pinned_head_oid") == quality_context.source["commit"]
@@ -12169,26 +13126,26 @@ def _validate_sealed_source_provenance_v1_3_2(
         and checked.get("implementation_tree_digest")
         == quality_context.manifest_binding["implementation_digest"]
         and isinstance(head_manifest, Mapping),
-        "Sealed v1.3.2 source provenance drifted.",
+        "Sealed v1.3.3 source provenance drifted.",
     )
     head = cast(Mapping[str, Any], head_manifest)
     _require(
         set(head) == {"path", "git_mode", "git_blob_oid", "sha256", "bytes", "source_base64"}
-        and head.get("path") == str(V1_3_2_MANIFEST_RELATIVE_PATH)
+        and head.get("path") == str(V1_3_3_MANIFEST_RELATIVE_PATH)
         and head.get("git_mode") in {"100644", "100755"}
         and _is_git_oid(head.get("git_blob_oid"))
         and head.get("sha256") == quality_context.manifest_binding["sha256"]
         and head.get("bytes") == quality_context.manifest_binding["bytes"]
         and isinstance(head.get("source_base64"), str),
-        "Sealed v1.3.2 HEAD-manifest binding drifted.",
+        "Sealed v1.3.3 HEAD-manifest binding drifted.",
     )
     try:
         source_bytes = base64.b64decode(cast(str, head["source_base64"]), validate=True)
     except (TypeError, ValueError) as error:
-        raise ValueError("Sealed v1.3.2 manifest source encoding is invalid.") from error
+        raise ValueError("Sealed v1.3.3 manifest source encoding is invalid.") from error
     opened = _open_secure_regular(
         quality_context.manifest_path,
-        label="Live v1.3.2 manifest for sealed provenance",
+        label="Live v1.3.3 manifest for sealed provenance",
     )
     try:
         live = opened.read_bytes()
@@ -12201,7 +13158,7 @@ def _validate_sealed_source_provenance_v1_3_2(
             source_bytes == live
             and hashlib.sha256(source_bytes).hexdigest() == head["sha256"]
             and git_blob == head["git_blob_oid"],
-            "Sealed v1.3.2 manifest bytes differ from the live manifest.",
+            "Sealed v1.3.3 manifest bytes differ from the live manifest.",
         )
         opened.assert_unchanged()
     finally:
@@ -12209,7 +13166,7 @@ def _validate_sealed_source_provenance_v1_3_2(
     return checked
 
 
-def _validate_sealed_launch_routing_v1_3_2(
+def _validate_sealed_launch_routing_v1_3_3(
     value: Mapping[str, Any], *, source_provenance: Mapping[str, Any]
 ) -> dict[str, Any]:
     checked = dict(value)
@@ -12227,7 +13184,7 @@ def _validate_sealed_launch_routing_v1_3_2(
             "bytes",
         }
         and checked.get("schema_version") == 1
-        and checked.get("launcher") == V1_3_2_CANONICAL_GIT_OBJECT_LAUNCHER_ID
+        and checked.get("launcher") == V1_3_3_CANONICAL_GIT_OBJECT_LAUNCHER_ID
         and checked.get("entrypoint_selector") == "matrix"
         and checked.get("entrypoint_relative_path")
         == "research/adaptive_v4_memory/scripts/run_p2_direct_controller_matrix_v1_3.py"
@@ -12237,17 +13194,17 @@ def _validate_sealed_launch_routing_v1_3_2(
         and _is_sha256(checked.get("sha256"))
         and type(checked.get("bytes")) is int
         and cast(int, checked["bytes"]) > 0,
-        "Sealed v1.3.2 matrix launch routing drifted.",
+        "Sealed v1.3.3 matrix launch routing drifted.",
     )
     return checked
 
 
 def _activation_policy() -> dict[str, Any]:
     contract = importlib.import_module("p2_direct_controller_contract_v1_3")
-    builder = getattr(contract, "expected_v1_3_2_activation_policy", None)
-    _require(callable(builder), "V1.3.2 activation policy builder is unavailable.")
+    builder = getattr(contract, "expected_v1_3_3_activation_policy", None)
+    _require(callable(builder), "V1.3.3 activation policy builder is unavailable.")
     value = cast(Callable[[], object], builder)()
-    _require(isinstance(value, Mapping), "V1.3.2 activation policy is invalid.")
+    _require(isinstance(value, Mapping), "V1.3.3 activation policy is invalid.")
     return dict(cast(Mapping[str, Any], value))
 
 
@@ -12256,8 +13213,8 @@ def _activation_root_members(
     *,
     canonical_root: Path,
 ) -> tuple[dict[str, Any], dict[str, Any], Path]:
-    _require(os.path.lexists(root), "V1.3.2 activation root is missing.")
-    root = _exact_path(root, label="V1.3.2 activation root", must_exist=True)
+    _require(os.path.lexists(root), "V1.3.3 activation root is missing.")
+    root = _exact_path(root, label="V1.3.3 activation root", must_exist=True)
     no_follow = getattr(os, "O_NOFOLLOW", None)
     _require(no_follow is not None, "Activation validation requires O_NOFOLLOW.")
     descriptor = os.open(
@@ -12278,8 +13235,8 @@ def _activation_root_members(
             "Activation root ownership, identity, or mode is unsafe.",
         )
         expected_names = {
-            V1_3_2_ACTIVATION_MATRIX_LOCK_PATH.name,
-            V1_3_2_QUALITY_START_ACTIVATION_PATH.name,
+            V1_3_3_ACTIVATION_MATRIX_LOCK_PATH.name,
+            V1_3_3_QUALITY_START_ACTIVATION_PATH.name,
         }
         _require(set(os.listdir(descriptor)) == expected_names, "Activation root is not exact2.")
         identities: dict[str, os.stat_result] = {}
@@ -12323,10 +13280,10 @@ def _activation_root_members(
         "nlink": opened_root.st_nlink,
         "persistent_inode": True,
     }
-    lock = identities[V1_3_2_ACTIVATION_MATRIX_LOCK_PATH.name]
+    lock = identities[V1_3_3_ACTIVATION_MATRIX_LOCK_PATH.name]
     lock_binding = {
-        "path": str(canonical_root / V1_3_2_ACTIVATION_MATRIX_LOCK_PATH.name),
-        "semantics": V1_3_2_ACTIVATION_MATRIX_LOCK_SEMANTICS,
+        "path": str(canonical_root / V1_3_3_ACTIVATION_MATRIX_LOCK_PATH.name),
+        "semantics": V1_3_3_ACTIVATION_MATRIX_LOCK_SEMANTICS,
         "persistent_inode": True,
         "device": lock.st_dev,
         "inode": lock.st_ino,
@@ -12338,7 +13295,7 @@ def _activation_root_members(
     return (
         root_binding,
         lock_binding,
-        root / V1_3_2_QUALITY_START_ACTIVATION_PATH.name,
+        root / V1_3_3_QUALITY_START_ACTIVATION_PATH.name,
     )
 
 
@@ -12350,13 +13307,29 @@ def _activation_public_binding(
     source = payload.get("sealed_source_provenance")
     routing = payload.get("sealed_launch_routing")
     failure_lineage = payload.get("superseded_zero_quality_failure_lineage")
+    prerequisite_failure = payload.get(
+        "superseded_zero_quality_prerequisite_failure_lineage"
+    )
     _require(
         all(
             isinstance(value, Mapping)
-            for value in (envelope, lock, source, routing, failure_lineage)
+            for value in (
+                envelope,
+                lock,
+                source,
+                routing,
+                failure_lineage,
+                prerequisite_failure,
+            )
         )
         and payload.get("superseded_zero_quality_failure_lineage_projection_sha256")
         == cast(Mapping[str, Any], failure_lineage).get(
+            "normalized_contract_projection_sha256"
+        )
+        and payload.get(
+            "superseded_zero_quality_prerequisite_failure_lineage_projection_sha256"
+        )
+        == cast(Mapping[str, Any], prerequisite_failure).get(
             "normalized_contract_projection_sha256"
         ),
         "Activation public-binding inputs are invalid.",
@@ -12375,18 +13348,20 @@ def _activation_public_binding(
         "base_prerequisites_sha256": payload.get("base_prerequisites_sha256"),
         "sealed_source_bundle_sha256": cast(Mapping[str, Any], source).get("bundle_sha256"),
         "sealed_launch_routing_sha256": _json_digest(dict(cast(Mapping[str, Any], routing))),
-        "superseded_failure_lineage_sha256": cast(Mapping[str, Any], failure_lineage).get(
+        "superseded_failure_lineage_sha256": cast(
+            Mapping[str, Any], prerequisite_failure
+        ).get(
             "lineage_sha256"
         ),
         "superseded_failure_lineage_projection_sha256": payload.get(
-            "superseded_zero_quality_failure_lineage_projection_sha256"
+            "superseded_zero_quality_prerequisite_failure_lineage_projection_sha256"
         ),
     }
 
 
 def _build_quality_start_activation_payload(
     *,
-    prestart: PrestartQualityAuthorityV1_3_2,
+    prestart: PrestartQualityAuthorityV1_3_3,
     trust_root: attestation.TrustRoot,
     base_prerequisites_binding: Mapping[str, Any],
     sealed_source_provenance: Mapping[str, Any],
@@ -12395,12 +13370,12 @@ def _build_quality_start_activation_payload(
     matrix_lock_binding: Mapping[str, Any],
 ) -> dict[str, Any]:
     authority = _require_prestart_authority(prestart)
-    _require_v1_3_2_context(authority.quality_context, trust_root=trust_root)
-    source = _validate_sealed_source_provenance_v1_3_2(
+    _require_v1_3_3_context(authority.quality_context, trust_root=trust_root)
+    source = _validate_sealed_source_provenance_v1_3_3(
         sealed_source_provenance,
         quality_context=authority.quality_context,
     )
-    routing = _validate_sealed_launch_routing_v1_3_2(
+    routing = _validate_sealed_launch_routing_v1_3_3(
         sealed_launch_routing,
         source_provenance=source,
     )
@@ -12411,15 +13386,15 @@ def _build_quality_start_activation_payload(
     )
     genesis = authority.preheldout_genesis.payload
     root = _absolute(
-        V1_3_2_ACTIVATION_ROOT,
+        V1_3_3_ACTIVATION_ROOT,
         repository_root=authority.quality_context.repository_root,
     )
-    activation_path = root / V1_3_2_QUALITY_START_ACTIVATION_PATH.name
+    activation_path = root / V1_3_3_QUALITY_START_ACTIVATION_PATH.name
     return _attested_payload(
         {
-            "schema_version": V1_3_2_ACTIVATION_SCHEMA_VERSION,
-            "artifact_type": "direct-controller-v1-3-2-quality-start-activation",
-            "experiment_id": V1_3_2_QUALITY_EXPERIMENT_ID,
+            "schema_version": V1_3_3_ACTIVATION_SCHEMA_VERSION,
+            "artifact_type": "direct-controller-v1-3-3-quality-start-activation",
+            "experiment_id": V1_3_3_QUALITY_EXPERIMENT_ID,
             "status": "activated",
             "canonical_root": str(root),
             "canonical_path": str(activation_path),
@@ -12435,6 +13410,14 @@ def _build_quality_start_activation_payload(
             "superseded_zero_quality_failure_lineage_projection_sha256": (
                 _superseded_failure_projection_sha256(
                     authority.superseded_failure_lineage
+                )
+            ),
+            "superseded_zero_quality_prerequisite_failure_lineage": (
+                authority.superseded_prerequisite_failure_lineage.public_binding
+            ),
+            "superseded_zero_quality_prerequisite_failure_lineage_projection_sha256": (
+                _superseded_prerequisite_failure_projection_sha256(
+                    authority.superseded_prerequisite_failure_lineage
                 )
             ),
             "prestart_absence_witness": authority.absence_witness,
@@ -12463,7 +13446,7 @@ def _build_quality_start_activation_payload(
             "scientific_subprocesses_started_during_activation": 0,
         },
         trust_root=trust_root,
-        purpose=V1_3_2_QUALITY_START_ACTIVATION_PURPOSE,
+        purpose=V1_3_3_QUALITY_START_ACTIVATION_PURPOSE,
     )
 
 
@@ -12480,17 +13463,17 @@ def _validate_quality_start_activation_internal(
     sealed_launch_routing: Mapping[str, Any] | None,
     expected_base_prerequisites_binding: Mapping[str, Any] | None,
     expected_public_binding: Mapping[str, Any] | None,
-    consumer_scope: _ActivatedConsumerScopeV1_3_2 | None = None,
+    consumer_scope: _ActivatedConsumerScopeV1_3_3 | None = None,
     static_authority: (
-        PrestartQualityAuthorityV1_3_2 | ValidatedQualityStartActivationV1_3_2 | None
+        PrestartQualityAuthorityV1_3_3 | ValidatedQualityStartActivationV1_3_3 | None
     ) = None,
-) -> ValidatedQualityStartActivationV1_3_2:
-    _require_v1_3_2_context(quality_context, trust_root=trust_root)
+) -> ValidatedQualityStartActivationV1_3_3:
+    _require_v1_3_3_context(quality_context, trust_root=trust_root)
     canonical = _absolute(canonical_root, repository_root=quality_context.repository_root)
     _require(
         canonical
-        == _absolute(V1_3_2_ACTIVATION_ROOT, repository_root=quality_context.repository_root),
-        "V1.3.2 activation root is not canonical.",
+        == _absolute(V1_3_3_ACTIVATION_ROOT, repository_root=quality_context.repository_root),
+        "V1.3.3 activation root is not canonical.",
     )
     root_identity, lock_binding, storage_path = _activation_root_members(
         storage_root,
@@ -12498,7 +13481,7 @@ def _validate_quality_start_activation_internal(
     )
     payload, opened = _load_json_nofollow(
         storage_path,
-        label="V1.3.2 quality-start activation",
+        label="V1.3.3 quality-start activation",
         require_canonical_pretty_bytes=True,
     )
     try:
@@ -12517,6 +13500,8 @@ def _validate_quality_start_activation_internal(
             "superseded_empty_lineage",
             "superseded_zero_quality_failure_lineage",
             "superseded_zero_quality_failure_lineage_projection_sha256",
+            "superseded_zero_quality_prerequisite_failure_lineage",
+            "superseded_zero_quality_prerequisite_failure_lineage_projection_sha256",
             "prestart_absence_witness",
             "base_prerequisites_binding",
             "base_prerequisites_sha256",
@@ -12548,11 +13533,17 @@ def _validate_quality_start_activation_internal(
         _verify_attested_payload(
             payload,
             trust_root=trust_root,
-            purpose=V1_3_2_QUALITY_START_ACTIVATION_PURPOSE,
-            label="V1.3.2 quality-start activation",
+            purpose=V1_3_3_QUALITY_START_ACTIVATION_PURPOSE,
+            label="V1.3.3 quality-start activation",
         )
         if static_authority is None:
-            admission, genesis, lineage, failure_lineage = _load_v1_3_2_static_bundle(
+            (
+                admission,
+                genesis,
+                lineage,
+                failure_lineage,
+                prerequisite_failure,
+            ) = _load_v1_3_3_static_bundle(
                 quality_context=quality_context,
                 trust_root=trust_root,
                 expected_shards=expected_shards,
@@ -12566,7 +13557,13 @@ def _validate_quality_start_activation_internal(
                 consumer_scope is None,
                 "A cached full-grid authority cannot satisfy a scoped consumer replay.",
             )
-            admission, genesis, lineage, failure_lineage = _revalidate_cached_static_bundle(
+            (
+                admission,
+                genesis,
+                lineage,
+                failure_lineage,
+                prerequisite_failure,
+            ) = _revalidate_cached_static_bundle(
                 static_authority,
                 quality_context=quality_context,
                 trust_root=trust_root,
@@ -12596,12 +13593,13 @@ def _validate_quality_start_activation_internal(
             preheldout_genesis=genesis,
             superseded_empty_lineage=lineage,
             superseded_failure_lineage=failure_lineage,
+            superseded_prerequisite_failure_lineage=prerequisite_failure,
         )
-        source = _validate_sealed_source_provenance_v1_3_2(
+        source = _validate_sealed_source_provenance_v1_3_3(
             cast(Mapping[str, Any], raw_source),
             quality_context=quality_context,
         )
-        routing = _validate_sealed_launch_routing_v1_3_2(
+        routing = _validate_sealed_launch_routing_v1_3_3(
             cast(Mapping[str, Any], raw_routing),
             source_provenance=source,
         )
@@ -12638,11 +13636,11 @@ def _validate_quality_start_activation_internal(
             "top_p_quality_input_count",
             "scientific_subprocesses_started_during_activation",
         )
-        final_path = canonical / V1_3_2_QUALITY_START_ACTIVATION_PATH.name
+        final_path = canonical / V1_3_3_QUALITY_START_ACTIVATION_PATH.name
         _require(
-            payload.get("schema_version") == V1_3_2_ACTIVATION_SCHEMA_VERSION
-            and payload.get("artifact_type") == "direct-controller-v1-3-2-quality-start-activation"
-            and payload.get("experiment_id") == V1_3_2_QUALITY_EXPERIMENT_ID
+            payload.get("schema_version") == V1_3_3_ACTIVATION_SCHEMA_VERSION
+            and payload.get("artifact_type") == "direct-controller-v1-3-3-quality-start-activation"
+            and payload.get("experiment_id") == V1_3_3_QUALITY_EXPERIMENT_ID
             and payload.get("status") == "activated"
             and payload.get("canonical_root") == str(canonical)
             and payload.get("canonical_path") == str(final_path)
@@ -12656,6 +13654,12 @@ def _validate_quality_start_activation_internal(
             == failure_lineage.public_binding
             and payload.get("superseded_zero_quality_failure_lineage_projection_sha256")
             == _superseded_failure_projection_sha256(failure_lineage)
+            and payload.get("superseded_zero_quality_prerequisite_failure_lineage")
+            == prerequisite_failure.public_binding
+            and payload.get(
+                "superseded_zero_quality_prerequisite_failure_lineage_projection_sha256"
+            )
+            == _superseded_prerequisite_failure_projection_sha256(prerequisite_failure)
             and payload.get("prestart_absence_witness") == absence_witness
             and payload.get("base_prerequisites_binding") == base
             and payload.get("base_prerequisites_sha256") == _json_digest(base)
@@ -12690,8 +13694,8 @@ def _validate_quality_start_activation_internal(
         opened.close()
     _activation_root_members(storage_root, canonical_root=canonical)
     assert_quality_context_unchanged(quality_context)
-    return ValidatedQualityStartActivationV1_3_2(
-        _seal=_VALIDATED_QUALITY_START_ACTIVATION_V1_3_2_SEAL,
+    return ValidatedQualityStartActivationV1_3_3(
+        _seal=_VALIDATED_QUALITY_START_ACTIVATION_V1_3_3_SEAL,
         payload=dict(payload),
         public_binding=public_binding,
         quality_context=quality_context,
@@ -12699,6 +13703,7 @@ def _validate_quality_start_activation_internal(
         preheldout_genesis=genesis,
         superseded_empty_lineage=lineage,
         superseded_failure_lineage=failure_lineage,
+        superseded_prerequisite_failure_lineage=prerequisite_failure,
         consumer_coordinate=(
             None if consumer_scope is None else consumer_scope.coordinate
         ),
@@ -12718,10 +13723,10 @@ def load_activated_quality_authority(
     sealed_launch_routing: Mapping[str, Any] | None = None,
     expected_base_prerequisites_binding: Mapping[str, Any] | None = None,
     expected_public_binding: Mapping[str, Any] | None = None,
-) -> ValidatedQualityStartActivationV1_3_2:
+) -> ValidatedQualityStartActivationV1_3_3:
     """Validate activation read-only; never acquire the matrix flock here."""
 
-    root = _absolute(V1_3_2_ACTIVATION_ROOT, repository_root=quality_context.repository_root)
+    root = _absolute(V1_3_3_ACTIVATION_ROOT, repository_root=quality_context.repository_root)
     return _validate_quality_start_activation_internal(
         quality_context=quality_context,
         trust_root=trust_root,
@@ -12753,7 +13758,7 @@ def load_activated_consumer_authority(
     sealed_source_provenance: Mapping[str, Any] | None = None,
     sealed_launch_routing: Mapping[str, Any] | None = None,
     expected_base_prerequisites_binding: Mapping[str, Any] | None = None,
-) -> ActivatedConsumerAuthorityV1_3_2:
+) -> ActivatedConsumerAuthorityV1_3_3:
     """Authenticate one admitted coordinate without granting full-owner authority."""
 
     _require(
@@ -12766,13 +13771,13 @@ def load_activated_consumer_authority(
         "Activated consumer artifact bindings must be mappings.",
     )
     coordinate = (scale, training_seed)
-    scope = _ActivatedConsumerScopeV1_3_2(
-        _seal=_ACTIVATED_CONSUMER_SCOPE_V1_3_2_SEAL,
+    scope = _ActivatedConsumerScopeV1_3_3(
+        _seal=_ACTIVATED_CONSUMER_SCOPE_V1_3_3_SEAL,
         coordinate=coordinate,
         calibration_binding=dict(calibration_binding),
         checkpoint_binding=dict(checkpoint_binding),
     )
-    root = _absolute(V1_3_2_ACTIVATION_ROOT, repository_root=quality_context.repository_root)
+    root = _absolute(V1_3_3_ACTIVATION_ROOT, repository_root=quality_context.repository_root)
     activation = _validate_quality_start_activation_internal(
         quality_context=quality_context,
         trust_root=trust_root,
@@ -12794,8 +13799,8 @@ def load_activated_consumer_authority(
         "Activated consumer authority escaped its selected coordinate.",
     )
     return require_activated_consumer_authority(
-        ActivatedConsumerAuthorityV1_3_2(
-            _seal=_ACTIVATED_CONSUMER_AUTHORITY_V1_3_2_SEAL,
+        ActivatedConsumerAuthorityV1_3_3(
+            _seal=_ACTIVATED_CONSUMER_AUTHORITY_V1_3_3_SEAL,
             activation=activation,
             reuse_admission=activation.reuse_admission,
             preheldout_genesis=activation.preheldout_genesis,
@@ -12813,8 +13818,8 @@ def _remove_safe_activation_staging(path: Path) -> None:
         f"Unsafe activation staging root requires manual quarantine: {path}",
     )
     allowed = {
-        V1_3_2_ACTIVATION_MATRIX_LOCK_PATH.name,
-        V1_3_2_QUALITY_START_ACTIVATION_PATH.name,
+        V1_3_3_ACTIVATION_MATRIX_LOCK_PATH.name,
+        V1_3_3_QUALITY_START_ACTIVATION_PATH.name,
     }
     with os.scandir(path) as iterator:
         entries = list(iterator)
@@ -12840,7 +13845,7 @@ def _recover_activation_staging_only(parent: Path) -> None:
         candidates = sorted(
             Path(entry.path)
             for entry in iterator
-            if entry.name.startswith(V1_3_2_ACTIVATION_STAGING_PREFIX)
+            if entry.name.startswith(V1_3_3_ACTIVATION_STAGING_PREFIX)
         )
     for candidate in candidates:
         _remove_safe_activation_staging(candidate)
@@ -12881,7 +13886,7 @@ def _pre_receipt_activation_identities(
     root = os.stat(staging, follow_symlinks=False)
     lock = os.fstat(lock_descriptor)
     current_lock = os.stat(
-        staging / V1_3_2_ACTIVATION_MATRIX_LOCK_PATH.name,
+        staging / V1_3_3_ACTIVATION_MATRIX_LOCK_PATH.name,
         follow_symlinks=False,
     )
     _require(
@@ -12907,8 +13912,8 @@ def _pre_receipt_activation_identities(
             "persistent_inode": True,
         },
         {
-            "path": str(canonical_root / V1_3_2_ACTIVATION_MATRIX_LOCK_PATH.name),
-            "semantics": V1_3_2_ACTIVATION_MATRIX_LOCK_SEMANTICS,
+            "path": str(canonical_root / V1_3_3_ACTIVATION_MATRIX_LOCK_PATH.name),
+            "semantics": V1_3_3_ACTIVATION_MATRIX_LOCK_SEMANTICS,
             "persistent_inode": True,
             "device": lock.st_dev,
             "inode": lock.st_ino,
@@ -12922,16 +13927,16 @@ def _pre_receipt_activation_identities(
 
 def publish_quality_start_activation(
     *,
-    prestart: PrestartQualityAuthorityV1_3_2,
+    prestart: PrestartQualityAuthorityV1_3_3,
     trust_root: attestation.TrustRoot,
     base_prerequisites_binding: Mapping[str, Any],
     sealed_source_provenance: Mapping[str, Any],
     sealed_launch_routing: Mapping[str, Any],
-) -> QualityStartActivationLeaseV1_3_2:
+) -> QualityStartActivationLeaseV1_3_3:
     """Atomically publish exact2 activation while retaining the same lock FD."""
 
     authority = _require_prestart_authority(prestart)
-    _require_v1_3_2_context(authority.quality_context, trust_root=trust_root)
+    _require_v1_3_3_context(authority.quality_context, trust_root=trust_root)
     expected_shards = authority.preheldout_genesis.payload.get("expected_shards")
     coordinate_digest = authority.preheldout_genesis.payload.get("coordinate_digest")
     exact_fill_arm_names = tuple(
@@ -12961,19 +13966,19 @@ def publish_quality_start_activation(
         "Prestart authority became stale before activation publication.",
     )
     root = _absolute(
-        V1_3_2_ACTIVATION_ROOT,
+        V1_3_3_ACTIVATION_ROOT,
         repository_root=authority.quality_context.repository_root,
     )
     parent = _exact_path(root.parent, label="Activation parent", must_exist=True)
     from adaptive_v4_gpu_lock import acquire_gpu_lock
 
     bootstrap = acquire_gpu_lock(
-        "p2-direct-controller-v1.3.2-activation-bootstrap",
-        path=V1_3_2_ACTIVATION_BOOTSTRAP_LOCK_PATH,
+        "p2-direct-controller-v1.3.3-activation-bootstrap",
+        path=V1_3_3_ACTIVATION_BOOTSTRAP_LOCK_PATH,
     )
     staging: Path | None = None
     matrix_descriptor: int | None = None
-    activation_lease: QualityStartActivationLeaseV1_3_2 | None = None
+    activation_lease: QualityStartActivationLeaseV1_3_3 | None = None
     published = False
     returned = False
     bootstrap_closed = False
@@ -12994,11 +13999,11 @@ def publish_quality_start_activation(
             fresh.absence_witness == authority.absence_witness,
             "Prestart absence witness changed under the bootstrap lock.",
         )
-        staging = parent / f"{V1_3_2_ACTIVATION_STAGING_PREFIX}{secrets.token_hex(16)}"
+        staging = parent / f"{V1_3_3_ACTIVATION_STAGING_PREFIX}{secrets.token_hex(16)}"
         os.mkdir(staging, SAFE_DIRECTORY_MODE)
         os.chmod(staging, SAFE_DIRECTORY_MODE)
         matrix_descriptor = _create_and_lock_activation_matrix_lock(
-            staging / V1_3_2_ACTIVATION_MATRIX_LOCK_PATH.name
+            staging / V1_3_3_ACTIVATION_MATRIX_LOCK_PATH.name
         )
         root_binding, lock_binding = _pre_receipt_activation_identities(
             staging,
@@ -13015,7 +14020,7 @@ def publish_quality_start_activation(
             matrix_lock_binding=lock_binding,
         )
         _write_exclusive_durable(
-            staging / V1_3_2_QUALITY_START_ACTIVATION_PATH.name,
+            staging / V1_3_3_QUALITY_START_ACTIVATION_PATH.name,
             canonical_pretty_json(payload),
         )
         _fsync_directory(staging, exact_mode=SAFE_DIRECTORY_MODE)
@@ -13035,7 +14040,7 @@ def publish_quality_start_activation(
         )
         bootstrap.assert_held()
         _require(not os.path.lexists(root), "Activation root appeared before no-replace rename.")
-        _assert_v1_3_2_quality_paths_absent(
+        _assert_v1_3_3_quality_paths_absent(
             repository_root=authority.quality_context.repository_root
         )
         _rename_directory_noreplace(staging, root)
@@ -13066,8 +14071,8 @@ def publish_quality_start_activation(
             (held.st_dev, held.st_ino) == (current.st_dev, current.st_ino),
             "Preheld activation matrix-lock FD changed across rename.",
         )
-        activation_lease = QualityStartActivationLeaseV1_3_2(
-            _QUALITY_START_ACTIVATION_LEASE_V1_3_2_SEAL,
+        activation_lease = QualityStartActivationLeaseV1_3_3(
+            _QUALITY_START_ACTIVATION_LEASE_V1_3_3_SEAL,
             final,
             matrix_descriptor,
         )
@@ -13098,8 +14103,8 @@ def publish_quality_start_activation(
 
 
 def _require_activation_authority(
-    activation: ValidatedQualityStartActivationV1_3_2,
-) -> ValidatedQualityStartActivationV1_3_2:
+    activation: ValidatedQualityStartActivationV1_3_3,
+) -> ValidatedQualityStartActivationV1_3_3:
     coordinate = getattr(activation, "consumer_coordinate", None)
     expected_coordinates = (
         {(scale, seed) for scale in SCALES for seed in TRAINING_SEEDS}
@@ -13107,8 +14112,8 @@ def _require_activation_authority(
         else {coordinate}
     )
     _require(
-        type(activation) is ValidatedQualityStartActivationV1_3_2
-        and activation._seal is _VALIDATED_QUALITY_START_ACTIVATION_V1_3_2_SEAL
+        type(activation) is ValidatedQualityStartActivationV1_3_3
+        and activation._seal is _VALIDATED_QUALITY_START_ACTIVATION_V1_3_3_SEAL
         and type(activation.reuse_admission) is ValidatedReuseAdmission
         and type(activation.preheldout_genesis) is ValidatedPreheldoutGenesis
         and type(activation.superseded_empty_lineage) is SupersededEmptyLineageV1_3
@@ -13142,8 +14147,8 @@ def _require_activation_authority(
 
 
 def _require_full_activation_authority(
-    activation: ValidatedQualityStartActivationV1_3_2,
-) -> ValidatedQualityStartActivationV1_3_2:
+    activation: ValidatedQualityStartActivationV1_3_3,
+) -> ValidatedQualityStartActivationV1_3_3:
     authority = _require_activation_authority(activation)
     _require(
         authority.consumer_coordinate is None,
@@ -13153,13 +14158,13 @@ def _require_full_activation_authority(
 
 
 def require_activated_consumer_authority(
-    consumer: ActivatedConsumerAuthorityV1_3_2,
-) -> ActivatedConsumerAuthorityV1_3_2:
+    consumer: ActivatedConsumerAuthorityV1_3_3,
+) -> ActivatedConsumerAuthorityV1_3_3:
     """Reject nominal or duck-typed objects at a cached consumer boundary."""
 
     _require(
-        type(consumer) is ActivatedConsumerAuthorityV1_3_2
-        and consumer._seal is _ACTIVATED_CONSUMER_AUTHORITY_V1_3_2_SEAL,
+        type(consumer) is ActivatedConsumerAuthorityV1_3_3
+        and consumer._seal is _ACTIVATED_CONSUMER_AUTHORITY_V1_3_3_SEAL,
         "Activated consumer authority is raw or duck-typed.",
     )
     activation = _require_activation_authority(consumer.activation)
@@ -13175,14 +14180,14 @@ def require_activated_consumer_authority(
 
 
 def _reload_activation_capability(
-    activation: ValidatedQualityStartActivationV1_3_2,
+    activation: ValidatedQualityStartActivationV1_3_3,
     *,
     trust_root: attestation.TrustRoot,
-) -> ValidatedQualityStartActivationV1_3_2:
+) -> ValidatedQualityStartActivationV1_3_3:
     authority = _require_full_activation_authority(activation)
     payload = authority.payload
     root = _absolute(
-        V1_3_2_ACTIVATION_ROOT,
+        V1_3_3_ACTIVATION_ROOT,
         repository_root=authority.quality_context.repository_root,
     )
     return _validate_quality_start_activation_internal(
@@ -13204,20 +14209,20 @@ def _reload_activation_capability(
 
 
 def revalidate_activated_quality_authority(
-    activation: ValidatedQualityStartActivationV1_3_2,
+    activation: ValidatedQualityStartActivationV1_3_3,
     *,
     trust_root: attestation.TrustRoot,
-) -> ValidatedQualityStartActivationV1_3_2:
+) -> ValidatedQualityStartActivationV1_3_3:
     """Recheck an existing full-grid capability without another checkpoint-grid replay."""
 
     return _reload_activation_capability(activation, trust_root=trust_root)
 
 
 def acquire_quality_start_activation_lease(
-    activation: ValidatedQualityStartActivationV1_3_2,
+    activation: ValidatedQualityStartActivationV1_3_3,
     *,
     trust_root: attestation.TrustRoot,
-) -> QualityStartActivationLeaseV1_3_2:
+) -> QualityStartActivationLeaseV1_3_3:
     """Acquire an existing persistent lock without O_CREAT, then revalidate."""
 
     authority = _reload_activation_capability(activation, trust_root=trust_root)
@@ -13230,7 +14235,7 @@ def acquire_quality_start_activation_lease(
     )
     acquired = False
     reserved_identity: tuple[int, int] | None = None
-    lease: QualityStartActivationLeaseV1_3_2 | None = None
+    lease: QualityStartActivationLeaseV1_3_3 | None = None
     returned = False
     try:
         metadata = os.fstat(descriptor)
@@ -13244,19 +14249,19 @@ def acquire_quality_start_activation_lease(
             and stat.S_IMODE(metadata.st_mode) == SAFE_FILE_MODE,
             "Existing activation matrix lock differs from its receipt binding.",
         )
-        with _ACTIVE_V1_3_2_ACTIVATION_LEASES_GUARD:
+        with _ACTIVE_V1_3_3_ACTIVATION_LEASES_GUARD:
             identity = (metadata.st_dev, metadata.st_ino)
-            for active_fd in _ACTIVE_V1_3_2_ACTIVATION_LEASE_FDS:
+            for active_fd in _ACTIVE_V1_3_3_ACTIVATION_LEASE_FDS:
                 active = os.fstat(active_fd)
                 _require(
                     (active.st_dev, active.st_ino) != identity,
                     "Activation matrix-lock reentry in one process is forbidden.",
                 )
             _require(
-                identity not in _PENDING_V1_3_2_ACTIVATION_LEASE_IDENTITIES,
+                identity not in _PENDING_V1_3_3_ACTIVATION_LEASE_IDENTITIES,
                 "Activation matrix-lock acquisition is already pending in this process.",
             )
-            _PENDING_V1_3_2_ACTIVATION_LEASE_IDENTITIES.add(identity)
+            _PENDING_V1_3_3_ACTIVATION_LEASE_IDENTITIES.add(identity)
             reserved_identity = identity
         fcntl.flock(descriptor, fcntl.LOCK_EX)
         acquired = True
@@ -13269,8 +14274,8 @@ def acquire_quality_start_activation_lease(
         )
         _fsync_directory(activation_root, exact_mode=SAFE_DIRECTORY_MODE)
         _fsync_directory(activation_root.parent)
-        lease = QualityStartActivationLeaseV1_3_2(
-            _QUALITY_START_ACTIVATION_LEASE_V1_3_2_SEAL,
+        lease = QualityStartActivationLeaseV1_3_3(
+            _QUALITY_START_ACTIVATION_LEASE_V1_3_3_SEAL,
             revalidated,
             descriptor,
         )
@@ -13288,14 +14293,14 @@ def acquire_quality_start_activation_lease(
                 lease.close()
         finally:
             if reserved_identity is not None:
-                with _ACTIVE_V1_3_2_ACTIVATION_LEASES_GUARD:
-                    _PENDING_V1_3_2_ACTIVATION_LEASE_IDENTITIES.discard(
+                with _ACTIVE_V1_3_3_ACTIVATION_LEASES_GUARD:
+                    _PENDING_V1_3_3_ACTIVATION_LEASE_IDENTITIES.discard(
                         reserved_identity
                     )
 
 
 def load_activated_static_bundle(
-    activation: ValidatedQualityStartActivationV1_3_2,
+    activation: ValidatedQualityStartActivationV1_3_3,
     *,
     trust_root: attestation.TrustRoot,
     expected_shards: int,
@@ -13305,7 +14310,7 @@ def load_activated_static_bundle(
     """Reuse one fully validated activation replay without recursively replaying it."""
 
     authority = _require_full_activation_authority(activation)
-    _require_v1_3_2_context(authority.quality_context, trust_root=trust_root)
+    _require_v1_3_3_context(authority.quality_context, trust_root=trust_root)
     _require(
         expected_shards == authority.payload.get("expected_shards")
         and coordinate_digest == authority.payload.get("coordinate_digest")
@@ -13316,27 +14321,27 @@ def load_activated_static_bundle(
     _verify_attested_payload(
         authority.payload,
         trust_root=trust_root,
-        purpose=V1_3_2_QUALITY_START_ACTIVATION_PURPOSE,
-        label="Cached v1.3.2 quality-start activation",
+        purpose=V1_3_3_QUALITY_START_ACTIVATION_PURPOSE,
+        label="Cached v1.3.3 quality-start activation",
     )
     _verify_attested_payload(
         authority.reuse_admission.payload,
         trust_root=trust_root,
-        purpose=V1_3_2_REUSE_ADMISSION_PURPOSE,
-        label="Cached v1.3.2 reuse admission",
+        purpose=V1_3_3_REUSE_ADMISSION_PURPOSE,
+        label="Cached v1.3.3 reuse admission",
     )
     _verify_attested_payload(
         authority.preheldout_genesis.payload,
         trust_root=trust_root,
-        purpose=V1_3_2_PREHELDOUT_GENESIS_PURPOSE,
-        label="Cached v1.3.2 pre-heldout genesis",
+        purpose=V1_3_3_PREHELDOUT_GENESIS_PURPOSE,
+        label="Cached v1.3.3 pre-heldout genesis",
     )
     _require_superseded_lineage(authority.superseded_empty_lineage)
     _require_superseded_failure_lineage(authority.superseded_failure_lineage)
     for binding, label in (
-        (authority.public_binding, "Cached v1.3.2 activation"),
-        (authority.reuse_admission.public_binding, "Cached v1.3.2 reuse admission"),
-        (authority.preheldout_genesis.public_binding, "Cached v1.3.2 pre-heldout genesis"),
+        (authority.public_binding, "Cached v1.3.3 activation"),
+        (authority.reuse_admission.public_binding, "Cached v1.3.3 reuse admission"),
+        (authority.preheldout_genesis.public_binding, "Cached v1.3.3 pre-heldout genesis"),
     ):
         _require(isinstance(binding, Mapping), f"{label} binding is missing.")
         _validate_file_binding(
@@ -13349,7 +14354,7 @@ def load_activated_static_bundle(
 
 
 def load_activated_reuse_admission(
-    activation: ValidatedQualityStartActivationV1_3_2,
+    activation: ValidatedQualityStartActivationV1_3_3,
     *,
     trust_root: attestation.TrustRoot,
 ) -> ValidatedReuseAdmission:
@@ -13365,7 +14370,7 @@ def load_activated_reuse_admission(
 
 
 def load_activated_preheldout_genesis(
-    activation: ValidatedQualityStartActivationV1_3_2,
+    activation: ValidatedQualityStartActivationV1_3_3,
     *,
     trust_root: attestation.TrustRoot,
     expected_shards: int,

@@ -66,20 +66,42 @@ def _calibration() -> dict[str, Any]:
 
 
 def _validated_admission(calibration: Mapping[str, Any]) -> SimpleNamespace:
+    payload_sha256 = "b" * 64
+    attestation_mac = "c" * 64
+    historical_receipt_sha256 = "d" * 64
+    canonical_nonobservation_sha256 = "e" * 64
+    failure_lineage_sha256 = "f" * 64
+    failure_projection_sha256 = "1" * 64
     return SimpleNamespace(
         payload={
+            "experiment_id": contract.V1_3_3_EXPERIMENT_ID,
+            "payload_sha256": payload_sha256,
+            "attestation": {"mac": attestation_mac},
             "quality_evaluation_started": False,
             "evaluation_seed_used_to_initialize_quality_rng": False,
+            "superseded_empty_lineage": {
+                "historical_receipt_payload_sha256": historical_receipt_sha256,
+                "canonical_nonobservation_payload_sha256": (canonical_nonobservation_sha256),
+            },
+            "superseded_zero_quality_prerequisite_failure_lineage": {
+                "lineage_sha256": failure_lineage_sha256,
+                "normalized_contract_projection_sha256": failure_projection_sha256,
+            },
+            "superseded_zero_quality_prerequisite_failure_lineage_projection_sha256": (
+                failure_projection_sha256
+            ),
         },
         public_binding={
-            "path": "/tmp/v1-3-reuse-admission.json",
+            "path": "/tmp/v1-3-3-reuse-admission.json",
             "sha256": "a" * 64,
             "bytes": 1024,
-            "experiment_id": "p2-direct-controller-exact-fill-reuse-admission-v1.3",
-            "payload_sha256": "b" * 64,
-            "attestation_mac": "c" * 64,
-            "historical_receipt_sha256": "d" * 64,
-            "canonical_nonobservation_sha256": "e" * 64,
+            "experiment_id": contract.V1_3_3_EXPERIMENT_ID,
+            "payload_sha256": payload_sha256,
+            "attestation_mac": attestation_mac,
+            "historical_receipt_sha256": historical_receipt_sha256,
+            "canonical_nonobservation_sha256": canonical_nonobservation_sha256,
+            "superseded_failure_lineage_sha256": failure_lineage_sha256,
+            "superseded_failure_lineage_projection_sha256": failure_projection_sha256,
         },
         calibrations={("s55", 6071406): SimpleNamespace(path=Path("/tmp/calibration.json"))},
         checkpoints={("s55", 6071406): object()},
@@ -261,7 +283,7 @@ def test_builder_uses_admission_validator_and_returns_only_exact_fill(
     )
     assert metadata["exact_fill_arms"] == contract.ALL_ARM_NAMES
     assert metadata["dual_manifest_contexts_validated"] is True
-    assert metadata["quality_experiment_id"] == contract.V1_3_2_EXPERIMENT_ID
+    assert metadata["quality_experiment_id"] == contract.V1_3_3_EXPERIMENT_ID
     assert metadata["quality_experiment_id"] != contract.EXPERIMENT_ID
     assert not _contains_threshold_metadata(metadata)
     contract.validate_arm_semantics(arms)
@@ -359,24 +381,23 @@ def test_persistent_session_namespaces_and_transport_claims_are_exact() -> None:
     assert contract.PERSISTENT_SESSION_LEDGER_ROOT.name.startswith(".")
     assert not contract.PERSISTENT_SESSION_LEDGER_ROOT.name.startswith("..")
     absolute_output_root = (
-        Path(__file__).resolve().parents[1] / contract.V1_3_2_OUTPUT_ROOT
+        Path(__file__).resolve().parents[1] / contract.V1_3_3_OUTPUT_ROOT
     ).resolve()
-    expected_v1_3_2_suffix = contract.V1_3_2_PERSISTENT_SESSION_LEDGER_ROOT.name.removeprefix(
-        f".{contract.V1_3_2_OUTPUT_ROOT.name}."
+    expected_v1_3_3_suffix = contract.V1_3_3_PERSISTENT_SESSION_LEDGER_ROOT.name.removeprefix(
+        f".{contract.V1_3_3_OUTPUT_ROOT.name}."
     )
-    assert persistent_session.SESSION_LEDGER_ROOT_SUFFIX == expected_v1_3_2_suffix
+    assert persistent_session.SESSION_LEDGER_ROOT_SUFFIX == expected_v1_3_3_suffix
     assert (
         persistent_session.session_ledger_root(absolute_output_root)
         == (
-            Path(__file__).resolve().parents[1]
-            / contract.V1_3_2_PERSISTENT_SESSION_LEDGER_ROOT
+            Path(__file__).resolve().parents[1] / contract.V1_3_3_PERSISTENT_SESSION_LEDGER_ROOT
         ).resolve()
     )
     assert (
         persistent_session.session_ledger_lock_path(absolute_output_root)
         == (
             Path(__file__).resolve().parents[1]
-            / contract.V1_3_2_PERSISTENT_SESSION_LEDGER_LOCK_PATH
+            / contract.V1_3_3_PERSISTENT_SESSION_LEDGER_LOCK_PATH
         ).resolve()
     )
     assert {
@@ -405,12 +426,12 @@ def test_persistent_session_namespaces_and_transport_claims_are_exact() -> None:
         "launch": persistent_session.LAUNCH_LEDGER_ATTESTATION_PURPOSE,
         "terminal": persistent_session.TERMINAL_LEDGER_ATTESTATION_PURPOSE,
     } == {
-        "plan": contract.V1_3_2_PERSISTENT_SESSION_PLAN_ATTESTATION_PURPOSE,
-        "work": contract.V1_3_2_PERSISTENT_SESSION_WORK_ATTESTATION_PURPOSE,
-        "result": contract.V1_3_2_PERSISTENT_SESSION_RESULT_ATTESTATION_PURPOSE,
-        "receipt": contract.V1_3_2_PERSISTENT_SESSION_RECEIPT_ATTESTATION_PURPOSE,
-        "launch": contract.V1_3_2_PERSISTENT_SESSION_LAUNCH_LEDGER_ATTESTATION_PURPOSE,
-        "terminal": contract.V1_3_2_PERSISTENT_SESSION_TERMINAL_LEDGER_ATTESTATION_PURPOSE,
+        "plan": contract.V1_3_3_PERSISTENT_SESSION_PLAN_ATTESTATION_PURPOSE,
+        "work": contract.V1_3_3_PERSISTENT_SESSION_WORK_ATTESTATION_PURPOSE,
+        "result": contract.V1_3_3_PERSISTENT_SESSION_RESULT_ATTESTATION_PURPOSE,
+        "receipt": contract.V1_3_3_PERSISTENT_SESSION_RECEIPT_ATTESTATION_PURPOSE,
+        "launch": contract.V1_3_3_PERSISTENT_SESSION_LAUNCH_LEDGER_ATTESTATION_PURPOSE,
+        "terminal": contract.V1_3_3_PERSISTENT_SESSION_TERMINAL_LEDGER_ATTESTATION_PURPOSE,
     }
     assert namespaces["persistent_session_ledger_root"] == str(
         contract.PERSISTENT_SESSION_LEDGER_ROOT
@@ -756,3 +777,169 @@ def test_v1_3_2_inventory_appends_only_the_import_boundary_report_to_v1_3_1() ->
         contract.V1_3_2_IMPORT_BOUNDARY_AMENDMENT_REPORT_PATH
     )
     assert "2026-07-20" in contract.V1_3_2_IMPLEMENTATION_PATHS[-1]
+
+
+def test_v1_3_3_static_failure_lineage_is_exact_zero_quality_and_source_bound() -> None:
+    lineage = contract.expected_v1_3_3_superseded_static_failure_lineage()
+    unsigned = {key: value for key, value in lineage.items() if key != "projection_sha256"}
+
+    assert lineage["projection_sha256"] == contract.json_digest(unsigned)
+    assert lineage["lineage_type"] == (
+        "signed-superseded-zero-quality-preactivation-static-publication"
+    )
+    assert lineage["implementation"] == {
+        "source_commit": contract.V1_3_2_SUPERSEDED_IMPLEMENTATION_SOURCE_COMMIT,
+        "source_tree": contract.V1_3_2_SUPERSEDED_IMPLEMENTATION_SOURCE_TREE,
+        "tree_digest": contract.V1_3_2_SUPERSEDED_IMPLEMENTATION_TREE_DIGEST,
+        "live_inventory_digest": (contract.V1_3_2_SUPERSEDED_LIVE_IMPLEMENTATION_INVENTORY_DIGEST),
+        "live_file_count": contract.V1_3_2_SUPERSEDED_LIVE_IMPLEMENTATION_FILE_COUNT,
+    }
+    assert lineage["manifest"]["sha256"] == contract.V1_3_2_SUPERSEDED_MANIFEST_SHA256
+    assert lineage["reuse_admission"]["sha256"] == (contract.V1_3_2_SUPERSEDED_ADMISSION_SHA256)
+    assert lineage["preheldout_genesis"]["sha256"] == (contract.V1_3_2_SUPERSEDED_GENESIS_SHA256)
+    assert lineage["admission_root"]["exact_relative_files"] == [
+        "historical-reuse-admission.json",
+        "preheldout-genesis.json",
+    ]
+    assert lineage["quality_state"] == {
+        "records": [],
+        "completed_shards": 0,
+        "quality_evaluation_started": False,
+        "evaluation_seed_used_to_initialize_quality_rng": False,
+        "quality_rng_initialized": False,
+        "evaluation_inputs_materialized": 0,
+        "quality_predictions_materialized": 0,
+        "quality_outcomes_materialized": 0,
+        "quality_aggregates_materialized": 0,
+        "active_claim_count": 0,
+        "worker_ledger_count": 0,
+        "top_p_quality_input_count": 0,
+        "scientific_subprocesses_started_during_admission": 0,
+    }
+    diagnosis = lineage["source_bound_failure_diagnosis"]
+    assert diagnosis["signed_terminal_failure_receipt_published"] is False
+    assert diagnosis["consumer_expected_fields"] == list(
+        contract.V1_3_2_REUSE_ADMISSION_PUBLIC_BINDING_FIELDS[:-2]
+    )
+    assert diagnosis["producer_observed_fields"] == list(
+        contract.V1_3_2_REUSE_ADMISSION_PUBLIC_BINDING_FIELDS
+    )
+    assert diagnosis["unexpected_fields"] == [
+        "superseded_failure_lineage_sha256",
+        "superseded_failure_lineage_projection_sha256",
+    ]
+    assert len(lineage["absent_paths"]) == 10
+
+
+def test_v1_3_3_manifest_binds_immediate_lineage_and_distinct_namespaces() -> None:
+    payload = contract.build_v1_3_3_manifest_payload(
+        attestation_key_id=contract.V1_2_ATTESTATION_KEY_ID,
+        implementation_tree_digest="a" * 64,
+        implementation_source_commit="b" * 40,
+    )
+
+    assert contract.validate_v1_3_3_manifest_payload(copy.deepcopy(payload)) == payload
+    assert payload["experiment_id"] == contract.V1_3_3_EXPERIMENT_ID
+    assert payload["status"] == contract.V1_3_3_MANIFEST_STATUS
+    assert payload["implementation"]["paths"] == list(contract.V1_3_3_IMPLEMENTATION_PATHS)
+    disclosure = payload["lineage_and_adaptation_disclosure"]
+    assert (
+        disclosure["v1_3_2_signed_zero_quality_preactivation_static_publication_lineage"]
+        == contract.expected_v1_3_3_superseded_static_failure_lineage()
+    )
+    assert disclosure["v1_3_2_quality_outcomes_observed_before_amendment"] is False
+    assert disclosure["failure_diagnosis_is_source_bound_not_a_signed_terminal_receipt"] is True
+    namespaces = payload["artifact_namespaces"]
+    assert namespaces == contract.expected_v1_3_3_artifact_namespaces()
+    assert namespaces["v1_3_2_output_or_admission_namespace_reused"] is False
+    assert namespaces["superseded_v1_3_2_static_pair_is_read_only_lineage"] is True
+    assert all(
+        "v1-3-3" in purpose or "v1.3.3" in purpose
+        for purpose in namespaces["attestation_purposes"].values()
+    )
+    assert set(namespaces["attestation_purposes"].values()).isdisjoint(
+        contract.expected_v1_3_2_artifact_namespaces()["attestation_purposes"].values()
+    )
+    activation = payload["execution_contract"]["sealed_launch_and_persistent_session"][
+        "quality_start_activation"
+    ]
+    assert activation == contract.expected_v1_3_3_activation_policy()
+    assert activation["historical_v1_3_2_static_lineage_revalidated_before_every_mutation"] is True
+    assert activation["canonical_v1_3_2_entrypoint_status"] == "retired"
+
+    drift = copy.deepcopy(payload)
+    drift["lineage_and_adaptation_disclosure"][
+        "v1_3_2_signed_zero_quality_preactivation_static_publication_lineage"
+    ]["reuse_admission"]["sha256"] = "0" * 64
+    with pytest.raises(ValueError, match="content drifted"):
+        contract.validate_v1_3_3_manifest_payload(drift)
+
+
+def test_v1_3_3_scientific_projection_is_byte_canonical_v1_3_2_equality() -> None:
+    arguments = {
+        "attestation_key_id": contract.V1_2_ATTESTATION_KEY_ID,
+        "implementation_tree_digest": "a" * 64,
+        "implementation_source_commit": "b" * 40,
+    }
+    previous = contract.build_v1_3_2_manifest_payload(**arguments)
+    amended = contract.build_v1_3_3_manifest_payload(**arguments)
+
+    for field in (
+        "grid",
+        "phases",
+        "primary_estimand",
+        "statistical_analysis",
+        "confirmatory_success_gate",
+        "descriptive_feasibility_evidence",
+    ):
+        assert contract.canonical_json(amended[field]) == contract.canonical_json(
+            previous[field]
+        )
+    assert amended["cohort"] == {
+        **previous["cohort"],
+        "freshness_definition": "never-used-for-quality-preserved-through-v1.3.3",
+    }
+
+
+def test_v1_3_3_inventory_appends_only_the_schema_amendment_report() -> None:
+    assert contract.V1_3_3_IMPLEMENTATION_PATHS[:-1] == contract.V1_3_2_IMPLEMENTATION_PATHS
+    assert contract.V1_3_3_IMPLEMENTATION_PATHS[-1] == str(
+        contract.V1_3_3_REUSE_ADMISSION_VIEW_AMENDMENT_REPORT_PATH
+    )
+
+
+def test_reuse_admission_view_requires_relationally_exact_ten_field_schema(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _stub_admission_validator(monkeypatch)
+    calibration = _calibration()
+    canonical = _validated_admission(calibration)
+
+    _arms, metadata = _build(calibration, canonical)
+    assert tuple(metadata["reuse_admission"]) == (
+        contract.V1_3_3_REUSE_ADMISSION_PUBLIC_BINDING_FIELDS
+    )
+    assert metadata["reuse_admission"] == canonical.public_binding
+
+    for field in contract.V1_3_3_REUSE_ADMISSION_PUBLIC_BINDING_FIELDS:
+        missing = _validated_admission(calibration)
+        missing.public_binding.pop(field)
+        with pytest.raises(ValueError, match="schema drifted"):
+            _build(calibration, missing)
+
+    extra = _validated_admission(calibration)
+    extra.public_binding["unexpected"] = "2" * 64
+    with pytest.raises(ValueError, match="schema drifted"):
+        _build(calibration, extra)
+
+    tampered = _validated_admission(calibration)
+    tampered.public_binding["superseded_failure_lineage_sha256"] = "2" * 64
+    with pytest.raises(ValueError, match="failure-lineage binding drifted"):
+        _build(calibration, tampered)
+
+    projection_tampered = _validated_admission(calibration)
+    projection_tampered.payload[
+        "superseded_zero_quality_prerequisite_failure_lineage_projection_sha256"
+    ] = "3" * 64
+    with pytest.raises(ValueError, match="failure-lineage binding drifted"):
+        _build(calibration, projection_tampered)
