@@ -1,0 +1,2085 @@
+{
+  "artifact_namespaces": {
+    "activation_matrix_lock_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-4-activation/matrix.lock",
+    "activation_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-4-activation",
+    "activation_root_exact_member_count": 2,
+    "activation_root_is_immutable_sibling_outside_quality_closed_world": true,
+    "admission_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-4-admission",
+    "attestation_purposes": {
+      "integrity": "p2-direct-controller-exact-fill-integrity-v1-3-4",
+      "matrix": "p2-direct-controller-exact-fill-matrix-v1-3-4",
+      "persistent_session_launch_ledger": "p2-direct-controller-exact-fill-v1-3-4-persistent-launch-ledger-v1",
+      "persistent_session_plan": "p2-direct-controller-exact-fill-v1-3-4-persistent-session-plan-v1",
+      "persistent_session_receipt": "p2-direct-controller-exact-fill-v1-3-4-persistent-session-receipt-v1",
+      "persistent_session_result": "p2-direct-controller-exact-fill-v1-3-4-persistent-session-result-v1",
+      "persistent_session_terminal_ledger": "p2-direct-controller-exact-fill-v1-3-4-persistent-terminal-ledger-v1",
+      "persistent_session_work": "p2-direct-controller-exact-fill-v1-3-4-persistent-session-work-v1",
+      "preheldout_genesis": "p2-direct-v1.3.4-preheldout-genesis-v1",
+      "quality_start_activation": "p2-direct-v1.3.4-quality-start-activation-v1",
+      "reuse_admission": "p2-direct-v1.3.4-reuse-admission-v1",
+      "shard": "p2-direct-controller-exact-fill-shard-v1-3-4",
+      "summary": "p2-direct-controller-exact-fill-summary-v1-3-4",
+      "worker_ledger": "p2-direct-controller-exact-fill-worker-ledger-v1-3-4"
+    },
+    "experiment_ids": {
+      "integrity": "p2-post-rank-direct-controller-exact-fill-integrity-v1.3.4",
+      "matrix": "p2-post-rank-direct-controller-exact-fill-matrix-v1.3.4",
+      "shard": "p2-post-rank-direct-controller-exact-fill-shard-v1.3.4",
+      "summary": "p2-post-rank-direct-controller-exact-fill-summary-v1.3.4",
+      "worker_ledger": "p2-post-rank-direct-controller-exact-fill-worker-ledger-v1.3.4"
+    },
+    "integrity_output_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-4.integrity.json",
+    "matrix_binds_role_tagged_preflight_hmac_evidence": true,
+    "matrix_lock_is_precreated_before_first_quality_mutation": true,
+    "matrix_summary_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-4/controller-matrix.summary.json",
+    "output_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-4",
+    "persistent_session_ledger_lock_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/.controller-exact-fill-v1-3-4.p2-direct-controller-persistent-sessions-v1-3-4.lock",
+    "persistent_session_ledger_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/.controller-exact-fill-v1-3-4.p2-direct-controller-persistent-sessions-v1-3-4",
+    "persistent_session_roles": {
+      "quality_work": "quality",
+      "ready_only_preflight": "ready_only_preflight"
+    },
+    "preflight_hmac_artifact_roles": [
+      "launch",
+      "ready",
+      "final-stopped",
+      "terminal"
+    ],
+    "preheldout_genesis_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-4-admission/preheldout-genesis.json",
+    "quality_start_activation_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-4-activation/quality-start-activation.json",
+    "reuse_admission_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-4-admission/historical-reuse-admission.json",
+    "summary_output_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-4.summary.json",
+    "superseded_v1_3_2_static_admission_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-2-admission",
+    "superseded_v1_3_2_static_pair_is_read_only_lineage": true,
+    "superseded_v1_3_3_activation_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-3-activation",
+    "superseded_v1_3_3_admission_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-3-admission",
+    "superseded_v1_3_3_persistent_session_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/.controller-exact-fill-v1-3-3.p2-direct-controller-persistent-sessions-v1-3-3",
+    "superseded_v1_3_3_runtime_state_is_read_only_lineage": true,
+    "v1_3_1_output_or_admission_namespace_reused": false,
+    "v1_3_2_output_or_admission_namespace_reused": false,
+    "v1_3_3_output_or_admission_namespace_reused": false,
+    "v1_3_output_or_admission_namespace_reused": false,
+    "worker_ledger_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/.controller-exact-fill-v1-3-4.p2-direct-controller-workers-v1-3-4"
+  },
+  "attestation": {
+    "key_compromise_in_scope": false,
+    "key_id": "67f433c02a291f9b1c9e65218171b6da46ef019567ee24406b4738c2ddf765bf",
+    "key_storage_rule": "raw high-entropy key outside repository and artifact roots, owned by the invoking user, regular non-symlink file, mode 0600; key bytes never enter commands, artifacts, or logs",
+    "key_transport": "runner-to-child inherited sealed memfd",
+    "scheme": "hmac-sha256-v1",
+    "threat_model": "authenticates artifacts produced by the trusted canonical runner and detects forged, concurrently substituted, or binding-mismatched stale files; compromise of the user-owned key, ptrace or memory inspection by the same user, a hostile process already holding the key, and whole-set rollback of an otherwise valid identically bound experiment are out of scope"
+  },
+  "claim_boundary": {
+    "fail_label": "NO-GO-CONFIRMATORY",
+    "forbidden_reporting_label": "unchanged-v1.3.3-preregistration",
+    "go_does_not_support": [
+      "population-significance-at-two-sided-p-less-than-0.05",
+      "top-p-quality-superiority-or-a-memory-quality-pareto-win",
+      "variable-fill-baseline-superiority",
+      "natural-language-or-large-model-transfer",
+      "official-DeepSeek-V4-transfer",
+      "total-HBM-H2D-D2H-latency-throughput-tail-or-production-serving-claims",
+      "causal-isolation-beyond-the-named-arm-contrasts"
+    ],
+    "go_supports": "replicated positive intent-to-treat effects in the frozen synthetic five-seed two-scale two-budget exact-fill observed cohort for the named comparators at exact paired physical hot-resident bytes, plus preregistered diagnostic estimates",
+    "pass_label": "GO-OBSERVED-COHORT-BOUNDED",
+    "population_boundary": "five independent training seeds have minimum attainable two-sided exact p=0.0625; conversation-level intervals do not establish population significance",
+    "prospective_claim_scope": "held-out-quality-only-after-an-observed-calibration-only-feasibility-result",
+    "required_reporting_label": "quality-blind-v1.3.4-runtime-module-provenance-amendment",
+    "top_p_language": "report the v1.2 result only as a cap-only calibration-feasibility failure, never as a failed or weak quality baseline"
+  },
+  "cohort": {
+    "calibration_seeds": [
+      7071406,
+      7071407,
+      7071408,
+      7071409,
+      7071410
+    ],
+    "evaluation_seed_identifiers_enumerated_for_coordinate_registration": true,
+    "evaluation_seed_replacement_after_feasibility_result_forbidden": true,
+    "evaluation_seeds": [
+      10071406,
+      10071407,
+      10071408,
+      10071409,
+      10071410
+    ],
+    "evaluation_seeds_preserved_without_reselection": true,
+    "evaluation_seeds_previously_reserved": true,
+    "evaluation_seeds_used_to_initialize_quality_rng": false,
+    "fresh_evaluation_namespace": true,
+    "freshness_definition": "never-used-for-quality-preserved-through-v1.3.4",
+    "seed_namespaces_pairwise_disjoint": true,
+    "seed_triplets": [
+      {
+        "calibration_seed": 7071406,
+        "evaluation_seed": 10071406,
+        "training_seed": 6071406
+      },
+      {
+        "calibration_seed": 7071407,
+        "evaluation_seed": 10071407,
+        "training_seed": 6071407
+      },
+      {
+        "calibration_seed": 7071408,
+        "evaluation_seed": 10071408,
+        "training_seed": 6071408
+      },
+      {
+        "calibration_seed": 7071409,
+        "evaluation_seed": 10071409,
+        "training_seed": 6071409
+      },
+      {
+        "calibration_seed": 7071410,
+        "evaluation_seed": 10071410,
+        "training_seed": 6071410
+      }
+    ],
+    "training_seeds": [
+      6071406,
+      6071407,
+      6071408,
+      6071409,
+      6071410
+    ]
+  },
+  "confirmatory_success_gate": {
+    "all_registered_confirmatory_cells_must_pass": true,
+    "all_three_contrasts_evaluated_independently": true,
+    "conditions_per_comparator_scale_budget": [
+      "pooled paired intent-to-treat mean strictly positive",
+      "all five training-seed mean differences strictly positive",
+      "paired conversation bootstrap 95 percent lower bound strictly positive",
+      "training-seed-cluster bootstrap 95 percent lower bound strictly positive",
+      "Bonferroni four-cell 98.75 percent seed-cluster lower bound strictly positive",
+      "zero candidate or comparator technical failures",
+      "exact paired physical hot-resident-byte parity for all five seeds"
+    ],
+    "confirmatory_contrast_count": 3,
+    "diagnostic_ablation_eligible_for_arm_selection": false,
+    "direct_hsoft_candidate": "hierarchical-soft-lag+pins",
+    "direct_hsoft_comparators": [
+      "fixed+pins",
+      "hierarchical-balanced-fixed+pins"
+    ],
+    "exact_seed_p_value_used_as_success_gate": false,
+    "fail_label": "NO-GO-CONFIRMATORY",
+    "original_central_and_both_hsoft_comparators_must_pass_every_cell": true,
+    "original_central_causal_contrast": {
+      "candidate": "calibrated+pins",
+      "comparator": "fixed+pins",
+      "name": "calibrated_pins_vs_fixed_pins"
+    },
+    "pass_label": "GO-OBSERVED-COHORT-BOUNDED",
+    "population_significance_reported_separately": true,
+    "primary_metric": "accuracy",
+    "required_budgets": [
+      "2x",
+      "4x"
+    ],
+    "required_confirmatory_cells_total": 12,
+    "required_directional_seed_effects_total": 60,
+    "required_scale_budget_cells_per_contrast": 4,
+    "required_scales": [
+      "s55",
+      "s151"
+    ],
+    "required_seed_effects_per_scale_budget": 5,
+    "top_p_eligible_for_primary_gate": false,
+    "top_p_quality_inputs_required": 0
+  },
+  "descriptive_feasibility_evidence": {
+    "bounded_conclusion": "the two frozen cap-only variable-cardinality comparators failed the one-percent mean-hot-byte match in all 40 calibration cells; no quality comparison ran",
+    "completed_cells": 40,
+    "eligible_for_any_multiplicity_family": false,
+    "eligible_for_primary_or_diagnostic_claim": false,
+    "evaluation_seed_accessed": false,
+    "expected_cells": 40,
+    "go_cells": 0,
+    "ledger": {
+      "attestation_key_id": "67f433c02a291f9b1c9e65218171b6da46ef019567ee24406b4738c2ddf765bf",
+      "attestation_mac": "8190a5a0bb955b21099c1527ea70a6def79bcda6718ee407f7fd41cbe0b0c750",
+      "attestation_payload_sha256": "6bb0dfcb7ecb073e5609a5ccf7a8114b728241e9b76efdc357c5e777e835d95b",
+      "bytes": 158900,
+      "coordinate_digest": "ecde0f6b82f368dc78f66b0349e8395ca3f9c8345de716985bd66532aa648bb4",
+      "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/top_p_physical_match/top-p-physical-matrix.summary.json",
+      "payload_sha256": "e4881c11ff7508d920746059e26be3dfb00e142fb2bc891c79b8e84ff6f8fd09",
+      "sha256": "ad4b5d2dcdcbc50ccd5008a0927cfb1a3265f904740e22f6ebab23c2b8f40c41"
+    },
+    "no_go_cells": 40,
+    "quality_arm": false,
+    "quality_execution_dependency": false,
+    "quality_statistical_input": false,
+    "role": "historical-disclosure-only",
+    "scope": "calibration-only-cap-only-variable-cardinality-physical-match",
+    "terminal_result": "NO-GO"
+  },
+  "execution_contract": {
+    "actual_hot_tensor_bytes_recorded_per_token": true,
+    "arm_execution_order_rule": "left-rotate-frozen-17-arm-order-by-schedule-index-modulo-17",
+    "arm_execution_rotation_period": 17,
+    "balanced_feasible_control_rule": "at every token, fixed+pins and hierarchical-balanced-fixed+pins receive the exact same candidate_caps, pin_floors, active layer set, and feasible B_t as Hsoft, but allocate with signal-blind uniform weights and deterministic capped water-filling plus Hamilton rounding",
+    "batch_size": 1,
+    "chunked_equivalence_required": false,
+    "configured_caps_are_physical_evidence": false,
+    "cuda_peak_allocated_and_reserved_recorded": true,
+    "decode_tokens_per_step": 1,
+    "direct_arm_semantics_authoritative": true,
+    "dual_manifest_contexts_may_not_be_collapsed": true,
+    "exact_fill_arms": [
+      "hierarchical-soft-lag+pins",
+      "fixed+pins",
+      "hierarchical-balanced-fixed+pins",
+      "fixed",
+      "calibrated-no-pins",
+      "calibrated+pins",
+      "shuffled-quota",
+      "shuffled-quota+pins",
+      "local-no-pins",
+      "local+pins",
+      "hierarchical-soft-lag-no-pins",
+      "hierarchical-soft-lag+pins-no-score",
+      "hierarchical-soft-lag+pins-no-temporal",
+      "hierarchical-soft-lag+pins-no-cross-layer",
+      "hierarchical-soft-lag+pins-no-refresh",
+      "hierarchical-soft-lag+pins-permuted-quota",
+      "hierarchical-soft-lag+pins+fallback"
+    ],
+    "exact_fill_rule": "every exact-fill arm must select and physically materialize exactly feasible B_t blocks after pins, where B_t=min(frozen global B, summed candidate caps); pins are charged inside B_t, every active CSA layer keeps a one-block floor, zero-cap stores are forbidden, and per-layer hot capacities must sum exactly to B_t",
+    "fallback_boundary": "fallback may reorder/recover only blocks already resident inside the arm's unchanged per-layer quota; it may not add a block, resize a tier, transfer an extra block, or change B_t",
+    "fallback_preserves_exact_b": true,
+    "legacy_configs_are_scaffolds_only": true,
+    "literal_model_path": "sequential-tiered",
+    "outcome_dependent_early_stopping": false,
+    "per_layer_hot_floor": 1,
+    "phase_b_runs_regardless_of_phase_a_outcomes": true,
+    "physical_audit_rule": "at every decoded token, bind allocator pin IDs/counts to store protected blocks, resize all CSA stores, materialize the selected exact-fill set, synchronize CUDA, and record actual hot tensor bytes plus CUDA peak allocated and reserved bytes; configured caps alone are not evidence of physical memory matching",
+    "pin_ids_and_counts_bound_before_resize": true,
+    "same_literal_path_for_every_arm": true,
+    "sealed_launch_and_persistent_session": {
+      "canonical_git_object_launcher_id": "p2-direct-controller-git-object-launcher-v1-3-4",
+      "canonical_git_object_launcher_required": true,
+      "checkpoint_model_deserialization_load_claim_excludes": [
+        "total-checkpoint-io-bytes",
+        "parent-checkpoint-hash-read-bytes",
+        "distributed-worker-execution",
+        "controlled-stop-execution",
+        "restart-or-recovery-execution",
+        "failed-or-interrupted-launches"
+      ],
+      "checkpoint_model_load_attempt_upper_bound_per_session": 1,
+      "child_full_historical_evidence_replays_per_session": 0,
+      "durable_per_session_failure_evidence_authoritative": [
+        "status",
+        "actual_session_argv",
+        "child_process_returncode"
+      ],
+      "durable_runtime_counter_compatibility_aliases": {
+        "durably_evidenced_parent_full_evidence_replays": "durably_evidenced_launch_authority_full_historical_evidence_replay_count"
+      },
+      "durable_runtime_counter_fields_authoritative": [
+        "launch_attempt_count",
+        "checkpoint_model_load_attempt_upper_bound",
+        "ready_model_load_count",
+        "observed_successful_model_loads",
+        "launch_only_interrupted_attempt_count",
+        "terminal_count",
+        "child_eof_count",
+        "published_bundle_reingestion_count",
+        "launch_authority_count",
+        "durably_evidenced_launch_authority_full_historical_evidence_replay_count",
+        "session_triggered_full_historical_evidence_replay_count",
+        "normal_no_restart_unique_worker_scale_seed_assignments",
+        "normal_path_model_load_bound",
+        "normal_path_model_load_bound_applicable",
+        "normal_path_model_load_bound_observed_satisfied",
+        "additional_controlled_or_recovery_launch_attempts",
+        "controlled_stop_session_count"
+      ],
+      "durably_evidenced_parent_full_historical_replays_per_launch_authority": 1,
+      "entrypoint_selector_allowlist": [
+        "matrix",
+        "audit",
+        "summary"
+      ],
+      "matrix_binds_role_tagged_preflight_hmac_evidence": true,
+      "parent_full_historical_checkpoint_hash_read_bytes": "not_measured",
+      "per_invocation_routing_binding": "fully-sealed-memfd-selector-relative-path-git-mode-blob-oid-sha256-bytes-v1",
+      "persistent_evaluator_protocol": "sealed-hmac-jsonl-model-resident-v1",
+      "persistent_session_roles": {
+        "quality_work": "quality",
+        "ready_only_preflight": "ready_only_preflight"
+      },
+      "persistent_session_scope": "one-model-resident-maximal-canonical-worker-scale-training-seed-cohort-prefix-v1",
+      "quality_session_normal_path_model_loads": 10,
+      "quality_start_activation": {
+        "activation_root_members": [
+          "matrix.lock",
+          "quality-start-activation.json"
+        ],
+        "activation_root_publication": "staged-exact-two-member-directory-fsync-renameat2-noreplace-v1",
+        "authority_model": "typed-prestart-then-hmac-activation-no-raw-skip-boolean",
+        "canonical_v1_3_2_entrypoint_status": "retired",
+        "canonical_v1_3_3_entrypoint_status": "retired",
+        "forbidden_operational_prefix_actions": [
+          "inspect-quality-value",
+          "select-arm-seed-scale-budget-family-context-or-replicate",
+          "change-analysis-or-success-gate",
+          "stop-for-scientific-direction"
+        ],
+        "fresh_execution_sequence": [
+          "canonical-read-only-prerequisites-only",
+          "publish-fresh-quality-start-activation",
+          "run-zero-work-persistent-ready-only-preflight",
+          "publish-initial-zero-record-matrix-binding-role-tagged-preflight-launch-ready-stopped-and-terminal-evidence",
+          "run-canonical-matrix-with-max-new-cells-equal-to-one",
+          "verify-only-integrity-schema-device-and-closed-world-properties",
+          "resume-full-matrix-regardless-of-the-first-cell-outcome-direction"
+        ],
+        "full_resume_gate": "authenticated-exact-one-canonical-prefix-with-automated-integrity-schema-device-and-closed-world-validation",
+        "full_resume_independent_of_outcome_direction": true,
+        "full_resume_required_after_valid_operational_prefix": true,
+        "historical_lineage_full_revalidation_boundaries": [
+          "admission-staging-recovery-and-publication",
+          "activation-staging-recovery-and-publication",
+          "activation-or-static-capability-reload-and-handoff",
+          "authenticated-quality-session-entry-before-first-write"
+        ],
+        "historical_lineage_rehashed_before_each_shard_or_ledger_write_within_one_retained_activation_lease_session": false,
+        "historical_v1_3_2_static_lineage_revalidated_at_each_mutating_phase_entry": true,
+        "historical_v1_3_3_ready_preflight_failure_lineage_revalidated_at_each_mutating_phase_entry": true,
+        "matrix_lock_semantics": "activation-root-precreated-inode-flock-exclusive-process-owner-v1",
+        "operational_prefix_is_scientific_analysis": false,
+        "operational_prefix_max_new_cells": 1,
+        "out_of_band_c4_key_holder_execution_in_scope": false,
+        "out_of_band_c6_key_holder_execution_in_scope": false,
+        "outcome_values_may_be_inspected_during_operational_prefix_check": false,
+        "outcome_values_may_influence_continue_stop_or_configuration": false,
+        "permitted_operational_prefix_checks": [
+          "integrity",
+          "schema",
+          "device-binding",
+          "closed-world-storage"
+        ],
+        "quality_execution_topology": {
+          "distributed_execution_supported": false,
+          "reason": "v1-3-4-seals-one-local-worker-device-route-and-defines-no-distributed-coordination-contract",
+          "worker_count": 1,
+          "worker_index": 0
+        },
+        "ready_only_preflight": {
+          "boundary": "post-activation-before-initial-zero-record-matrix-publication-and-before-any-cell-claim",
+          "cell_claim_count": 0,
+          "completed_coordinate_count": 0,
+          "evaluation_rng_initialization_count": 0,
+          "failure_behavior": "remain-zero-record-and-not-claim-eligible-with-no-quality-session-launch",
+          "final_receipt_status": "stopped",
+          "held_out_evaluation_input_materialization_count": 0,
+          "matrix_binding": "initial-zero-record-matrix-binds-role-tagged-hmac-launch-ready-final-stopped-and-terminal-evidence-before-first-claim-v1",
+          "matrix_claim_eligibility_requires_success": true,
+          "normal_path_checkpoint_model_load_attempt_count": 1,
+          "outcome_materialization_count": 0,
+          "persistent_session_required": true,
+          "planned_coordinate_count": 1,
+          "prediction_materialization_count": 0,
+          "quality_values_accessed": false,
+          "recovery_attempt_accounting": "every-failed-or-retried-preflight-attempt-is-dynamically-counted-and-reported-in-the-role-tagged-hmac-persistent-session-ledger",
+          "required_role_tagged_hmac_evidence": [
+            "launch",
+            "ready",
+            "final-stopped",
+            "terminal"
+          ],
+          "session_role": "ready_only_preflight",
+          "stopped_receipt_required": true,
+          "successful_preflight_ready_model_load_count": 1,
+          "unconditional_total_checkpoint_model_load_attempt_upper_bound": null,
+          "work_order_count": 0
+        },
+        "runtime_module_provenance": {
+          "both_claims_require_lexical_and-resolved-identity-when-present": true,
+          "class_proxy_object_identity_is_statically_resolved_from_owner_namespace": true,
+          "every_filesystem_claim_retains_strict-resolve-site-packages-escape-and-repository-frozen-inventory-validation": true,
+          "filesystem_claim_sources": [
+            "module-instance-own-__file__",
+            "module-instance-own-__spec__.origin-when-has_location-is-true"
+          ],
+          "malformed_instance_owned_file_or_spec_metadata_is_rejected": true,
+          "module_name_allowlist_used": false,
+          "no-own-file-and-no-locatable-own-spec-means-virtual-or-namespace-module-without-source-backed-import-claim": true,
+          "none_registry_entries_are_nonexecuting_negative_import_cache": true,
+          "nonmodule_registry_entries_require_structural_class_proxy_anchor_to_an_audited_defining_module": true
+        },
+        "signed-lineage-bindings-and-retained-activation-lease-carry-authority-within-one-authenticated-session": true,
+        "zero_prefix_resume_behavior": "execute-exactly-one-operational-cell-and-stop-before-full-resume"
+      },
+      "ready_only_preflight": {
+        "boundary": "post-activation-before-initial-zero-record-matrix-publication-and-before-any-cell-claim",
+        "cell_claim_count": 0,
+        "completed_coordinate_count": 0,
+        "evaluation_rng_initialization_count": 0,
+        "failure_behavior": "remain-zero-record-and-not-claim-eligible-with-no-quality-session-launch",
+        "final_receipt_status": "stopped",
+        "held_out_evaluation_input_materialization_count": 0,
+        "matrix_binding": "initial-zero-record-matrix-binds-role-tagged-hmac-launch-ready-final-stopped-and-terminal-evidence-before-first-claim-v1",
+        "matrix_claim_eligibility_requires_success": true,
+        "normal_path_checkpoint_model_load_attempt_count": 1,
+        "outcome_materialization_count": 0,
+        "persistent_session_required": true,
+        "planned_coordinate_count": 1,
+        "prediction_materialization_count": 0,
+        "quality_values_accessed": false,
+        "recovery_attempt_accounting": "every-failed-or-retried-preflight-attempt-is-dynamically-counted-and-reported-in-the-role-tagged-hmac-persistent-session-ledger",
+        "required_role_tagged_hmac_evidence": [
+          "launch",
+          "ready",
+          "final-stopped",
+          "terminal"
+        ],
+        "session_role": "ready_only_preflight",
+        "stopped_receipt_required": true,
+        "successful_preflight_ready_model_load_count": 1,
+        "unconditional_total_checkpoint_model_load_attempt_upper_bound": null,
+        "work_order_count": 0
+      },
+      "ready_only_preflight_normal_path_model_loads": 1,
+      "source_provenance_binding": "selector-invariant-bundle-sha256-over-the-full-allowlisted-entrypoint-and-implementation-inventory-v1",
+      "successful_checkpoint_model_load_evidence_boundary": "authenticated-ready-receipt",
+      "total_normal_path_checkpoint_model_loads": 11,
+      "uninterrupted_single_worker_normal_path_checkpoint_model_deserialization_loads": 10,
+      "uninterrupted_single_worker_normal_path_conditions": [
+        "single-worker",
+        "complete-9000-shard-matrix",
+        "one-successful-session-per-scale-training-seed-cohort",
+        "no-controlled-stop",
+        "no-interruption-launch-failure-child-eof-parent-commit-failure-or-parent-crash-recovery",
+        "no-restart-or-recovery-launch"
+      ]
+    },
+    "signal_diagnostic_rule": "for every decoded token and CSA layer record each raw controller component, its robust standardized value before clipping, the post-clip value, clip/saturation indicator, requested and allocated blocks, and whether controller history is cold-start or steady-state; report clipping and quota-movement rates by seed, scale, budget, family, context, and regime",
+    "signal_weight_rule": {
+      "by_arm": {
+        "calibrated+pins": {
+          "cross_layer": 0.2,
+          "entropy": 0.35,
+          "margin": 0.2,
+          "temporal": 0.25
+        },
+        "calibrated-no-pins": {
+          "cross_layer": 0.2,
+          "entropy": 0.35,
+          "margin": 0.2,
+          "temporal": 0.25
+        },
+        "fixed": {
+          "cross_layer": 0.2,
+          "entropy": 0.35,
+          "margin": 0.2,
+          "temporal": 0.25
+        },
+        "fixed+pins": {
+          "cross_layer": 0.2,
+          "entropy": 0.35,
+          "margin": 0.2,
+          "temporal": 0.25
+        },
+        "hierarchical-balanced-fixed+pins": {
+          "cross_layer": 0.2,
+          "entropy": 0.35,
+          "margin": 0.2,
+          "temporal": 0.25
+        },
+        "hierarchical-soft-lag+pins": {
+          "cross_layer": 0.2,
+          "entropy": 0.35,
+          "margin": 0.2,
+          "temporal": 0.25
+        },
+        "hierarchical-soft-lag+pins+fallback": {
+          "cross_layer": 0.2,
+          "entropy": 0.35,
+          "margin": 0.2,
+          "temporal": 0.25
+        },
+        "hierarchical-soft-lag+pins-no-cross-layer": {
+          "cross_layer": 0.0,
+          "entropy": 0.4375,
+          "margin": 0.25,
+          "temporal": 0.3125
+        },
+        "hierarchical-soft-lag+pins-no-refresh": {
+          "cross_layer": 0.2,
+          "entropy": 0.35,
+          "margin": 0.2,
+          "temporal": 0.25
+        },
+        "hierarchical-soft-lag+pins-no-score": {
+          "cross_layer": 0.4444444444444444,
+          "entropy": 0.0,
+          "margin": 0.0,
+          "temporal": 0.5555555555555556
+        },
+        "hierarchical-soft-lag+pins-no-temporal": {
+          "cross_layer": 0.26666666666666666,
+          "entropy": 0.4666666666666667,
+          "margin": 0.26666666666666666,
+          "temporal": 0.0
+        },
+        "hierarchical-soft-lag+pins-permuted-quota": {
+          "cross_layer": 0.2,
+          "entropy": 0.35,
+          "margin": 0.2,
+          "temporal": 0.25
+        },
+        "hierarchical-soft-lag-no-pins": {
+          "cross_layer": 0.2,
+          "entropy": 0.35,
+          "margin": 0.2,
+          "temporal": 0.25
+        },
+        "local+pins": {
+          "cross_layer": 0.2,
+          "entropy": 0.35,
+          "margin": 0.2,
+          "temporal": 0.25
+        },
+        "local-no-pins": {
+          "cross_layer": 0.2,
+          "entropy": 0.35,
+          "margin": 0.2,
+          "temporal": 0.25
+        },
+        "shuffled-quota": {
+          "cross_layer": 0.2,
+          "entropy": 0.35,
+          "margin": 0.2,
+          "temporal": 0.25
+        },
+        "shuffled-quota+pins": {
+          "cross_layer": 0.2,
+          "entropy": 0.35,
+          "margin": 0.2,
+          "temporal": 0.25
+        }
+      },
+      "component_order": [
+        "entropy",
+        "margin",
+        "temporal",
+        "cross_layer"
+      ],
+      "description": "default entropy/margin/temporal/cross-layer weights are .35/.20/.25/.20; each signal ablation sets every removed demand component to zero and preregisteredly renormalizes the remaining enabled components to sum exactly one"
+    },
+    "single_token_decode": true,
+    "soft_lag_signal_rule": "token t quotas use only token t-1 ControllerLayerSignal values, target-free calibration, pin/candidate bounds, and a deterministic control key; same-token signals, labels, answers, correctness, and evaluation outcomes are forbidden inputs",
+    "top_p_quality_input_count": 0,
+    "top_p_schedule_or_match_input_forbidden": true,
+    "v1_2_upstream_manifest_context_required": true,
+    "v1_3_1_signed_zero_quality_launch_failure_lineage_context_required": true,
+    "v1_3_2_signed_zero_quality_preactivation_static_publication_lineage_context_required": true,
+    "v1_3_3_signed_zero_quality_postactivation_ready_preflight_launch_failure_lineage_context_required": true,
+    "v1_3_4_quality_manifest_context_required": true,
+    "v1_3_4_ready_only_preflight_required_before_first_claim": true,
+    "v1_3_quality_manifest_context_required": true,
+    "v1_3_signed_empty_lineage_context_required": true,
+    "variable_fill_sensitivity_arms": [],
+    "zero_cap_tier_stores_forbidden": true
+  },
+  "experiment_id": "p2-post-rank-direct-controller-exact-fill-v1.3.4",
+  "grid": {
+    "arm_execution_order_rule": "left-rotate-frozen-17-arm-order-by-schedule-index-modulo-17",
+    "arm_execution_rotation_period": 17,
+    "budgets": [
+      "2x",
+      "4x"
+    ],
+    "cardinalities": {
+      "all_arm_conversations": 3060000,
+      "budget_expanded_conversation_evaluations_total": 180000,
+      "budget_shards_total": 9000,
+      "budgets": 2,
+      "contexts": 5,
+      "distinct_generated_conversations_total": 45000,
+      "examples_per_seed_scale_family": 1000,
+      "examples_per_shard": 20,
+      "families": 9,
+      "phase_a_arm_conversations": 540000,
+      "phase_b_additional_arm_conversations": 2520000,
+      "quality_outcomes_total": 3060000,
+      "raw_token_rows_without_technical_failures": 138040000,
+      "raw_token_rows_without_technical_failures_per_arm": 8120000,
+      "replicates_per_context": 10,
+      "scale_specific_conversation_evaluations_total": 90000,
+      "scales": 2,
+      "seeds": 5,
+      "system_slices_total": 15300,
+      "unique_shards_per_seed_scale": 450,
+      "unique_shards_total": 4500
+    },
+    "contexts": [
+      80,
+      128,
+      256,
+      512,
+      1024
+    ],
+    "examples_per_shard": 20,
+    "families": [
+      "single-remote-retrieval",
+      "multiple-independent-needles",
+      "associative-recall",
+      "multi-turn-query-shift",
+      "dense-global-aggregation",
+      "irrelevant-context-local-only",
+      "instruction-persistence",
+      "adversarial-lexical-distractors",
+      "long-generation-changing-evidence"
+    ],
+    "generation_seed_rule": "evaluation_seed*100000 + family_index*1000 + context_index*10 + replicate",
+    "paired_across_scales_budgets_and_arms": true,
+    "quality_coordinate_digest": "9f7b099051a785a87082d5030e494398098fcb1766574c5df829b2fcd4a21c4a",
+    "replicates": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9
+    ],
+    "scales": [
+      "s55",
+      "s151"
+    ]
+  },
+  "implementation": {
+    "paths": [
+      "pyproject.toml",
+      "nano_deepseek_v4",
+      "research/adaptive_v4_memory/reports/2026-07-19-p2-direct-training-validator-amendment.md",
+      "research/adaptive_v4_memory/reports/2026-07-19-p2-direct-calibration-path-binding-amendment.md",
+      "research/adaptive_v4_memory/reports/2026-07-20-p2-direct-top-p-physical-match-no-go.md",
+      "research/adaptive_v4_memory/scripts/adaptive_v4_execution_environment.py",
+      "research/adaptive_v4_memory/scripts/adaptive_v4_gpu_lock.py",
+      "research/adaptive_v4_memory/scripts/freeze_p2_causal_factorial_arms.py",
+      "research/adaptive_v4_memory/scripts/p2_direct_attestation.py",
+      "research/adaptive_v4_memory/scripts/train_m1_associative_recall.py",
+      "research/adaptive_v4_memory/scripts/p2_direct_controller_contract.py",
+      "research/adaptive_v4_memory/scripts/run_p2_direct_training_matrix.py",
+      "research/adaptive_v4_memory/scripts/calibrate_p2_direct_soft_lag.py",
+      "research/adaptive_v4_memory/scripts/run_p2_direct_calibration_matrix.py",
+      "research/adaptive_v4_memory/scripts/validate_p2_direct_top_p_physical_match.py",
+      "research/adaptive_v4_memory/scripts/run_p2_direct_top_p_physical_matrix.py",
+      "research/adaptive_v4_memory/scripts/evaluate_p2_direct_controller_shard.py",
+      "research/adaptive_v4_memory/scripts/run_p2_direct_controller_matrix.py",
+      "research/adaptive_v4_memory/scripts/audit_p2_direct_controller_integrity.py",
+      "research/adaptive_v4_memory/scripts/summarize_p2_direct_controller.py",
+      "research/adaptive_v4_memory/scripts/p2_direct_controller_contract_v1_3.py",
+      "research/adaptive_v4_memory/scripts/p2_direct_controller_reuse_admission_v1_3.py",
+      "research/adaptive_v4_memory/scripts/p2_direct_controller_persistent_session_v1_3.py",
+      "research/adaptive_v4_memory/scripts/p2_direct_controller_git_launcher_v1_3.py",
+      "research/adaptive_v4_memory/scripts/generate_p2_direct_controller_v1_3.py",
+      "research/adaptive_v4_memory/scripts/evaluate_p2_direct_controller_shard_v1_3.py",
+      "research/adaptive_v4_memory/scripts/run_p2_direct_controller_matrix_v1_3.py",
+      "research/adaptive_v4_memory/scripts/audit_p2_direct_controller_integrity_v1_3.py",
+      "research/adaptive_v4_memory/scripts/summarize_p2_direct_controller_v1_3.py",
+      "research/adaptive_v4_memory/reports/2026-07-20-p2-direct-controller-v1-3-1-activation-amendment.md",
+      "research/adaptive_v4_memory/reports/2026-07-20-p2-direct-controller-v1-3-2-import-boundary-amendment.md",
+      "research/adaptive_v4_memory/reports/2026-07-20-p2-direct-controller-v1-3-3-reuse-admission-view-amendment.md",
+      "research/adaptive_v4_memory/reports/2026-07-20-p2-direct-controller-v1-3-4-runtime-module-provenance-amendment.md"
+    ],
+    "source_commit": "41df1455723b8729c492e27c3e0eec18570736d0",
+    "tree_digest": "12aef1af6636758a7b07ff1488b06abf19359878f81568f7674e80bdb1e18d44"
+  },
+  "lineage_and_adaptation_disclosure": {
+    "amendment_trigger": "runtime-module-origin-audit-misclassified-the-source-less-torch.ops-virtual-namespace-class-level-compatibility-file-sentinel-as-a-filesystem-provenance-claim",
+    "arm_change": "delete-exactly-two-variable-fill-top-p-arms-and-preserve-all-17-exact-fill-arms-relative-order-semantics-estimands-and-analysis",
+    "evaluation_seed_policy": {
+      "freshness_definition": "never-used-for-quality-not-newly-selected-in-v1.3",
+      "identifiers_enumerated_for_coordinate_registration": true,
+      "preserved_without_reselection": true,
+      "previously_reserved": true,
+      "quality_examples_or_targets_materialized": false,
+      "replacement_after_feasibility_result_forbidden": true,
+      "used_to_initialize_quality_rng": false
+    },
+    "failure_diagnosis_is_source_bound_not_a_signed_terminal_receipt": true,
+    "failure_diagnosis_is_source_bound_stderr_not_a_signed_terminal_field": true,
+    "feasibility_outcome_used_to_create_fork": true,
+    "fork_trigger": "terminal-calibration-only-top-p-physical-match-no-go",
+    "global_outcome_independence_claimed": false,
+    "prior_p2_quality_results_observed": true,
+    "prospective_scope": "previously-unobserved-held-out-controller-quality-only",
+    "protocol_relation_to_v1_2": "new-follow-on-protocol-fork-not-a-repair-relabel-or-unchanged-continuation",
+    "protocol_relation_to_v1_3": "prospective-runtime-module-provenance-amendment-after-signed-v1.3.3-zero-quality-postactivation-ready-preflight-launch-failure-not-a-repair-overwrite-resume-or-quality-informed-refreeze",
+    "quality_nonobservation_scope": "reserved evaluation-seed identifiers and their deterministic future RNG-seed schedule were registered as protocol metadata, but no quality RNG was initialized and no held-out input target prediction or outcome was created or inspected by the trusted canonical v1.2 quality pipeline",
+    "quality_nonobservation_threat_boundary": "owner-controlled deletion filesystem rollback and out-of-band execution are not cryptographically disproved and remain outside the trusted-pipeline claim",
+    "quality_outcome_used_to_create_fork": false,
+    "removed_arms": [
+      "fixed-top-p-0.5+pins",
+      "fixed-top-p-0.8+pins"
+    ],
+    "retained_arm_features_projection_sha256": "9f521f76255f851cdceba6ef643b996a3088647ee28de1acab0290a4dbac34fe",
+    "retained_arm_order_sha256": "6d69fef8bdc5db6d0bfb6f7a815a4e118015cb354a45a4016b652c4bc13e7198",
+    "retained_diagnostic_contrasts_sha256": "1fa76bf2a9ea665e3129d3db7fa1b5a65188ad3b390aef9614dbb0d45fa69a4f",
+    "reused_upstream_evidence": {
+      "attestation_key_id": "67f433c02a291f9b1c9e65218171b6da46ef019567ee24406b4738c2ddf765bf",
+      "calibration_ledger": {
+        "attestation_mac": "d5db4d64675d8037f9704560c3813609fe75717908f215f26d1c5ceb60896ad6",
+        "attestation_payload_sha256": "f7b34e54224b5012511ba6cf50b8f1e1f4aae4636c9abcd824a08a7364ce0d57",
+        "bytes": 66661,
+        "completed_cells": 10,
+        "expected_cells": 10,
+        "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/calibration-v1-2/calibration-matrix-v1-2.summary.json",
+        "payload_sha256": "f2ef5a44401cee1509a7b27dfb36236db12a13ee8d151039db1a9acc9ed18c1b",
+        "quality_evaluation_started": false,
+        "sha256": "b6da3a7861ac0a7d3d3d94cec9b6031a40270f01ff5eef8a1513761d97cc7b61",
+        "status": "terminal",
+        "terminal_decision": "GO"
+      },
+      "recalibration_after_top_p_result_forbidden": true,
+      "training_ledger": {
+        "attestation_mac": "3263b5aa69970a74cae515c5a2be7ef4c74c7862a8472bf9eb076f95636b5296",
+        "attestation_payload_sha256": "29c7d9da9d7b2f10caaa18875d001e24a94ba155773a0f1045977f7004a53504",
+        "bytes": 18032,
+        "completed_runs": 10,
+        "expected_runs": 10,
+        "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/training/training-matrix-v1-1.summary.json",
+        "payload_sha256": "f48b8d205bc44cf07dfd1a7ff20396fa608c52d174210e8e6e331be7dbba7736",
+        "sha256": "786669b8feb74eef5a4aa1e57dccc3ffada10596a8ae995d78e931daeef06cb5",
+        "status": "terminal"
+      }
+    },
+    "runtime_module_provenance_uses_structural_claims_not_module_name_allowlists": true,
+    "scientific-grid-arm-estimand-or-success-gate_changed": false,
+    "v1_2_held_out_controller_quality_observed": false,
+    "v1_2_manifest": {
+      "implementation_source_commit": "ce04646b09051e8ad13783eb794f4d92f728fd85",
+      "implementation_tree_digest": "2978634d0c6da3e45d8a97a494f5a319778653ebd7c9a774f44ff72cee238b96",
+      "path": "research/adaptive_v4_memory/manifests/p2-post-rank-direct-controller-v1-2.json",
+      "result_source_commit": "8c88464d3de39dd98a119ec98cef99a5f7a8c0f5",
+      "sha256": "eab8e67d9e2d0e162aaf19a637a2978a1a41d71c799570aecfec3c31499754d7"
+    },
+    "v1_2_quality_roots_at_terminal_report": {
+      "absence_is_pipeline_scoped_not_proof_against_owner_deletion": true,
+      "controller_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller",
+      "controller_root_absent": true,
+      "matrix_lock_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/.controller.p2-direct-controller-matrix.lock",
+      "matrix_lock_path_absent": true,
+      "worker_ledger_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/.controller.p2-direct-controller-workers",
+      "worker_ledger_root_absent": true
+    },
+    "v1_2_top_p_result_observed_before_freeze": true,
+    "v1_2_top_p_terminal_report": {
+      "path": "research/adaptive_v4_memory/reports/2026-07-20-p2-direct-top-p-physical-match-no-go.md",
+      "sha256": "46d760e74e3efbfd7e9a887aa6490d1ce8c3d68f028d9254661988112026609e",
+      "source_commit": "4c23fbbaf100f92e58c5419aa6286453ab14f155"
+    },
+    "v1_3_1_quality_outcomes_observed_before_amendment": false,
+    "v1_3_1_signed_zero_quality_launch_failure_lineage": {
+      "absent_paths": [
+        "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/.controller-exact-fill-v1-3-1.p2-direct-controller-workers-v1-3-1",
+        "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-1.integrity.json",
+        "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-1.summary.json"
+      ],
+      "activation_root": {
+        "exact_members": [
+          {
+            "bytes": 509,
+            "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-1-activation/matrix.lock",
+            "sha256": "101d46a05395e701d04b42b471ca67dc778117e01c87405196df227f4216c642"
+          },
+          {
+            "attestation_mac": "ef7c07823390abf627060974c8a5f120334ca61cd5fb1fa2bf8bdc54bbde8624",
+            "attestation_payload_sha256": "95fc5e73a43c658a9012f3d6cf1e8c818e246de45e2d134aa45cc0114438844c",
+            "attestation_purpose": "p2-direct-v1.3.1-quality-start-activation-v1",
+            "bytes": 177754,
+            "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-1-activation/quality-start-activation.json",
+            "payload_sha256": "a4a28c0dba896fd74253a3bb7edd95921018999f3e2d9421924896f45233cdf3",
+            "sha256": "e14b9e672fe0beb93203b51faa252ec17885b60ec52eac4890cdfe89e0e151d6"
+          }
+        ],
+        "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-1-activation"
+      },
+      "attestation_key_id": "67f433c02a291f9b1c9e65218171b6da46ef019567ee24406b4738c2ddf765bf",
+      "experiment_id": "p2-post-rank-direct-controller-exact-fill-v1.3.1",
+      "implementation": {
+        "source_commit": "b473b237689ed7466a3a27db7054d2770afe60b8",
+        "source_tree": "6d35e8458495112f4179fde0bdb0fe58cb7ad055",
+        "tree_digest": "6b861b5c1869c42442cc432bf940c0403d030a31c4b0438c1bd99166a30db7e0"
+      },
+      "lineage_type": "signed-superseded-zero-quality-launch-failure",
+      "manifest": {
+        "bytes": 56967,
+        "path": "research/adaptive_v4_memory/manifests/p2-post-rank-direct-controller-exact-fill-v1-3-1.json",
+        "sha256": "980144f5ae00ae8381f4ced1a93d614a1bdd2a361060fa344bb55db8273ae50d"
+      },
+      "output_closed_world": {
+        "exact_relative_directories": [
+          ".",
+          "s55",
+          "s55/seed-6071406",
+          "s55/seed-6071406/2x",
+          "s55/seed-6071406/2x/single-remote-retrieval",
+          "s55/seed-6071406/2x/single-remote-retrieval/context-80",
+          "s55/seed-6071406/2x/single-remote-retrieval/context-80/replicate-0"
+        ],
+        "exact_relative_files": [
+          "controller-matrix.summary.json",
+          "s55/seed-6071406/2x/single-remote-retrieval/context-80/replicate-0/.p2-direct-controller-exact-fill-v1-3-1-cell.claim"
+        ],
+        "matrix": {
+          "attestation_mac": "f78b4d0c2760e5620a323392124ea219f7f6646b6d57c0a50f74e01cb3e720fa",
+          "attestation_payload_sha256": "dca120aa04fa4b053a31dc862df24fb2aa45e91c058c0bac5d994b95b468c110",
+          "attestation_purpose": "p2-direct-controller-exact-fill-matrix-v1-3-1",
+          "bytes": 194432,
+          "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-1/controller-matrix.summary.json",
+          "payload_sha256": "f25756152b9103273cc4f3710cdfbccf6c09be9e7f1289b5218616aafc1f01b1",
+          "sha256": "79d726212ca6bf9af1f9f8c380d9dbd8b0e98fcfc36fd6cec64870bdbe17eebb"
+        },
+        "orphan_claim": {
+          "bytes": 532,
+          "dead_owner_required": true,
+          "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-1/s55/seed-6071406/2x/single-remote-retrieval/context-80/replicate-0/.p2-direct-controller-exact-fill-v1-3-1-cell.claim",
+          "pid": 151659,
+          "process_start_ticks": 328868946,
+          "quality_payload_fields_present": false,
+          "relative_path": "s55/seed-6071406/2x/single-remote-retrieval/context-80/replicate-0/.p2-direct-controller-exact-fill-v1-3-1-cell.claim",
+          "sha256": "4deb50235d9f6999e09a2b4e3bf3ae53f689c1a75e3b6afd54a2ce53949b0c20"
+        },
+        "root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-1"
+      },
+      "persistent_session": {
+        "child_process_returncode": 1,
+        "exact_members": [
+          {
+            "attestation_mac": "4137a43e35744f207960428797e527ab4b2d35ceeafb5ed7dd6f9d749f56a07d",
+            "attestation_payload_sha256": "42e6e951e63090142ee86ec8fcf40e6a4074befd44dc4e2552b5dce887319a9a",
+            "attestation_purpose": "p2-direct-controller-exact-fill-v1-3-1-persistent-launch-ledger-v1",
+            "bytes": 21891,
+            "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/.controller-exact-fill-v1-3-1.p2-direct-controller-persistent-sessions-v1-3-1/caecf57c56d3ee51263c150cdc24ebf6a1c789dca085cf0e5eaa81a970f9d222.launch.json",
+            "payload_sha256": "81f3c53b5c4987392b18f0b5d756b006d03c6dc90c4e870db65e949d0580490a",
+            "sha256": "db938290daa24802a8cb084525e535b1068417f33bf8608a7a87fef635a46e9a"
+          },
+          {
+            "attestation_mac": "5e7a743cae34b3681e076ad47b06378f3ed6217cfc86804a33f33fe50a3ac060",
+            "attestation_payload_sha256": "58e125144404540d36677eb92c20404fcdb4bb0a660eec6ada6506150b02560f",
+            "attestation_purpose": "p2-direct-controller-exact-fill-v1-3-1-persistent-terminal-ledger-v1",
+            "bytes": 19659,
+            "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/.controller-exact-fill-v1-3-1.p2-direct-controller-persistent-sessions-v1-3-1/caecf57c56d3ee51263c150cdc24ebf6a1c789dca085cf0e5eaa81a970f9d222.terminal.json",
+            "payload_sha256": "932b29a7f471b2bd32a6818c9fa6c3bfdfbcec20bec4daac255c1b2b7396c310",
+            "sha256": "4a638fc41ab27fafcdd04c0bd47eea31fb7122b05442f79a4a0cdb68f3a91454"
+          }
+        ],
+        "launch_authority_nonce": "6c64fafcbea3cb212b341adc173b4197033f097d04bf61465dc54c8e47eb97a4",
+        "lock": {
+          "bytes": 0,
+          "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/.controller-exact-fill-v1-3-1.p2-direct-controller-persistent-sessions-v1-3-1.lock",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/.controller-exact-fill-v1-3-1.p2-direct-controller-persistent-sessions-v1-3-1",
+        "session_nonce": "caecf57c56d3ee51263c150cdc24ebf6a1c789dca085cf0e5eaa81a970f9d222",
+        "terminal_status": "launch_failure"
+      },
+      "preheldout_genesis": {
+        "attestation_mac": "c657bcdf9c4f7a33ff8c6b1d43c32cad45a2e3dd349eab6b12167bc0ebfa9821",
+        "attestation_payload_sha256": "b496882bad92c3a3020abcd5b3f8ff4a859d87afa3335dee4cdc24ffab285609",
+        "attestation_purpose": "p2-direct-v1.3.1-preheldout-genesis-v1",
+        "bytes": 10427,
+        "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-1-admission/preheldout-genesis.json",
+        "payload_sha256": "d4da758f4be9615b3dd1a9c97eeb47e1737e4668bc6a7b59c5190624f9e5971c",
+        "sha256": "3d8a4f0f006f916586a223ab5f0cc92e72c17e66267eb85bc8ebbaa9ef27948e"
+      },
+      "projection_sha256": "2e2b7c1df5eaaf316ad53abc4efd8c4d86651da1d18ba1129e2561cdb6b349b0",
+      "quality_state": {
+        "completed_shards": 0,
+        "evaluation_inputs_materialized": 0,
+        "evaluation_seed_used_to_initialize_quality_rng": false,
+        "final_receipt_count": 0,
+        "globally_committed_shards": 0,
+        "integrity_fail_shards": 0,
+        "integrity_pass_shards": 0,
+        "live_active_claim_count": 0,
+        "orphan_claim_count": 1,
+        "outcome_dependent_early_stopping": false,
+        "outcome_selection_performed": false,
+        "quality_aggregates_materialized": 0,
+        "quality_evaluation_started": false,
+        "quality_outcomes_aggregated": false,
+        "quality_outcomes_materialized": 0,
+        "quality_predictions_materialized": 0,
+        "quality_rng_initialized": false,
+        "ready_receipt_count": 0,
+        "records": [],
+        "work_order_count": 0,
+        "work_result_count": 0,
+        "worker_ledger_count": 0
+      },
+      "result_source_commit": "828e8e0c57042b71a1117cd067b113f20d61c04c",
+      "result_source_tree": "2d0b3b4be19893c3c14ca69308db0e40850eb76a",
+      "reuse_admission": {
+        "attestation_mac": "4bdfd54ae51114a8ebfe0baebed8c2bec996023c370c076931ab505526374a98",
+        "attestation_payload_sha256": "7fec73573a4ba5def25ff52f82f53b8e391dc326c0eacbe74c46f0450bd33b9d",
+        "attestation_purpose": "p2-direct-v1.3.1-reuse-admission-v1",
+        "bytes": 11092,
+        "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-1-admission/historical-reuse-admission.json",
+        "payload_sha256": "26d110d67658ec285730d6fc09ddb3e107a2d14b5427abe6e97ff3cc50c037ec",
+        "sha256": "c2c786d437a3d42d3329947d8d7941751d7b9561317eaf00c92e10cfeb27c5ea"
+      },
+      "schema_version": 1
+    },
+    "v1_3_2_quality_outcomes_observed_before_amendment": false,
+    "v1_3_2_signed_zero_quality_preactivation_static_publication_lineage": {
+      "absent_paths": [
+        "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-2-activation",
+        "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-2-activation/matrix.lock",
+        "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-2-activation/quality-start-activation.json",
+        "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-2",
+        "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-2/controller-matrix.summary.json",
+        "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/.controller-exact-fill-v1-3-2.p2-direct-controller-workers-v1-3-2",
+        "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/.controller-exact-fill-v1-3-2.p2-direct-controller-persistent-sessions-v1-3-2",
+        "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/.controller-exact-fill-v1-3-2.p2-direct-controller-persistent-sessions-v1-3-2.lock",
+        "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-2.integrity.json",
+        "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-2.summary.json"
+      ],
+      "absent_staging_prefixes": [
+        ".controller-exact-fill-v1-3-2-admission.staging-",
+        ".controller-exact-fill-v1-3-2-activation.staging-"
+      ],
+      "admission_root": {
+        "exact_relative_directories": [
+          "."
+        ],
+        "exact_relative_files": [
+          "historical-reuse-admission.json",
+          "preheldout-genesis.json"
+        ],
+        "file_mode": 384,
+        "file_nlink": 1,
+        "mode": 448,
+        "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-2-admission"
+      },
+      "attestation_key_id": "67f433c02a291f9b1c9e65218171b6da46ef019567ee24406b4738c2ddf765bf",
+      "cross_relations": {
+        "genesis_reuse_admission_binding": {
+          "attestation_mac": "52a84b079605e19e04ccd59ef08219463aafdeca2e744727feb1ad379aaf0e5f",
+          "bytes": 42717,
+          "canonical_nonobservation_sha256": "7c4f5a7304f87f12e1a74bb0301829f4c961e3a17c9a75dfd13883b3ba2af4b1",
+          "experiment_id": "p2-post-rank-direct-controller-exact-fill-v1.3.2",
+          "historical_receipt_sha256": "3af058c7c0bb18b417643af0469b733bf8987fa1a0348b1b117ac0522e241131",
+          "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-2-admission/historical-reuse-admission.json",
+          "payload_sha256": "1a635d667dbd96a1380299076b13ce0bf8fcf3a6d236059ff05ee74a39055e8e",
+          "sha256": "5ae8f4d7bc67752ff491db2781b2a8e5130bc6b26cc49648428da3aba886393d",
+          "superseded_failure_lineage_projection_sha256": "2e2b7c1df5eaaf316ad53abc4efd8c4d86651da1d18ba1129e2561cdb6b349b0",
+          "superseded_failure_lineage_sha256": "d24397690eaac81d0b73f461168d2ebbd09ca3b448808b2e3a4a09be245dab7f"
+        },
+        "shared_superseded_empty_lineage_sha256": "9ec45d1ededa576d76f0cec3614ce0606e195aee2a1475aa5ff1f1d7ff4f39cc",
+        "shared_superseded_failure_lineage_projection_sha256": "2e2b7c1df5eaaf316ad53abc4efd8c4d86651da1d18ba1129e2561cdb6b349b0",
+        "shared_superseded_failure_lineage_sha256": "d24397690eaac81d0b73f461168d2ebbd09ca3b448808b2e3a4a09be245dab7f"
+      },
+      "experiment_id": "p2-post-rank-direct-controller-exact-fill-v1.3.2",
+      "implementation": {
+        "live_file_count": 53,
+        "live_inventory_digest": "1377652a81d2aca713e7e88947d557b7a1208715f7cd818d385a2dc801daae4f",
+        "source_commit": "92dec29cf6b9e4a4763a80d97e1ccd4569bfa5d6",
+        "source_tree": "ba3a154a33871f07304a9ce572ae1d144d48b329",
+        "tree_digest": "a08c59347d57bcbbb5856739664aaeb3f8ece072e1e9760fd9992f638156e0d0"
+      },
+      "lineage_type": "signed-superseded-zero-quality-preactivation-static-publication",
+      "manifest": {
+        "bytes": 70859,
+        "experiment_id": "p2-post-rank-direct-controller-exact-fill-v1.3.2",
+        "git_blob": "ac5b6b3c770e376226efcd23eec55de5171c587f",
+        "implementation_source_commit": "92dec29cf6b9e4a4763a80d97e1ccd4569bfa5d6",
+        "implementation_tree_digest": "a08c59347d57bcbbb5856739664aaeb3f8ece072e1e9760fd9992f638156e0d0",
+        "path": "research/adaptive_v4_memory/manifests/p2-post-rank-direct-controller-exact-fill-v1-3-2.json",
+        "sha256": "14c45f4efd2d0fdde9619944908fa22994524a36e22ec85e3fa596108f7f2056"
+      },
+      "preheldout_genesis": {
+        "attestation_mac": "28e56183c9ea93398dca5b19f08012d16703d1316eb1f04dfa1f09ce3395cbfe",
+        "attestation_payload_sha256": "8bf3a8774055b92661c19f8e8548b0302057302c6d85cadefe78392b4d1159d2",
+        "attestation_purpose": "p2-direct-v1.3.2-preheldout-genesis-v1",
+        "bytes": 42281,
+        "coordinate_digest": "9f7b099051a785a87082d5030e494398098fcb1766574c5df829b2fcd4a21c4a",
+        "expected_shards": 9000,
+        "experiment_id": "p2-post-rank-direct-controller-exact-fill-v1.3.2",
+        "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-2-admission/preheldout-genesis.json",
+        "payload_sha256": "3d15609f88c17dbc1d60114b1c18374c39cfa1455b973841befca5cbc51a3762",
+        "reuse_admission_sha256": "5ae8f4d7bc67752ff491db2781b2a8e5130bc6b26cc49648428da3aba886393d",
+        "sha256": "05363b86f5a9cdba0097dfbdb8b9af7810a851c01d7bbe872e71fffa62e28beb",
+        "superseded_failure_lineage_projection_sha256": "2e2b7c1df5eaaf316ad53abc4efd8c4d86651da1d18ba1129e2561cdb6b349b0",
+        "superseded_failure_lineage_sha256": "d24397690eaac81d0b73f461168d2ebbd09ca3b448808b2e3a4a09be245dab7f"
+      },
+      "projection_sha256": "8386956fb97218fa159721cd22a075badd5a0479d98a302eda275f59396c3156",
+      "quality_state": {
+        "active_claim_count": 0,
+        "completed_shards": 0,
+        "evaluation_inputs_materialized": 0,
+        "evaluation_seed_used_to_initialize_quality_rng": false,
+        "quality_aggregates_materialized": 0,
+        "quality_evaluation_started": false,
+        "quality_outcomes_materialized": 0,
+        "quality_predictions_materialized": 0,
+        "quality_rng_initialized": false,
+        "records": [],
+        "scientific_subprocesses_started_during_admission": 0,
+        "top_p_quality_input_count": 0,
+        "worker_ledger_count": 0
+      },
+      "registered_grid": {
+        "coordinate_digest": "9f7b099051a785a87082d5030e494398098fcb1766574c5df829b2fcd4a21c4a",
+        "exact_fill_arm_names": [
+          "hierarchical-soft-lag+pins",
+          "fixed+pins",
+          "hierarchical-balanced-fixed+pins",
+          "fixed",
+          "calibrated-no-pins",
+          "calibrated+pins",
+          "shuffled-quota",
+          "shuffled-quota+pins",
+          "local-no-pins",
+          "local+pins",
+          "hierarchical-soft-lag-no-pins",
+          "hierarchical-soft-lag+pins-no-score",
+          "hierarchical-soft-lag+pins-no-temporal",
+          "hierarchical-soft-lag+pins-no-cross-layer",
+          "hierarchical-soft-lag+pins-no-refresh",
+          "hierarchical-soft-lag+pins-permuted-quota",
+          "hierarchical-soft-lag+pins+fallback"
+        ],
+        "expected_shards": 9000
+      },
+      "result_source_commit": "62f33e9809f76e31c3f7a216b7621d31469488a4",
+      "result_source_tree": "0ab4c3d64c67e7cf82d5c3d54259eff76738f9f4",
+      "reuse_admission": {
+        "attestation_mac": "52a84b079605e19e04ccd59ef08219463aafdeca2e744727feb1ad379aaf0e5f",
+        "attestation_payload_sha256": "680d7a31d552d6edddc376d9b039276721eb0aeb36657f6915b36dcf3dbf4c89",
+        "attestation_purpose": "p2-direct-v1.3.2-reuse-admission-v1",
+        "bytes": 42717,
+        "canonical_nonobservation_sha256": "7c4f5a7304f87f12e1a74bb0301829f4c961e3a17c9a75dfd13883b3ba2af4b1",
+        "experiment_id": "p2-post-rank-direct-controller-exact-fill-v1.3.2",
+        "historical_receipt_sha256": "3af058c7c0bb18b417643af0469b733bf8987fa1a0348b1b117ac0522e241131",
+        "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-2-admission/historical-reuse-admission.json",
+        "payload_sha256": "1a635d667dbd96a1380299076b13ce0bf8fcf3a6d236059ff05ee74a39055e8e",
+        "sha256": "5ae8f4d7bc67752ff491db2781b2a8e5130bc6b26cc49648428da3aba886393d",
+        "superseded_failure_lineage_projection_sha256": "2e2b7c1df5eaaf316ad53abc4efd8c4d86651da1d18ba1129e2561cdb6b349b0",
+        "superseded_failure_lineage_sha256": "d24397690eaac81d0b73f461168d2ebbd09ca3b448808b2e3a4a09be245dab7f"
+      },
+      "schema_version": 1,
+      "source_bound_failure_diagnosis": {
+        "activation_published": false,
+        "consumer_expected_fields": [
+          "path",
+          "sha256",
+          "bytes",
+          "experiment_id",
+          "payload_sha256",
+          "attestation_mac",
+          "historical_receipt_sha256",
+          "canonical_nonobservation_sha256"
+        ],
+        "exception_message": "Reuse-admission public binding schema drifted.",
+        "exception_type": "ValueError",
+        "producer_observed_fields": [
+          "path",
+          "sha256",
+          "bytes",
+          "experiment_id",
+          "payload_sha256",
+          "attestation_mac",
+          "historical_receipt_sha256",
+          "canonical_nonobservation_sha256",
+          "superseded_failure_lineage_sha256",
+          "superseded_failure_lineage_projection_sha256"
+        ],
+        "signed_terminal_failure_receipt_published": false,
+        "stage": "first-arm-construction-after-static-bundle-validation",
+        "unexpected_fields": [
+          "superseded_failure_lineage_sha256",
+          "superseded_failure_lineage_projection_sha256"
+        ]
+      }
+    },
+    "v1_3_3_quality_outcomes_observed_before_amendment": false,
+    "v1_3_3_signed_zero_quality_postactivation_ready_preflight_launch_failure_lineage": {
+      "absent_paths": [
+        "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-3",
+        "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-3/controller-matrix.summary.json",
+        "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/.controller-exact-fill-v1-3-3.p2-direct-controller-workers-v1-3-3",
+        "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-3.integrity.json",
+        "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-3.summary.json"
+      ],
+      "absent_staging_prefixes": [
+        ".controller-exact-fill-v1-3-3-admission.staging-",
+        ".controller-exact-fill-v1-3-3-activation.staging-"
+      ],
+      "activation_root": {
+        "activation": {
+          "activation_nonce": "44cfcb4d89d0efa0d9b6567374f382981f2f1343dd50a8cc4165a2b7f2e48da0",
+          "attestation_mac": "c1999e71d3d7148116412a7c1ff2f87ea1994d193615a9966143df2db5448441",
+          "attestation_payload_sha256": "f3582f21dd8e3479af5c52ec15ffff0a9736a955db418a63bc4d7cde52e8e866",
+          "attestation_purpose": "p2-direct-v1.3.3-quality-start-activation-v1",
+          "bytes": 295752,
+          "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-3-activation/quality-start-activation.json",
+          "payload_sha256": "3faa13b34d6eee980057dc7df412ef0808cea8e0ade690096457b0bf369e2c49",
+          "sha256": "adf07b131ae7dcdcafe106a31bea6e202ebd81c89b2cbd78b5a0761318e8fa4c",
+          "status": "activated"
+        },
+        "exact_relative_directories": [
+          "."
+        ],
+        "exact_relative_files": [
+          "matrix.lock",
+          "quality-start-activation.json"
+        ],
+        "file_mode": 384,
+        "file_nlink": 1,
+        "matrix_lock": {
+          "bytes": 0,
+          "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-3-activation/matrix.lock",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "mode": 448,
+        "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-3-activation"
+      },
+      "admission_root": {
+        "exact_relative_directories": [
+          "."
+        ],
+        "exact_relative_files": [
+          "historical-reuse-admission.json",
+          "preheldout-genesis.json"
+        ],
+        "file_mode": 384,
+        "file_nlink": 1,
+        "mode": 448,
+        "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-3-admission"
+      },
+      "attestation_key_id": "67f433c02a291f9b1c9e65218171b6da46ef019567ee24406b4738c2ddf765bf",
+      "cross_relations": {
+        "activation_preheldout_genesis_binding": {
+          "attestation_mac": "bb5f7ed076936ef09bf2406fac1eacc527247537b0454545ab51b1b49abf8959",
+          "bytes": 59252,
+          "coordinate_digest": "9f7b099051a785a87082d5030e494398098fcb1766574c5df829b2fcd4a21c4a",
+          "expected_shards": 9000,
+          "experiment_id": "p2-post-rank-direct-controller-exact-fill-v1.3.3",
+          "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-3-admission/preheldout-genesis.json",
+          "payload_sha256": "9741ae44cc08eeb7ef9170c4d16a4b2a3c4186250d85295302dc99e160966ebd",
+          "reuse_admission_sha256": "32eb171fd5131d27a54683c7b917dd4d3f9cec635d65d11d331cb4950caea186",
+          "sha256": "b276ebb6eb811935a7a1b677518f8e889ea82795cd189fbda051b247dc39dee0",
+          "superseded_failure_lineage_projection_sha256": "8386956fb97218fa159721cd22a075badd5a0479d98a302eda275f59396c3156",
+          "superseded_failure_lineage_sha256": "49c244f853c5ef185682ed9e76573e6bcd0e9ade234ae886077693751ecd52bc"
+        },
+        "activation_reuse_admission_binding": {
+          "attestation_mac": "8796d993e628aff74e93d02327527959d9a99d0548cee362db6ae78742deea29",
+          "bytes": 59688,
+          "canonical_nonobservation_sha256": "7c4f5a7304f87f12e1a74bb0301829f4c961e3a17c9a75dfd13883b3ba2af4b1",
+          "experiment_id": "p2-post-rank-direct-controller-exact-fill-v1.3.3",
+          "historical_receipt_sha256": "3af058c7c0bb18b417643af0469b733bf8987fa1a0348b1b117ac0522e241131",
+          "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-3-admission/historical-reuse-admission.json",
+          "payload_sha256": "d38e79d08dd4c276f305225d335bcd1c41ab06206b37b271ead0f95d7f7d47e4",
+          "sha256": "32eb171fd5131d27a54683c7b917dd4d3f9cec635d65d11d331cb4950caea186",
+          "superseded_failure_lineage_projection_sha256": "8386956fb97218fa159721cd22a075badd5a0479d98a302eda275f59396c3156",
+          "superseded_failure_lineage_sha256": "49c244f853c5ef185682ed9e76573e6bcd0e9ade234ae886077693751ecd52bc"
+        },
+        "genesis_reuse_admission_binding": {
+          "attestation_mac": "8796d993e628aff74e93d02327527959d9a99d0548cee362db6ae78742deea29",
+          "bytes": 59688,
+          "canonical_nonobservation_sha256": "7c4f5a7304f87f12e1a74bb0301829f4c961e3a17c9a75dfd13883b3ba2af4b1",
+          "experiment_id": "p2-post-rank-direct-controller-exact-fill-v1.3.3",
+          "historical_receipt_sha256": "3af058c7c0bb18b417643af0469b733bf8987fa1a0348b1b117ac0522e241131",
+          "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-3-admission/historical-reuse-admission.json",
+          "payload_sha256": "d38e79d08dd4c276f305225d335bcd1c41ab06206b37b271ead0f95d7f7d47e4",
+          "sha256": "32eb171fd5131d27a54683c7b917dd4d3f9cec635d65d11d331cb4950caea186",
+          "superseded_failure_lineage_projection_sha256": "8386956fb97218fa159721cd22a075badd5a0479d98a302eda275f59396c3156",
+          "superseded_failure_lineage_sha256": "49c244f853c5ef185682ed9e76573e6bcd0e9ade234ae886077693751ecd52bc"
+        },
+        "shared_superseded_failure_lineage_projection_sha256": "8386956fb97218fa159721cd22a075badd5a0479d98a302eda275f59396c3156",
+        "shared_superseded_failure_lineage_sha256": "49c244f853c5ef185682ed9e76573e6bcd0e9ade234ae886077693751ecd52bc"
+      },
+      "experiment_id": "p2-post-rank-direct-controller-exact-fill-v1.3.3",
+      "external_mutable_lock_contents_in_normalized_lineage": false,
+      "implementation": {
+        "live_file_count": 54,
+        "live_inventory_digest": "d332cf248124cc964224b46c82567e93b1f29e2a2b6ba44dff2b94e17944cace",
+        "sealed_source_bundle_sha256": "69acca5fb524e72f8f8d01918cd4dbf6621b498ab312a843ebf594dddd5ca16d",
+        "source_commit": "af26a021dc99c54d48fe0c0e0ea7cfdea615e44a",
+        "source_tree": "a141844f19c8ca796796db6c7caf766f4045f914",
+        "tree_digest": "5c61e93bd259aec342ae26dac94447fc5ef40985df7b4af86c00b10e9d4548a0"
+      },
+      "lineage_type": "signed-superseded-zero-quality-postactivation-ready-preflight-launch-failure",
+      "manifest": {
+        "bytes": 81675,
+        "experiment_id": "p2-post-rank-direct-controller-exact-fill-v1.3.3",
+        "git_blob": "e28e567c854d46399bc2c2f7ed891a9c93bf52f2",
+        "implementation_source_commit": "af26a021dc99c54d48fe0c0e0ea7cfdea615e44a",
+        "implementation_tree_digest": "5c61e93bd259aec342ae26dac94447fc5ef40985df7b4af86c00b10e9d4548a0",
+        "path": "research/adaptive_v4_memory/manifests/p2-post-rank-direct-controller-exact-fill-v1-3-3.json",
+        "sha256": "b7024052085aee9ab5741575d7968d9d4a758cfeab1d2e240161e5087a68e495"
+      },
+      "persistent_session": {
+        "exact_relative_directories": [
+          "."
+        ],
+        "exact_relative_files": [
+          "67520e50e2778b4650966938efc2fa6f3b8440819bbd6f4578e799c082ed9d56.launch.json",
+          "67520e50e2778b4650966938efc2fa6f3b8440819bbd6f4578e799c082ed9d56.terminal.json"
+        ],
+        "file_mode": 384,
+        "file_nlink": 1,
+        "launch": {
+          "attestation_mac": "3dbb0cd1425caa5d34ec84221aa6ac9d0f15ec2a4c6f6bc49fe77e0f6181ce7e",
+          "attestation_payload_sha256": "bdf3a7dc636037e0b4b01981e5e0f04be4da50a5b130168bd37465b5498c153c",
+          "attestation_purpose": "p2-direct-controller-exact-fill-v1-3-3-persistent-launch-ledger-v1",
+          "bytes": 22020,
+          "checkpoint_model_load_attempt_upper_bound": 1,
+          "durably_evidenced_launch_authority_full_historical_evidence_replay_count": 1,
+          "outcome_dependent_selection": false,
+          "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/.controller-exact-fill-v1-3-3.p2-direct-controller-persistent-sessions-v1-3-3/67520e50e2778b4650966938efc2fa6f3b8440819bbd6f4578e799c082ed9d56.launch.json",
+          "payload_sha256": "6c540ed450b557779a2f6b2414e91a72983b40e0f9e9b2250e82ebb405bcdec9",
+          "session_triggered_full_historical_evidence_replay_count": 0,
+          "sha256": "339e7c7c3f533de09ff8d2a0758dd48b9e041160ca11d0b9b4f7619449c13ed6"
+        },
+        "launch_authority_nonce": "d557290c212de570b57ab3975d03c2ae7877578fa773fee76e07df3e365fb552",
+        "lock": {
+          "bytes": 0,
+          "mode": 384,
+          "nlink": 1,
+          "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/.controller-exact-fill-v1-3-3.p2-direct-controller-persistent-sessions-v1-3-3.lock",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "mode": 448,
+        "plan": {
+          "assignment_completed_prefix_count": 0,
+          "assignment_completed_prefix_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "attestation_mac": "562ea68d55805024247fbb12dde5047ac067fa16fe0d5d7afca277114e9715e2",
+          "attestation_payload_sha256": "f68c1ac7db296d5b3278eec1dbcf26355e334abdc46839634baeef252403fd92",
+          "attestation_purpose": "p2-direct-controller-exact-fill-v1-3-3-persistent-session-plan-v1",
+          "canonical_evaluator_digest": "308c63b9c4d50f9ec7d0bfa8fa5fc65eb2ccf91fc7b5517704a31cb7e3730afd",
+          "coordinate_count": 1,
+          "coordinate_digest": "aae3df2942c0f115e8bfed87579303277583474aa8f71ac575c76a761f3c5ed7",
+          "coordinates": [
+            {
+              "budget": "2x",
+              "calibration_seed": 7071406,
+              "context": 80,
+              "evaluation_seed": 10071406,
+              "family": "single-remote-retrieval",
+              "generation_seed": 1007140600000,
+              "replicate": 0,
+              "scale": "s55",
+              "training_seed": 6071406
+            }
+          ],
+          "gpu_lease_binding_digest": "538d800c80b15c1ac20fec54c6e66013a31c86711b8ea990611dcd2c80e53b45",
+          "input_binding_digest": "7ad354afb44f4eeba2b1e3150dc5fd0f278430a6c82890636dcf98c3ba6770d3",
+          "max_new_cells_stop_limit": 1,
+          "model_load_limit": 1,
+          "outcome_dependent_selection": false,
+          "payload_sha256": "68fc1851707ad82a583ea5ea8b403922e2c932c467456ae3f27f433e3c902524",
+          "prerequisites_binding_digest": "1aec05cc3081bc1312fda7aa79970440feed5790f5888d7faaf1d559a21a0823",
+          "session_role": "ready_only_preflight",
+          "worker_count": 1,
+          "worker_index": 0
+        },
+        "root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/.controller-exact-fill-v1-3-3.p2-direct-controller-persistent-sessions-v1-3-3",
+        "session_nonce": "67520e50e2778b4650966938efc2fa6f3b8440819bbd6f4578e799c082ed9d56",
+        "terminal": {
+          "attestation_mac": "475da7a7dcea1fde6df10f54a04a3c2616967d7078fe40f1c4e6795ce04c5bb0",
+          "attestation_payload_sha256": "c9fe491a869ed11fd9d675f81121a4f966a02fd36e4ccb6720b6425b868d89ec",
+          "attestation_purpose": "p2-direct-controller-exact-fill-v1-3-3-persistent-terminal-ledger-v1",
+          "bytes": 19744,
+          "child_process_returncode": 1,
+          "completed_result_payload_sha256": [],
+          "completed_work_payload_sha256": [],
+          "final_receipt": null,
+          "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/.controller-exact-fill-v1-3-3.p2-direct-controller-persistent-sessions-v1-3-3/67520e50e2778b4650966938efc2fa6f3b8440819bbd6f4578e799c082ed9d56.terminal.json",
+          "payload_sha256": "d9695120480590924c68d4c644303e17735fb3b1cf5c962897419ae70cc34683",
+          "plan_payload_sha256": "68fc1851707ad82a583ea5ea8b403922e2c932c467456ae3f27f433e3c902524",
+          "published_bundle_reingestion_count": 0,
+          "ready_receipt": null,
+          "sha256": "2513be78bd9ec8a01970a6fdc1f6ebe32594c4ea2f894de520d26c78c9f8c95d",
+          "status": "launch_failure"
+        }
+      },
+      "preheldout_genesis": {
+        "attestation_mac": "bb5f7ed076936ef09bf2406fac1eacc527247537b0454545ab51b1b49abf8959",
+        "attestation_payload_sha256": "74c7fcff3a4ce033a435c7482d81d0c8f16e4ea1a09fb2e054da8bb291246b1b",
+        "attestation_purpose": "p2-direct-v1.3.3-preheldout-genesis-v1",
+        "bytes": 59252,
+        "completed_shards": 0,
+        "coordinate_digest": "9f7b099051a785a87082d5030e494398098fcb1766574c5df829b2fcd4a21c4a",
+        "expected_shards": 9000,
+        "experiment_id": "p2-post-rank-direct-controller-exact-fill-v1.3.3",
+        "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-3-admission/preheldout-genesis.json",
+        "payload_sha256": "9741ae44cc08eeb7ef9170c4d16a4b2a3c4186250d85295302dc99e160966ebd",
+        "records": [],
+        "reuse_admission_sha256": "32eb171fd5131d27a54683c7b917dd4d3f9cec635d65d11d331cb4950caea186",
+        "sha256": "b276ebb6eb811935a7a1b677518f8e889ea82795cd189fbda051b247dc39dee0",
+        "status": "in_progress",
+        "superseded_failure_lineage_projection_sha256": "8386956fb97218fa159721cd22a075badd5a0479d98a302eda275f59396c3156",
+        "superseded_failure_lineage_sha256": "49c244f853c5ef185682ed9e76573e6bcd0e9ade234ae886077693751ecd52bc"
+      },
+      "projection_sha256": "6780bbe3da21fef92a5f2f37016f01e12583b4cac147e2bec4aa9a84133f5fff",
+      "quality_state": {
+        "active_claim_count": 0,
+        "checkpoint_model_load_attempt_upper_bound": 1,
+        "completed_shards": 0,
+        "evaluation_inputs_materialized": 0,
+        "evaluation_seed_used_to_initialize_quality_rng": false,
+        "final_receipt_count": 0,
+        "globally_committed_shards": 0,
+        "integrity_fail_shards": 0,
+        "integrity_pass_shards": 0,
+        "observed_successful_model_loads": 0,
+        "orphan_claim_count": 0,
+        "outcome_dependent_early_stopping": false,
+        "outcome_selection_performed": false,
+        "quality_aggregates_materialized": 0,
+        "quality_evaluation_started": false,
+        "quality_outcomes_aggregated": false,
+        "quality_outcomes_materialized": 0,
+        "quality_predictions_materialized": 0,
+        "quality_rng_initialized": false,
+        "quality_session_launch_count": 0,
+        "ready_preflight_failed_count": 1,
+        "ready_preflight_launch_count": 1,
+        "ready_preflight_success_count": 0,
+        "ready_preflight_terminal_count": 1,
+        "ready_receipt_count": 0,
+        "records": [],
+        "scientific_subprocesses_started_during_activation": 0,
+        "top_p_quality_input_count": 0,
+        "work_order_count": 0,
+        "work_result_count": 0,
+        "worker_ledger_count": 0
+      },
+      "registered_grid": {
+        "coordinate_digest": "9f7b099051a785a87082d5030e494398098fcb1766574c5df829b2fcd4a21c4a",
+        "exact_fill_arm_names": [
+          "hierarchical-soft-lag+pins",
+          "fixed+pins",
+          "hierarchical-balanced-fixed+pins",
+          "fixed",
+          "calibrated-no-pins",
+          "calibrated+pins",
+          "shuffled-quota",
+          "shuffled-quota+pins",
+          "local-no-pins",
+          "local+pins",
+          "hierarchical-soft-lag-no-pins",
+          "hierarchical-soft-lag+pins-no-score",
+          "hierarchical-soft-lag+pins-no-temporal",
+          "hierarchical-soft-lag+pins-no-cross-layer",
+          "hierarchical-soft-lag+pins-no-refresh",
+          "hierarchical-soft-lag+pins-permuted-quota",
+          "hierarchical-soft-lag+pins+fallback"
+        ],
+        "expected_shards": 9000
+      },
+      "result_source_commit": "6a4f936a85ad837c7fa0907a23747bb8a494fa96",
+      "result_source_tree": "d0a040e02661ec0b1f51920df3353a539c250040",
+      "reuse_admission": {
+        "attestation_mac": "8796d993e628aff74e93d02327527959d9a99d0548cee362db6ae78742deea29",
+        "attestation_payload_sha256": "4531233f187f3776fb1bd0c254de5e88e76834ec22a951124f01814de2583f90",
+        "attestation_purpose": "p2-direct-v1.3.3-reuse-admission-v1",
+        "bytes": 59688,
+        "canonical_nonobservation_sha256": "7c4f5a7304f87f12e1a74bb0301829f4c961e3a17c9a75dfd13883b3ba2af4b1",
+        "experiment_id": "p2-post-rank-direct-controller-exact-fill-v1.3.3",
+        "historical_receipt_sha256": "3af058c7c0bb18b417643af0469b733bf8987fa1a0348b1b117ac0522e241131",
+        "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-3-admission/historical-reuse-admission.json",
+        "payload_sha256": "d38e79d08dd4c276f305225d335bcd1c41ab06206b37b271ead0f95d7f7d47e4",
+        "sha256": "32eb171fd5131d27a54683c7b917dd4d3f9cec635d65d11d331cb4950caea186",
+        "status": "terminal",
+        "superseded_failure_lineage_projection_sha256": "8386956fb97218fa159721cd22a075badd5a0479d98a302eda275f59396c3156",
+        "superseded_failure_lineage_sha256": "49c244f853c5ef185682ed9e76573e6bcd0e9ade234ae886077693751ecd52bc"
+      },
+      "schema_version": 1,
+      "source_bound_stderr_diagnosis": {
+        "evaluator_exception_message": "Imported module origin is not exact: torch.ops -> /home/hebo1221/nano-deepseek-v4/_ops.py",
+        "evaluator_exception_type": "ValueError",
+        "evaluator_function": "_assert_repository_import_origins",
+        "inner_errno": 2,
+        "inner_exception_message": "[Errno 2] No such file or directory: '/home/hebo1221/nano-deepseek-v4/_ops.py'",
+        "inner_exception_type": "FileNotFoundError",
+        "parent_exception_message": "Persistent evaluator exited before its ready receipt.",
+        "parent_exception_type": "ValueError",
+        "parent_functions": [
+          "_start_persistent_evaluator",
+          "_ensure_ready_only_preflight"
+        ],
+        "provenance": "source-bound-stderr-and-frozen-source-not-signed-terminal-fields",
+        "signed_terminal_child_process_returncode": 1,
+        "signed_terminal_error_or_traceback_field_present": false,
+        "signed_terminal_status": "launch_failure",
+        "stage": "ready-only-preflight-import-origin-audit-before-ready-receipt"
+      }
+    },
+    "v1_3_quality_outcomes_observed_before_amendment": false,
+    "v1_3_signed_empty_lineage": {
+      "attestation_key_id": "67f433c02a291f9b1c9e65218171b6da46ef019567ee24406b4738c2ddf765bf",
+      "canonical_nonobservation_payload_sha256": "7c4f5a7304f87f12e1a74bb0301829f4c961e3a17c9a75dfd13883b3ba2af4b1",
+      "experiment_id": "p2-post-rank-direct-controller-exact-fill-v1.3",
+      "historical_receipt_payload_sha256": "3af058c7c0bb18b417643af0469b733bf8987fa1a0348b1b117ac0522e241131",
+      "lineage_type": "signed-superseded-empty-quality-prefix",
+      "manifest": {
+        "bytes": 51431,
+        "implementation_source_commit": "a729723bc3e513dd10ed06ac65f7128b4b726f98",
+        "implementation_source_tree": "a7b1cc62f22d3993fc180c33444c96d0ed0eea3d",
+        "implementation_tree_digest": "5c96c102ffa7cabc974d0a86ba60f536b513829c59ded31d615111c1312a7ebb",
+        "path": "research/adaptive_v4_memory/manifests/p2-post-rank-direct-controller-exact-fill-v1-3.json",
+        "sha256": "7fb1bc578b112031ce1ad914c7ea1cdc09fdf21a2c6fcde8362e93df60dd994e"
+      },
+      "preheldout_genesis": {
+        "attestation_mac": "6b47fa8667c92a961f664793547b1991a9e87cd1866847760609e34bf2a68336",
+        "attestation_payload_sha256": "5a570eef17ba9e51ca0c92b88070847748174f3df451aaf5b4ba29ffb1923d74",
+        "attestation_purpose": "p2-direct-v1.3-preheldout-genesis-v1",
+        "bytes": 4314,
+        "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-admission/preheldout-genesis.json",
+        "payload_sha256": "887c47fcc55697075db6293816e9c3fd14c6f382a5f93c5b34fb82b879f44b85",
+        "sha256": "dff6d05c69c04b1b83d7edb3d5da650daef691d7e508defcc70decd9328bbdd9"
+      },
+      "quality_state": {
+        "active_claim_count": 0,
+        "completed_shards": 0,
+        "evaluation_inputs_materialized": 0,
+        "evaluation_seed_used_to_initialize_quality_rng": false,
+        "quality_aggregates_materialized": 0,
+        "quality_evaluation_started": false,
+        "quality_outcomes_materialized": 0,
+        "quality_predictions_materialized": 0,
+        "quality_rng_initialized": false,
+        "records": [],
+        "top_p_quality_input_count": 0,
+        "worker_ledger_count": 0
+      },
+      "result_source_commit": "62ba095614f9614cb85a06f1a043a89a21f7f1dd",
+      "result_source_tree": "5779ff8261029c1c53bc834a6dc7d16c84963fcf",
+      "reuse_admission": {
+        "attestation_mac": "d8a1759466fe64ac192f95c02022b5bfb6ce96c0581864e5270bfe1407201d19",
+        "attestation_payload_sha256": "4312aef8a00ce564eb4e5e394ead61037fe4afba41549848e0f18edbf41d6c73",
+        "attestation_purpose": "p2-direct-v1.3-reuse-admission-v1",
+        "bytes": 109919,
+        "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-admission/historical-reuse-admission.json",
+        "payload_sha256": "954c088184df272e6509953ea0a33e226e7d075a2da48f00b0d8af15d2f1df3a",
+        "sha256": "0ec0efc962b77389c1a2db3cd1cf96a19ae989afb131c0d8d05a242f7a38a574"
+      },
+      "schema_version": 1
+    }
+  },
+  "phases": {
+    "all_arms": [
+      "hierarchical-soft-lag+pins",
+      "fixed+pins",
+      "hierarchical-balanced-fixed+pins",
+      "fixed",
+      "calibrated-no-pins",
+      "calibrated+pins",
+      "shuffled-quota",
+      "shuffled-quota+pins",
+      "local-no-pins",
+      "local+pins",
+      "hierarchical-soft-lag-no-pins",
+      "hierarchical-soft-lag+pins-no-score",
+      "hierarchical-soft-lag+pins-no-temporal",
+      "hierarchical-soft-lag+pins-no-cross-layer",
+      "hierarchical-soft-lag+pins-no-refresh",
+      "hierarchical-soft-lag+pins-permuted-quota",
+      "hierarchical-soft-lag+pins+fallback"
+    ],
+    "all_arms_exact_fill": true,
+    "arm_features": {
+      "calibrated+pins": {
+        "analysis_role": "central-confirmatory-and-causal-diagnostic",
+        "cross_layer_signal": false,
+        "fallback_mode": "disabled",
+        "fill_mode": "exact-feasible-B",
+        "lag_tokens": 0,
+        "name": "calibrated+pins",
+        "permute_quota": false,
+        "protected_pins": true,
+        "quota_runtime": "calibrated-static",
+        "refresh_reuse": false,
+        "scaffold_name": "calibrated+pins",
+        "score_concentration": false,
+        "signal_weights": [
+          0.35,
+          0.2,
+          0.25,
+          0.2
+        ],
+        "temporal_reuse": false,
+        "top_p": null
+      },
+      "calibrated-no-pins": {
+        "analysis_role": "causal-diagnostic",
+        "cross_layer_signal": false,
+        "fallback_mode": "disabled",
+        "fill_mode": "exact-feasible-B",
+        "lag_tokens": 0,
+        "name": "calibrated-no-pins",
+        "permute_quota": false,
+        "protected_pins": false,
+        "quota_runtime": "calibrated-static",
+        "refresh_reuse": false,
+        "scaffold_name": "calibrated-no-pins",
+        "score_concentration": false,
+        "signal_weights": [
+          0.35,
+          0.2,
+          0.25,
+          0.2
+        ],
+        "temporal_reuse": false,
+        "top_p": null
+      },
+      "fixed": {
+        "analysis_role": "causal-diagnostic",
+        "cross_layer_signal": false,
+        "fallback_mode": "disabled",
+        "fill_mode": "exact-feasible-B",
+        "lag_tokens": 0,
+        "name": "fixed",
+        "permute_quota": false,
+        "protected_pins": false,
+        "quota_runtime": "balanced-feasible",
+        "refresh_reuse": false,
+        "scaffold_name": "fixed",
+        "score_concentration": false,
+        "signal_weights": [
+          0.35,
+          0.2,
+          0.25,
+          0.2
+        ],
+        "temporal_reuse": false,
+        "top_p": null
+      },
+      "fixed+pins": {
+        "analysis_role": "primary-comparator",
+        "cross_layer_signal": false,
+        "fallback_mode": "disabled",
+        "fill_mode": "exact-feasible-B",
+        "lag_tokens": 0,
+        "name": "fixed+pins",
+        "permute_quota": false,
+        "protected_pins": true,
+        "quota_runtime": "balanced-feasible",
+        "refresh_reuse": false,
+        "scaffold_name": "fixed+pins",
+        "score_concentration": false,
+        "signal_weights": [
+          0.35,
+          0.2,
+          0.25,
+          0.2
+        ],
+        "temporal_reuse": false,
+        "top_p": null
+      },
+      "hierarchical-balanced-fixed+pins": {
+        "analysis_role": "primary-comparator",
+        "cross_layer_signal": true,
+        "fallback_mode": "disabled",
+        "fill_mode": "exact-feasible-B",
+        "lag_tokens": 0,
+        "name": "hierarchical-balanced-fixed+pins",
+        "permute_quota": false,
+        "protected_pins": true,
+        "quota_runtime": "balanced-feasible",
+        "refresh_reuse": true,
+        "scaffold_name": "hierarchical+pins",
+        "score_concentration": true,
+        "signal_weights": [
+          0.35,
+          0.2,
+          0.25,
+          0.2
+        ],
+        "temporal_reuse": true,
+        "top_p": null
+      },
+      "hierarchical-soft-lag+pins": {
+        "analysis_role": "primary-treatment",
+        "cross_layer_signal": true,
+        "fallback_mode": "disabled",
+        "fill_mode": "exact-feasible-B",
+        "lag_tokens": 1,
+        "name": "hierarchical-soft-lag+pins",
+        "permute_quota": false,
+        "protected_pins": true,
+        "quota_runtime": "soft-lag",
+        "refresh_reuse": true,
+        "scaffold_name": "hierarchical+pins",
+        "score_concentration": true,
+        "signal_weights": [
+          0.35,
+          0.2,
+          0.25,
+          0.2
+        ],
+        "temporal_reuse": true,
+        "top_p": null
+      },
+      "hierarchical-soft-lag+pins+fallback": {
+        "analysis_role": "causal-diagnostic",
+        "cross_layer_signal": true,
+        "fallback_mode": "same-quota-resident-only-dense-recovery",
+        "fill_mode": "exact-feasible-B",
+        "lag_tokens": 1,
+        "name": "hierarchical-soft-lag+pins+fallback",
+        "permute_quota": false,
+        "protected_pins": true,
+        "quota_runtime": "soft-lag",
+        "refresh_reuse": true,
+        "scaffold_name": "hierarchical+pins+fallback",
+        "score_concentration": true,
+        "signal_weights": [
+          0.35,
+          0.2,
+          0.25,
+          0.2
+        ],
+        "temporal_reuse": true,
+        "top_p": null
+      },
+      "hierarchical-soft-lag+pins-no-cross-layer": {
+        "analysis_role": "causal-diagnostic",
+        "cross_layer_signal": false,
+        "fallback_mode": "disabled",
+        "fill_mode": "exact-feasible-B",
+        "lag_tokens": 1,
+        "name": "hierarchical-soft-lag+pins-no-cross-layer",
+        "permute_quota": false,
+        "protected_pins": true,
+        "quota_runtime": "soft-lag",
+        "refresh_reuse": true,
+        "scaffold_name": "local+pins",
+        "score_concentration": true,
+        "signal_weights": [
+          0.4375,
+          0.25,
+          0.3125,
+          0.0
+        ],
+        "temporal_reuse": true,
+        "top_p": null
+      },
+      "hierarchical-soft-lag+pins-no-refresh": {
+        "analysis_role": "causal-diagnostic",
+        "cross_layer_signal": true,
+        "fallback_mode": "disabled",
+        "fill_mode": "exact-feasible-B",
+        "lag_tokens": 1,
+        "name": "hierarchical-soft-lag+pins-no-refresh",
+        "permute_quota": false,
+        "protected_pins": true,
+        "quota_runtime": "soft-lag",
+        "refresh_reuse": false,
+        "scaffold_name": "hierarchical+pins-no-refresh",
+        "score_concentration": true,
+        "signal_weights": [
+          0.35,
+          0.2,
+          0.25,
+          0.2
+        ],
+        "temporal_reuse": true,
+        "top_p": null
+      },
+      "hierarchical-soft-lag+pins-no-score": {
+        "analysis_role": "causal-diagnostic",
+        "cross_layer_signal": true,
+        "fallback_mode": "disabled",
+        "fill_mode": "exact-feasible-B",
+        "lag_tokens": 1,
+        "name": "hierarchical-soft-lag+pins-no-score",
+        "permute_quota": false,
+        "protected_pins": true,
+        "quota_runtime": "soft-lag",
+        "refresh_reuse": true,
+        "scaffold_name": "hierarchical+pins-no-score",
+        "score_concentration": false,
+        "signal_weights": [
+          0.0,
+          0.0,
+          0.5555555555555556,
+          0.4444444444444444
+        ],
+        "temporal_reuse": true,
+        "top_p": null
+      },
+      "hierarchical-soft-lag+pins-no-temporal": {
+        "analysis_role": "causal-diagnostic",
+        "cross_layer_signal": true,
+        "fallback_mode": "disabled",
+        "fill_mode": "exact-feasible-B",
+        "lag_tokens": 1,
+        "name": "hierarchical-soft-lag+pins-no-temporal",
+        "permute_quota": false,
+        "protected_pins": true,
+        "quota_runtime": "soft-lag",
+        "refresh_reuse": true,
+        "scaffold_name": "hierarchical+pins-no-temporal",
+        "score_concentration": true,
+        "signal_weights": [
+          0.4666666666666667,
+          0.26666666666666666,
+          0.0,
+          0.26666666666666666
+        ],
+        "temporal_reuse": false,
+        "top_p": null
+      },
+      "hierarchical-soft-lag+pins-permuted-quota": {
+        "analysis_role": "causal-diagnostic",
+        "cross_layer_signal": true,
+        "fallback_mode": "disabled",
+        "fill_mode": "exact-feasible-B",
+        "lag_tokens": 1,
+        "name": "hierarchical-soft-lag+pins-permuted-quota",
+        "permute_quota": true,
+        "protected_pins": true,
+        "quota_runtime": "soft-lag-permuted",
+        "refresh_reuse": true,
+        "scaffold_name": "hierarchical+pins",
+        "score_concentration": true,
+        "signal_weights": [
+          0.35,
+          0.2,
+          0.25,
+          0.2
+        ],
+        "temporal_reuse": true,
+        "top_p": null
+      },
+      "hierarchical-soft-lag-no-pins": {
+        "analysis_role": "causal-diagnostic",
+        "cross_layer_signal": true,
+        "fallback_mode": "disabled",
+        "fill_mode": "exact-feasible-B",
+        "lag_tokens": 1,
+        "name": "hierarchical-soft-lag-no-pins",
+        "permute_quota": false,
+        "protected_pins": false,
+        "quota_runtime": "soft-lag",
+        "refresh_reuse": true,
+        "scaffold_name": "hierarchical-no-pins",
+        "score_concentration": true,
+        "signal_weights": [
+          0.35,
+          0.2,
+          0.25,
+          0.2
+        ],
+        "temporal_reuse": true,
+        "top_p": null
+      },
+      "local+pins": {
+        "analysis_role": "causal-diagnostic",
+        "cross_layer_signal": false,
+        "fallback_mode": "disabled",
+        "fill_mode": "exact-feasible-B",
+        "lag_tokens": 0,
+        "name": "local+pins",
+        "permute_quota": false,
+        "protected_pins": true,
+        "quota_runtime": "local-static-quota",
+        "refresh_reuse": true,
+        "scaffold_name": "local+pins",
+        "score_concentration": true,
+        "signal_weights": [
+          0.35,
+          0.2,
+          0.25,
+          0.2
+        ],
+        "temporal_reuse": true,
+        "top_p": null
+      },
+      "local-no-pins": {
+        "analysis_role": "causal-diagnostic",
+        "cross_layer_signal": false,
+        "fallback_mode": "disabled",
+        "fill_mode": "exact-feasible-B",
+        "lag_tokens": 0,
+        "name": "local-no-pins",
+        "permute_quota": false,
+        "protected_pins": false,
+        "quota_runtime": "local-static-quota",
+        "refresh_reuse": true,
+        "scaffold_name": "local-no-pins",
+        "score_concentration": true,
+        "signal_weights": [
+          0.35,
+          0.2,
+          0.25,
+          0.2
+        ],
+        "temporal_reuse": true,
+        "top_p": null
+      },
+      "shuffled-quota": {
+        "analysis_role": "causal-diagnostic",
+        "cross_layer_signal": false,
+        "fallback_mode": "disabled",
+        "fill_mode": "exact-feasible-B",
+        "lag_tokens": 0,
+        "name": "shuffled-quota",
+        "permute_quota": false,
+        "protected_pins": false,
+        "quota_runtime": "calibration-shuffled-static",
+        "refresh_reuse": false,
+        "scaffold_name": "shuffled-quota",
+        "score_concentration": false,
+        "signal_weights": [
+          0.35,
+          0.2,
+          0.25,
+          0.2
+        ],
+        "temporal_reuse": false,
+        "top_p": null
+      },
+      "shuffled-quota+pins": {
+        "analysis_role": "causal-diagnostic",
+        "cross_layer_signal": false,
+        "fallback_mode": "disabled",
+        "fill_mode": "exact-feasible-B",
+        "lag_tokens": 0,
+        "name": "shuffled-quota+pins",
+        "permute_quota": false,
+        "protected_pins": true,
+        "quota_runtime": "calibration-shuffled-static",
+        "refresh_reuse": false,
+        "scaffold_name": "shuffled-quota+pins",
+        "score_concentration": false,
+        "signal_weights": [
+          0.35,
+          0.2,
+          0.25,
+          0.2
+        ],
+        "temporal_reuse": false,
+        "top_p": null
+      }
+    },
+    "arm_features_projection_sha256": "9f521f76255f851cdceba6ef643b996a3088647ee28de1acab0290a4dbac34fe",
+    "arm_order_projection_rule": "v1.2-all-arms-minus-exactly-the-two-variable-fill-arms-preserve-relative-order",
+    "arm_order_sha256": "6d69fef8bdc5db6d0bfb6f7a815a4e118015cb354a45a4016b652c4bc13e7198",
+    "original_central_causal_set": [
+      "calibrated+pins",
+      "fixed+pins"
+    ],
+    "phase_a_all": [
+      "hierarchical-soft-lag+pins",
+      "fixed+pins",
+      "hierarchical-balanced-fixed+pins"
+    ],
+    "phase_a_confirmatory_set": [
+      "hierarchical-soft-lag+pins",
+      "fixed+pins",
+      "hierarchical-balanced-fixed+pins"
+    ],
+    "phase_a_pareto_sensitivities": [],
+    "phase_b_diagnostic": [
+      "fixed",
+      "calibrated-no-pins",
+      "calibrated+pins",
+      "shuffled-quota",
+      "shuffled-quota+pins",
+      "local-no-pins",
+      "local+pins",
+      "hierarchical-soft-lag-no-pins",
+      "hierarchical-soft-lag+pins-no-score",
+      "hierarchical-soft-lag+pins-no-temporal",
+      "hierarchical-soft-lag+pins-no-cross-layer",
+      "hierarchical-soft-lag+pins-no-refresh",
+      "hierarchical-soft-lag+pins-permuted-quota",
+      "hierarchical-soft-lag+pins+fallback"
+    ],
+    "removed_variable_fill_arms": [
+      "fixed-top-p-0.5+pins",
+      "fixed-top-p-0.8+pins"
+    ]
+  },
+  "primary_estimand": {
+    "adaptive_arm": "hierarchical-soft-lag+pins",
+    "all_quality_arms_exact_fill": true,
+    "comparator_selection_from_outcomes": false,
+    "confirmatory_comparator_rule": "fixed+pins is the predeclared conventional fixed control and hierarchical-balanced-fixed+pins is the mandatory clean allocator control; both use the same target-free balanced feasible bound rule and are tested separately, with no evaluation-outcome max, replacement, selection, or pooling",
+    "confirmatory_comparators": [
+      "fixed+pins",
+      "hierarchical-balanced-fixed+pins"
+    ],
+    "confirmatory_decision_rule": "report and gate Hsoft independently against both frozen confirmatory comparators in every required seed-scale-budget cell; neither comparison may be dropped, pooled, maximized, or selected using evaluation outcomes",
+    "confirmatory_estimands": {
+      "fixed+pins": "total Hsoft controller-bundle effect versus a conventional signal-blind balanced feasible exact-B selector with protected pins and adaptive selector features disabled",
+      "hierarchical-balanced-fixed+pins": "soft-lag signal-weighted allocator effect versus a signal-blind balanced feasible allocator, holding candidate caps, pin floors, selector/reuse bundle, protected pins, exact-fill rule, and global B_t fixed"
+    },
+    "memory_match_target_metric": "hot_resident_bytes",
+    "primary_exact_fill_required": true,
+    "top_p_quality_contrast_count": 0,
+    "top_p_quality_input_count": 0
+  },
+  "schema_version": 1,
+  "statistical_analysis": {
+    "causal_diagnostic_contrast_count": 15,
+    "causal_diagnostic_contrasts": [
+      {
+        "candidate": "calibrated-no-pins",
+        "comparator": "fixed",
+        "name": "adaptive_quota_without_pins"
+      },
+      {
+        "candidate": "fixed+pins",
+        "comparator": "fixed",
+        "name": "pin_fixed"
+      },
+      {
+        "candidate": "calibrated+pins",
+        "comparator": "calibrated-no-pins",
+        "name": "pin_calibrated"
+      },
+      {
+        "candidate": "shuffled-quota+pins",
+        "comparator": "shuffled-quota",
+        "name": "pin_shuffled_quota"
+      },
+      {
+        "candidate": "local+pins",
+        "comparator": "local-no-pins",
+        "name": "pin_local"
+      },
+      {
+        "candidate": "hierarchical-soft-lag+pins",
+        "comparator": "hierarchical-soft-lag-no-pins",
+        "name": "pin_hsoft"
+      },
+      {
+        "candidate": "calibrated+pins",
+        "comparator": "shuffled-quota+pins",
+        "name": "calibrated_quota_vs_shuffled"
+      },
+      {
+        "candidate": "hierarchical-soft-lag+pins",
+        "comparator": "calibrated+pins",
+        "name": "dynamic_hsoft_vs_calibrated_static"
+      },
+      {
+        "candidate": "hierarchical-soft-lag+pins",
+        "comparator": "local+pins",
+        "name": "hierarchical_hsoft_vs_local"
+      },
+      {
+        "candidate": "hierarchical-soft-lag+pins",
+        "comparator": "hierarchical-soft-lag+pins-no-score",
+        "name": "score_signal"
+      },
+      {
+        "candidate": "hierarchical-soft-lag+pins",
+        "comparator": "hierarchical-soft-lag+pins-no-temporal",
+        "name": "temporal_signal"
+      },
+      {
+        "candidate": "hierarchical-soft-lag+pins",
+        "comparator": "hierarchical-soft-lag+pins-no-cross-layer",
+        "name": "cross_layer_signal"
+      },
+      {
+        "candidate": "hierarchical-soft-lag+pins",
+        "comparator": "hierarchical-soft-lag+pins-no-refresh",
+        "name": "refresh_reuse"
+      },
+      {
+        "candidate": "hierarchical-soft-lag+pins",
+        "comparator": "hierarchical-soft-lag+pins-permuted-quota",
+        "name": "quota_identity_vs_permuted"
+      },
+      {
+        "candidate": "hierarchical-soft-lag+pins+fallback",
+        "comparator": "hierarchical-soft-lag+pins",
+        "name": "resident_fallback_increment"
+      }
+    ],
+    "confirmatory_comparators_pooled_selected_or_dropped": false,
+    "confirmatory_contrast_count": 3,
+    "confirmatory_contrasts": [
+      {
+        "candidate": "calibrated+pins",
+        "comparator": "fixed+pins",
+        "name": "calibrated_pins_vs_fixed_pins",
+        "role": "central-causal-confirmatory"
+      },
+      {
+        "candidate": "hierarchical-soft-lag+pins",
+        "comparator": "fixed+pins",
+        "name": "hsoft_vs_conventional_fixed",
+        "role": "confirmatory"
+      },
+      {
+        "candidate": "hierarchical-soft-lag+pins",
+        "comparator": "hierarchical-balanced-fixed+pins",
+        "name": "hsoft_vs_clean_allocator_control",
+        "role": "confirmatory"
+      }
+    ],
+    "confirmatory_cross_contrast_rule": "single-conjunctive-intersection-union-gate-requires-all-three-with-no-selection-pooling-or-standalone-population-claim",
+    "dependency_boundary": "the tracked pyproject.toml constrains project dependencies but is not an exact environment lock; terminal summaries must record and validate the exact Python and NumPy versions used",
+    "descriptive_top_p_feasibility_in_any_multiplicity_family": false,
+    "diagnostic_contrast_correction": "Holm-Bonferroni over all 15 preregistered causal diagnostic contrasts separately within each scale, budget, and quality metric",
+    "exact_dependency_lock_bound": false,
+    "exact_seed_sign_flip_assignments": 32,
+    "family_correction": "Holm-Bonferroni over all 9 workload families separately within each contrast, scale, budget, and quality metric",
+    "independent_cluster": "training checkpoint seed",
+    "independent_seed_clusters_per_scale_budget": 5,
+    "minimum_attainable_two_sided_seed_p": 0.0625,
+    "numpy_quantile_method": "linear",
+    "numpy_rng": "numpy.random.Generator(numpy.random.PCG64)",
+    "paired_bootstrap_resamples": 20000,
+    "paired_conversation_confidence_level": 0.95,
+    "paired_conversation_scope": "conditional-on-observed-fitted-model-cohort",
+    "population_generalization_from_conversation_count": false,
+    "primary_four_cell_confidence_level": 0.9875,
+    "primary_four_cell_correction": "Bonferroni over 2 scales x 2 budgets, separately for each of the three registered confirmatory contrasts, using five independent training-seed means",
+    "primary_quality_metric": "accuracy",
+    "project_dependency_spec_bound": true,
+    "registered_quality_contrast_count": 18,
+    "required_joint_quality_slice": [
+      "scale",
+      "budget",
+      "training_seed",
+      "family",
+      "context"
+    ],
+    "required_slices": [
+      "scale",
+      "budget",
+      "training_seed",
+      "family",
+      "context"
+    ],
+    "secondary_metrics_used_for_primary_gate": false,
+    "secondary_quality_metrics": [
+      "all_queries_correct"
+    ],
+    "seed_cluster_bootstrap_resamples": 20000,
+    "seed_cluster_confidence_level": 0.95,
+    "seed_exact_test_alpha": 0.05,
+    "seed_p_value_used_as_success_gate": false,
+    "technical_failure_policy": "intent-to-treat-zero-and-confirmatory-no-go",
+    "technical_failure_quality_score": 0.0,
+    "top_p_quality_contrast_count": 0,
+    "top_p_quality_input_count": 0,
+    "top_p_sensitivity_in_confirmatory_multiplicity": false,
+    "worst_family_context_slice_reported": true,
+    "worst_joint_training_seed_family_context_slice_reported": true
+  },
+  "status": "frozen_v1_3_4_runtime_module_provenance_amendment_after_signed_v1_3_3_zero_quality_postactivation_ready_preflight_launch_failure"
+}
