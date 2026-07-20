@@ -535,8 +535,8 @@
       "research/adaptive_v4_memory/scripts/audit_p2_direct_controller_integrity_v1_3.py",
       "research/adaptive_v4_memory/scripts/summarize_p2_direct_controller_v1_3.py"
     ],
-    "source_commit": "64fa15e821a58de7ed31088d782390e466668b50",
-    "tree_digest": "a7b6fa9c1266f8c0484616cbf4d589f8297c9b377fda31dca0ab662dcdd0a60d"
+    "source_commit": "afdd4fb6fc4d100b6088fbf75fcec9250146b0e6",
+    "tree_digest": "580551021b155ed3bb93d93dfa2a1301ca175181a46ad7dd4b201702fb657048"
   },
   "lineage_and_adaptation_disclosure": {
     "arm_change": "delete-exactly-two-variable-fill-top-p-arms-and-preserve-all-17-exact-fill-arms-relative-order-semantics-estimands-and-analysis",
