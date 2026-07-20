@@ -4,6 +4,7 @@ import ast
 import base64
 import hashlib
 import inspect
+import io
 import json
 import os
 import py_compile
@@ -14,6 +15,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+import typing_extensions
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = REPOSITORY_ROOT / "research/adaptive_v4_memory/scripts"
@@ -52,7 +54,7 @@ def _imports(source: str) -> set[str]:
 def _sealed_common_provenance() -> tuple[dict[str, object], dict[str, object], dict[str, object]]:
     authority: dict[str, object] = {
         "schema_version": 1,
-        "launcher": "p2-direct-controller-git-object-launcher-v1-3-1",
+        "launcher": "p2-direct-controller-git-object-launcher-v1-3-2",
         "sealed_runner": True,
         "sealed_inventory": True,
     }
@@ -71,7 +73,7 @@ def _sealed_common_provenance() -> tuple[dict[str, object], dict[str, object], d
     }
     source: dict[str, object] = {
         "schema_version": 1,
-        "launcher": "p2-direct-controller-git-object-launcher-v1-3-1",
+        "launcher": "p2-direct-controller-git-object-launcher-v1-3-2",
         "repository_root": str(REPOSITORY_ROOT.resolve()),
         "bundle_sha256": "2" * 64,
         "pinned_head_oid": "3" * 40,
@@ -90,7 +92,7 @@ def _sealed_route(selector: str, *, sha_digit: str = "6") -> dict[str, object]:
     }
     return {
         "schema_version": 1,
-        "launcher": "p2-direct-controller-git-object-launcher-v1-3-1",
+        "launcher": "p2-direct-controller-git-object-launcher-v1-3-2",
         "entrypoint_selector": selector,
         "entrypoint_relative_path": paths[selector],
         "source_bundle_sha256": "2" * 64,
@@ -114,6 +116,17 @@ def test_generator_reproduces_all_committed_v1_3_sources() -> None:
         )
         for source in expected.values()
     )
+    assert all("V1_3_1" not in source for source in expected.values())
+    assert all("v1-3-1" not in source for source in expected.values())
+    assert all("V1_3_2_1" not in source for source in expected.values())
+    assert all("v1_3_2_1" not in source for source in expected.values())
+    evaluator_source = expected[GENERATED_PATHS["evaluator"]]
+    matrix_source = expected[GENERATED_PATHS["matrix"]]
+    assert 'globals().get("SEALED_SOURCE_PROVENANCE_V1_3_2")' in evaluator_source
+    assert 'globals().get("SEALED_LAUNCH_ROUTING_V1_3_2")' in evaluator_source
+    assert 'globals().get("SEALED_LAUNCH_ROUTING_V1_3_2")' in matrix_source
+    assert "exact-fill-v1-3-worker-" not in matrix_source
+    assert "exact-fill-v1-3-2-worker-" in matrix_source
 
 
 def test_generator_pins_and_preserves_every_v1_2_source_byte_for_byte() -> None:
@@ -123,27 +136,27 @@ def test_generator_pins_and_preserves_every_v1_2_source_byte_for_byte() -> None:
 
 
 def test_generated_module_identity_and_paths_are_contract_derived() -> None:
-    assert evaluator.EXPERIMENT_ID == contract.V1_3_1_SHARD_EXPERIMENT_ID
-    assert evaluator.ATTESTATION_PURPOSE == contract.V1_3_1_SHARD_ATTESTATION_PURPOSE
-    assert matrix.EXPERIMENT_ID == contract.V1_3_1_MATRIX_EXPERIMENT_ID
-    assert matrix.WORKER_EXPERIMENT_ID == contract.V1_3_1_WORKER_LEDGER_EXPERIMENT_ID
-    assert matrix.MATRIX_ATTESTATION_PURPOSE == contract.V1_3_1_MATRIX_ATTESTATION_PURPOSE
-    assert matrix.WORKER_ATTESTATION_PURPOSE == contract.V1_3_1_WORKER_LEDGER_ATTESTATION_PURPOSE
-    assert audit.EXPERIMENT_ID == contract.V1_3_1_INTEGRITY_EXPERIMENT_ID
-    assert audit.ATTESTATION_PURPOSE == contract.V1_3_1_INTEGRITY_ATTESTATION_PURPOSE
-    assert summary.EXPERIMENT_ID == contract.V1_3_1_SUMMARY_EXPERIMENT_ID
-    assert summary.ATTESTATION_PURPOSE == contract.V1_3_1_SUMMARY_ATTESTATION_PURPOSE
-    assert matrix.OUTPUT_ROOT == contract.V1_3_1_OUTPUT_ROOT
+    assert evaluator.EXPERIMENT_ID == contract.V1_3_2_SHARD_EXPERIMENT_ID
+    assert evaluator.ATTESTATION_PURPOSE == contract.V1_3_2_SHARD_ATTESTATION_PURPOSE
+    assert matrix.EXPERIMENT_ID == contract.V1_3_2_MATRIX_EXPERIMENT_ID
+    assert matrix.WORKER_EXPERIMENT_ID == contract.V1_3_2_WORKER_LEDGER_EXPERIMENT_ID
+    assert matrix.MATRIX_ATTESTATION_PURPOSE == contract.V1_3_2_MATRIX_ATTESTATION_PURPOSE
+    assert matrix.WORKER_ATTESTATION_PURPOSE == contract.V1_3_2_WORKER_LEDGER_ATTESTATION_PURPOSE
+    assert audit.EXPERIMENT_ID == contract.V1_3_2_INTEGRITY_EXPERIMENT_ID
+    assert audit.ATTESTATION_PURPOSE == contract.V1_3_2_INTEGRITY_ATTESTATION_PURPOSE
+    assert summary.EXPERIMENT_ID == contract.V1_3_2_SUMMARY_EXPERIMENT_ID
+    assert summary.ATTESTATION_PURPOSE == contract.V1_3_2_SUMMARY_ATTESTATION_PURPOSE
+    assert matrix.OUTPUT_ROOT == contract.V1_3_2_OUTPUT_ROOT
     assert matrix.MATRIX_SUMMARY_NAME == contract.MATRIX_SUMMARY_NAME
-    assert matrix.MATRIX_SUMMARY == contract.V1_3_1_MATRIX_SUMMARY_PATH
-    assert matrix._matrix_lock_path(matrix.OUTPUT_ROOT) == contract.V1_3_1_ACTIVATION_MATRIX_LOCK_PATH.resolve()
-    assert matrix._worker_ledger_root(matrix.OUTPUT_ROOT) == contract.V1_3_1_WORKER_LEDGER_ROOT.resolve()
-    assert matrix.REUSE_ADMISSION_PATH == contract.V1_3_1_REUSE_ADMISSION_PATH
-    assert matrix.PREHELDOUT_GENESIS_PATH == contract.V1_3_1_PREHELDOUT_GENESIS_PATH
-    assert contract.V1_3_1_ADMISSION_ROOT.parent == contract.V1_3_1_OUTPUT_ROOT.parent
-    assert contract.V1_3_1_ADMISSION_ROOT != contract.V1_3_1_OUTPUT_ROOT
-    assert not contract.V1_3_1_REUSE_ADMISSION_PATH.is_relative_to(contract.V1_3_1_OUTPUT_ROOT)
-    assert not contract.V1_3_1_PREHELDOUT_GENESIS_PATH.is_relative_to(contract.V1_3_1_OUTPUT_ROOT)
+    assert matrix.MATRIX_SUMMARY == contract.V1_3_2_MATRIX_SUMMARY_PATH
+    assert matrix._matrix_lock_path(matrix.OUTPUT_ROOT) == contract.V1_3_2_ACTIVATION_MATRIX_LOCK_PATH.resolve()
+    assert matrix._worker_ledger_root(matrix.OUTPUT_ROOT) == contract.V1_3_2_WORKER_LEDGER_ROOT.resolve()
+    assert matrix.REUSE_ADMISSION_PATH == contract.V1_3_2_REUSE_ADMISSION_PATH
+    assert matrix.PREHELDOUT_GENESIS_PATH == contract.V1_3_2_PREHELDOUT_GENESIS_PATH
+    assert contract.V1_3_2_ADMISSION_ROOT.parent == contract.V1_3_2_OUTPUT_ROOT.parent
+    assert contract.V1_3_2_ADMISSION_ROOT != contract.V1_3_2_OUTPUT_ROOT
+    assert not contract.V1_3_2_REUSE_ADMISSION_PATH.is_relative_to(contract.V1_3_2_OUTPUT_ROOT)
+    assert not contract.V1_3_2_PREHELDOUT_GENESIS_PATH.is_relative_to(contract.V1_3_2_OUTPUT_ROOT)
 
 
 def test_generated_modules_import_only_the_v1_3_controller_pipeline() -> None:
@@ -342,7 +355,7 @@ def test_admission_failure_precedes_every_evaluator_cuda_probe(
     monkeypatch.setattr(evaluator, "_assert_repository_import_origins", lambda: None)
     monkeypatch.setattr(
         evaluator.admission,
-        "establish_v1_3_1_quality_context",
+        "establish_v1_3_2_quality_context",
         lambda *_a, **_k: context,
     )
     monkeypatch.setattr(
@@ -574,9 +587,18 @@ def test_child_uses_fresh_pycache_prefix_and_rejects_rogue_package_origin(
     rogue = REPOSITORY_ROOT / "nano_deepseek_v4/_ignored_rogue_v1_3_test.py"
     rogue.write_text("ROGUE = True\n", encoding="utf-8")
     try:
+        site_packages = Path(
+            str(launcher._python_runtime_binding(REPOSITORY_ROOT)["site_packages"])
+        )
+        monkeypatch.setattr(
+            evaluator,
+            "_ADAPTIVE_V4_SEALED_SITE_PACKAGES_V1_3_2",
+            str(site_packages),
+            raising=False,
+        )
         monkeypatch.setattr(
             evaluator.contract,
-            "v1_3_1_implementation_file_paths",
+            "v1_3_2_implementation_file_paths",
             lambda: (
                 "research/adaptive_v4_memory/scripts/evaluate_p2_direct_controller_shard_v1_3.py",
             ),
@@ -673,6 +695,20 @@ def test_child_uses_fresh_pycache_prefix_and_rejects_rogue_package_origin(
             os.close(evaluator_fd)
             if manifest_created:
                 manifest_path.unlink(missing_ok=True)
+
+    bootstrap_site_packages = Path(
+        str(launcher._python_runtime_binding(REPOSITORY_ROOT)["site_packages"])
+    )
+    bootstrap_global_helper = tmp_path / "bootstrap_global_helper.py"
+    bootstrap_global_helper.write_text("VALUE = True\n", encoding="utf-8")
+    sealed_global_result = run_bootstrap(
+        root=tmp_path,
+        files=[inventory_row(tmp_path, bootstrap_global_helper)],
+        source=b"print(_ADAPTIVE_V4_SEALED_SITE_PACKAGES_V1_3_2)\n",
+        script=tmp_path / "sealed_evaluator.py",
+    )
+    assert sealed_global_result.returncode == 0, sealed_global_result.stderr
+    assert sealed_global_result.stdout.strip() == str(bootstrap_site_packages)
 
     package = tmp_path / "bootstrap_guard_package"
     package.mkdir()
@@ -792,11 +828,71 @@ def test_child_uses_fresh_pycache_prefix_and_rejects_rogue_package_origin(
     assert not pth_marker.exists()
 
 
+def test_runtime_import_guard_accepts_only_exact_sealed_site_packages(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    site_packages = Path(
+        str(launcher._python_runtime_binding(REPOSITORY_ROOT)["site_packages"])
+    )
+    assert Path(str(typing_extensions.__file__)).resolve().is_relative_to(site_packages)
+    monkeypatch.setattr(
+        evaluator.contract,
+        "v1_3_2_implementation_file_paths",
+        lambda: (
+            "research/adaptive_v4_memory/scripts/evaluate_p2_direct_controller_shard_v1_3.py",
+        ),
+    )
+    monkeypatch.setattr(
+        evaluator,
+        "_ADAPTIVE_V4_SEALED_SITE_PACKAGES_V1_3_2",
+        str(site_packages),
+        raising=False,
+    )
+
+    evaluator._assert_repository_import_origins({"typing_extensions": typing_extensions})
+
+    outside = tmp_path / "outside_site_packages.py"
+    outside.write_text("VALUE = 'outside'\n", encoding="utf-8")
+    inside_link = site_packages / "_adaptive_v4_v132_symlink_escape.py"
+    inside_link.symlink_to(outside)
+    try:
+        with pytest.raises(ValueError, match="escaped its sealed root"):
+            evaluator._assert_repository_import_origins(
+                {"inside_symlink_escape": SimpleNamespace(__file__=str(inside_link))}
+            )
+    finally:
+        inside_link.unlink(missing_ok=True)
+
+    outside_link = tmp_path / "outside_link_into_site_packages.py"
+    outside_link.symlink_to(Path(str(typing_extensions.__file__)).resolve())
+    with pytest.raises(ValueError, match="escaped its sealed root"):
+        evaluator._assert_repository_import_origins(
+            {"outside_symlink_forgery": SimpleNamespace(__file__=str(outside_link))}
+        )
+
+    monkeypatch.setattr(
+        evaluator,
+        "_ADAPTIVE_V4_SEALED_SITE_PACKAGES_V1_3_2",
+        str(REPOSITORY_ROOT.resolve()),
+    )
+    with pytest.raises(ValueError, match="not the exact verified runtime root"):
+        evaluator._assert_repository_import_origins({"typing_extensions": typing_extensions})
+
+    monkeypatch.setattr(
+        evaluator,
+        "_ADAPTIVE_V4_SEALED_SITE_PACKAGES_V1_3_2",
+        str(site_packages.parent / ".." / site_packages.parent.name / site_packages.name),
+    )
+    with pytest.raises(ValueError, match="not the exact verified runtime root"):
+        evaluator._assert_repository_import_origins({"typing_extensions": typing_extensions})
+
+
 def test_summary_cli_defaults_cannot_fall_back_to_the_v1_2_output_tree() -> None:
     source = _source("summary")
     assert "default=integrity_audit.INTEGRITY_OUTPUT" in source
-    assert "default=contract.V1_3_1_MATRIX_SUMMARY_PATH" in source
-    assert "default=contract.V1_3_1_OUTPUT_ROOT" in source
+    assert "default=contract.V1_3_2_MATRIX_SUMMARY_PATH" in source
+    assert "default=contract.V1_3_2_OUTPUT_ROOT" in source
     assert "confirmatory_comparator_rule" in source
     assert "strongest_fixed_comparator_rule" not in source
 
@@ -814,7 +910,7 @@ def test_entrypoint_clis_forward_explicit_key_path_with_sanitized_environment(
     def fake_run_matrix(**kwargs: object) -> dict[str, object]:
         matrix_call.update(kwargs)
         return {
-            "experiment_id": contract.V1_3_1_MATRIX_EXPERIMENT_ID,
+            "experiment_id": contract.V1_3_2_MATRIX_EXPERIMENT_ID,
             "status": "terminal",
             "integrity_status": "INTEGRITY-PASS",
             "completed_shards": matrix.EXPECTED_SHARDS,
@@ -903,7 +999,7 @@ def test_prerequisites_only_cli_has_a_dedicated_nonledger_result_schema(
         matrix,
         "run_matrix",
         lambda **_kwargs: {
-            "experiment_id": contract.V1_3_1_MATRIX_EXPERIMENT_ID,
+            "experiment_id": contract.V1_3_2_MATRIX_EXPERIMENT_ID,
             "status": "prerequisites_validated",
             "expected_shards": matrix.EXPECTED_SHARDS,
         },
@@ -912,7 +1008,7 @@ def test_prerequisites_only_cli_has_a_dedicated_nonledger_result_schema(
         sys,
         "argv",
         [
-            "matrix-v1-3-1",
+            "matrix-v1-3-2",
             "--attestation-key-path",
             str(key_path),
             "--start-mode",
@@ -921,7 +1017,7 @@ def test_prerequisites_only_cli_has_a_dedicated_nonledger_result_schema(
     )
     assert matrix.main() == 0
     assert json.loads(capsys.readouterr().out) == {
-        "experiment_id": contract.V1_3_1_MATRIX_EXPERIMENT_ID,
+        "experiment_id": contract.V1_3_2_MATRIX_EXPERIMENT_ID,
         "expected_shards": matrix.EXPECTED_SHARDS,
         "status": "prerequisites_validated",
     }
@@ -1030,7 +1126,7 @@ def test_quality_start_mode_and_stop_limit_truth_table_precedes_layout(
             matrix.run_matrix(start_mode=start_mode, max_new_cells=limit)
 
 
-def test_v1_3_1_single_worker_topology_rejects_before_any_mutating_lock(
+def test_v1_3_2_single_worker_topology_rejects_before_any_mutating_lock(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(matrix, "_require_launcher_authority", lambda: {})
@@ -1165,6 +1261,7 @@ def test_activation_ledger_boundary_uses_held_lease_and_recovers_interrupted_zer
         "completed_shards": 0,
         "prerequisites": prerequisites.public_binding,
         "matrix_lock": lock_binding,
+        "ready_only_preflight": {"preflight": "binding"},
         "worker_count": 1,
     }
     monkeypatch.setattr(matrix, "_matrix_payload", lambda *_args, **_kwargs: dict(payload))
@@ -1179,6 +1276,7 @@ def test_activation_ledger_boundary_uses_held_lease_and_recovers_interrupted_zer
         prerequisites=prerequisites,
         activation_lease=lease,
         evaluator_binding={},
+        ready_only_preflight=payload["ready_only_preflight"],
         worker_count=1,
         gpu_lease_binding={"gpu": "lease"},
     )
@@ -1193,6 +1291,7 @@ def test_activation_ledger_boundary_uses_held_lease_and_recovers_interrupted_zer
         prerequisites=prerequisites,
         activation_lease=lease,
         evaluator_binding={},
+        ready_only_preflight=payload["ready_only_preflight"],
         worker_count=1,
         gpu_lease_binding={"gpu": "lease"},
     )
@@ -1211,6 +1310,7 @@ def test_activation_ledger_boundary_uses_held_lease_and_recovers_interrupted_zer
         prerequisites=prerequisites,
         activation_lease=lease,
         evaluator_binding={},
+        ready_only_preflight=payload["ready_only_preflight"],
         worker_count=1,
         gpu_lease_binding={"gpu": "lease"},
     )
@@ -1342,7 +1442,7 @@ def test_runner_rejects_nested_coordinate_scoped_activation_promotion() -> None:
         bundles={},
         public_binding=public_binding,
     )
-    scoped = matrix.admission.ValidatedQualityStartActivationV1_3_1(
+    scoped = matrix.admission.ValidatedQualityStartActivationV1_3_2(
         _seal=object(),
         payload={"base_prerequisites_binding": public_binding},
         public_binding={"activation": "binding"},
@@ -1350,6 +1450,7 @@ def test_runner_rejects_nested_coordinate_scoped_activation_promotion() -> None:
         reuse_admission=SimpleNamespace(),
         preheldout_genesis=SimpleNamespace(),
         superseded_empty_lineage=SimpleNamespace(),
+        superseded_failure_lineage=SimpleNamespace(),
         consumer_coordinate=(contract.SCALES[0], contract.TRAINING_SEEDS[0]),
         root_identity={},
         matrix_lock_binding={},
@@ -1438,7 +1539,7 @@ def test_mutating_lock_paths_reject_authority_key_and_hardlink_aliases(
         )
     with pytest.raises(ValueError, match="overlaps"):
         matrix._validate_quality_mutating_lock_path(
-            matrix.admission.V1_3_1_ACTIVATION_BOOTSTRAP_LOCK_PATH,
+            matrix.admission.V1_3_2_ACTIVATION_BOOTSTRAP_LOCK_PATH,
             layout=layout,
             manifest_path=manifest_path,
             attestation_key_path=None,
@@ -1488,7 +1589,7 @@ def test_source_provenance_distinguishes_pinned_head_from_frozen_source_commit(
     ).encode()
     provenance = {
         "schema_version": 1,
-        "launcher": "p2-direct-controller-git-object-launcher-v1-3-1",
+        "launcher": "p2-direct-controller-git-object-launcher-v1-3-2",
         "repository_root": str(REPOSITORY_ROOT.resolve()),
         "bundle_sha256": "4" * 64,
         "pinned_head_oid": pinned_head,
@@ -1503,13 +1604,13 @@ def test_source_provenance_distinguishes_pinned_head_from_frozen_source_commit(
             "source_base64": base64.b64encode(manifest_source).decode("ascii"),
         },
     }
-    monkeypatch.setattr(matrix, "SEALED_SOURCE_PROVENANCE_V1_3_1", provenance)
+    monkeypatch.setattr(matrix, "SEALED_SOURCE_PROVENANCE_V1_3_2", provenance)
     assert matrix._validated_source_provenance() == provenance
     assert source_commit != pinned_head
 
     mismatched = dict(provenance)
     mismatched["frozen_source_commit"] = "6" * 40
-    monkeypatch.setattr(matrix, "SEALED_SOURCE_PROVENANCE_V1_3_1", mismatched)
+    monkeypatch.setattr(matrix, "SEALED_SOURCE_PROVENANCE_V1_3_2", mismatched)
     with pytest.raises(ValueError, match="decoded HEAD manifest implementation"):
         matrix._validated_source_provenance()
 
@@ -1522,15 +1623,15 @@ def test_audit_and_summary_routes_are_active_only_for_their_own_entrypoint(
     summary_route = _sealed_route("summary")
     alternate_audit_route = _sealed_route("audit", sha_digit="8")
     for module in (audit, summary):
-        monkeypatch.setattr(module, "SEALED_LAUNCH_AUTHORITY_V1_3_1", authority)
-        monkeypatch.setattr(module, "SEALED_PYTHON_RUNTIME_V1_3_1", runtime)
-        monkeypatch.setattr(module, "SEALED_SOURCE_PROVENANCE_V1_3_1", source_provenance)
-    monkeypatch.setattr(matrix, "SEALED_LAUNCH_AUTHORITY_V1_3_1", None)
-    monkeypatch.setattr(matrix, "SEALED_PYTHON_RUNTIME_V1_3_1", None)
-    monkeypatch.setattr(matrix, "SEALED_SOURCE_PROVENANCE_V1_3_1", None)
-    monkeypatch.setattr(matrix, "SEALED_LAUNCH_ROUTING_V1_3_1", None)
+        monkeypatch.setattr(module, "SEALED_LAUNCH_AUTHORITY_V1_3_2", authority)
+        monkeypatch.setattr(module, "SEALED_PYTHON_RUNTIME_V1_3_2", runtime)
+        monkeypatch.setattr(module, "SEALED_SOURCE_PROVENANCE_V1_3_2", source_provenance)
+    monkeypatch.setattr(matrix, "SEALED_LAUNCH_AUTHORITY_V1_3_2", None)
+    monkeypatch.setattr(matrix, "SEALED_PYTHON_RUNTIME_V1_3_2", None)
+    monkeypatch.setattr(matrix, "SEALED_SOURCE_PROVENANCE_V1_3_2", None)
+    monkeypatch.setattr(matrix, "SEALED_LAUNCH_ROUTING_V1_3_2", None)
 
-    monkeypatch.setattr(audit, "SEALED_LAUNCH_ROUTING_V1_3_1", audit_route)
+    monkeypatch.setattr(audit, "SEALED_LAUNCH_ROUTING_V1_3_2", audit_route)
     assert audit._active_audit_launch_routing() == audit_route
     assert (
         audit._validate_audit_launch_routing_snapshot(
@@ -1543,7 +1644,7 @@ def test_audit_and_summary_routes_are_active_only_for_their_own_entrypoint(
             alternate_audit_route, source_provenance=source_provenance
         )
 
-    monkeypatch.setattr(audit, "SEALED_LAUNCH_ROUTING_V1_3_1", None)
+    monkeypatch.setattr(audit, "SEALED_LAUNCH_ROUTING_V1_3_2", None)
     assert (
         audit._validate_audit_launch_routing_snapshot(
             alternate_audit_route, source_provenance=source_provenance
@@ -1555,10 +1656,10 @@ def test_audit_and_summary_routes_are_active_only_for_their_own_entrypoint(
             summary_route, source_provenance=source_provenance
         )
 
-    monkeypatch.setattr(summary, "SEALED_LAUNCH_ROUTING_V1_3_1", summary_route)
+    monkeypatch.setattr(summary, "SEALED_LAUNCH_ROUTING_V1_3_2", summary_route)
     assert summary._active_summary_launch_routing() == summary_route
-    assert audit.SEALED_LAUNCH_ROUTING_V1_3_1 is None
-    assert matrix.SEALED_LAUNCH_ROUTING_V1_3_1 is None
+    assert audit.SEALED_LAUNCH_ROUTING_V1_3_2 is None
+    assert matrix.SEALED_LAUNCH_ROUTING_V1_3_2 is None
 
 
 def test_matrix_session_crosscheck_binds_actual_argv_and_recovered_eof() -> None:
@@ -1907,6 +2008,45 @@ def test_terminal_authority_failure_prevents_irreversible_publication(
     )
 
 
+@pytest.mark.parametrize("trailing", ["{}\n", "X"])
+def test_persistent_close_rejects_output_after_the_final_receipt(trailing: str) -> None:
+    process = subprocess.Popen(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import sys; sys.stdin.buffer.read(); "
+                "sys.stdout.write('{}\\n' + sys.argv[1]); sys.stdout.flush()"
+            ),
+            trailing,
+        ],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+    )
+    active = object.__new__(matrix.PersistentEvaluatorProcess)
+    active.process = process
+    active.closed = False
+    active.terminal_published = False
+    active.committed_count = 0
+    active.work_orders = []
+    active.results = []
+    active.eof_returncode = None
+    active._assert_authority = lambda: None
+    try:
+        with pytest.raises(
+            ValueError,
+            match="trailing output after its final receipt|JSONL message framing is invalid",
+        ):
+            active.close()
+        assert process.returncode == 0
+        assert active.terminal_published is False
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait(timeout=1)
+        matrix._close_persistent_process_streams(process)
+
+
 def test_persistent_scope_generation_fixes_claim_and_launch_failure_windows() -> None:
     distributed = inspect.getsource(matrix._run_distributed_matrix)
     single = inspect.getsource(matrix.run_matrix)
@@ -1927,3 +2067,429 @@ def test_persistent_scope_generation_fixes_claim_and_launch_failure_windows() ->
     assert start.index("publish_session_launch(") < start.index("try:")
     assert start.index("try:") < start.index("_open_evaluator(")
     assert start.index("_open_evaluator(") < start.index('status="launch_failure"')
+
+
+def test_ready_only_preflight_is_ordered_before_zero_matrix_activation_release_and_claim() -> None:
+    single = inspect.getsource(matrix.run_matrix)
+    ensure = inspect.getsource(matrix._ensure_ready_only_preflight)
+    projection = inspect.getsource(matrix._persistent_plan_projection)
+
+    assert (
+        single.index("ready_only_preflight = _ensure_ready_only_preflight(")
+        < single.index("activation_boundary = _complete_activation_ledger_boundary(")
+        < single.index("activation_lease.close()")
+        < single.index("_exclusive_cell_claim(")
+    )
+    assert ensure.index("_start_persistent_evaluator(") < ensure.index(
+        "final_receipt = evaluator.close()"
+    )
+    assert "evaluator.execute(" not in ensure
+    assert "build_work_order(" not in ensure
+    assert "ready_only_preflight" in matrix._MATRIX_FIELDS
+    assert '"session_role": plan["session_role"]' in projection
+
+
+class _HeldPreflightLease:
+    def __init__(self) -> None:
+        self.assertions = 0
+
+    def assert_held(self) -> None:
+        self.assertions += 1
+
+
+def test_ready_only_preflight_runs_zero_work_once_and_leaves_quality_tree_absent(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    first = matrix.coordinates()[0]
+    output_root = (tmp_path / "quality").resolve()
+    layout = SimpleNamespace(
+        output_root=output_root,
+        matrix_summary=output_root / matrix.MATRIX_SUMMARY_NAME,
+    )
+    binding = {"schema_version": 1, "session_role": "ready_only_preflight"}
+    projections = [
+        {"sessions": []},
+        {
+            "sessions": [
+                {
+                    "session_role": matrix.persistent_session.READY_ONLY_PREFLIGHT_SESSION_ROLE,
+                    "status": "stopped",
+                }
+            ]
+        },
+    ]
+    events: list[str] = []
+
+    def load_projection(*_args: object, **_kwargs: object) -> dict[str, object]:
+        events.append("load-projection")
+        return projections.pop(0)
+
+    def project_ready(value: dict[str, object]) -> dict[str, object] | None:
+        return binding if value["sessions"] else None
+
+    ready = {"status": "stopped", "completed_coordinates": 0}
+    closed_stream = SimpleNamespace(closed=True)
+
+    class FakeEvaluator:
+        ready_receipt = ready
+        closed = False
+        terminal_published = False
+        eof_returncode = None
+        committed_count = 0
+        work_orders: list[object] = []
+        results: list[object] = []
+        reingestion_count = 0
+        canonical_descriptor = 12
+        pycache_manager: object | None = object()
+        process = SimpleNamespace(
+            stdin=closed_stream,
+            stdout=closed_stream,
+            stderr=closed_stream,
+        )
+
+        def close(self) -> dict[str, object]:
+            events.append("close-zero-work")
+            self.closed = True
+            self.terminal_published = True
+            self.eof_returncode = 0
+            self.canonical_descriptor = -1
+            self.pycache_manager = None
+            return ready
+
+    def start_evaluator(**kwargs: object) -> FakeEvaluator:
+        events.append("start-ready-only")
+        assert kwargs["session_role"] == (
+            matrix.persistent_session.READY_ONLY_PREFLIGHT_SESSION_ROLE
+        )
+        assert kwargs["plan_coordinates"] == (first,)
+        assert kwargs["max_new_cells_stop_limit"] == 1
+        assert not layout.matrix_summary.exists()
+        return FakeEvaluator()
+
+    def validate_binding(value: object, **_kwargs: object) -> dict[str, object]:
+        events.append("validate-binding")
+        assert value == binding
+        return binding
+
+    monkeypatch.setattr(
+        matrix.persistent_session, "load_session_ledger_projection", load_projection
+    )
+    monkeypatch.setattr(
+        matrix.persistent_session, "ready_only_preflight_binding", project_ready
+    )
+    monkeypatch.setattr(matrix, "_start_persistent_evaluator", start_evaluator)
+    monkeypatch.setattr(
+        matrix, "_validate_ready_only_preflight_snapshot", validate_binding
+    )
+    activation = _HeldPreflightLease()
+    gpu = _HeldPreflightLease()
+    device = _HeldPreflightLease()
+    prerequisites = SimpleNamespace(
+        trust_root=object(),
+        public_binding={},
+        bundles={
+            (first.scale, first.training_seed, first.budget): SimpleNamespace(
+                binding={"input_binding_digest": "a" * 64}
+            )
+        },
+    )
+
+    observed = matrix._ensure_ready_only_preflight(
+        start_mode="fresh",
+        layout=layout,
+        manifest_path=tmp_path / "manifest.json",
+        canonical=tmp_path / "evaluator.py",
+        evaluator_snapshot=SimpleNamespace(),
+        evaluator_binding={},
+        prerequisites=prerequisites,
+        activation_lease=activation,
+        launch_authority_nonce="b" * 64,
+        gpu_lease_binding={},
+        gpu_lease=gpu,
+        device_guard_lease=device,
+    )
+    assert observed == binding
+    assert events == [
+        "load-projection",
+        "start-ready-only",
+        "close-zero-work",
+        "load-projection",
+        "validate-binding",
+    ]
+    assert activation.assertions >= 2
+    assert gpu.assertions >= 2
+    assert device.assertions >= 2
+    assert not output_root.exists()
+
+
+def test_ready_only_preflight_adopts_valid_proof_and_failure_cannot_publish_matrix(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    output_root = (tmp_path / "quality").resolve()
+    layout = SimpleNamespace(
+        output_root=output_root,
+        matrix_summary=output_root / matrix.MATRIX_SUMMARY_NAME,
+    )
+    proof = {"schema_version": 1, "session_role": "ready_only_preflight"}
+    projection = {
+        "sessions": [
+            {
+                "session_role": matrix.persistent_session.READY_ONLY_PREFLIGHT_SESSION_ROLE,
+                "status": "stopped",
+            }
+        ]
+    }
+    monkeypatch.setattr(
+        matrix.persistent_session,
+        "load_session_ledger_projection",
+        lambda *_args, **_kwargs: projection,
+    )
+    monkeypatch.setattr(
+        matrix.persistent_session,
+        "ready_only_preflight_binding",
+        lambda _projection: proof,
+    )
+    monkeypatch.setattr(
+        matrix,
+        "_validate_ready_only_preflight_snapshot",
+        lambda value, **_kwargs: dict(value),
+    )
+    monkeypatch.setattr(
+        matrix,
+        "_start_persistent_evaluator",
+        lambda **_kwargs: pytest.fail("valid preflight was rerun"),
+    )
+    lease = _HeldPreflightLease()
+    first = matrix.coordinates()[0]
+    prerequisites = SimpleNamespace(
+        trust_root=object(),
+        bundles={
+            (first.scale, first.training_seed, first.budget): SimpleNamespace(
+                binding={"input_binding_digest": "a" * 64}
+            )
+        },
+        public_binding={},
+    )
+    adopted = matrix._ensure_ready_only_preflight(
+        start_mode="resume",
+        layout=layout,
+        manifest_path=tmp_path / "manifest.json",
+        canonical=tmp_path / "evaluator.py",
+        evaluator_snapshot=SimpleNamespace(),
+        evaluator_binding={},
+        prerequisites=prerequisites,
+        activation_lease=lease,
+        launch_authority_nonce="c" * 64,
+        gpu_lease_binding={},
+        gpu_lease=lease,
+        device_guard_lease=lease,
+    )
+    assert adopted == proof
+    assert not layout.matrix_summary.exists()
+
+    monkeypatch.setattr(
+        matrix.persistent_session,
+        "load_session_ledger_projection",
+        lambda *_args, **_kwargs: {"sessions": []},
+    )
+    monkeypatch.setattr(
+        matrix.persistent_session,
+        "ready_only_preflight_binding",
+        lambda _projection: None,
+    )
+
+    def fail_start(**_kwargs: object) -> object:
+        raise RuntimeError("preflight-launch-failed")
+
+    monkeypatch.setattr(matrix, "_start_persistent_evaluator", fail_start)
+    with pytest.raises(RuntimeError, match="preflight-launch-failed"):
+        matrix._ensure_ready_only_preflight(
+            start_mode="resume",
+            layout=layout,
+            manifest_path=tmp_path / "manifest.json",
+            canonical=tmp_path / "evaluator.py",
+            evaluator_snapshot=SimpleNamespace(),
+            evaluator_binding={},
+            prerequisites=prerequisites,
+            activation_lease=lease,
+            launch_authority_nonce="d" * 64,
+            gpu_lease_binding={},
+            gpu_lease=lease,
+            device_guard_lease=lease,
+        )
+    assert not layout.matrix_summary.exists()
+    assert not output_root.exists()
+
+    events: list[str] = []
+
+    class CloseFailure:
+        terminal_published = False
+
+        def close(self) -> None:
+            events.append("close-failed")
+            raise RuntimeError("preflight-close-failed")
+
+        def abort_after_parent_commit_failure(self) -> None:
+            events.append("failure-terminal")
+            self.terminal_published = True
+
+    monkeypatch.setattr(
+        matrix, "_start_persistent_evaluator", lambda **_kwargs: CloseFailure()
+    )
+    with pytest.raises(RuntimeError, match="preflight-close-failed"):
+        matrix._ensure_ready_only_preflight(
+            start_mode="resume",
+            layout=layout,
+            manifest_path=tmp_path / "manifest.json",
+            canonical=tmp_path / "evaluator.py",
+            evaluator_snapshot=SimpleNamespace(),
+            evaluator_binding={},
+            prerequisites=prerequisites,
+            activation_lease=lease,
+            launch_authority_nonce="e" * 64,
+            gpu_lease_binding={},
+            gpu_lease=lease,
+            device_guard_lease=lease,
+        )
+    assert events == ["close-failed", "failure-terminal"]
+    assert not layout.matrix_summary.exists()
+    assert not output_root.exists()
+
+
+def test_ready_only_matrix_binding_rejects_tamper_before_authority_crosscheck(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    reconstructed = {"schema_version": 1, "session_role": "ready_only_preflight"}
+    monkeypatch.setattr(
+        matrix.persistent_session,
+        "ready_only_preflight_binding",
+        lambda _projection: reconstructed,
+    )
+    with pytest.raises(ValueError, match="differs from its authenticated ledger"):
+        matrix._validate_ready_only_preflight_snapshot(
+            {**reconstructed, "session_role": "quality"},
+            session_projection={},
+            output_root=Path("/tmp/quality"),
+            prerequisites=SimpleNamespace(),
+            evaluator_binding={},
+            gpu_lease_binding={},
+        )
+
+
+def test_evaluator_ready_only_role_accepts_only_eof_before_any_work_or_publication(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    coordinate = dict(contract.quality_coordinates()[0])
+    output_root = (tmp_path / "quality").resolve()
+    output = output_root / "forbidden-envelope.json"
+    plan = {
+        "session_nonce": "1" * 64,
+        "session_role": contract.V1_3_2_READY_ONLY_PREFLIGHT_SESSION_ROLE,
+        "scale": coordinate["scale"],
+        "training_seed": coordinate["training_seed"],
+        "coordinates": [coordinate],
+        "coordinate_count": 1,
+        "input_binding_digest": "2" * 64,
+        "output_root": str(output_root),
+    }
+    args = SimpleNamespace(
+        launch_nonce=plan["session_nonce"],
+        scale=coordinate["scale"],
+        training_seed=coordinate["training_seed"],
+        budget=coordinate["budget"],
+        family=coordinate["family"],
+        context=coordinate["context"],
+        replicate=coordinate["replicate"],
+        output=output,
+        checkpoint=tmp_path / "checkpoint.pt",
+        training_summary=tmp_path / "training.json",
+        training_matrix_summary=tmp_path / "training-matrix.json",
+        calibration=tmp_path / "calibration.json",
+        reuse_admission=tmp_path / "reuse.json",
+        preheldout_genesis=tmp_path / "genesis.json",
+        quality_start_activation=tmp_path / "activation.json",
+        manifest=tmp_path / "manifest.json",
+        device="cuda:0",
+        expected_device_identity_type="uuid",
+        expected_device_identity="GPU-test",
+    )
+    monkeypatch.setattr(
+        evaluator.persistent_session,
+        "read_sealed_plan_fd",
+        lambda *_args, **_kwargs: plan,
+    )
+    monkeypatch.setattr(
+        evaluator,
+        "establish_evaluator_inputs",
+        lambda **_kwargs: (
+            {"input_binding_digest": plan["input_binding_digest"]},
+            object(),
+            object(),
+            {},
+            {},
+            object(),
+        ),
+    )
+    monkeypatch.setattr(
+        evaluator.admission, "assert_quality_context_unchanged", lambda _context: None
+    )
+    monkeypatch.setattr(evaluator, "_runtime_environment", lambda *_args, **_kwargs: {})
+    monkeypatch.setattr(evaluator, "_load_checkpoint_model", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(evaluator, "_persistent_model_state", lambda _model: ())
+    monkeypatch.setattr(evaluator.torch.cuda, "synchronize", lambda _device: None)
+    monkeypatch.setattr(evaluator.torch.cuda, "empty_cache", lambda: None)
+    monkeypatch.setattr(evaluator.torch.cuda, "memory_allocated", lambda _device: 0)
+    monkeypatch.setattr(evaluator.gc, "collect", lambda: 0)
+    ready = {"status": "stopped", "completed_coordinates": 0}
+    monkeypatch.setattr(
+        evaluator.persistent_session,
+        "build_session_receipt",
+        lambda *_args, **_kwargs: ready,
+    )
+    monkeypatch.setattr(
+        evaluator.persistent_session,
+        "validate_work_order",
+        lambda *_args, **_kwargs: pytest.fail("preflight validated a work order"),
+    )
+    monkeypatch.setattr(
+        evaluator,
+        "publish_direct_controller_shard_bundle",
+        lambda *_args, **_kwargs: pytest.fail("preflight invoked the workload publisher"),
+    )
+
+    messages: list[dict[str, object]] = []
+    monkeypatch.setattr(evaluator, "_write_persistent_message", messages.append)
+    monkeypatch.setenv(evaluator.PERSISTENT_PLAN_FD_ENV, "9")
+    monkeypatch.setattr(
+        evaluator.sys,
+        "stdin",
+        SimpleNamespace(buffer=io.BytesIO(b'{"work":"forbidden"}\n')),
+    )
+    with pytest.raises(ValueError, match="rejects every work order"):
+        evaluator._run_persistent_session(
+            args, quality_context=object(), trust_root=object()
+        )
+    assert messages == [ready]
+    assert not output_root.exists()
+
+    messages.clear()
+    monkeypatch.setenv(evaluator.PERSISTENT_PLAN_FD_ENV, "9")
+    monkeypatch.setattr(
+        evaluator.sys, "stdin", SimpleNamespace(buffer=io.BytesIO(b""))
+    )
+    evaluator._run_persistent_session(
+        args, quality_context=object(), trust_root=object()
+    )
+    assert messages == [ready, ready]
+    assert messages[0] is messages[1]
+    assert not output_root.exists()
+
+    child = inspect.getsource(evaluator._run_persistent_session)
+    role_gate = child.index(
+        "plan[\"session_role\"] == persistent_session.READY_ONLY_PREFLIGHT_SESSION_ROLE"
+    )
+    assert role_gate < child.index("persistent_session.validate_work_order(")
+    assert role_gate < child.index("publish_direct_controller_shard_bundle(")

@@ -24,27 +24,27 @@ RECEIPT_MESSAGE_TYPE = contract.PERSISTENT_SESSION_RECEIPT_MESSAGE_TYPE
 LAUNCH_ARTIFACT_TYPE = contract.PERSISTENT_SESSION_LAUNCH_ARTIFACT_TYPE
 TERMINAL_ARTIFACT_TYPE = contract.PERSISTENT_SESSION_TERMINAL_ARTIFACT_TYPE
 
-PLAN_ATTESTATION_PURPOSE = contract.V1_3_1_PERSISTENT_SESSION_PLAN_ATTESTATION_PURPOSE
-WORK_ATTESTATION_PURPOSE = contract.V1_3_1_PERSISTENT_SESSION_WORK_ATTESTATION_PURPOSE
-RESULT_ATTESTATION_PURPOSE = contract.V1_3_1_PERSISTENT_SESSION_RESULT_ATTESTATION_PURPOSE
-RECEIPT_ATTESTATION_PURPOSE = contract.V1_3_1_PERSISTENT_SESSION_RECEIPT_ATTESTATION_PURPOSE
+PLAN_ATTESTATION_PURPOSE = contract.V1_3_2_PERSISTENT_SESSION_PLAN_ATTESTATION_PURPOSE
+WORK_ATTESTATION_PURPOSE = contract.V1_3_2_PERSISTENT_SESSION_WORK_ATTESTATION_PURPOSE
+RESULT_ATTESTATION_PURPOSE = contract.V1_3_2_PERSISTENT_SESSION_RESULT_ATTESTATION_PURPOSE
+RECEIPT_ATTESTATION_PURPOSE = contract.V1_3_2_PERSISTENT_SESSION_RECEIPT_ATTESTATION_PURPOSE
 LAUNCH_LEDGER_ATTESTATION_PURPOSE = (
-    contract.V1_3_1_PERSISTENT_SESSION_LAUNCH_LEDGER_ATTESTATION_PURPOSE
+    contract.V1_3_2_PERSISTENT_SESSION_LAUNCH_LEDGER_ATTESTATION_PURPOSE
 )
 TERMINAL_LEDGER_ATTESTATION_PURPOSE = (
-    contract.V1_3_1_PERSISTENT_SESSION_TERMINAL_LEDGER_ATTESTATION_PURPOSE
+    contract.V1_3_2_PERSISTENT_SESSION_TERMINAL_LEDGER_ATTESTATION_PURPOSE
 )
-_CANONICAL_OUTPUT_ROOT = contract.V1_3_1_OUTPUT_ROOT
-_CANONICAL_SESSION_LEDGER_ROOT = contract.V1_3_1_PERSISTENT_SESSION_LEDGER_ROOT
+_CANONICAL_OUTPUT_ROOT = contract.V1_3_2_OUTPUT_ROOT
+_CANONICAL_SESSION_LEDGER_ROOT = contract.V1_3_2_PERSISTENT_SESSION_LEDGER_ROOT
 _CANONICAL_SESSION_LEDGER_LOCK_PATH = (
-    contract.V1_3_1_PERSISTENT_SESSION_LEDGER_LOCK_PATH
+    contract.V1_3_2_PERSISTENT_SESSION_LEDGER_LOCK_PATH
 )
 SESSION_LEDGER_ROOT_SUFFIX = _CANONICAL_SESSION_LEDGER_ROOT.name.removeprefix(
     f".{_CANONICAL_OUTPUT_ROOT.name}."
 )
 _require_suffix = f".{_CANONICAL_OUTPUT_ROOT.name}.{SESSION_LEDGER_ROOT_SUFFIX}"
 if _CANONICAL_SESSION_LEDGER_ROOT.name != _require_suffix:
-    raise RuntimeError("Canonical v1.3.1 persistent-session ledger layout drifted.")
+    raise RuntimeError("Canonical v1.3.2 persistent-session ledger layout drifted.")
 del _require_suffix
 
 MAXIMUM_PLAN_BYTES = 4 << 20
@@ -52,10 +52,29 @@ MAXIMUM_JSONL_MESSAGE_BYTES = 1 << 20
 MAXIMUM_LEDGER_BYTES = 8 << 20
 CHILD_FULL_HISTORICAL_EVIDENCE_REPLAY_COUNT = 0
 MODEL_LOADS_PER_SESSION = 1
+READY_ONLY_PREFLIGHT_SESSION_ROLE = contract.V1_3_2_READY_ONLY_PREFLIGHT_SESSION_ROLE
+QUALITY_SESSION_ROLE = contract.V1_3_2_QUALITY_SESSION_ROLE
+if READY_ONLY_PREFLIGHT_SESSION_ROLE == QUALITY_SESSION_ROLE:
+    raise RuntimeError("Ready-only and quality persistent session roles must be distinct.")
+SESSION_ROLES = frozenset(
+    {READY_ONLY_PREFLIGHT_SESSION_ROLE, QUALITY_SESSION_ROLE}
+)
 
 # Frozen planning constants. Durable receipts below distinguish launch-time
 # upper bounds from model loads that actually reached the ready boundary.
-NORMAL_PATH_UNIQUE_MODEL_COHORTS = 10
+NORMAL_PATH_UNIQUE_MODEL_COHORTS = (
+    contract.V1_3_2_QUALITY_SESSION_NORMAL_PATH_MODEL_LOADS
+)
+READY_ONLY_PREFLIGHT_MODEL_LOAD_UPPER_BOUND = (
+    contract.V1_3_2_READY_ONLY_PREFLIGHT_MODEL_LOADS
+)
+SINGLE_WORKER_TOTAL_MODEL_LOAD_UPPER_BOUND = (
+    contract.V1_3_2_TOTAL_NORMAL_PATH_CHECKPOINT_MODEL_LOADS
+)
+if SINGLE_WORKER_TOTAL_MODEL_LOAD_UPPER_BOUND != (
+    READY_ONLY_PREFLIGHT_MODEL_LOAD_UPPER_BOUND + NORMAL_PATH_UNIQUE_MODEL_COHORTS
+):
+    raise RuntimeError("Ready-only plus quality model-load bounds do not sum exactly.")
 NORMAL_PATH_CHILD_CHECKPOINT_MODEL_DESERIALIZATION_PAYLOAD_BYTES = 11_810_258_620
 LEGACY_PER_SHARD_CHILD_CHECKPOINT_MODEL_DESERIALIZATION_PAYLOAD_BYTES = 10_629_232_758_000
 THEORETICAL_CHILD_CHECKPOINT_MODEL_DESERIALIZATION_REDUCTION_FACTOR = 900
@@ -106,6 +125,7 @@ _PLAN_SOURCE_FIELDS = frozenset(
         "message_type",
         "session_nonce",
         "launch_authority_nonce",
+        "session_role",
         "worker_index",
         "worker_count",
         "scale",
@@ -417,12 +437,14 @@ def build_session_plan(
     prerequisites_binding_digest: str,
     output_root: Path,
     trust_root: attestation.TrustRoot,
+    session_role: str = QUALITY_SESSION_ROLE,
 ) -> dict[str, Any]:
     _require(contract.is_sha256(session_nonce), "Persistent session nonce is invalid.")
     _require(
         contract.is_sha256(launch_authority_nonce),
         "Persistent launch-authority nonce is invalid.",
     )
+    _require(session_role in SESSION_ROLES, "Persistent session role is invalid.")
     for digest in (
         input_binding_digest,
         canonical_evaluator_digest,
@@ -479,6 +501,7 @@ def build_session_plan(
         "message_type": PLAN_MESSAGE_TYPE,
         "session_nonce": session_nonce,
         "launch_authority_nonce": launch_authority_nonce,
+        "session_role": session_role,
         "worker_index": worker_index,
         "worker_count": worker_count,
         "scale": scale,
@@ -539,6 +562,7 @@ def validate_session_plan(
         prerequisites_binding_digest=cast(str, plan.get("prerequisites_binding_digest")),
         output_root=Path(cast(str, plan.get("output_root"))),
         trust_root=trust_root,
+        session_role=cast(str, plan.get("session_role")),
     )
     _require(plan == rebuilt, "Persistent session plan semantics drifted.")
     return plan
@@ -988,7 +1012,7 @@ def create_sealed_plan_fd(plan: Mapping[str, Any]) -> int:
         "Persistent plan transport requires sealed memfd support.",
     )
     descriptor = cast(Any, create)(
-        "adaptive-v4-direct-exact-fill-v1-3-1-persistent-plan",
+        "adaptive-v4-direct-exact-fill-v1-3-2-persistent-plan",
         cast(int, getattr(os, "MFD_CLOEXEC", 0)) | cast(int, allow_sealing),
     )
     try:
@@ -1050,7 +1074,7 @@ def session_ledger_root(output_root: Path) -> Path:
         canonical_ledger_root = Path(os.path.abspath(_CANONICAL_SESSION_LEDGER_ROOT))
         _require(
             canonical_ledger_root.parent == root.parent,
-            "Canonical v1.3.1 persistent-session ledger root drifted.",
+            "Canonical v1.3.2 persistent-session ledger root drifted.",
         )
         return canonical_ledger_root
     return root.parent / f".{root.name}.{SESSION_LEDGER_ROOT_SUFFIX}"
@@ -1075,7 +1099,7 @@ def session_ledger_lock_path(output_root: Path) -> Path:
         canonical_lock = Path(os.path.abspath(_CANONICAL_SESSION_LEDGER_LOCK_PATH))
         _require(
             canonical_lock == root.parent / f"{root.name}.lock",
-            "Canonical v1.3.1 persistent-session ledger lock drifted.",
+            "Canonical v1.3.2 persistent-session ledger lock drifted.",
         )
         return canonical_lock
     return root.parent / f"{root.name}.lock"
@@ -1410,6 +1434,51 @@ def _load_ledger_json(path: Path) -> tuple[dict[str, Any], dict[str, Any]]:
     }
 
 
+def _receipt_projection(value: Mapping[str, Any]) -> dict[str, Any]:
+    """Project every readiness-relevant field from one verified receipt."""
+
+    attestation_value = value.get("attestation")
+    _require(
+        isinstance(attestation_value, Mapping),
+        "Persistent receipt projection lacks its attestation.",
+    )
+    attestation_map = cast(Mapping[str, Any], attestation_value)
+    return {
+        "payload_sha256": value["payload_sha256"],
+        "attestation_mac": attestation_map["mac"],
+        "status": value["status"],
+        "planned_coordinates": value["planned_coordinates"],
+        "completed_coordinates": value["completed_coordinates"],
+        "completed_work_payload_sha256": list(
+            cast(list[Any], value["completed_work_payload_sha256"])
+        ),
+        "completed_result_payload_sha256": list(
+            cast(list[Any], value["completed_result_payload_sha256"])
+        ),
+        "model_load_count": value["model_load_count"],
+        "child_full_historical_evidence_replay_count": value[
+            "child_full_historical_evidence_replay_count"
+        ],
+        "active_activation_validation_count": value[
+            "active_activation_validation_count"
+        ],
+        "active_admission_validation_count": value[
+            "active_admission_validation_count"
+        ],
+        "active_genesis_validation_count": value[
+            "active_genesis_validation_count"
+        ],
+        "active_calibration_validation_count": value[
+            "active_calibration_validation_count"
+        ],
+        "active_checkpoint_validation_count": value[
+            "active_checkpoint_validation_count"
+        ],
+        "model_state_reset_count": value["model_state_reset_count"],
+        "outcome_dependent_selection": value["outcome_dependent_selection"],
+    }
+
+
 def _load_session_ledger_projection_locked(
     output_root: Path,
     *,
@@ -1437,6 +1506,23 @@ def _load_session_ledger_projection_locked(
         "normal_path_model_load_bound_observed_satisfied": True,
         "additional_controlled_or_recovery_launch_attempts": 0,
         "controlled_stop_session_count": 0,
+        "ready_only_preflight_launch_attempt_count": 0,
+        "ready_only_preflight_terminal_count": 0,
+        "ready_only_preflight_success_count": 0,
+        "ready_only_preflight_failed_or_interrupted_attempt_count": 0,
+        "ready_only_preflight_ready_model_load_count": 0,
+        "quality_launch_attempt_count": 0,
+        "quality_terminal_count": 0,
+        "quality_ready_model_load_count": 0,
+        "single_worker_normal_path_ready_only_preflight_model_load_upper_bound": (
+            READY_ONLY_PREFLIGHT_MODEL_LOAD_UPPER_BOUND
+        ),
+        "single_worker_normal_path_quality_model_load_upper_bound": (
+            NORMAL_PATH_UNIQUE_MODEL_COHORTS
+        ),
+        "single_worker_normal_path_total_model_load_upper_bound": (
+            SINGLE_WORKER_TOTAL_MODEL_LOAD_UPPER_BOUND
+        ),
         "single_worker_full_matrix_unique_scale_seed_cohorts": (NORMAL_PATH_UNIQUE_MODEL_COHORTS),
         "single_worker_theoretical_child_checkpoint_model_deserialization_payload_bytes": (
             NORMAL_PATH_CHILD_CHECKPOINT_MODEL_DESERIALIZATION_PAYLOAD_BYTES
@@ -1562,16 +1648,20 @@ def _load_session_ledger_projection_locked(
     )
     authorities: set[str] = set()
     authority_bindings: dict[str, tuple[Any, ...]] = {}
-    cohorts: set[tuple[int, str, int]] = set()
+    quality_authorities: set[str] = set()
+    quality_cohorts: set[tuple[int, str, int]] = set()
     ready_loads = 0
+    quality_ready_loads = 0
+    preflight_ready_loads = 0
     eof_count = 0
     reingestions = 0
-    controlled_stop_sessions = 0
-    uninterrupted_terminal_sessions = 0
+    quality_controlled_stop_sessions = 0
+    uninterrupted_quality_terminal_sessions = 0
     session_rows: list[dict[str, Any]] = []
     for nonce, launch in launches.items():
         plan = cast(Mapping[str, Any], launch["plan"])
         authority = cast(str, launch["launch_authority_nonce"])
+        session_role = cast(str, plan["session_role"])
         authorities.add(authority)
         authority_binding = (
             plan["worker_index"],
@@ -1585,21 +1675,33 @@ def _load_session_ledger_projection_locked(
             prior_authority_binding == authority_binding,
             "Persistent launch authority crossed its frozen worker or prerequisite binding.",
         )
-        cohorts.add(
-            (
-                cast(int, plan["worker_index"]),
-                cast(str, plan["scale"]),
-                cast(int, plan["training_seed"]),
+        if session_role == QUALITY_SESSION_ROLE:
+            quality_authorities.add(authority)
+            quality_cohorts.add(
+                (
+                    cast(int, plan["worker_index"]),
+                    cast(str, plan["scale"]),
+                    cast(int, plan["training_seed"]),
+                )
             )
-        )
-        controlled_stop_sessions += plan.get("max_new_cells_stop_limit") is not None
+            quality_controlled_stop_sessions += (
+                plan.get("max_new_cells_stop_limit") is not None
+            )
         terminal = terminals.get(nonce)
         if terminal is None:
             session_rows.append(
                 {
                     "session_nonce": nonce,
                     "launch_authority_nonce": authority,
+                    "session_role": session_role,
                     "plan_payload_sha256": plan["payload_sha256"],
+                    "input_binding_digest": plan["input_binding_digest"],
+                    "canonical_evaluator_digest": plan["canonical_evaluator_digest"],
+                    "gpu_lease_binding_digest": plan["gpu_lease_binding_digest"],
+                    "prerequisites_binding_digest": plan[
+                        "prerequisites_binding_digest"
+                    ],
+                    "output_root": plan["output_root"],
                     "worker_index": plan["worker_index"],
                     "worker_count": plan["worker_count"],
                     "scale": plan["scale"],
@@ -1609,6 +1711,8 @@ def _load_session_ledger_projection_locked(
                     "max_new_cells_stop_limit": plan["max_new_cells_stop_limit"],
                     "status": "launch_only",
                     "ready_model_load_observed": False,
+                    "ready_receipt_binding": None,
+                    "final_receipt_binding": None,
                     "completed_work_payload_sha256": [],
                     "completed_result_payload_sha256": [],
                     "published_bundle_reingestion_count": 0,
@@ -1623,6 +1727,7 @@ def _load_session_ledger_projection_locked(
             "Persistent terminal/launch cross-binding drifted.",
         )
         ready = terminal.get("ready_receipt")
+        ready_binding: dict[str, Any] | None = None
         if ready is not None:
             _require(isinstance(ready, Mapping), "Persistent ready receipt is invalid.")
             checked_ready = validate_attested_session_receipt(
@@ -1637,6 +1742,11 @@ def _load_session_ledger_projection_locked(
                 "Persistent ready receipt cross-binding drifted.",
             )
             ready_loads += 1
+            ready_binding = _receipt_projection(checked_ready)
+            if session_role == QUALITY_SESSION_ROLE:
+                quality_ready_loads += 1
+            else:
+                preflight_ready_loads += 1
         raw_work_digests = terminal.get("completed_work_payload_sha256")
         raw_result_digests = terminal.get("completed_result_payload_sha256")
         _require(
@@ -1678,6 +1788,7 @@ def _load_session_ledger_projection_locked(
             "Persistent terminal argv differs from its launch ledger.",
         )
         final = terminal.get("final_receipt")
+        final_binding: dict[str, Any] | None = None
         if final is not None:
             _require(isinstance(final, Mapping), "Persistent final receipt is invalid.")
             checked_final = validate_attested_session_receipt(
@@ -1697,6 +1808,7 @@ def _load_session_ledger_projection_locked(
                 and checked_final.get("status") == status,
                 "Persistent final receipt completion projection drifted.",
             )
+            final_binding = _receipt_projection(checked_final)
         if status in {"complete", "stopped"}:
             final_map = cast(Mapping[str, Any], final)
             _require(
@@ -1708,7 +1820,9 @@ def _load_session_ledger_projection_locked(
                 is (status == "complete"),
                 "Persistent graceful terminal semantics drifted.",
             )
-            uninterrupted_terminal_sessions += status == "complete"
+            uninterrupted_quality_terminal_sessions += (
+                status == "complete" and session_role == QUALITY_SESSION_ROLE
+            )
         elif status == "child_eof":
             _require(
                 ready is not None and final is None and type(returncode) is int,
@@ -1745,7 +1859,15 @@ def _load_session_ledger_projection_locked(
             {
                 "session_nonce": nonce,
                 "launch_authority_nonce": authority,
+                "session_role": session_role,
                 "plan_payload_sha256": plan["payload_sha256"],
+                "input_binding_digest": plan["input_binding_digest"],
+                "canonical_evaluator_digest": plan["canonical_evaluator_digest"],
+                "gpu_lease_binding_digest": plan["gpu_lease_binding_digest"],
+                "prerequisites_binding_digest": plan[
+                    "prerequisites_binding_digest"
+                ],
+                "output_root": plan["output_root"],
                 "worker_index": plan["worker_index"],
                 "worker_count": plan["worker_count"],
                 "scale": plan["scale"],
@@ -1755,6 +1877,8 @@ def _load_session_ledger_projection_locked(
                 "max_new_cells_stop_limit": plan["max_new_cells_stop_limit"],
                 "status": status,
                 "ready_model_load_observed": ready is not None,
+                "ready_receipt_binding": ready_binding,
+                "final_receipt_binding": final_binding,
                 "completed_work_payload_sha256": list(work_digests),
                 "completed_result_payload_sha256": list(result_digests),
                 "published_bundle_reingestion_count": checked_reingestion_count,
@@ -1763,14 +1887,31 @@ def _load_session_ledger_projection_locked(
             }
         )
     authority_replays = len(authorities)
+    quality_rows = [
+        row for row in session_rows if row["session_role"] == QUALITY_SESSION_ROLE
+    ]
+    preflight_rows = [
+        row
+        for row in session_rows
+        if row["session_role"] == READY_ONLY_PREFLIGHT_SESSION_ROLE
+    ]
+    quality_terminal_count = sum(row["status"] != "launch_only" for row in quality_rows)
+    preflight_terminal_count = sum(
+        row["status"] != "launch_only" for row in preflight_rows
+    )
+    preflight_success_count = sum(
+        row["status"] == "stopped"
+        and row["ready_receipt_binding"] == row["final_receipt_binding"]
+        for row in preflight_rows
+    )
     additional_attempts, normal_path_applicable = _normal_path_claim_semantics(
-        launch_count=len(launches),
-        terminal_count=len(terminals),
-        graceful_terminal_count=uninterrupted_terminal_sessions,
-        controlled_stop_count=controlled_stop_sessions,
-        cohort_count=len(cohorts),
-        launch_authority_count=len(authorities),
-        worker_counts=[cast(int, row["worker_count"]) for row in session_rows],
+        launch_count=len(quality_rows),
+        terminal_count=quality_terminal_count,
+        graceful_terminal_count=uninterrupted_quality_terminal_sessions,
+        controlled_stop_count=quality_controlled_stop_sessions,
+        cohort_count=len(quality_cohorts),
+        launch_authority_count=len(quality_authorities),
+        worker_counts=[cast(int, row["worker_count"]) for row in quality_rows],
     )
     projection = {
         "root": str(root),
@@ -1788,14 +1929,33 @@ def _load_session_ledger_projection_locked(
         ),
         "durably_evidenced_parent_full_evidence_replays": authority_replays,
         "session_triggered_full_historical_evidence_replay_count": 0,
-        "normal_no_restart_unique_worker_scale_seed_assignments": len(cohorts),
-        "normal_path_model_load_bound": len(cohorts),
+        "normal_no_restart_unique_worker_scale_seed_assignments": len(quality_cohorts),
+        "normal_path_model_load_bound": len(quality_cohorts),
         "normal_path_model_load_bound_applicable": normal_path_applicable,
         "normal_path_model_load_bound_observed_satisfied": (
-            ready_loads <= len(cohorts) if normal_path_applicable else None
+            quality_ready_loads <= len(quality_cohorts) if normal_path_applicable else None
         ),
         "additional_controlled_or_recovery_launch_attempts": additional_attempts,
-        "controlled_stop_session_count": controlled_stop_sessions,
+        "controlled_stop_session_count": quality_controlled_stop_sessions,
+        "ready_only_preflight_launch_attempt_count": len(preflight_rows),
+        "ready_only_preflight_terminal_count": preflight_terminal_count,
+        "ready_only_preflight_success_count": preflight_success_count,
+        "ready_only_preflight_failed_or_interrupted_attempt_count": (
+            len(preflight_rows) - preflight_success_count
+        ),
+        "ready_only_preflight_ready_model_load_count": preflight_ready_loads,
+        "quality_launch_attempt_count": len(quality_rows),
+        "quality_terminal_count": quality_terminal_count,
+        "quality_ready_model_load_count": quality_ready_loads,
+        "single_worker_normal_path_ready_only_preflight_model_load_upper_bound": (
+            READY_ONLY_PREFLIGHT_MODEL_LOAD_UPPER_BOUND
+        ),
+        "single_worker_normal_path_quality_model_load_upper_bound": (
+            NORMAL_PATH_UNIQUE_MODEL_COHORTS
+        ),
+        "single_worker_normal_path_total_model_load_upper_bound": (
+            SINGLE_WORKER_TOTAL_MODEL_LOAD_UPPER_BOUND
+        ),
         "single_worker_full_matrix_unique_scale_seed_cohorts": (NORMAL_PATH_UNIQUE_MODEL_COHORTS),
         "single_worker_theoretical_child_checkpoint_model_deserialization_payload_bytes": (
             NORMAL_PATH_CHILD_CHECKPOINT_MODEL_DESERIALIZATION_PAYLOAD_BYTES
@@ -1837,6 +1997,17 @@ def validate_session_ledger_projection(value: Mapping[str, Any]) -> dict[str, An
         "normal_path_model_load_bound_observed_satisfied",
         "additional_controlled_or_recovery_launch_attempts",
         "controlled_stop_session_count",
+        "ready_only_preflight_launch_attempt_count",
+        "ready_only_preflight_terminal_count",
+        "ready_only_preflight_success_count",
+        "ready_only_preflight_failed_or_interrupted_attempt_count",
+        "ready_only_preflight_ready_model_load_count",
+        "quality_launch_attempt_count",
+        "quality_terminal_count",
+        "quality_ready_model_load_count",
+        "single_worker_normal_path_ready_only_preflight_model_load_upper_bound",
+        "single_worker_normal_path_quality_model_load_upper_bound",
+        "single_worker_normal_path_total_model_load_upper_bound",
         "single_worker_full_matrix_unique_scale_seed_cohorts",
         "single_worker_theoretical_child_checkpoint_model_deserialization_payload_bytes",
         "single_worker_legacy_per_shard_child_checkpoint_model_deserialization_payload_bytes",
@@ -1862,6 +2033,11 @@ def validate_session_ledger_projection(value: Mapping[str, Any]) -> dict[str, An
     )
     session_values = cast(list[Any], sessions)
     registry_values = cast(list[Any], registry)
+    root_path = Path(cast(str, root))
+    expected_output_name = root_path.name.removeprefix(".").removesuffix(
+        f".{SESSION_LEDGER_ROOT_SUFFIX}"
+    )
+    expected_output_root = str(root_path.parent / expected_output_name)
     integer_fields = expected_fields - {
         "root",
         "normal_path_model_load_bound_applicable",
@@ -1882,7 +2058,13 @@ def validate_session_ledger_projection(value: Mapping[str, Any]) -> dict[str, An
     session_fields = {
         "session_nonce",
         "launch_authority_nonce",
+        "session_role",
         "plan_payload_sha256",
+        "input_binding_digest",
+        "canonical_evaluator_digest",
+        "gpu_lease_binding_digest",
+        "prerequisites_binding_digest",
+        "output_root",
         "worker_index",
         "worker_count",
         "scale",
@@ -1892,6 +2074,8 @@ def validate_session_ledger_projection(value: Mapping[str, Any]) -> dict[str, An
         "max_new_cells_stop_limit",
         "status",
         "ready_model_load_observed",
+        "ready_receipt_binding",
+        "final_receipt_binding",
         "completed_work_payload_sha256",
         "completed_result_payload_sha256",
         "published_bundle_reingestion_count",
@@ -1908,7 +2092,13 @@ def validate_session_ledger_projection(value: Mapping[str, Any]) -> dict[str, An
             set(row) == session_fields
             and contract.is_sha256(row.get("session_nonce"))
             and contract.is_sha256(row.get("launch_authority_nonce"))
+            and row.get("session_role") in SESSION_ROLES
             and contract.is_sha256(row.get("plan_payload_sha256"))
+            and contract.is_sha256(row.get("input_binding_digest"))
+            and contract.is_sha256(row.get("canonical_evaluator_digest"))
+            and contract.is_sha256(row.get("gpu_lease_binding_digest"))
+            and contract.is_sha256(row.get("prerequisites_binding_digest"))
+            and row.get("output_root") == expected_output_root
             and contract.is_sha256(row.get("coordinate_digest"))
             and type(row.get("worker_index")) is int
             and type(row.get("worker_count")) is int
@@ -1954,6 +2144,82 @@ def validate_session_ledger_projection(value: Mapping[str, Any]) -> dict[str, An
             ),
             "Persistent session projection row semantics drifted.",
         )
+        receipt_fields = {
+            "payload_sha256",
+            "attestation_mac",
+            "status",
+            "planned_coordinates",
+            "completed_coordinates",
+            "completed_work_payload_sha256",
+            "completed_result_payload_sha256",
+            "model_load_count",
+            "child_full_historical_evidence_replay_count",
+            "active_activation_validation_count",
+            "active_admission_validation_count",
+            "active_genesis_validation_count",
+            "active_calibration_validation_count",
+            "active_checkpoint_validation_count",
+            "model_state_reset_count",
+            "outcome_dependent_selection",
+        }
+        for name in ("ready_receipt_binding", "final_receipt_binding"):
+            raw_receipt = row.get(name)
+            if raw_receipt is None:
+                continue
+            _require(
+                isinstance(raw_receipt, Mapping)
+                and set(raw_receipt) == receipt_fields
+                and contract.is_sha256(raw_receipt.get("payload_sha256"))
+                and contract.is_sha256(raw_receipt.get("attestation_mac"))
+                and raw_receipt.get("status") in {"complete", "stopped"}
+                and type(raw_receipt.get("planned_coordinates")) is int
+                and cast(int, raw_receipt["planned_coordinates"]) > 0
+                and type(raw_receipt.get("completed_coordinates")) is int
+                and 0
+                <= cast(int, raw_receipt["completed_coordinates"])
+                <= cast(int, raw_receipt["planned_coordinates"])
+                and isinstance(raw_receipt.get("completed_work_payload_sha256"), list)
+                and isinstance(raw_receipt.get("completed_result_payload_sha256"), list)
+                and len(cast(list[Any], raw_receipt["completed_work_payload_sha256"]))
+                == len(cast(list[Any], raw_receipt["completed_result_payload_sha256"]))
+                == cast(int, raw_receipt["completed_coordinates"])
+                and all(
+                    contract.is_sha256(item)
+                    for item in cast(
+                        list[Any], raw_receipt["completed_work_payload_sha256"]
+                    )
+                )
+                and all(
+                    contract.is_sha256(item)
+                    for item in cast(
+                        list[Any], raw_receipt["completed_result_payload_sha256"]
+                    )
+                )
+                and raw_receipt.get("model_load_count") == MODEL_LOADS_PER_SESSION
+                and raw_receipt.get("child_full_historical_evidence_replay_count")
+                == CHILD_FULL_HISTORICAL_EVIDENCE_REPLAY_COUNT
+                and all(
+                    raw_receipt.get(field) == 1
+                    for field in (
+                        "active_activation_validation_count",
+                        "active_admission_validation_count",
+                        "active_genesis_validation_count",
+                        "active_calibration_validation_count",
+                        "active_checkpoint_validation_count",
+                    )
+                )
+                and raw_receipt.get("model_state_reset_count")
+                == raw_receipt.get("completed_coordinates")
+                and raw_receipt.get("outcome_dependent_selection") is False,
+                "Persistent projected receipt semantics drifted.",
+            )
+        _require(
+            (row["ready_model_load_observed"] is True)
+            is (row["ready_receipt_binding"] is not None)
+            and (row["status"] in {"complete", "stopped"})
+            is (row["final_receipt_binding"] is not None),
+            "Persistent projected receipt presence drifted.",
+        )
         argv = row.get("actual_session_argv")
         if isinstance(argv, list):
             launch_indices = [index for index, item in enumerate(argv) if item == "--launch-nonce"]
@@ -1985,19 +2251,44 @@ def validate_session_ledger_projection(value: Mapping[str, Any]) -> dict[str, An
         cast(int, row["published_bundle_reingestion_count"]) for row in checked_sessions
     )
     authorities = {row["launch_authority_nonce"] for row in checked_sessions}
+    quality_rows = [
+        row for row in checked_sessions if row["session_role"] == QUALITY_SESSION_ROLE
+    ]
+    preflight_rows = [
+        row
+        for row in checked_sessions
+        if row["session_role"] == READY_ONLY_PREFLIGHT_SESSION_ROLE
+    ]
+    quality_authorities = {row["launch_authority_nonce"] for row in quality_rows}
     cohorts = {
         (row["worker_index"], row["scale"], row["training_seed"]) for row in checked_sessions
+        if row["session_role"] == QUALITY_SESSION_ROLE
     }
-    controlled = sum(row["max_new_cells_stop_limit"] is not None for row in checked_sessions)
-    graceful_terminal_count = sum(row["status"] == "complete" for row in checked_sessions)
+    controlled = sum(row["max_new_cells_stop_limit"] is not None for row in quality_rows)
+    graceful_terminal_count = sum(row["status"] == "complete" for row in quality_rows)
+    quality_terminal_count = sum(row["status"] != "launch_only" for row in quality_rows)
+    quality_ready_count = sum(
+        row["ready_model_load_observed"] is True for row in quality_rows
+    )
+    preflight_terminal_count = sum(
+        row["status"] != "launch_only" for row in preflight_rows
+    )
+    preflight_ready_count = sum(
+        row["ready_model_load_observed"] is True for row in preflight_rows
+    )
+    preflight_success_count = sum(
+        row["status"] == "stopped"
+        and row["ready_receipt_binding"] == row["final_receipt_binding"]
+        for row in preflight_rows
+    )
     additional, expected_applicable = _normal_path_claim_semantics(
-        launch_count=launch_count,
-        terminal_count=terminal_count,
+        launch_count=len(quality_rows),
+        terminal_count=quality_terminal_count,
         graceful_terminal_count=graceful_terminal_count,
         controlled_stop_count=controlled,
         cohort_count=len(cohorts),
-        launch_authority_count=len(authorities),
-        worker_counts=[cast(int, row["worker_count"]) for row in checked_sessions],
+        launch_authority_count=len(quality_authorities),
+        worker_counts=[cast(int, row["worker_count"]) for row in quality_rows],
     )
     _require(
         value.get("launch_attempt_count") == launch_count
@@ -2016,7 +2307,17 @@ def validate_session_ledger_projection(value: Mapping[str, Any]) -> dict[str, An
         and value.get("normal_no_restart_unique_worker_scale_seed_assignments") == len(cohorts)
         and value.get("normal_path_model_load_bound") == len(cohorts)
         and value.get("additional_controlled_or_recovery_launch_attempts") == additional
-        and value.get("controlled_stop_session_count") == controlled,
+        and value.get("controlled_stop_session_count") == controlled
+        and value.get("ready_only_preflight_launch_attempt_count") == len(preflight_rows)
+        and value.get("ready_only_preflight_terminal_count") == preflight_terminal_count
+        and value.get("ready_only_preflight_success_count") == preflight_success_count
+        and value.get("ready_only_preflight_failed_or_interrupted_attempt_count")
+        == len(preflight_rows) - preflight_success_count
+        and value.get("ready_only_preflight_ready_model_load_count")
+        == preflight_ready_count
+        and value.get("quality_launch_attempt_count") == len(quality_rows)
+        and value.get("quality_terminal_count") == quality_terminal_count
+        and value.get("quality_ready_model_load_count") == quality_ready_count,
         "Persistent ledger projection aggregate counters drifted.",
     )
     applicable = cast(bool, value["normal_path_model_load_bound_applicable"])
@@ -2025,11 +2326,19 @@ def validate_session_ledger_projection(value: Mapping[str, Any]) -> dict[str, An
         type(applicable) is bool
         and applicable is expected_applicable
         and (
-            (applicable and observed_bound is (ready_count <= len(cohorts)))
+            (applicable and observed_bound is (quality_ready_count <= len(cohorts)))
             or (not applicable and observed_bound is None)
         )
         and value.get("single_worker_full_matrix_unique_scale_seed_cohorts")
         == NORMAL_PATH_UNIQUE_MODEL_COHORTS
+        and value.get(
+            "single_worker_normal_path_ready_only_preflight_model_load_upper_bound"
+        )
+        == READY_ONLY_PREFLIGHT_MODEL_LOAD_UPPER_BOUND
+        and value.get("single_worker_normal_path_quality_model_load_upper_bound")
+        == NORMAL_PATH_UNIQUE_MODEL_COHORTS
+        and value.get("single_worker_normal_path_total_model_load_upper_bound")
+        == SINGLE_WORKER_TOTAL_MODEL_LOAD_UPPER_BOUND
         and value.get(
             "single_worker_theoretical_child_checkpoint_model_deserialization_payload_bytes"
         )
@@ -2076,6 +2385,143 @@ def validate_session_ledger_projection(value: Mapping[str, Any]) -> dict[str, An
         "Persistent ledger projection file registry drifted.",
     )
     return _json_clone(dict(value))
+
+
+def ready_only_preflight_binding(
+    value: Mapping[str, Any],
+) -> dict[str, Any] | None:
+    """Reconstruct the unique zero-work readiness proof from authenticated ledgers."""
+
+    projection = validate_session_ledger_projection(value)
+    rows = [
+        cast(Mapping[str, Any], row)
+        for row in cast(list[Any], projection["sessions"])
+        if cast(Mapping[str, Any], row).get("session_role")
+        == READY_ONLY_PREFLIGHT_SESSION_ROLE
+    ]
+    if not rows:
+        return None
+    first_coordinate = dict(contract.quality_coordinates()[0])
+    expected_coordinate_digest = contract.json_digest([first_coordinate])
+    successes: list[Mapping[str, Any]] = []
+    for row in rows:
+        ready = row.get("ready_receipt_binding")
+        final = row.get("final_receipt_binding")
+        _require(
+            row.get("worker_index") == 0
+            and row.get("worker_count") == 1
+            and row.get("scale") == first_coordinate["scale"]
+            and row.get("training_seed") == first_coordinate["training_seed"]
+            and row.get("coordinate_count") == 1
+            and row.get("coordinate_digest") == expected_coordinate_digest
+            and row.get("max_new_cells_stop_limit") == 1
+            and row.get("completed_work_payload_sha256") == []
+            and row.get("completed_result_payload_sha256") == []
+            and row.get("published_bundle_reingestion_count") == 0
+            and row.get("status") != "complete",
+            "Ready-only preflight attempt performed work or changed its frozen plan.",
+        )
+        if ready is not None:
+            _require(
+                isinstance(ready, Mapping)
+                and ready.get("status") == "stopped"
+                and ready.get("planned_coordinates") == 1
+                and ready.get("completed_coordinates") == 0
+                and ready.get("completed_work_payload_sha256") == []
+                and ready.get("completed_result_payload_sha256") == []
+                and ready.get("model_load_count") == 1
+                and ready.get("child_full_historical_evidence_replay_count") == 0
+                and ready.get("model_state_reset_count") == 0
+                and ready.get("outcome_dependent_selection") is False
+                and all(
+                    ready.get(field) == 1
+                    for field in (
+                        "active_activation_validation_count",
+                        "active_admission_validation_count",
+                        "active_genesis_validation_count",
+                        "active_calibration_validation_count",
+                        "active_checkpoint_validation_count",
+                    )
+                ),
+                "Ready-only preflight ready receipt is not an exact zero-work proof.",
+            )
+        if row.get("status") == "stopped":
+            _require(
+                ready is not None
+                and final is not None
+                and ready == final
+                and row.get("child_process_returncode") == 0,
+                "Ready-only preflight ready/final receipts are not identical.",
+            )
+            successes.append(row)
+        else:
+            _require(
+                final is None,
+                "Failed ready-only preflight attempt has a final success receipt.",
+            )
+    _require(
+        len(successes) <= 1,
+        "Ready-only preflight has more than one successful execution.",
+    )
+    if not successes:
+        return None
+    _require(
+        all(row.get("status") != "launch_only" for row in rows),
+        "Successful ready-only preflight coexists with an unrecovered launch.",
+    )
+    success = successes[0]
+    registry_rows = [
+        cast(Mapping[str, Any], row)
+        for row in cast(list[Any], projection["registry"])
+        if cast(Mapping[str, Any], row).get("session_nonce")
+        in {attempt["session_nonce"] for attempt in rows}
+    ]
+    success_registry = [
+        dict(row)
+        for row in registry_rows
+        if row.get("session_nonce") == success["session_nonce"]
+    ]
+    _require(
+        [row["kind"] for row in success_registry] == ["launch", "terminal"],
+        "Ready-only preflight success lacks exact launch/terminal file bindings.",
+    )
+    source = {
+        "schema_version": 1,
+        "session_role": READY_ONLY_PREFLIGHT_SESSION_ROLE,
+        "status": "stopped",
+        "session_nonce": success["session_nonce"],
+        "launch_authority_nonce": success["launch_authority_nonce"],
+        "plan_payload_sha256": success["plan_payload_sha256"],
+        "input_binding_digest": success["input_binding_digest"],
+        "canonical_evaluator_digest": success["canonical_evaluator_digest"],
+        "gpu_lease_binding_digest": success["gpu_lease_binding_digest"],
+        "prerequisites_binding_digest": success["prerequisites_binding_digest"],
+        "output_root": success["output_root"],
+        "worker_index": 0,
+        "worker_count": 1,
+        "coordinate_count": 1,
+        "coordinate_digest": expected_coordinate_digest,
+        "ready_receipt_binding": dict(
+            cast(Mapping[str, Any], success["ready_receipt_binding"])
+        ),
+        "final_receipt_binding": dict(
+            cast(Mapping[str, Any], success["final_receipt_binding"])
+        ),
+        "launch_ledger_binding": success_registry[0],
+        "terminal_ledger_binding": success_registry[1],
+        "launch_attempt_count": len(rows),
+        "failed_attempt_count": len(rows) - 1,
+        "attempt_history_digest": contract.json_digest(rows),
+        "attempt_registry_digest": contract.json_digest(registry_rows),
+        "model_load_count": 1,
+        "quality_work_order_count": 0,
+        "quality_result_count": 0,
+        "model_state_reset_count": 0,
+        "published_bundle_reingestion_count": 0,
+        "outcome_dependent_selection": False,
+        "child_process_returncode": 0,
+    }
+    return _json_clone(source)
 
 
 def load_session_ledger_projection(

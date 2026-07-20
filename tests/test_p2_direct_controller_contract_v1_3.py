@@ -261,6 +261,8 @@ def test_builder_uses_admission_validator_and_returns_only_exact_fill(
     )
     assert metadata["exact_fill_arms"] == contract.ALL_ARM_NAMES
     assert metadata["dual_manifest_contexts_validated"] is True
+    assert metadata["quality_experiment_id"] == contract.V1_3_2_EXPERIMENT_ID
+    assert metadata["quality_experiment_id"] != contract.EXPERIMENT_ID
     assert not _contains_threshold_metadata(metadata)
     contract.validate_arm_semantics(arms)
 
@@ -357,24 +359,24 @@ def test_persistent_session_namespaces_and_transport_claims_are_exact() -> None:
     assert contract.PERSISTENT_SESSION_LEDGER_ROOT.name.startswith(".")
     assert not contract.PERSISTENT_SESSION_LEDGER_ROOT.name.startswith("..")
     absolute_output_root = (
-        Path(__file__).resolve().parents[1] / contract.V1_3_1_OUTPUT_ROOT
+        Path(__file__).resolve().parents[1] / contract.V1_3_2_OUTPUT_ROOT
     ).resolve()
-    expected_v1_3_1_suffix = contract.V1_3_1_PERSISTENT_SESSION_LEDGER_ROOT.name.removeprefix(
-        f".{contract.V1_3_1_OUTPUT_ROOT.name}."
+    expected_v1_3_2_suffix = contract.V1_3_2_PERSISTENT_SESSION_LEDGER_ROOT.name.removeprefix(
+        f".{contract.V1_3_2_OUTPUT_ROOT.name}."
     )
-    assert persistent_session.SESSION_LEDGER_ROOT_SUFFIX == expected_v1_3_1_suffix
+    assert persistent_session.SESSION_LEDGER_ROOT_SUFFIX == expected_v1_3_2_suffix
     assert (
         persistent_session.session_ledger_root(absolute_output_root)
         == (
             Path(__file__).resolve().parents[1]
-            / contract.V1_3_1_PERSISTENT_SESSION_LEDGER_ROOT
+            / contract.V1_3_2_PERSISTENT_SESSION_LEDGER_ROOT
         ).resolve()
     )
     assert (
         persistent_session.session_ledger_lock_path(absolute_output_root)
         == (
             Path(__file__).resolve().parents[1]
-            / contract.V1_3_1_PERSISTENT_SESSION_LEDGER_LOCK_PATH
+            / contract.V1_3_2_PERSISTENT_SESSION_LEDGER_LOCK_PATH
         ).resolve()
     )
     assert {
@@ -403,12 +405,12 @@ def test_persistent_session_namespaces_and_transport_claims_are_exact() -> None:
         "launch": persistent_session.LAUNCH_LEDGER_ATTESTATION_PURPOSE,
         "terminal": persistent_session.TERMINAL_LEDGER_ATTESTATION_PURPOSE,
     } == {
-        "plan": contract.V1_3_1_PERSISTENT_SESSION_PLAN_ATTESTATION_PURPOSE,
-        "work": contract.V1_3_1_PERSISTENT_SESSION_WORK_ATTESTATION_PURPOSE,
-        "result": contract.V1_3_1_PERSISTENT_SESSION_RESULT_ATTESTATION_PURPOSE,
-        "receipt": contract.V1_3_1_PERSISTENT_SESSION_RECEIPT_ATTESTATION_PURPOSE,
-        "launch": contract.V1_3_1_PERSISTENT_SESSION_LAUNCH_LEDGER_ATTESTATION_PURPOSE,
-        "terminal": contract.V1_3_1_PERSISTENT_SESSION_TERMINAL_LEDGER_ATTESTATION_PURPOSE,
+        "plan": contract.V1_3_2_PERSISTENT_SESSION_PLAN_ATTESTATION_PURPOSE,
+        "work": contract.V1_3_2_PERSISTENT_SESSION_WORK_ATTESTATION_PURPOSE,
+        "result": contract.V1_3_2_PERSISTENT_SESSION_RESULT_ATTESTATION_PURPOSE,
+        "receipt": contract.V1_3_2_PERSISTENT_SESSION_RECEIPT_ATTESTATION_PURPOSE,
+        "launch": contract.V1_3_2_PERSISTENT_SESSION_LAUNCH_LEDGER_ATTESTATION_PURPOSE,
+        "terminal": contract.V1_3_2_PERSISTENT_SESSION_TERMINAL_LEDGER_ATTESTATION_PURPOSE,
     }
     assert namespaces["persistent_session_ledger_root"] == str(
         contract.PERSISTENT_SESSION_LEDGER_ROOT
@@ -625,19 +627,24 @@ def test_no_calibration_only_threshold_generation_api_is_added_to_v1_3_contract(
     assert "top_p_match_generation_seed" not in contract.__dict__
 
 
-def test_v1_3_1_activation_amendment_has_distinct_complete_namespaces() -> None:
-    namespaces = contract.expected_v1_3_1_artifact_namespaces()
+def test_v1_3_2_import_boundary_amendment_has_distinct_complete_namespaces() -> None:
+    namespaces = contract.expected_v1_3_2_artifact_namespaces()
 
-    assert contract.V1_3_1_EXPERIMENT_ID.endswith("v1.3.1")
-    assert "v1-3-1" in str(contract.V1_3_1_MANIFEST_PATH)
-    assert "v1-3-1" in str(contract.V1_3_1_OUTPUT_ROOT)
-    assert "v1-3-1" in str(contract.V1_3_1_ADMISSION_ROOT)
-    assert "v1-3-1" in str(contract.V1_3_1_ACTIVATION_ROOT)
-    assert contract.V1_3_1_OUTPUT_ROOT != contract.OUTPUT_ROOT
-    assert contract.V1_3_1_ADMISSION_ROOT != contract.ADMISSION_ROOT
+    assert contract.V1_3_2_READY_ONLY_PREFLIGHT_SESSION_ROLE == (
+        persistent_session.READY_ONLY_PREFLIGHT_SESSION_ROLE
+    )
+    assert contract.V1_3_2_QUALITY_SESSION_ROLE == persistent_session.QUALITY_SESSION_ROLE
+    assert contract.V1_3_2_EXPERIMENT_ID.endswith("v1.3.2")
+    assert "v1-3-2" in str(contract.V1_3_2_MANIFEST_PATH)
+    assert "v1-3-2" in str(contract.V1_3_2_OUTPUT_ROOT)
+    assert "v1-3-2" in str(contract.V1_3_2_ADMISSION_ROOT)
+    assert "v1-3-2" in str(contract.V1_3_2_ACTIVATION_ROOT)
+    assert contract.V1_3_2_OUTPUT_ROOT != contract.OUTPUT_ROOT
+    assert contract.V1_3_2_ADMISSION_ROOT != contract.ADMISSION_ROOT
+    assert namespaces["v1_3_1_output_or_admission_namespace_reused"] is False
     assert namespaces["activation_root_exact_member_count"] == 2
     assert namespaces["activation_matrix_lock_path"] == str(
-        contract.V1_3_1_ACTIVATION_ROOT / "matrix.lock"
+        contract.V1_3_2_ACTIVATION_ROOT / "matrix.lock"
     )
     purposes = namespaces["attestation_purposes"]
     assert set(purposes) == {
@@ -657,32 +664,45 @@ def test_v1_3_1_activation_amendment_has_distinct_complete_namespaces() -> None:
         "persistent_session_terminal_ledger",
     }
     assert len(set(purposes.values())) == len(purposes)
-    assert all("v1-3-1" in purpose or "v1.3.1" in purpose for purpose in purposes.values())
+    assert all("v1-3-2" in purpose or "v1.3.2" in purpose for purpose in purposes.values())
     assert set(purposes.values()).isdisjoint(
         contract.expected_artifact_namespaces()["attestation_purposes"].values()
     )
 
 
-def test_v1_3_1_manifest_binds_signed_empty_lineage_and_fixed_start_sequence() -> None:
-    payload = contract.build_v1_3_1_manifest_payload(
+def test_v1_3_2_manifest_binds_both_superseded_lineages_and_ready_preflight() -> None:
+    payload = contract.build_v1_3_2_manifest_payload(
         attestation_key_id=contract.V1_2_ATTESTATION_KEY_ID,
         implementation_tree_digest="a" * 64,
         implementation_source_commit="b" * 40,
     )
 
-    assert contract.validate_v1_3_1_manifest_payload(copy.deepcopy(payload)) == payload
-    assert payload["experiment_id"] == contract.V1_3_1_EXPERIMENT_ID
-    assert payload["status"] == contract.V1_3_1_MANIFEST_STATUS
-    assert payload["implementation"]["paths"] == list(contract.V1_3_1_IMPLEMENTATION_PATHS)
+    assert contract.validate_v1_3_2_manifest_payload(copy.deepcopy(payload)) == payload
+    assert payload["experiment_id"] == contract.V1_3_2_EXPERIMENT_ID
+    assert payload["status"] == contract.V1_3_2_MANIFEST_STATUS
+    assert payload["implementation"]["paths"] == list(contract.V1_3_2_IMPLEMENTATION_PATHS)
     lineage = payload["lineage_and_adaptation_disclosure"]["v1_3_signed_empty_lineage"]
-    assert lineage == contract.expected_v1_3_1_superseded_empty_lineage()
+    assert lineage == contract.expected_v1_3_2_superseded_empty_lineage()
     assert lineage["quality_state"]["records"] == []
     assert lineage["quality_state"]["completed_shards"] == 0
     assert lineage["reuse_admission"]["sha256"] == (contract.V1_3_SUPERSEDED_ADMISSION_SHA256)
+    failure = payload["lineage_and_adaptation_disclosure"][
+        "v1_3_1_signed_zero_quality_launch_failure_lineage"
+    ]
+    assert failure == contract.expected_v1_3_2_superseded_failure_lineage()
+    assert failure["projection_sha256"] == contract.json_digest(
+        {key: value for key, value in failure.items() if key != "projection_sha256"}
+    )
+    assert failure["quality_state"]["records"] == []
+    assert failure["quality_state"]["orphan_claim_count"] == 1
+    assert failure["quality_state"]["live_active_claim_count"] == 0
+    assert failure["persistent_session"]["terminal_status"] == "launch_failure"
+    assert failure["persistent_session"]["child_process_returncode"] == 1
+    assert failure["output_closed_world"]["orphan_claim"]["dead_owner_required"] is True
     policy = payload["execution_contract"]["sealed_launch_and_persistent_session"][
         "quality_start_activation"
     ]
-    assert policy == contract.expected_v1_3_1_activation_policy()
+    assert policy == contract.expected_v1_3_2_activation_policy()
     assert policy["operational_prefix_max_new_cells"] == 1
     assert policy["zero_prefix_resume_behavior"].startswith("execute-exactly-one")
     assert policy["full_resume_gate"].startswith("authenticated-exact-one")
@@ -690,23 +710,49 @@ def test_v1_3_1_manifest_binds_signed_empty_lineage_and_fixed_start_sequence() -
         "worker_count": 1,
         "worker_index": 0,
         "distributed_execution_supported": False,
-        "reason": "sealed-device-routing-is-not-available-in-v1-3-1",
+        "reason": (
+            "v1-3-2-seals-one-local-worker-device-route-and-defines-no-distributed-"
+            "coordination-contract"
+        ),
     }
     assert policy["outcome_values_may_influence_continue_stop_or_configuration"] is False
     assert policy["full_resume_required_after_valid_operational_prefix"] is True
     assert policy["fresh_execution_sequence"][-1].startswith("resume-full-matrix-regardless")
+    preflight = policy["ready_only_preflight"]
+    assert preflight == contract.expected_v1_3_2_ready_preflight_policy()
+    assert preflight["planned_coordinate_count"] == 1
+    assert preflight["completed_coordinate_count"] == 0
+    assert preflight["work_order_count"] == 0
+    assert preflight["held_out_evaluation_input_materialization_count"] == 0
+    assert preflight["normal_path_checkpoint_model_load_attempt_count"] == 1
+    assert preflight["successful_preflight_ready_model_load_count"] == 1
+    assert preflight["unconditional_total_checkpoint_model_load_attempt_upper_bound"] is None
+    assert "dynamically-counted" in preflight["recovery_attempt_accounting"]
+    assert preflight["matrix_claim_eligibility_requires_success"] is True
+    transport = payload["execution_contract"]["sealed_launch_and_persistent_session"]
+    assert transport["ready_only_preflight_normal_path_model_loads"] == 1
+    assert transport["quality_session_normal_path_model_loads"] == 10
+    assert transport["total_normal_path_checkpoint_model_loads"] == 11
+    assert transport["matrix_binds_role_tagged_preflight_hmac_evidence"] is True
 
     drift = copy.deepcopy(payload)
     drift["lineage_and_adaptation_disclosure"]["v1_3_signed_empty_lineage"]["reuse_admission"][
         "sha256"
     ] = "0" * 64
     with pytest.raises(ValueError, match="content drifted"):
-        contract.validate_v1_3_1_manifest_payload(drift)
+        contract.validate_v1_3_2_manifest_payload(drift)
+
+    failure_drift = copy.deepcopy(payload)
+    failure_drift["lineage_and_adaptation_disclosure"][
+        "v1_3_1_signed_zero_quality_launch_failure_lineage"
+    ]["output_closed_world"]["orphan_claim"]["dead_owner_required"] = False
+    with pytest.raises(ValueError, match="content drifted"):
+        contract.validate_v1_3_2_manifest_payload(failure_drift)
 
 
-def test_v1_3_1_inventory_adds_only_the_activation_amendment_report_path() -> None:
-    assert contract.V1_3_1_IMPLEMENTATION_PATHS[:-1] == contract.IMPLEMENTATION_PATHS
-    assert contract.V1_3_1_IMPLEMENTATION_PATHS[-1] == str(
-        contract.V1_3_1_ACTIVATION_AMENDMENT_REPORT_PATH
+def test_v1_3_2_inventory_appends_only_the_import_boundary_report_to_v1_3_1() -> None:
+    assert contract.V1_3_2_IMPLEMENTATION_PATHS[:-1] == contract.V1_3_1_IMPLEMENTATION_PATHS
+    assert contract.V1_3_2_IMPLEMENTATION_PATHS[-1] == str(
+        contract.V1_3_2_IMPORT_BOUNDARY_AMENDMENT_REPORT_PATH
     )
-    assert "2026-07-20" in contract.V1_3_1_IMPLEMENTATION_PATHS[-1]
+    assert "2026-07-20" in contract.V1_3_2_IMPLEMENTATION_PATHS[-1]

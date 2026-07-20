@@ -83,91 +83,104 @@ def _insert_generated_header(text: str) -> str:
     return text.replace(f"{marker}\n", f"{marker}\n{GENERATED_HEADER}", 1)
 
 
-def _upgrade_generated_contract_to_v1_3_1(text: str) -> str:
-    """Move every generated quality authority reference into the v1.3.1 namespace."""
+def _upgrade_generated_contract_to_v1_3_2(text: str) -> str:
+    """Move every generated quality authority reference into the v1.3.2 namespace."""
 
     replacements = (
-        ("contract.SHARD_EXPERIMENT_ID", "contract.V1_3_1_SHARD_EXPERIMENT_ID"),
-        ("contract.MATRIX_EXPERIMENT_ID", "contract.V1_3_1_MATRIX_EXPERIMENT_ID"),
+        ("contract.SHARD_EXPERIMENT_ID", "contract.V1_3_2_SHARD_EXPERIMENT_ID"),
+        ("contract.MATRIX_EXPERIMENT_ID", "contract.V1_3_2_MATRIX_EXPERIMENT_ID"),
         (
             "contract.WORKER_LEDGER_EXPERIMENT_ID",
-            "contract.V1_3_1_WORKER_LEDGER_EXPERIMENT_ID",
+            "contract.V1_3_2_WORKER_LEDGER_EXPERIMENT_ID",
         ),
-        ("contract.INTEGRITY_EXPERIMENT_ID", "contract.V1_3_1_INTEGRITY_EXPERIMENT_ID"),
-        ("contract.SUMMARY_EXPERIMENT_ID", "contract.V1_3_1_SUMMARY_EXPERIMENT_ID"),
-        ("contract.SHARD_ATTESTATION_PURPOSE", "contract.V1_3_1_SHARD_ATTESTATION_PURPOSE"),
-        ("contract.MATRIX_ATTESTATION_PURPOSE", "contract.V1_3_1_MATRIX_ATTESTATION_PURPOSE"),
+        ("contract.INTEGRITY_EXPERIMENT_ID", "contract.V1_3_2_INTEGRITY_EXPERIMENT_ID"),
+        ("contract.SUMMARY_EXPERIMENT_ID", "contract.V1_3_2_SUMMARY_EXPERIMENT_ID"),
+        ("contract.SHARD_ATTESTATION_PURPOSE", "contract.V1_3_2_SHARD_ATTESTATION_PURPOSE"),
+        ("contract.MATRIX_ATTESTATION_PURPOSE", "contract.V1_3_2_MATRIX_ATTESTATION_PURPOSE"),
         (
             "contract.WORKER_LEDGER_ATTESTATION_PURPOSE",
-            "contract.V1_3_1_WORKER_LEDGER_ATTESTATION_PURPOSE",
+            "contract.V1_3_2_WORKER_LEDGER_ATTESTATION_PURPOSE",
         ),
         (
             "contract.INTEGRITY_ATTESTATION_PURPOSE",
-            "contract.V1_3_1_INTEGRITY_ATTESTATION_PURPOSE",
+            "contract.V1_3_2_INTEGRITY_ATTESTATION_PURPOSE",
         ),
-        ("contract.SUMMARY_ATTESTATION_PURPOSE", "contract.V1_3_1_SUMMARY_ATTESTATION_PURPOSE"),
-        ("contract.INTEGRITY_OUTPUT_PATH", "contract.V1_3_1_INTEGRITY_OUTPUT_PATH"),
-        ("contract.SUMMARY_OUTPUT_PATH", "contract.V1_3_1_SUMMARY_OUTPUT_PATH"),
-        ("contract.MATRIX_SUMMARY_PATH", "contract.V1_3_1_MATRIX_SUMMARY_PATH"),
-        ("contract.REUSE_ADMISSION_PATH", "contract.V1_3_1_REUSE_ADMISSION_PATH"),
+        ("contract.SUMMARY_ATTESTATION_PURPOSE", "contract.V1_3_2_SUMMARY_ATTESTATION_PURPOSE"),
+        ("contract.INTEGRITY_OUTPUT_PATH", "contract.V1_3_2_INTEGRITY_OUTPUT_PATH"),
+        ("contract.SUMMARY_OUTPUT_PATH", "contract.V1_3_2_SUMMARY_OUTPUT_PATH"),
+        ("contract.MATRIX_SUMMARY_PATH", "contract.V1_3_2_MATRIX_SUMMARY_PATH"),
+        ("contract.REUSE_ADMISSION_PATH", "contract.V1_3_2_REUSE_ADMISSION_PATH"),
         (
             "contract.PREHELDOUT_GENESIS_PATH",
-            "contract.V1_3_1_PREHELDOUT_GENESIS_PATH",
+            "contract.V1_3_2_PREHELDOUT_GENESIS_PATH",
         ),
-        ("contract.IMPLEMENTATION_PATHS", "contract.V1_3_1_IMPLEMENTATION_PATHS"),
-        ("contract.MANIFEST_PATH", "contract.V1_3_1_MANIFEST_PATH"),
-        ("contract.OUTPUT_ROOT", "contract.V1_3_1_OUTPUT_ROOT"),
-        ("contract.EXPERIMENT_ID", "contract.V1_3_1_EXPERIMENT_ID"),
+        ("contract.IMPLEMENTATION_PATHS", "contract.V1_3_2_IMPLEMENTATION_PATHS"),
+        ("contract.MANIFEST_PATH", "contract.V1_3_2_MANIFEST_PATH"),
+        ("contract.OUTPUT_ROOT", "contract.V1_3_2_OUTPUT_ROOT"),
+        ("contract.EXPERIMENT_ID", "contract.V1_3_2_EXPERIMENT_ID"),
         (
             "contract.implementation_tree_digest()",
-            "contract.v1_3_1_implementation_tree_digest()",
+            "contract.v1_3_2_implementation_tree_digest()",
         ),
         (
             "contract.implementation_file_paths()",
-            "contract.v1_3_1_implementation_file_paths()",
+            "contract.v1_3_2_implementation_file_paths()",
         ),
     )
     for old, new in replacements:
         text = text.replace(old, new)
+    # Fragments added by v1.3.1 must be retagged before the broader V1_3
+    # compatibility names below are upgraded.  Otherwise the prefix replacement
+    # turns ``V1_3_1`` into the malformed and unsealed ``V1_3_2_1`` namespace.
+    for old, new in (
+        ("V1_3_1", "V1_3_2"),
+        ("v1_3_1", "v1_3_2"),
+        ("V1.3.1", "V1.3.2"),
+        ("v1.3.1", "v1.3.2"),
+        ("V1-3-1", "V1-3-2"),
+        ("v1-3-1", "v1-3-2"),
+    ):
+        text = text.replace(old, new)
+
     global_upgrades = (
-        ("SEALED_LAUNCH_AUTHORITY_V1_3", "SEALED_LAUNCH_AUTHORITY_V1_3_1"),
-        ("SEALED_PYTHON_RUNTIME_V1_3", "SEALED_PYTHON_RUNTIME_V1_3_1"),
-        ("SEALED_SOURCE_PROVENANCE_V1_3", "SEALED_SOURCE_PROVENANCE_V1_3_1"),
-        ("SEALED_LAUNCH_ROUTING_V1_3", "SEALED_LAUNCH_ROUTING_V1_3_1"),
+        ("SEALED_LAUNCH_AUTHORITY_V1_3", "SEALED_LAUNCH_AUTHORITY_V1_3_2"),
+        ("SEALED_PYTHON_RUNTIME_V1_3", "SEALED_PYTHON_RUNTIME_V1_3_2"),
+        ("SEALED_SOURCE_PROVENANCE_V1_3", "SEALED_SOURCE_PROVENANCE_V1_3_2"),
+        ("SEALED_LAUNCH_ROUTING_V1_3", "SEALED_LAUNCH_ROUTING_V1_3_2"),
     )
     for index, (old, new) in enumerate(global_upgrades):
-        placeholder = f"__PRESERVED_V1_3_1_GLOBAL_{index}__"
+        placeholder = f"__PRESERVED_V1_3_2_GLOBAL_{index}__"
         text = text.replace(new, placeholder)
         text = text.replace(old, new)
         text = text.replace(placeholder, new)
     for old, new in (
         (
             "ADAPTIVE_V4_CANONICAL_DIRECT_EXACT_FILL_V1_3_EVALUATOR_FD",
-            "ADAPTIVE_V4_CANONICAL_DIRECT_EXACT_FILL_V1_3_1_EVALUATOR_FD",
+            "ADAPTIVE_V4_CANONICAL_DIRECT_EXACT_FILL_V1_3_2_EVALUATOR_FD",
         ),
         (
             "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_IMPORT_INVENTORY_FD",
-            "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_1_IMPORT_INVENTORY_FD",
+            "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_2_IMPORT_INVENTORY_FD",
         ),
         (
             "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_PERSISTENT_PLAN_FD",
-            "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_1_PERSISTENT_PLAN_FD",
+            "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_2_PERSISTENT_PLAN_FD",
         ),
         (
             "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_PROJECTED_REMAINING_SHARDS",
-            "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_1_PROJECTED_REMAINING_SHARDS",
+            "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_2_PROJECTED_REMAINING_SHARDS",
         ),
         (
             "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_PROJECTED_REMAINING_TOKEN_ROWS",
-            "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_1_PROJECTED_REMAINING_TOKEN_ROWS",
+            "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_2_PROJECTED_REMAINING_TOKEN_ROWS",
         ),
-        ("exact-fill-v1-3-cell.claim", "exact-fill-v1-3-1-cell.claim"),
-        ("exact-fill-v1-3-import-inventory", "exact-fill-v1-3-1-import-inventory"),
-        ("exact-fill-v1-3-pycache", "exact-fill-v1-3-1-pycache"),
-        ("exact-fill-v1-3-matrix", "exact-fill-v1-3-1-matrix"),
-        ("paper-grade v1.3 exact-fill", "paper-grade v1.3.1 exact-fill"),
-        ("live v1.3 quality context", "live v1.3.1 quality context"),
-        ("Bound v1.3 manifest", "Bound v1.3.1 manifest"),
+        ("exact-fill-v1-3-cell.claim", "exact-fill-v1-3-2-cell.claim"),
+        ("exact-fill-v1-3-import-inventory", "exact-fill-v1-3-2-import-inventory"),
+        ("exact-fill-v1-3-pycache", "exact-fill-v1-3-2-pycache"),
+        ("exact-fill-v1-3-matrix", "exact-fill-v1-3-2-matrix"),
+        ("paper-grade v1.3 exact-fill", "paper-grade v1.3.2 exact-fill"),
+        ("live v1.3 quality context", "live v1.3.2 quality context"),
+        ("Bound v1.3 manifest", "Bound v1.3.2 manifest"),
     ):
         text = text.replace(old, new)
     return text
@@ -175,15 +188,15 @@ def _upgrade_generated_contract_to_v1_3_1(text: str) -> str:
 
 def _sealed_entrypoint_preamble(*, selector: str, relative_path: str) -> str:
     return f'''if __name__ == "__main__":
-    _launcher_sentinel = globals().get("_ADAPTIVE_V4_GIT_OBJECT_LAUNCH_SENTINEL_V1_3_1")
+    _launcher_sentinel = globals().get("_ADAPTIVE_V4_GIT_OBJECT_LAUNCH_SENTINEL_V1_3_2")
     if _launcher_sentinel != {{
         "schema_version": 1,
-        "launcher": "p2-direct-controller-git-object-launcher-v1-3-1",
+        "launcher": "p2-direct-controller-git-object-launcher-v1-3-2",
         "sealed_runner": True,
         "sealed_inventory": True,
     }}:
         raise RuntimeError("Direct controller sealed launcher sentinel drifted.")
-    _python_runtime = globals().get("_ADAPTIVE_V4_GIT_OBJECT_PYTHON_RUNTIME_V1_3_1")
+    _python_runtime = globals().get("_ADAPTIVE_V4_GIT_OBJECT_PYTHON_RUNTIME_V1_3_2")
     if not isinstance(_python_runtime, dict) or set(_python_runtime) != {{
         "schema_version", "implementation", "cache_tag", "version", "executable",
         "venv_executable", "resolved_executable", "executable_sha256",
@@ -191,7 +204,7 @@ def _sealed_entrypoint_preamble(*, selector: str, relative_path: str) -> str:
     }}:
         raise RuntimeError("Direct controller sealed Python runtime binding is missing.")
     _source_provenance = globals().get(
-        "_ADAPTIVE_V4_GIT_OBJECT_SOURCE_PROVENANCE_V1_3_1"
+        "_ADAPTIVE_V4_GIT_OBJECT_SOURCE_PROVENANCE_V1_3_2"
     )
     if not isinstance(_source_provenance, dict) or set(_source_provenance) != {{
         "schema_version", "launcher", "repository_root", "bundle_sha256",
@@ -199,7 +212,7 @@ def _sealed_entrypoint_preamble(*, selector: str, relative_path: str) -> str:
         "head_manifest",
     }}:
         raise RuntimeError("Direct controller sealed source provenance is missing.")
-    _launch_routing = globals().get("_ADAPTIVE_V4_GIT_OBJECT_LAUNCH_ROUTING_V1_3_1")
+    _launch_routing = globals().get("_ADAPTIVE_V4_GIT_OBJECT_LAUNCH_ROUTING_V1_3_2")
     if not isinstance(_launch_routing, dict) or set(_launch_routing) != {{
         "schema_version", "launcher", "entrypoint_selector", "entrypoint_relative_path",
         "source_bundle_sha256", "git_mode", "git_blob_oid", "sha256", "bytes",
@@ -211,7 +224,7 @@ def _sealed_entrypoint_preamble(*, selector: str, relative_path: str) -> str:
     if (
         _launch_routing.get("schema_version") != 1
         or _launch_routing.get("launcher")
-        != "p2-direct-controller-git-object-launcher-v1-3-1"
+        != "p2-direct-controller-git-object-launcher-v1-3-2"
         or _launch_routing.get("entrypoint_selector") != {selector!r}
         or _launch_routing.get("entrypoint_relative_path") != {relative_path!r}
         or _launch_routing.get("source_bundle_sha256")
@@ -226,16 +239,16 @@ def _sealed_entrypoint_preamble(*, selector: str, relative_path: str) -> str:
         or globals().get("__file__") != _expected_entrypoint
     ):
         raise RuntimeError("Direct controller sealed launch routing drifted.")
-    SEALED_LAUNCH_AUTHORITY_V1_3_1 = dict(_launcher_sentinel)
-    SEALED_PYTHON_RUNTIME_V1_3_1 = dict(_python_runtime)
-    SEALED_SOURCE_PROVENANCE_V1_3_1 = dict(_source_provenance)
-    SEALED_LAUNCH_ROUTING_V1_3_1 = dict(_launch_routing)
+    SEALED_LAUNCH_AUTHORITY_V1_3_2 = dict(_launcher_sentinel)
+    SEALED_PYTHON_RUNTIME_V1_3_2 = dict(_python_runtime)
+    SEALED_SOURCE_PROVENANCE_V1_3_2 = dict(_source_provenance)
+    SEALED_LAUNCH_ROUTING_V1_3_2 = dict(_launch_routing)
     del _launcher_sentinel, _python_runtime, _source_provenance, _launch_routing
     del _expected_entrypoint
-    globals().pop("_ADAPTIVE_V4_GIT_OBJECT_LAUNCH_SENTINEL_V1_3_1", None)
-    globals().pop("_ADAPTIVE_V4_GIT_OBJECT_PYTHON_RUNTIME_V1_3_1", None)
-    globals().pop("_ADAPTIVE_V4_GIT_OBJECT_SOURCE_PROVENANCE_V1_3_1", None)
-    globals().pop("_ADAPTIVE_V4_GIT_OBJECT_LAUNCH_ROUTING_V1_3_1", None)
+    globals().pop("_ADAPTIVE_V4_GIT_OBJECT_LAUNCH_SENTINEL_V1_3_2", None)
+    globals().pop("_ADAPTIVE_V4_GIT_OBJECT_PYTHON_RUNTIME_V1_3_2", None)
+    globals().pop("_ADAPTIVE_V4_GIT_OBJECT_SOURCE_PROVENANCE_V1_3_2", None)
+    globals().pop("_ADAPTIVE_V4_GIT_OBJECT_LAUNCH_ROUTING_V1_3_2", None)
 
 '''
 
@@ -921,10 +934,46 @@ def arm_execution_order(schedule_index: int) -> tuple[str, ...]:
 
 
 EVALUATOR_IMPORT_GUARD = r'''
+def _sealed_site_packages_root_v1_3_2() -> Path:
+    raw = globals().get("_ADAPTIVE_V4_SEALED_SITE_PACKAGES_V1_3_2")
+    _require(
+        isinstance(raw, str) and bool(raw),
+        "Sealed v1.3.2 site-packages authority is missing.",
+    )
+    sealed = cast(str, raw)
+    repository_root = REPOSITORY_ROOT.resolve(strict=True)
+    lexical = Path(os.path.abspath(sealed))
+    expected = Path(
+        os.path.abspath(
+            repository_root
+            / ".venv"
+            / "lib"
+            / f"python{sys.version_info.major}.{sys.version_info.minor}"
+            / "site-packages"
+        )
+    )
+    try:
+        resolved = lexical.resolve(strict=True)
+        expected_resolved = expected.resolve(strict=True)
+    except (OSError, RuntimeError) as error:
+        raise ValueError("Sealed v1.3.2 site-packages authority is not exact.") from error
+    _require(
+        sealed == str(lexical)
+        and lexical == resolved
+        and lexical == expected
+        and expected == expected_resolved
+        and lexical.is_dir()
+        and not lexical.is_symlink(),
+        "Sealed v1.3.2 site-packages authority is not the exact verified runtime root.",
+    )
+    return lexical
+
+
 def _assert_repository_import_origins(
     modules: Mapping[str, Any] | None = None,
 ) -> None:
     repository_root = REPOSITORY_ROOT.resolve(strict=True)
+    site_packages_root = _sealed_site_packages_root_v1_3_2()
     allowed_files = {
         (repository_root / relative).resolve(strict=True)
         for relative in contract.implementation_file_paths()
@@ -934,13 +983,32 @@ def _assert_repository_import_origins(
         raw_origin = getattr(module, "__file__", None)
         if not isinstance(raw_origin, str):
             continue
-        origin = Path(raw_origin).resolve(strict=True)
-        if not origin.is_relative_to(repository_root):
+        lexical_origin = Path(os.path.abspath(raw_origin))
+        try:
+            resolved_origin = lexical_origin.resolve(strict=True)
+        except (OSError, RuntimeError) as error:
+            raise ValueError(
+                f"Imported module origin is not exact: {module_name} -> {lexical_origin}"
+            ) from error
+        lexical_in_environment = lexical_origin.is_relative_to(site_packages_root)
+        resolved_in_environment = resolved_origin.is_relative_to(site_packages_root)
+        if lexical_in_environment or resolved_in_environment:
+            _require(
+                lexical_in_environment and resolved_in_environment,
+                f"Trusted site-packages import escaped its sealed root: "
+                f"{module_name} -> {lexical_origin} -> {resolved_origin}",
+            )
+            continue
+        lexical_in_repository = lexical_origin.is_relative_to(repository_root)
+        resolved_in_repository = resolved_origin.is_relative_to(repository_root)
+        if not lexical_in_repository and not resolved_in_repository:
             continue
         _require(
-            origin.suffix == ".py" and origin in allowed_files,
+            lexical_origin == resolved_origin
+            and resolved_origin.suffix == ".py"
+            and resolved_origin in allowed_files,
             f"Repository-local import is outside the frozen implementation inventory: "
-            f"{module_name} -> {origin}",
+            f"{module_name} -> {lexical_origin} -> {resolved_origin}",
         )
 '''
 
@@ -1199,13 +1267,26 @@ def _run_persistent_session(
     }
     work_orders: list[dict[str, Any]] = []
     results: list[dict[str, Any]] = []
-    _write_persistent_message(
-        persistent_session.build_session_receipt(
-            plan,
-            work_orders,
-            results,
-            trust_root=trust_root,
+    ready_receipt = persistent_session.build_session_receipt(
+        plan,
+        work_orders,
+        results,
+        trust_root=trust_root,
+    )
+    _write_persistent_message(ready_receipt)
+    if plan["session_role"] == persistent_session.READY_ONLY_PREFLIGHT_SESSION_ROLE:
+        raw_preflight_input = sys.stdin.buffer.readline(
+            persistent_session.MAXIMUM_JSONL_MESSAGE_BYTES + 1
         )
+        _require(
+            raw_preflight_input == b"",
+            "Ready-only preflight rejects every work order before validation or publication.",
+        )
+        _write_persistent_message(ready_receipt)
+        return
+    _require(
+        plan["session_role"] == persistent_session.QUALITY_SESSION_ROLE,
+        "Persistent evaluator session role is invalid.",
     )
     for sequence_index in range(cast(int, plan["coordinate_count"])):
         raw_line = sys.stdin.buffer.readline(persistent_session.MAXIMUM_JSONL_MESSAGE_BYTES + 1)
@@ -1716,7 +1797,12 @@ sys.path.insert(0, root)
 sys.path.insert(0, os.path.dirname(p))
 sys.path.append(site_packages)
 data = read_fd(evaluator_fd)
-g = {"__name__": "__main__", "__file__": p, "__package__": None}
+g = {
+    "__name__": "__main__",
+    "__file__": p,
+    "__package__": None,
+    "_ADAPTIVE_V4_SEALED_SITE_PACKAGES_V1_3_2": site_packages,
+}
 exec(compile(data, p, "exec"), g, g)
 '''
 
@@ -3002,6 +3088,7 @@ def _complete_activation_ledger_boundary(
     prerequisites: FrozenPrerequisites,
     activation_lease: admission.QualityStartActivationLeaseV1_3_1,
     evaluator_binding: Mapping[str, Any],
+    ready_only_preflight: Mapping[str, Any],
     worker_count: int,
     gpu_lease_binding: Mapping[str, Any] | None,
 ) -> dict[str, Any]:
@@ -3025,6 +3112,7 @@ def _complete_activation_ledger_boundary(
         _require(
             payload.get("prerequisites") == dict(prerequisites.public_binding)
             and payload.get("matrix_lock") == lock_binding
+            and payload.get("ready_only_preflight") == dict(ready_only_preflight)
             and payload.get("worker_count") == worker_count,
             "Resume matrix ledger differs from activated authority.",
         )
@@ -3105,6 +3193,10 @@ def _complete_activation_ledger_boundary(
                 ),
             )
         _atomic_write_json(layout.matrix_summary, payload)
+        _require(
+            payload.get("ready_only_preflight") == dict(ready_only_preflight),
+            "Initial matrix did not bind the authenticated ready-only preflight.",
+        )
         _require(
             _load_json_nofollow(
                 layout.matrix_summary, label="initial activated matrix ledger"
@@ -3563,6 +3655,7 @@ def _persistent_plan_projection(plan: Mapping[str, Any]) -> dict[str, Any]:
     return {
         "session_nonce": plan["session_nonce"],
         "launch_authority_nonce": plan["launch_authority_nonce"],
+        "session_role": plan["session_role"],
         "payload_sha256": plan["payload_sha256"],
         "attestation_mac": cast(Mapping[str, Any], plan["attestation"])["mac"],
         "worker_index": plan["worker_index"],
@@ -3633,6 +3726,7 @@ def _validate_persistent_execution_payload(
         == {
             "session_nonce",
             "launch_authority_nonce",
+            "session_role",
             "payload_sha256",
             "attestation_mac",
             "worker_index",
@@ -3646,6 +3740,7 @@ def _validate_persistent_execution_payload(
         }
         and contract.is_sha256(plan.get("session_nonce"))
         and contract.is_sha256(plan.get("launch_authority_nonce"))
+        and plan.get("session_role") == persistent_session.QUALITY_SESSION_ROLE
         and contract.is_sha256(plan.get("payload_sha256"))
         and contract.is_sha256(plan.get("attestation_mac"))
         and plan.get("model_load_limit") == 1
@@ -4167,6 +4262,10 @@ class PersistentEvaluatorProcess:
         def read_final_message() -> None:
             try:
                 observed_messages.append(self._read_message())
+                _require(
+                    self._read_message() is None,
+                    "Persistent evaluator emitted trailing output after its final receipt.",
+                )
             except BaseException as read_error:
                 read_errors.append(read_error)
 
@@ -4219,6 +4318,7 @@ def _start_persistent_evaluator(
     first_coordinate: ShardCoordinate,
     plan_coordinates: Sequence[ShardCoordinate],
     max_new_cells_stop_limit: int | None,
+    session_role: str,
     launch_authority_nonce: str,
     worker_index: int,
     worker_count: int,
@@ -4253,6 +4353,7 @@ def _start_persistent_evaluator(
         prerequisites_binding_digest=contract.json_digest(prerequisites.public_binding),
         output_root=_absolute(output_root),
         trust_root=prerequisites.trust_root,
+        session_role=session_role,
     )
     command = build_evaluator_command(
         evaluator_script=canonical,
@@ -4426,6 +4527,226 @@ def _start_persistent_evaluator(
                 os.close(inherited)
         if descriptor >= 0:
             os.close(descriptor)
+
+
+def _assert_ready_only_preflight_output_boundary(layout: MatrixLayout) -> None:
+    """The readiness probe may create ledgers only in the sibling ledger root."""
+
+    _require(
+        not os.path.lexists(layout.matrix_summary),
+        "Ready-only preflight must precede the initial matrix ledger.",
+    )
+    if not os.path.lexists(layout.output_root):
+        return
+    metadata = os.stat(layout.output_root, follow_symlinks=False)
+    _require(
+        stat.S_ISDIR(metadata.st_mode)
+        and metadata.st_uid == os.getuid()
+        and stat.S_IMODE(metadata.st_mode) == 0o700,
+        "Ready-only preflight output root is unsafe.",
+    )
+    interrupted_prefix = f".{layout.matrix_summary.name}."
+    for member in tuple(layout.output_root.iterdir()):
+        member_metadata = os.stat(member, follow_symlinks=False)
+        _require(
+            member.name.startswith(interrupted_prefix)
+            and member.name.endswith(".tmp")
+            and stat.S_ISREG(member_metadata.st_mode)
+            and member_metadata.st_uid == os.getuid()
+            and member_metadata.st_nlink == 1
+            and stat.S_IMODE(member_metadata.st_mode) == 0o600,
+            "Ready-only preflight created a claim, envelope, or sidecar.",
+        )
+
+
+def _ensure_ready_only_preflight(
+    *,
+    start_mode: str,
+    layout: MatrixLayout,
+    manifest_path: Path,
+    canonical: Path,
+    evaluator_snapshot: CanonicalEvaluatorSnapshot,
+    evaluator_binding: Mapping[str, Any],
+    prerequisites: FrozenPrerequisites,
+    activation_lease: admission.QualityStartActivationLeaseV1_3_2,
+    launch_authority_nonce: str,
+    gpu_lease_binding: Mapping[str, Any],
+    gpu_lease: GPULockLease,
+    device_guard_lease: GPULockLease,
+) -> dict[str, Any]:
+    """Adopt or execute one post-activation, pre-claim zero-work model probe."""
+
+    del start_mode
+    activation_lease.assert_held()
+    gpu_lease.assert_held()
+    device_guard_lease.assert_held()
+    projection = persistent_session.load_session_ledger_projection(
+        _absolute(layout.output_root), trust_root=prerequisites.trust_root
+    )
+    if os.path.lexists(layout.matrix_summary):
+        binding = persistent_session.ready_only_preflight_binding(projection)
+        payload = _load_json_nofollow(
+            layout.matrix_summary, label="ready-only preflight matrix ledger"
+        )
+        _verify_attested_payload(payload, trust_root=prerequisites.trust_root)
+        _require(
+            binding is not None
+            and isinstance(payload.get("ready_only_preflight"), Mapping)
+            and payload.get("ready_only_preflight") == binding,
+            "Existing matrix lacks its exact authenticated ready-only preflight.",
+        )
+        checked_binding = cast(dict[str, Any], binding)
+        with _ACTIVE_PERSISTENT_EVALUATORS_LOCK:
+            _require(
+                _persistent_lease_key(gpu_lease)
+                not in _ACTIVE_PERSISTENT_EVALUATORS,
+                "Adopted ready-only preflight has a live evaluator registry entry.",
+            )
+        return _validate_ready_only_preflight_snapshot(
+            checked_binding,
+            session_projection=projection,
+            output_root=layout.output_root,
+            prerequisites=prerequisites,
+            evaluator_binding=evaluator_binding,
+            gpu_lease_binding=gpu_lease_binding,
+        )
+
+    _assert_ready_only_preflight_output_boundary(layout)
+    sessions = cast(list[Mapping[str, Any]], projection["sessions"])
+    _require(
+        all(
+            row["session_role"]
+            == persistent_session.READY_ONLY_PREFLIGHT_SESSION_ROLE
+            for row in sessions
+        ),
+        "A quality session exists before the initial matrix ledger.",
+    )
+    if any(row["status"] == "launch_only" for row in sessions):
+        def terminal_authority_check(
+            plan: Mapping[str, Any], session_argv: Sequence[str]
+        ) -> None:
+            descriptor, observed = _open_evaluator(
+                canonical, expected=evaluator_snapshot
+            )
+            try:
+                _require(
+                    observed == evaluator_snapshot,
+                    "Ready-only recovery evaluator snapshot drifted.",
+                )
+                _assert_terminal_launch_authority(
+                    plan,
+                    session_argv,
+                    canonical=canonical,
+                    canonical_descriptor=descriptor,
+                    evaluator_snapshot=evaluator_snapshot,
+                    prerequisites=prerequisites,
+                    gpu_binding=gpu_lease_binding,
+                    gpu_lease=gpu_lease,
+                    device_guard_lease=device_guard_lease,
+                    output_root=_absolute(layout.output_root),
+                )
+            finally:
+                os.close(descriptor)
+
+        projection = persistent_session.reconcile_committed_launch_only_sessions(
+            _absolute(layout.output_root),
+            (),
+            worker_index=0,
+            gpu_lease_binding_digest=contract.json_digest(gpu_lease_binding),
+            terminal_authority_check=terminal_authority_check,
+            trust_root=prerequisites.trust_root,
+        )
+    binding = persistent_session.ready_only_preflight_binding(projection)
+    if binding is None:
+        first = coordinates()[0]
+        inputs = prerequisites.bundles[
+            (first.scale, first.training_seed, first.budget)
+        ]
+        evaluator = _start_persistent_evaluator(
+            canonical=canonical,
+            expected=evaluator_snapshot,
+            manifest_path=manifest_path,
+            inputs=inputs,
+            first_coordinate=first,
+            plan_coordinates=(first,),
+            max_new_cells_stop_limit=1,
+            session_role=persistent_session.READY_ONLY_PREFLIGHT_SESSION_ROLE,
+            launch_authority_nonce=launch_authority_nonce,
+            worker_index=0,
+            worker_count=1,
+            evaluator_binding=evaluator_binding,
+            prerequisites=prerequisites,
+            gpu_lease_binding=gpu_lease_binding,
+            gpu_lease=gpu_lease,
+            device_guard_lease=device_guard_lease,
+            output_root=layout.output_root,
+        )
+        try:
+            final_receipt = evaluator.close()
+        except BaseException as preflight_error:
+            if not evaluator.terminal_published:
+                try:
+                    evaluator.abort_after_parent_commit_failure()
+                except BaseException as terminal_error:
+                    add_note = getattr(preflight_error, "add_note", None)
+                    if callable(add_note):
+                        cast(Callable[[str], None], add_note)(
+                            "Ready-only preflight failure terminal publication failed: "
+                            f"{terminal_error!r}"
+                        )
+            raise
+        _require(
+            final_receipt is not None
+            and final_receipt == evaluator.ready_receipt
+            and evaluator.closed
+            and evaluator.terminal_published
+            and evaluator.eof_returncode == 0
+            and evaluator.committed_count == 0
+            and evaluator.work_orders == []
+            and evaluator.results == []
+            and evaluator.reingestion_count == 0
+            and evaluator.canonical_descriptor == -1
+            and evaluator.pycache_manager is None
+            and all(
+                stream is None or stream.closed
+                for stream in (
+                    evaluator.process.stdin,
+                    evaluator.process.stdout,
+                    evaluator.process.stderr,
+                )
+            ),
+            "Ready-only preflight did not close as one clean zero-work session.",
+        )
+        with _ACTIVE_PERSISTENT_EVALUATORS_LOCK:
+            _require(
+                _persistent_lease_key(gpu_lease)
+                not in _ACTIVE_PERSISTENT_EVALUATORS,
+                "Ready-only preflight survived in the active evaluator registry.",
+            )
+        projection = persistent_session.load_session_ledger_projection(
+            _absolute(layout.output_root), trust_root=prerequisites.trust_root
+        )
+        binding = persistent_session.ready_only_preflight_binding(projection)
+    _require(binding is not None, "Ready-only preflight did not produce a durable proof.")
+    checked_binding = cast(dict[str, Any], binding)
+    with _ACTIVE_PERSISTENT_EVALUATORS_LOCK:
+        _require(
+            _persistent_lease_key(gpu_lease)
+            not in _ACTIVE_PERSISTENT_EVALUATORS,
+            "Ready-only preflight survived in the active evaluator registry.",
+        )
+    _assert_ready_only_preflight_output_boundary(layout)
+    activation_lease.assert_held()
+    gpu_lease.assert_held()
+    device_guard_lease.assert_held()
+    return _validate_ready_only_preflight_snapshot(
+        checked_binding,
+        session_projection=projection,
+        output_root=layout.output_root,
+        prerequisites=prerequisites,
+        evaluator_binding=evaluator_binding,
+        gpu_lease_binding=gpu_lease_binding,
+    )
 '''
 
 
@@ -4618,6 +4939,51 @@ def _validate_persistent_session_ledger_snapshot(
             "Matrix persistent-session watermark changed non-monotonically.",
         )
     return snapshot
+
+
+def _validate_ready_only_preflight_snapshot(
+    value: Mapping[str, Any],
+    *,
+    session_projection: Mapping[str, Any],
+    output_root: Path,
+    prerequisites: FrozenPrerequisites,
+    evaluator_binding: Mapping[str, Any],
+    gpu_lease_binding: Mapping[str, Any],
+) -> dict[str, Any]:
+    reconstructed = persistent_session.ready_only_preflight_binding(
+        session_projection
+    )
+    _require(
+        reconstructed is not None and dict(value) == reconstructed,
+        "Matrix ready-only preflight differs from its authenticated ledger reconstruction.",
+    )
+    checked = cast(dict[str, Any], reconstructed)
+    first = coordinates()[0]
+    inputs = prerequisites.bundles[
+        (first.scale, first.training_seed, first.budget)
+    ]
+    _isolated_evaluator_pycache_prefix(cast(str, checked["session_nonce"]))
+    _require(
+        checked["output_root"] == str(_absolute(output_root))
+        and checked["input_binding_digest"]
+        == cast(str, inputs.binding["input_binding_digest"])
+        and checked["canonical_evaluator_digest"]
+        == contract.json_digest(evaluator_binding)
+        and checked["gpu_lease_binding_digest"]
+        == contract.json_digest(gpu_lease_binding)
+        and checked["prerequisites_binding_digest"]
+        == contract.json_digest(prerequisites.public_binding)
+        and checked["coordinate_digest"]
+        == contract.json_digest([first.payload])
+        and checked["quality_work_order_count"] == 0
+        and checked["quality_result_count"] == 0
+        and checked["model_state_reset_count"] == 0
+        and checked["published_bundle_reingestion_count"] == 0
+        and checked["outcome_dependent_selection"] is False
+        and checked["child_process_returncode"] == 0,
+        "Matrix ready-only preflight authority or zero-work semantics drifted.",
+    )
+    return checked
 
 
 def _crosscheck_matrix_records_with_session_ledger(
@@ -5674,7 +6040,7 @@ def _generate_evaluator(source: str) -> str:
     _require("top_p_match" not in text, "Evaluator retained a top-p match input.")
     _require("validate_calibration_artifact" not in text, "Evaluator retained live v1.2 validation.")
     _require("establish_provenance" not in text, "Evaluator retained live v1.2 provenance.")
-    return _insert_generated_header(_upgrade_generated_contract_to_v1_3_1(text))
+    return _insert_generated_header(_upgrade_generated_contract_to_v1_3_2(text))
 
 
 def _generate_runner(source: str) -> str:
@@ -5834,6 +6200,7 @@ def _generate_runner(source: str) -> str:
         '        "storage",\n'
         '        "sealed_launcher",\n'
         '        "launch_routing",\n'
+        '        "ready_only_preflight",\n'
         '        "persistent_session_ledger",\n'
         '        "records",\n',
     )
@@ -5928,6 +6295,13 @@ def _generate_runner(source: str) -> str:
         "    session_projection = persistent_session.load_session_ledger_projection(\n"
         "        _absolute(output_root), trust_root=prerequisites.trust_root\n"
         "    )\n"
+        "    ready_only_preflight = persistent_session.ready_only_preflight_binding(\n"
+        "        session_projection\n"
+        "    )\n"
+        "    _require(\n"
+        "        worker_count != 1 or ready_only_preflight is not None,\n"
+        '        "Single-worker matrix lacks its authenticated ready-only preflight.",\n'
+        "    )\n"
         "    referenced_sessions = {\n"
         "        cast(str, cast(Mapping[str, Any], record[\"persistent_session_execution\"])[\"plan\"][\"session_nonce\"])\n"
         "        for record in records\n"
@@ -6012,12 +6386,14 @@ def _generate_runner(source: str) -> str:
         "    terminal = full_coordinate_set and not awaiting_session_terminal\n"
         "    raw_launcher = payload.get(\"sealed_launcher\")\n"
         "    raw_launch_routing = payload.get(\"launch_routing\")\n"
+        "    raw_ready_only_preflight = payload.get(\"ready_only_preflight\")\n"
         "    raw_session_ledger = payload.get(\"persistent_session_ledger\")\n"
         "    _require(\n"
         "        isinstance(raw_launcher, Mapping)\n"
         "        and isinstance(raw_launch_routing, Mapping)\n"
+        "        and isinstance(raw_ready_only_preflight, Mapping)\n"
         "        and isinstance(raw_session_ledger, Mapping),\n"
-        "        \"Matrix sealed launcher or persistent-session ledger binding is missing.\",\n"
+        "        \"Matrix sealed launcher, ready-only preflight, or persistent-session ledger binding is missing.\",\n"
         "    )\n"
         "    _validate_launcher_binding_snapshot(cast(Mapping[str, Any], raw_launcher))\n"
         "    _validate_launch_routing_snapshot(\n"
@@ -6035,6 +6411,14 @@ def _generate_runner(source: str) -> str:
         "        require_current_exact=(\n"
         "            terminal and not allow_stale_session_ledger_watermark\n"
         "        ),\n"
+        "    )\n"
+        "    _validate_ready_only_preflight_snapshot(\n"
+        "        cast(Mapping[str, Any], raw_ready_only_preflight),\n"
+        "        session_projection=session_projection,\n"
+        "        output_root=output_root,\n"
+        "        prerequisites=prerequisites,\n"
+        "        evaluator_binding=evaluator_binding,\n"
+        "        gpu_lease_binding=observed_gpu_bindings[0],\n"
         "    )\n"
         "    _crosscheck_matrix_records_with_session_ledger(\n"
         "        records,\n"
@@ -6081,6 +6465,7 @@ def _generate_runner(source: str) -> str:
         '        "launch_routing": _validated_launch_routing(\n'
         '            expected_selector="matrix"\n'
         '        ),\n'
+        '        "ready_only_preflight": ready_only_preflight,\n'
         '        "persistent_session_ledger": session_projection,\n'
         '        "records": list(records),\n',
         count=1,
@@ -6247,6 +6632,7 @@ def _generate_runner(source: str) -> str:
                     first_coordinate=coordinate,
                     plan_coordinates=plan_coordinates,
                     max_new_cells_stop_limit=remaining_limit,
+                    session_role=persistent_session.QUALITY_SESSION_ROLE,
                     launch_authority_nonce=launch_authority_nonce,
                     worker_index=worker_index,
                     worker_count=worker_count,
@@ -6451,12 +6837,28 @@ def _generate_runner(source: str) -> str:
         "            device_guard_lease=device_guard_lease,\n"
         "            device_context=device_context,\n"
         "        )\n"
+        "        preflight_launch_authority_nonce = secrets.token_hex(32)\n"
+        "        ready_only_preflight = _ensure_ready_only_preflight(\n"
+        "            start_mode=start_mode,\n"
+        "            layout=layout,\n"
+        "            manifest_path=prerequisites.context.manifest_path,\n"
+        "            canonical=canonical,\n"
+        "            evaluator_snapshot=evaluator_snapshot,\n"
+        "            evaluator_binding=evaluator_binding,\n"
+        "            prerequisites=prerequisites,\n"
+        "            activation_lease=activation_lease,\n"
+        "            launch_authority_nonce=preflight_launch_authority_nonce,\n"
+        "            gpu_lease_binding=gpu_binding,\n"
+        "            gpu_lease=gpu_lease,\n"
+        "            device_guard_lease=device_guard_lease,\n"
+        "        )\n"
         "        activation_boundary = _complete_activation_ledger_boundary(\n"
         "            start_mode=start_mode,\n"
         "            layout=layout,\n"
         "            prerequisites=prerequisites,\n"
         "            activation_lease=activation_lease,\n"
         "            evaluator_binding=evaluator_binding,\n"
+        "            ready_only_preflight=ready_only_preflight,\n"
         "            worker_count=1,\n"
         "            gpu_lease_binding=gpu_binding,\n"
         "        )\n"
@@ -6649,6 +7051,7 @@ def _generate_runner(source: str) -> str:
                         first_coordinate=coordinate,
                         plan_coordinates=plan_coordinates,
                         max_new_cells_stop_limit=remaining_limit,
+                        session_role=persistent_session.QUALITY_SESSION_ROLE,
                         launch_authority_nonce=launch_authority_nonce,
                         worker_index=0,
                         worker_count=1,
@@ -7122,7 +7525,7 @@ def _generate_runner(source: str) -> str:
     )
     text = text.replace(
         'f"p2-direct-controller-worker-{worker_index}-of-{worker_count}"',
-        'f"p2-direct-controller-exact-fill-v1-3-worker-{worker_index}-of-{worker_count}"',
+        'f"p2-direct-controller-exact-fill-v1-3-2-worker-{worker_index}-of-{worker_count}"',
     )
     text = text.replace(
         '"p2-direct-controller-matrix-single"',
@@ -7229,7 +7632,7 @@ def _generate_runner(source: str) -> str:
                 gpu_lease.assert_held()
                 device_context = _capture_selected_device_context(gpu_lease)
                 device_guard_lease = _acquire_selected_device_guard(
-                    label=f"p2-direct-controller-exact-fill-v1-3-worker-{worker_index}-of-{worker_count}",
+                    label=f"p2-direct-controller-exact-fill-v1-3-2-worker-{worker_index}-of-{worker_count}",
                     device_context=device_context,
                     scheduler_lease=gpu_lease,
                 )
@@ -7261,7 +7664,7 @@ def _generate_runner(source: str) -> str:
                 gpu_lease.assert_held()
                 device_context = _capture_selected_device_context(gpu_lease)
                 device_guard_lease = _acquire_selected_device_guard(
-                    label=f"p2-direct-controller-exact-fill-v1-3-worker-{worker_index}-of-{worker_count}",
+                    label=f"p2-direct-controller-exact-fill-v1-3-2-worker-{worker_index}-of-{worker_count}",
                     device_context=device_context,
                     scheduler_lease=gpu_lease,
                 )
@@ -7653,6 +8056,7 @@ def _generate_runner(source: str) -> str:
         "                prerequisites=prerequisites,\n"
         "                activation_lease=activation_lease,\n"
         "                evaluator_binding=evaluator_binding,\n"
+        "                ready_only_preflight={},\n"
         "                worker_count=worker_count,\n"
         "                gpu_lease_binding=gpu_binding,\n"
         "            )\n"
@@ -7717,7 +8121,7 @@ def _generate_runner(source: str) -> str:
         'help="Unsupported by the frozen v1.3.1 single-worker topology.",',
     )
     _require("top_p" not in text.lower(), "Runner retained a top-p prerequisite or identifier.")
-    generated = _insert_generated_header(_upgrade_generated_contract_to_v1_3_1(text))
+    generated = _insert_generated_header(_upgrade_generated_contract_to_v1_3_2(text))
     return _insert_sealed_entrypoint_preamble(
         generated,
         selector="matrix",
@@ -8304,7 +8708,7 @@ def _integrity_payload(
         count=1,
     )
     _require("top_p" not in text.lower(), "Audit retained a top-p prerequisite or identifier.")
-    generated = _insert_generated_header(_upgrade_generated_contract_to_v1_3_1(text))
+    generated = _insert_generated_header(_upgrade_generated_contract_to_v1_3_2(text))
     return _insert_sealed_entrypoint_preamble(
         generated,
         selector="audit",
@@ -8853,7 +9257,7 @@ def _register_external_bindings(
         count=1,
     )
     _require("top_p" not in text.lower(), "Summary retained top-p quality data or schema.")
-    generated = _insert_generated_header(_upgrade_generated_contract_to_v1_3_1(text))
+    generated = _insert_generated_header(_upgrade_generated_contract_to_v1_3_2(text))
     return _insert_sealed_entrypoint_preamble(
         generated,
         selector="summary",

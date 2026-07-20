@@ -24,6 +24,41 @@ def trust_root() -> attestation.TrustRoot:
     return attestation.TrustRoot(key=key, key_id=attestation.derive_key_id(key))
 
 
+def test_persistent_session_uses_only_v1_3_2_authorities_and_paths() -> None:
+    assert session.READY_ONLY_PREFLIGHT_SESSION_ROLE == (
+        contract.V1_3_2_READY_ONLY_PREFLIGHT_SESSION_ROLE
+    ) == "ready_only_preflight"
+    assert session.QUALITY_SESSION_ROLE == contract.V1_3_2_QUALITY_SESSION_ROLE == "quality"
+    assert session.SESSION_ROLES == frozenset({"ready_only_preflight", "quality"})
+    assert session.PLAN_ATTESTATION_PURPOSE == (
+        contract.V1_3_2_PERSISTENT_SESSION_PLAN_ATTESTATION_PURPOSE
+    )
+    assert session.WORK_ATTESTATION_PURPOSE == (
+        contract.V1_3_2_PERSISTENT_SESSION_WORK_ATTESTATION_PURPOSE
+    )
+    assert session.RESULT_ATTESTATION_PURPOSE == (
+        contract.V1_3_2_PERSISTENT_SESSION_RESULT_ATTESTATION_PURPOSE
+    )
+    assert session.RECEIPT_ATTESTATION_PURPOSE == (
+        contract.V1_3_2_PERSISTENT_SESSION_RECEIPT_ATTESTATION_PURPOSE
+    )
+    assert session.LAUNCH_LEDGER_ATTESTATION_PURPOSE == (
+        contract.V1_3_2_PERSISTENT_SESSION_LAUNCH_LEDGER_ATTESTATION_PURPOSE
+    )
+    assert session.TERMINAL_LEDGER_ATTESTATION_PURPOSE == (
+        contract.V1_3_2_PERSISTENT_SESSION_TERMINAL_LEDGER_ATTESTATION_PURPOSE
+    )
+    assert session._CANONICAL_OUTPUT_ROOT == contract.V1_3_2_OUTPUT_ROOT
+    assert session._CANONICAL_SESSION_LEDGER_ROOT == (
+        contract.V1_3_2_PERSISTENT_SESSION_LEDGER_ROOT
+    )
+    assert session._CANONICAL_SESSION_LEDGER_LOCK_PATH == (
+        contract.V1_3_2_PERSISTENT_SESSION_LEDGER_LOCK_PATH
+    )
+    assert "v1-3-2" in session.SESSION_LEDGER_ROOT_SUFFIX
+    assert "v1-3-1" not in session.SESSION_LEDGER_ROOT_SUFFIX
+
+
 def _plan(
     tmp_path: Path,
     trust_root: attestation.TrustRoot,
@@ -32,6 +67,7 @@ def _plan(
     session_digit: str = "1",
     authority_digit: str = "a",
     controlled_stop: bool = True,
+    session_role: str = session.QUALITY_SESSION_ROLE,
 ) -> dict[str, object]:
     selected = coordinates or [dict(item) for item in contract.quality_coordinates()[:3]]
     frozen = [dict(item) for item in contract.quality_coordinates()]
@@ -50,6 +86,7 @@ def _plan(
         prerequisites_binding_digest="e" * 64,
         output_root=tmp_path.resolve(),
         trust_root=trust_root,
+        session_role=session_role,
     )
 
 
@@ -122,6 +159,7 @@ def _recovery_record(
             "plan": {
                 "session_nonce": plan["session_nonce"],
                 "launch_authority_nonce": plan["launch_authority_nonce"],
+                "session_role": plan["session_role"],
                 "payload_sha256": plan["payload_sha256"],
                 "attestation_mac": plan_attestation["mac"],
                 "worker_index": plan["worker_index"],
@@ -725,6 +763,236 @@ def test_parent_crash_recovery_rejects_nonfinal_or_repeated_eof(
             terminal_authority_check=lambda _plan, _argv: None,
             trust_root=trust_root,
         )
+
+
+def _publish_ready_only_success(
+    output_root: Path,
+    trust_root: attestation.TrustRoot,
+    *,
+    session_digit: str,
+    authority_digit: str = "a",
+) -> dict[str, object]:
+    plan = _plan(
+        output_root,
+        trust_root,
+        coordinates=[dict(contract.quality_coordinates()[0])],
+        session_digit=session_digit,
+        authority_digit=authority_digit,
+        session_role=session.READY_ONLY_PREFLIGHT_SESSION_ROLE,
+    )
+    ready = session.build_session_receipt(plan, (), (), trust_root=trust_root)
+    session.publish_session_launch(
+        output_root,
+        plan,
+        actual_session_argv=_session_argv(plan),
+        trust_root=trust_root,
+    )
+    session.publish_session_terminal(
+        output_root,
+        plan,
+        status="stopped",
+        ready_receipt=ready,
+        final_receipt=ready,
+        work_orders=(),
+        results=(),
+        published_bundle_reingestion_count=0,
+        actual_session_argv=_session_argv(plan),
+        child_process_returncode=0,
+        trust_root=trust_root,
+    )
+    return plan
+
+
+def test_ready_only_role_is_plan_authenticated_and_cannot_substitute_quality(
+    tmp_path: Path, trust_root: attestation.TrustRoot
+) -> None:
+    plan = _plan(
+        tmp_path.resolve(),
+        trust_root,
+        coordinates=[dict(contract.quality_coordinates()[0])],
+        session_role=session.READY_ONLY_PREFLIGHT_SESSION_ROLE,
+    )
+    assert plan["session_role"] == session.READY_ONLY_PREFLIGHT_SESSION_ROLE
+    assert session.validate_session_plan(plan, trust_root=trust_root) == plan
+
+    substituted = dict(plan)
+    substituted["session_role"] = session.QUALITY_SESSION_ROLE
+    with pytest.raises(ValueError, match="digest drifted"):
+        session.validate_session_plan(substituted, trust_root=trust_root)
+
+
+def test_ready_only_binding_is_exact_zero_work_and_metrics_exclude_quality(
+    tmp_path: Path, trust_root: attestation.TrustRoot
+) -> None:
+    output_root = (tmp_path / "quality").resolve()
+    preflight = _publish_ready_only_success(
+        output_root, trust_root, session_digit="1"
+    )
+    second_cohort_start = next(
+        index
+        for index, item in enumerate(contract.quality_coordinates())
+        if (item["scale"], item["training_seed"])
+        != (preflight["scale"], preflight["training_seed"])
+    )
+    quality = _plan(
+        output_root,
+        trust_root,
+        coordinates=[dict(contract.quality_coordinates()[second_cohort_start])],
+        session_digit="2",
+        authority_digit="b",
+    )
+    session.publish_session_launch(
+        output_root,
+        quality,
+        actual_session_argv=_session_argv(quality),
+        trust_root=trust_root,
+    )
+
+    projection = session.load_session_ledger_projection(
+        output_root, trust_root=trust_root
+    )
+    binding = session.ready_only_preflight_binding(projection)
+    assert binding is not None
+    assert binding["status"] == "stopped"
+    assert binding["ready_receipt_binding"] == binding["final_receipt_binding"]
+    assert binding["quality_work_order_count"] == 0
+    assert binding["quality_result_count"] == 0
+    assert binding["model_state_reset_count"] == 0
+    assert binding["launch_ledger_binding"]["sha256"] in {
+        row["sha256"] for row in projection["registry"]
+    }
+    assert binding["terminal_ledger_binding"]["sha256"] in {
+        row["sha256"] for row in projection["registry"]
+    }
+    assert projection["ready_only_preflight_launch_attempt_count"] == 1
+    assert projection["ready_only_preflight_ready_model_load_count"] == 1
+    assert projection["quality_launch_attempt_count"] == 1
+    assert projection["quality_ready_model_load_count"] == 0
+    assert projection["normal_path_model_load_bound"] == 1
+    assert (
+        projection[
+            "single_worker_normal_path_ready_only_preflight_model_load_upper_bound"
+        ]
+        == 1
+    )
+    assert projection["single_worker_normal_path_quality_model_load_upper_bound"] == 10
+    assert projection["single_worker_normal_path_total_model_load_upper_bound"] == 11
+
+
+def test_ready_only_launch_only_is_recovered_then_one_success_is_adoptable(
+    tmp_path: Path, trust_root: attestation.TrustRoot
+) -> None:
+    output_root = (tmp_path / "quality").resolve()
+    interrupted = _plan(
+        output_root,
+        trust_root,
+        coordinates=[dict(contract.quality_coordinates()[0])],
+        session_digit="3",
+        session_role=session.READY_ONLY_PREFLIGHT_SESSION_ROLE,
+    )
+    session.publish_session_launch(
+        output_root,
+        interrupted,
+        actual_session_argv=_session_argv(interrupted),
+        trust_root=trust_root,
+    )
+    recovered = session.reconcile_committed_launch_only_sessions(
+        output_root,
+        (),
+        worker_index=0,
+        gpu_lease_binding_digest=str(interrupted["gpu_lease_binding_digest"]),
+        terminal_authority_check=lambda _plan, _argv: None,
+        trust_root=trust_root,
+    )
+    assert session.ready_only_preflight_binding(recovered) is None
+    assert recovered["sessions"][0]["status"] == "parent_crash_recovered"
+
+    _publish_ready_only_success(output_root, trust_root, session_digit="4")
+    adopted = session.load_session_ledger_projection(output_root, trust_root=trust_root)
+    binding = session.ready_only_preflight_binding(adopted)
+    assert binding is not None
+    assert binding["launch_attempt_count"] == 2
+    assert binding["failed_attempt_count"] == 1
+    assert adopted["ready_only_preflight_success_count"] == 1
+
+
+def test_ready_only_failed_load_then_success_exceeds_only_the_normal_path_count(
+    tmp_path: Path, trust_root: attestation.TrustRoot
+) -> None:
+    output_root = (tmp_path / "quality").resolve()
+    failed = _plan(
+        output_root,
+        trust_root,
+        coordinates=[dict(contract.quality_coordinates()[0])],
+        session_digit="8",
+        session_role=session.READY_ONLY_PREFLIGHT_SESSION_ROLE,
+    )
+    failed_ready = session.build_session_receipt(
+        failed, (), (), trust_root=trust_root
+    )
+    session.publish_session_launch(
+        output_root,
+        failed,
+        actual_session_argv=_session_argv(failed),
+        trust_root=trust_root,
+    )
+    session.publish_session_terminal(
+        output_root,
+        failed,
+        status="child_eof",
+        ready_receipt=failed_ready,
+        final_receipt=None,
+        work_orders=(),
+        results=(),
+        published_bundle_reingestion_count=0,
+        actual_session_argv=_session_argv(failed),
+        child_process_returncode=7,
+        trust_root=trust_root,
+    )
+    _publish_ready_only_success(output_root, trust_root, session_digit="9")
+
+    projection = session.load_session_ledger_projection(
+        output_root, trust_root=trust_root
+    )
+    binding = session.ready_only_preflight_binding(projection)
+    assert binding is not None
+    assert binding["launch_attempt_count"] == 2
+    assert binding["failed_attempt_count"] == 1
+    assert projection["checkpoint_model_load_attempt_upper_bound"] == 2
+    assert projection["ready_only_preflight_ready_model_load_count"] == 2
+    assert (
+        projection[
+            "single_worker_normal_path_ready_only_preflight_model_load_upper_bound"
+        ]
+        == 1
+    )
+    assert projection["single_worker_normal_path_total_model_load_upper_bound"] == 11
+
+
+def test_ready_only_second_success_or_tampered_terminal_fails_closed(
+    tmp_path: Path, trust_root: attestation.TrustRoot
+) -> None:
+    duplicate_root = (tmp_path / "duplicate").resolve()
+    _publish_ready_only_success(duplicate_root, trust_root, session_digit="5")
+    _publish_ready_only_success(duplicate_root, trust_root, session_digit="6")
+    duplicate = session.load_session_ledger_projection(
+        duplicate_root, trust_root=trust_root
+    )
+    with pytest.raises(ValueError, match="more than one successful"):
+        session.ready_only_preflight_binding(duplicate)
+
+    tampered_root = (tmp_path / "tampered").resolve()
+    plan = _publish_ready_only_success(tampered_root, trust_root, session_digit="7")
+    terminal_path = (
+        session.session_ledger_root(tampered_root)
+        / f"{plan['session_nonce']}.terminal.json"
+    )
+    raw = bytearray(terminal_path.read_bytes())
+    raw[raw.index(b'"status": "stopped"')] = ord("X")
+    terminal_path.write_bytes(raw)
+    terminal_path.chmod(0o600)
+    with pytest.raises(ValueError):
+        session.load_session_ledger_projection(tampered_root, trust_root=trust_root)
 
 
 def test_clean_cohort_boundary_restart_disables_single_parent_normal_claim() -> None:
