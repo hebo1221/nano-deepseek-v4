@@ -31,6 +31,11 @@ resident on the accelerator.
   records a bounded negative result: HCA adds tiny layer-local deviance signal
   but no reproducible two-scale recall lift over the prior-token/prior-CSA
   anchor, so HCA-driven directory/prefetch work is stopped.
+- The [`selective second-order CSA pilot`](reports/2026-07-20-cobs-selective-second-order-pilot.md)
+  follows the HCA no-go with a COBS-style descriptor and exact dense
+  counterfactual block-drop label. Current-token covariance is informative,
+  but it fails to beat the native indexer at operational matched budgets, so
+  neither the descriptor nor its acquisition gate is promoted.
 - [`experimental_protocol.md`](experimental_protocol.md) fixes the baselines,
   workloads, metrics, statistical analysis, artifacts, and phase gates before
   implementation begins.

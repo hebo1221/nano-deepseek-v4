@@ -140,6 +140,12 @@ selective descriptor-acquisition gate at matched descriptor bytes. HCA stays
 as an ablation only. Causal block-drop output damage must replace overlap as
 the terminal label before any runtime work.
 
+That pilot is now complete. The
+[`selective second-order report`](2026-07-20-cobs-selective-second-order-pilot.md)
+finds a bounded current-token covariance signal but no matched-budget win over
+the native indexer. It therefore denies runtime promotion and returns resources
+to the preregistered P2 fixed+pins versus calibrated+pins comparison.
+
 ## Artifact bindings
 
 Large checkpoints and raw derived rows remain ignored local artifacts.
