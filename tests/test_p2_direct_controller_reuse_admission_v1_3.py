@@ -1617,6 +1617,79 @@ def test_pre_rename_faults_never_leave_a_final_bundle(
     assert not list(root.parent.glob(f"{admission.ADMISSION_STAGING_PREFIX}*"))
 
 
+@pytest.mark.parametrize("cleanup_fault", ("remove", "parent-fsync"))
+def test_pre_rename_cleanup_failures_still_release_the_scheduler_lease(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    cleanup_fault: str,
+) -> None:
+    import adaptive_v4_gpu_lock
+
+    trust_root, context, receipt = _unpublished_inputs(tmp_path, monkeypatch)
+    root = admission._absolute(admission.ADMISSION_ROOT, repository_root=tmp_path)
+    original_remove = admission._remove_safe_staging_directory
+    original_fsync = admission._fsync_directory
+    rename_attempted = False
+
+    def failing_rename(_source: Path, _destination: Path) -> None:
+        nonlocal rename_attempted
+        rename_attempted = True
+        raise OSError("injected pre-rename publication failure")
+
+    monkeypatch.setattr(admission, "_rename_directory_noreplace", failing_rename)
+    if cleanup_fault == "remove":
+
+        def failing_remove(_path: Path) -> None:
+            raise OSError("injected staging cleanup removal failure")
+
+        monkeypatch.setattr(admission, "_remove_safe_staging_directory", failing_remove)
+        expected_error = "cleanup removal"
+    else:
+
+        def failing_parent_fsync(path: Path, *, exact_mode: int | None = None) -> None:
+            if rename_attempted and path == root.parent:
+                raise OSError("injected cleanup parent fsync failure")
+            original_fsync(path, exact_mode=exact_mode)
+
+        monkeypatch.setattr(admission, "_fsync_directory", failing_parent_fsync)
+        expected_error = "cleanup parent fsync"
+
+    with pytest.raises(OSError, match=expected_error):
+        admission.publish_admission_genesis_bundle(
+            historical_receipt=receipt,
+            quality_context=context,
+            trust_root=trust_root,
+            expected_shards=admission.EXPECTED_QUALITY_SHARDS,
+            coordinate_digest=admission.QUALITY_COORDINATE_DIGEST,
+            exact_fill_arm_names=admission.FROZEN_EXACT_FILL_ARM_NAMES,
+        )
+
+    assert rename_attempted
+    assert not os.path.lexists(root)
+    for relative_path in (
+        *admission.CANONICAL_NONOBSERVATION_PATHS,
+        *admission.PROSPECTIVE_QUALITY_PATHS,
+    ):
+        assert not os.path.lexists(admission._absolute(relative_path, repository_root=tmp_path))
+    staging = list(root.parent.glob(f"{admission.ADMISSION_STAGING_PREFIX}*"))
+    if cleanup_fault == "remove":
+        assert len(staging) == 1
+        admission._validate_admission_bundle_root(
+            staging[0], label="Injected cleanup-failure staging bundle"
+        )
+    else:
+        assert staging == []
+
+    reacquired = adaptive_v4_gpu_lock.acquire_gpu_lock(
+        "post-admission-cleanup-failure",
+        path=admission.DIRECT_GPU_SCHEDULER_LOCK_PATH,
+    )
+    reacquired.close()
+    for staging_path in staging:
+        original_remove(staging_path)
+        original_fsync(staging_path.parent)
+
+
 def test_quality_inventory_rejects_assume_unchanged_live_byte_tamper(tmp_path: Path) -> None:
     repository = tmp_path / "repository"
     repository.mkdir()

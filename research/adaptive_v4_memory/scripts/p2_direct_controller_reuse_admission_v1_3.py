@@ -8714,10 +8714,12 @@ def publish_admission_genesis_bundle(
         lease.assert_held()
         return staged_admission, staged_genesis
     finally:
-        if staging is not None and not published and os.path.lexists(staging):
-            _remove_safe_staging_directory(staging)
-            _fsync_directory(parent)
-        lease.close()
+        try:
+            if staging is not None and not published and os.path.lexists(staging):
+                _remove_safe_staging_directory(staging)
+                _fsync_directory(parent)
+        finally:
+            lease.close()
 
 
 def _argument_parser() -> argparse.ArgumentParser:
