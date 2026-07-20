@@ -174,6 +174,7 @@ def _isolated_bootstrap(
     *,
     entrypoint: str = "matrix",
     routing_override: dict[str, Any] | None = None,
+    cwd: Path | None = None,
 ) -> subprocess.CompletedProcess[str]:
     routing = (
         launcher._launch_routing_binding(bundle, runner_source, entrypoint)
@@ -206,6 +207,7 @@ def _isolated_bootstrap(
             check=False,
             capture_output=True,
             text=True,
+            cwd=Path(str(bundle["repository_root"])) if cwd is None else cwd,
             env=environment,
             pass_fds=(runner_fd, bundle_fd, routing_fd),
         )
@@ -390,6 +392,28 @@ def test_runner_child_uses_bound_interpreter_and_clean_environment(
     pass_fds = observed["pass_fds"]
     assert isinstance(pass_fds, tuple)
     assert len(pass_fds) == len(set(pass_fds)) == 3
+    assert observed["cwd"] == root
+
+
+def test_bootstrap_rejects_non_repository_working_directory(tmp_path: Path) -> None:
+    root, head, manifest_path, launcher_path, runner_path = _frozen_repository(tmp_path)
+    bundle, runner_source = _fixture_bundle(
+        root, head, manifest_path, launcher_path, runner_path
+    )
+    outside = tmp_path / "outside-working-directory"
+    outside.mkdir()
+    marker = tmp_path / "wrong-cwd-runner-must-not-execute"
+
+    result = _isolated_bootstrap(
+        bundle,
+        runner_source,
+        [str(marker)],
+        cwd=outside,
+    )
+
+    assert result.returncode != 0
+    assert "working directory differs from the exact repository root" in result.stderr
+    assert not marker.exists()
 
 
 def test_starting_head_is_pinned_across_a_later_ref_move(tmp_path: Path) -> None:
@@ -590,12 +614,15 @@ def test_canonical_command_executes_each_allowlisted_frozen_entrypoint(
 ) -> None:
     root, head, *_rest = _frozen_repository(tmp_path)
     marker = tmp_path / f"{entrypoint}-sealed-entrypoint-marker"
+    arbitrary_cwd = tmp_path / f"{entrypoint}-arbitrary-cwd"
+    arbitrary_cwd.mkdir()
     command = launcher.canonical_command(root, head, entrypoint=entrypoint)
     completed = subprocess.run(
         ["/bin/bash", "-c", f"{command} {shlex.quote(str(marker))}"],
         check=False,
         capture_output=True,
         text=True,
+        cwd=arbitrary_cwd,
     )
 
     assert completed.returncode == 0, completed.stderr

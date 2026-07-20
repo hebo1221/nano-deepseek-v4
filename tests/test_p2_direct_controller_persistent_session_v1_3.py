@@ -393,6 +393,9 @@ def test_durable_ledger_launch_terminal_and_exact_root_binding(
 
     other_ledger = session.session_ledger_root(other_root)
     other_ledger.mkdir(mode=0o700)
+    other_lock = session.session_ledger_lock_path(other_root)
+    other_lock.touch(mode=0o600)
+    other_lock.chmod(0o600)
     for source in session.session_ledger_root(output_root).iterdir():
         target = other_ledger / source.name
         shutil.copyfile(source, target)
@@ -407,6 +410,9 @@ def test_ledger_loader_is_nonblocking_bounded_and_recovers_exact_hardlink_tmp(
     fifo_root = tmp_path / "fifo-quality"
     fifo_ledger = session.session_ledger_root(fifo_root)
     fifo_ledger.mkdir(mode=0o700)
+    fifo_lock = session.session_ledger_lock_path(fifo_root)
+    fifo_lock.touch(mode=0o600)
+    fifo_lock.chmod(0o600)
     fifo = fifo_ledger / f"{'1' * 64}.launch.json"
     os.mkfifo(fifo, mode=0o600)
     with pytest.raises(ValueError, match="metadata is unsafe"):
@@ -415,6 +421,9 @@ def test_ledger_loader_is_nonblocking_bounded_and_recovers_exact_hardlink_tmp(
     huge_root = tmp_path / "huge-quality"
     huge_ledger = session.session_ledger_root(huge_root)
     huge_ledger.mkdir(mode=0o700)
+    huge_lock = session.session_ledger_lock_path(huge_root)
+    huge_lock.touch(mode=0o600)
+    huge_lock.chmod(0o600)
     huge = huge_ledger / f"{'2' * 64}.launch.json"
     with huge.open("wb") as stream:
         stream.truncate(session.MAXIMUM_LEDGER_BYTES + 1)
@@ -438,6 +447,51 @@ def test_ledger_loader_is_nonblocking_bounded_and_recovers_exact_hardlink_tmp(
     assert projection["launch_attempt_count"] == 1
     assert not interrupted_tmp.exists()
     assert final.stat().st_nlink == 1
+
+
+def test_session_ledger_absence_lock_only_recovery_and_missing_lock_fail_closed(
+    tmp_path: Path, trust_root: attestation.TrustRoot
+) -> None:
+    output_root = tmp_path / "quality"
+    ledger_root = session.session_ledger_root(output_root)
+    lock_path = session.session_ledger_lock_path(output_root)
+
+    empty = session.load_session_ledger_projection(output_root, trust_root=trust_root)
+    assert empty["launch_attempt_count"] == 0
+    assert not ledger_root.exists()
+    assert not lock_path.exists()
+
+    lock_path.touch(mode=0o600)
+    lock_path.chmod(0o600)
+    lock_identity = (lock_path.stat().st_dev, lock_path.stat().st_ino)
+    lock_only = session.load_session_ledger_projection(output_root, trust_root=trust_root)
+    assert lock_only["launch_attempt_count"] == 0
+    assert not ledger_root.exists()
+    assert (lock_path.stat().st_dev, lock_path.stat().st_ino) == lock_identity
+
+    plan = _plan(output_root, trust_root, session_digit="9")
+    session.publish_session_launch(
+        output_root,
+        plan,
+        actual_session_argv=_session_argv(plan),
+        trust_root=trust_root,
+    )
+    assert ledger_root.is_dir()
+    assert (lock_path.stat().st_dev, lock_path.stat().st_ino) == lock_identity
+
+    broken_output = tmp_path / "broken-quality"
+    broken_root = session.session_ledger_root(broken_output)
+    broken_root.mkdir(mode=0o700)
+    with pytest.raises(ValueError, match="lock is missing"):
+        session.load_session_ledger_projection(broken_output, trust_root=trust_root)
+    broken_plan = _plan(broken_output, trust_root, session_digit="a")
+    with pytest.raises(ValueError, match="lock is missing"):
+        session.publish_session_launch(
+            broken_output,
+            broken_plan,
+            actual_session_argv=_session_argv(broken_plan),
+            trust_root=trust_root,
+        )
 
 
 def test_parent_crash_recovery_closes_authenticated_committed_prefix(

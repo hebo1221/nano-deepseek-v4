@@ -24,15 +24,28 @@ RECEIPT_MESSAGE_TYPE = contract.PERSISTENT_SESSION_RECEIPT_MESSAGE_TYPE
 LAUNCH_ARTIFACT_TYPE = contract.PERSISTENT_SESSION_LAUNCH_ARTIFACT_TYPE
 TERMINAL_ARTIFACT_TYPE = contract.PERSISTENT_SESSION_TERMINAL_ARTIFACT_TYPE
 
-PLAN_ATTESTATION_PURPOSE = contract.PERSISTENT_SESSION_PLAN_ATTESTATION_PURPOSE
-WORK_ATTESTATION_PURPOSE = contract.PERSISTENT_SESSION_WORK_ATTESTATION_PURPOSE
-RESULT_ATTESTATION_PURPOSE = contract.PERSISTENT_SESSION_RESULT_ATTESTATION_PURPOSE
-RECEIPT_ATTESTATION_PURPOSE = contract.PERSISTENT_SESSION_RECEIPT_ATTESTATION_PURPOSE
-LAUNCH_LEDGER_ATTESTATION_PURPOSE = contract.PERSISTENT_SESSION_LAUNCH_LEDGER_ATTESTATION_PURPOSE
-TERMINAL_LEDGER_ATTESTATION_PURPOSE = (
-    contract.PERSISTENT_SESSION_TERMINAL_LEDGER_ATTESTATION_PURPOSE
+PLAN_ATTESTATION_PURPOSE = contract.V1_3_1_PERSISTENT_SESSION_PLAN_ATTESTATION_PURPOSE
+WORK_ATTESTATION_PURPOSE = contract.V1_3_1_PERSISTENT_SESSION_WORK_ATTESTATION_PURPOSE
+RESULT_ATTESTATION_PURPOSE = contract.V1_3_1_PERSISTENT_SESSION_RESULT_ATTESTATION_PURPOSE
+RECEIPT_ATTESTATION_PURPOSE = contract.V1_3_1_PERSISTENT_SESSION_RECEIPT_ATTESTATION_PURPOSE
+LAUNCH_LEDGER_ATTESTATION_PURPOSE = (
+    contract.V1_3_1_PERSISTENT_SESSION_LAUNCH_LEDGER_ATTESTATION_PURPOSE
 )
-SESSION_LEDGER_ROOT_SUFFIX = contract.PERSISTENT_SESSION_LEDGER_ROOT_SUFFIX
+TERMINAL_LEDGER_ATTESTATION_PURPOSE = (
+    contract.V1_3_1_PERSISTENT_SESSION_TERMINAL_LEDGER_ATTESTATION_PURPOSE
+)
+_CANONICAL_OUTPUT_ROOT = contract.V1_3_1_OUTPUT_ROOT
+_CANONICAL_SESSION_LEDGER_ROOT = contract.V1_3_1_PERSISTENT_SESSION_LEDGER_ROOT
+_CANONICAL_SESSION_LEDGER_LOCK_PATH = (
+    contract.V1_3_1_PERSISTENT_SESSION_LEDGER_LOCK_PATH
+)
+SESSION_LEDGER_ROOT_SUFFIX = _CANONICAL_SESSION_LEDGER_ROOT.name.removeprefix(
+    f".{_CANONICAL_OUTPUT_ROOT.name}."
+)
+_require_suffix = f".{_CANONICAL_OUTPUT_ROOT.name}.{SESSION_LEDGER_ROOT_SUFFIX}"
+if _CANONICAL_SESSION_LEDGER_ROOT.name != _require_suffix:
+    raise RuntimeError("Canonical v1.3.1 persistent-session ledger layout drifted.")
+del _require_suffix
 
 MAXIMUM_PLAN_BYTES = 4 << 20
 MAXIMUM_JSONL_MESSAGE_BYTES = 1 << 20
@@ -151,6 +164,7 @@ _RESULT_SOURCE_FIELDS = frozenset(
         "completed_in_session",
         "model_load_count",
         "child_full_historical_evidence_replay_count",
+        "active_activation_validation_count",
         "active_admission_validation_count",
         "active_genesis_validation_count",
         "active_calibration_validation_count",
@@ -172,6 +186,7 @@ _RECEIPT_SOURCE_FIELDS = frozenset(
         "completed_result_payload_sha256",
         "model_load_count",
         "child_full_historical_evidence_replay_count",
+        "active_activation_validation_count",
         "active_admission_validation_count",
         "active_genesis_validation_count",
         "active_calibration_validation_count",
@@ -706,6 +721,7 @@ def build_work_result(
         "child_full_historical_evidence_replay_count": (
             CHILD_FULL_HISTORICAL_EVIDENCE_REPLAY_COUNT
         ),
+        "active_activation_validation_count": 1,
         "active_admission_validation_count": 1,
         "active_genesis_validation_count": 1,
         "active_calibration_validation_count": 1,
@@ -766,6 +782,7 @@ def validate_attested_work_result(
             result.get(field) == 1
             for field in (
                 "active_admission_validation_count",
+                "active_activation_validation_count",
                 "active_genesis_validation_count",
                 "active_calibration_validation_count",
                 "active_checkpoint_validation_count",
@@ -820,6 +837,7 @@ def build_session_receipt(
         "child_full_historical_evidence_replay_count": (
             CHILD_FULL_HISTORICAL_EVIDENCE_REPLAY_COUNT
         ),
+        "active_activation_validation_count": 1,
         "active_admission_validation_count": 1,
         "active_genesis_validation_count": 1,
         "active_calibration_validation_count": 1,
@@ -970,7 +988,7 @@ def create_sealed_plan_fd(plan: Mapping[str, Any]) -> int:
         "Persistent plan transport requires sealed memfd support.",
     )
     descriptor = cast(Any, create)(
-        "adaptive-v4-direct-exact-fill-v1-3-persistent-plan",
+        "adaptive-v4-direct-exact-fill-v1-3-1-persistent-plan",
         cast(int, getattr(os, "MFD_CLOEXEC", 0)) | cast(int, allow_sealing),
     )
     try:
@@ -1027,6 +1045,14 @@ def session_ledger_root(output_root: Path) -> Path:
         and (not os.path.lexists(root) or root.resolve(strict=True) == root),
         "Persistent session output root is not exact.",
     )
+    canonical_output_root = Path(os.path.abspath(_CANONICAL_OUTPUT_ROOT))
+    if root == canonical_output_root:
+        canonical_ledger_root = Path(os.path.abspath(_CANONICAL_SESSION_LEDGER_ROOT))
+        _require(
+            canonical_ledger_root.parent == root.parent,
+            "Canonical v1.3.1 persistent-session ledger root drifted.",
+        )
+        return canonical_ledger_root
     return root.parent / f".{root.name}.{SESSION_LEDGER_ROOT_SUFFIX}"
 
 
@@ -1044,6 +1070,14 @@ def _require_plan_output_root(plan: Mapping[str, Any], *, output_root: Path) -> 
 
 def session_ledger_lock_path(output_root: Path) -> Path:
     root = session_ledger_root(output_root)
+    canonical_output_root = Path(os.path.abspath(_CANONICAL_OUTPUT_ROOT))
+    if Path(os.path.abspath(output_root)) == canonical_output_root:
+        canonical_lock = Path(os.path.abspath(_CANONICAL_SESSION_LEDGER_LOCK_PATH))
+        _require(
+            canonical_lock == root.parent / f"{root.name}.lock",
+            "Canonical v1.3.1 persistent-session ledger lock drifted.",
+        )
+        return canonical_lock
     return root.parent / f"{root.name}.lock"
 
 
@@ -1062,16 +1096,34 @@ def _fsync_directory(path: Path) -> None:
 
 
 @contextmanager
-def _session_ledger_lock(root: Path) -> Iterator[None]:
+def _session_ledger_lock(
+    root: Path, *, create: bool, exclusive_create: bool = False
+) -> Iterator[None]:
     lock_path = root.parent / f"{root.name}.lock"
     nofollow = getattr(os, "O_NOFOLLOW", None)
     _require(nofollow is not None, "Persistent session ledger locking requires O_NOFOLLOW.")
-    descriptor = os.open(
-        lock_path,
-        os.O_RDWR | os.O_CREAT | os.O_NONBLOCK | getattr(os, "O_CLOEXEC", 0) | cast(int, nofollow),
-        0o600,
+    flags = (
+        os.O_RDWR
+        | os.O_NONBLOCK
+        | getattr(os, "O_CLOEXEC", 0)
+        | cast(int, nofollow)
     )
+    if create:
+        flags |= os.O_CREAT
+    if exclusive_create:
+        _require(create, "Exclusive persistent lock creation requires create mode.")
+        flags |= os.O_EXCL
     try:
+        descriptor = os.open(lock_path, flags, 0o600)
+    except FileNotFoundError as error:
+        raise ValueError(
+            "Persistent session ledger lock is missing for an existing ledger root."
+        ) from error
+    try:
+        if exclusive_create:
+            os.fchmod(descriptor, 0o600)
+            os.fsync(descriptor)
+            _fsync_directory(lock_path.parent)
         opened = os.fstat(descriptor)
         current = os.stat(lock_path, follow_symlinks=False)
         _require(
@@ -1097,17 +1149,42 @@ def _session_ledger_lock(root: Path) -> Iterator[None]:
 
 def _publish_json_exclusive_locked(path: Path, payload: Mapping[str, Any]) -> dict[str, Any]:
     root = path.parent
+    root_created = False
     try:
-        root.mkdir(mode=0o700, parents=True, exist_ok=False)
-        _fsync_directory(root.parent)
+        root.mkdir(mode=0o700, parents=False, exist_ok=False)
+        root_created = True
     except FileExistsError:
+        pass
+    nofollow = getattr(os, "O_NOFOLLOW", None)
+    _require(nofollow is not None, "Persistent ledger publication requires O_NOFOLLOW.")
+    root_descriptor = os.open(
+        root,
+        os.O_RDONLY
+        | getattr(os, "O_DIRECTORY", 0)
+        | getattr(os, "O_CLOEXEC", 0)
+        | cast(int, nofollow),
+    )
+    try:
+        if root_created:
+            os.fchmod(root_descriptor, 0o700)
+        opened_root = os.fstat(root_descriptor)
         metadata = os.stat(root, follow_symlinks=False)
         _require(
-            stat.S_ISDIR(metadata.st_mode)
-            and metadata.st_uid == os.getuid()
-            and stat.S_IMODE(metadata.st_mode) == 0o700,
+            stat.S_ISDIR(opened_root.st_mode)
+            and (opened_root.st_dev, opened_root.st_ino)
+            == (metadata.st_dev, metadata.st_ino)
+            and opened_root.st_uid == metadata.st_uid == os.getuid()
+            and stat.S_IMODE(opened_root.st_mode)
+            == stat.S_IMODE(metadata.st_mode)
+            == 0o700,
             "Persistent session ledger root is unsafe.",
         )
+        os.fsync(root_descriptor)
+    finally:
+        os.close(root_descriptor)
+    # This is deliberately unconditional: it also durably adopts a safe root
+    # left by a crash between mkdir and the original parent-directory fsync.
+    _fsync_directory(root.parent)
     encoded = (json.dumps(payload, indent=2, sort_keys=True, allow_nan=False) + "\n").encode()
     temporary: Path | None = None
     try:
@@ -1119,6 +1196,14 @@ def _publish_json_exclusive_locked(path: Path, payload: Mapping[str, Any]) -> di
         temporary = Path(raw_path)
         os.fchmod(descriptor, 0o600)
         try:
+            temporary_metadata = os.fstat(descriptor)
+            _require(
+                stat.S_ISREG(temporary_metadata.st_mode)
+                and temporary_metadata.st_uid == os.getuid()
+                and temporary_metadata.st_nlink == 1
+                and stat.S_IMODE(temporary_metadata.st_mode) == 0o600,
+                "Persistent ledger temporary metadata is unsafe.",
+            )
             offset = 0
             while offset < len(encoded):
                 written = os.write(descriptor, encoded[offset:])
@@ -1155,8 +1240,18 @@ def _publish_json_exclusive_locked(path: Path, payload: Mapping[str, Any]) -> di
 
 
 def _publish_json_exclusive(path: Path, payload: Mapping[str, Any]) -> dict[str, Any]:
-    with _session_ledger_lock(path.parent):
-        return _publish_json_exclusive_locked(path, payload)
+    root = path.parent
+    if os.path.lexists(root):
+        with _session_ledger_lock(root, create=False):
+            return _publish_json_exclusive_locked(path, payload)
+    try:
+        with _session_ledger_lock(root, create=True, exclusive_create=True):
+            return _publish_json_exclusive_locked(path, payload)
+    except FileExistsError:
+        # Another first writer, or recovery from a crash after the durable lock
+        # publication, owns the only allowed initialization transition.
+        with _session_ledger_lock(root, create=False):
+            return _publish_json_exclusive_locked(path, payload)
 
 
 def publish_session_launch(
@@ -1316,7 +1411,10 @@ def _load_ledger_json(path: Path) -> tuple[dict[str, Any], dict[str, Any]]:
 
 
 def _load_session_ledger_projection_locked(
-    output_root: Path, *, trust_root: attestation.TrustRoot
+    output_root: Path,
+    *,
+    trust_root: attestation.TrustRoot,
+    require_root_absent: bool = False,
 ) -> dict[str, Any]:
     root = session_ledger_root(output_root)
     empty_projection = {
@@ -1355,6 +1453,12 @@ def _load_session_ledger_projection_locked(
         "registry": [],
         "registry_digest": contract.json_digest([]),
     }
+    if require_root_absent:
+        _require(
+            not os.path.lexists(root),
+            "Persistent session ledger appeared during an empty projection read.",
+        )
+        return empty_projection
     if not os.path.lexists(root):
         return empty_projection
     root_meta = os.stat(root, follow_symlinks=False)
@@ -1978,7 +2082,33 @@ def load_session_ledger_projection(
     output_root: Path, *, trust_root: attestation.TrustRoot
 ) -> dict[str, Any]:
     root = session_ledger_root(output_root)
-    with _session_ledger_lock(root):
+    if not os.path.lexists(root):
+        lock_path = session_ledger_lock_path(output_root)
+        if not os.path.lexists(lock_path):
+            projection = _load_session_ledger_projection_locked(
+                output_root,
+                trust_root=trust_root,
+                require_root_absent=True,
+            )
+            _require(
+                not os.path.lexists(root) and not os.path.lexists(lock_path),
+                "Persistent session ledger appeared during an unlocked empty read.",
+            )
+            return projection
+        # A durable lock-only state is the recoverable first-write boundary.  It
+        # is adopted by inode without O_CREAT; an active first writer may create
+        # the root before we acquire the flock, so recheck under the lease.
+        with _session_ledger_lock(root, create=False):
+            if os.path.lexists(root):
+                return _load_session_ledger_projection_locked(
+                    output_root, trust_root=trust_root
+                )
+            return _load_session_ledger_projection_locked(
+                output_root,
+                trust_root=trust_root,
+                require_root_absent=True,
+            )
+    with _session_ledger_lock(root, create=False):
         return _load_session_ledger_projection_locked(output_root, trust_root=trust_root)
 
 

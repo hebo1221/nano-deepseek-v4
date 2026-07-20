@@ -39,10 +39,10 @@ from nano_deepseek_v4 import (
     generate_adaptive_memory_workload,
 )
 
-EXPERIMENT_ID = contract.SHARD_EXPERIMENT_ID
+EXPERIMENT_ID = contract.V1_3_1_SHARD_EXPERIMENT_ID
 ARTIFACT_TYPE = "raw-direct-controller-exact-fill-shard"
 SCHEMA_VERSION = 1
-ATTESTATION_PURPOSE = contract.SHARD_ATTESTATION_PURPOSE
+ATTESTATION_PURPOSE = contract.V1_3_1_SHARD_ATTESTATION_PURPOSE
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 
 TERMINAL_PASS = "INTEGRITY-PASS"
@@ -50,9 +50,9 @@ TERMINAL_FAIL = "INTEGRITY-FAIL"
 DTYPE_NAME = "bfloat16"
 DEVICE_TYPE = "cuda"
 ASYNC_TRANSFER = False
-STORAGE_PROJECTED_SHARDS_ENV = "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_PROJECTED_REMAINING_SHARDS"
-STORAGE_PROJECTED_TOKEN_ROWS_ENV = "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_PROJECTED_REMAINING_TOKEN_ROWS"
-PERSISTENT_PLAN_FD_ENV = "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_PERSISTENT_PLAN_FD"
+STORAGE_PROJECTED_SHARDS_ENV = "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_1_PROJECTED_REMAINING_SHARDS"
+STORAGE_PROJECTED_TOKEN_ROWS_ENV = "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_1_PROJECTED_REMAINING_TOKEN_ROWS"
+PERSISTENT_PLAN_FD_ENV = "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_1_PERSISTENT_PLAN_FD"
 ENVELOPE_PLANNING_ALLOWANCE_BYTES = 1024 * 1024
 TOP_LEVEL_FIELDS = {
     "schema_version",
@@ -434,7 +434,7 @@ def _assert_repository_import_origins(
     repository_root = REPOSITORY_ROOT.resolve(strict=True)
     allowed_files = {
         (repository_root / relative).resolve(strict=True)
-        for relative in contract.implementation_file_paths()
+        for relative in contract.v1_3_1_implementation_file_paths()
     }
     active_modules = sys.modules if modules is None else modules
     for module_name, module in tuple(active_modules.items()):
@@ -1129,6 +1129,7 @@ def establish_evaluator_inputs(
     calibration_path: Path,
     reuse_admission_path: Path,
     preheldout_genesis_path: Path,
+    quality_start_activation_path: Path,
     manifest_path: Path,
     scale: str,
     training_seed: int,
@@ -1150,28 +1151,65 @@ def establish_evaluator_inputs(
         context=contract.CONTEXTS[0],
         replicate=contract.REPLICATES[0],
     )
-    quality_context = admission.establish_quality_context(
+    quality_context = admission.establish_v1_3_1_quality_context(
         manifest_path,
-        experiment_id=contract.EXPERIMENT_ID,
-        implementation_paths=contract.IMPLEMENTATION_PATHS,
+        implementation_paths=contract.V1_3_1_IMPLEMENTATION_PATHS,
         repository_root=REPOSITORY_ROOT,
     )
-    validated_admission = admission.load_validated_reuse_admission(
-        reuse_admission_path,
-        trust_root=trust_root,
-        quality_context=quality_context,
-        verify_evidence=False,
-    )
-    validated_genesis = admission.load_validated_preheldout_genesis(
-        preheldout_genesis_path,
-        admission=validated_admission,
-        trust_root=trust_root,
-        expected_shards=contract.BUDGET_SHARDS_TOTAL,
-        coordinate_digest=contract.quality_coordinate_digest(),
-        exact_fill_arm_names=contract.ALL_ARM_NAMES,
-    )
+    raw_sealed_source = globals().get("SEALED_SOURCE_PROVENANCE_V1_3_1")
+    raw_sealed_routing = globals().get("SEALED_LAUNCH_ROUTING_V1_3_1")
     calibration, opened_calibration = _opened_json(calibration_path)
     try:
+        raw_checkpoint_binding = calibration.get("checkpoint")
+        raw_training_binding = calibration.get("training_summary")
+        _require(
+            isinstance(raw_checkpoint_binding, Mapping)
+            and isinstance(raw_training_binding, Mapping),
+            "Calibration upstream bindings are missing before activated consumption.",
+        )
+        calibration_binding = _artifact_file_binding(
+            calibration_path,
+            calibration,
+            opened=opened_calibration,
+        )
+        consumer = admission.load_activated_consumer_authority(
+            quality_context=quality_context,
+            trust_root=trust_root,
+            expected_shards=contract.BUDGET_SHARDS_TOTAL,
+            coordinate_digest=contract.quality_coordinate_digest(),
+            exact_fill_arm_names=contract.ALL_ARM_NAMES,
+            scale=scale,
+            training_seed=training_seed,
+            calibration_binding=calibration_binding,
+            checkpoint_binding=cast(Mapping[str, Any], raw_checkpoint_binding),
+            sealed_source_provenance=(
+                cast(Mapping[str, Any], raw_sealed_source)
+                if isinstance(raw_sealed_source, Mapping)
+                else None
+            ),
+            sealed_launch_routing=(
+                cast(Mapping[str, Any], raw_sealed_routing)
+                if isinstance(raw_sealed_routing, Mapping)
+                else None
+            ),
+        )
+        activation = consumer.activation
+        validated_admission = consumer.reuse_admission
+        validated_genesis = consumer.preheldout_genesis
+        _require(
+            consumer.coordinate == (scale, training_seed)
+            and Path(cast(str, activation.public_binding["path"])).resolve(strict=True)
+            == quality_start_activation_path.resolve(strict=True)
+            and Path(cast(str, validated_admission.public_binding["path"])).resolve(
+                strict=True
+            )
+            == reuse_admission_path.resolve(strict=True)
+            and Path(cast(str, validated_genesis.public_binding["path"])).resolve(
+                strict=True
+            )
+            == preheldout_genesis_path.resolve(strict=True),
+            "Evaluator activated consumer paths or coordinate drifted.",
+        )
         admitted_calibration = validated_admission.calibrations[(scale, training_seed)]
         _require(
             opened_calibration.path == admitted_calibration.path.resolve(strict=True),
@@ -1186,9 +1224,7 @@ def establish_evaluator_inputs(
             expected_training_seed=training_seed,
         )
         calibration_binding = _artifact_file_binding(
-            calibration_path,
-            calibration,
-            opened=opened_calibration,
+            calibration_path, calibration, opened=opened_calibration
         )
         _require(
             calibration_binding
@@ -1251,6 +1287,7 @@ def establish_evaluator_inputs(
         "calibration_artifact": calibration_binding,
         "reuse_admission": dict(validated_admission.public_binding),
         "preheldout_genesis": dict(validated_genesis.public_binding),
+        "quality_start_activation": dict(activation.public_binding),
     }
     inputs = {**inputs_source, "input_binding_digest": contract.json_digest(inputs_source)}
     admission.assert_quality_context_unchanged(quality_context)
@@ -2834,6 +2871,7 @@ def _validate_inputs_structure(inputs: Mapping[str, Any]) -> dict[str, Any]:
             "calibration_artifact",
             "reuse_admission",
             "preheldout_genesis",
+            "quality_start_activation",
             "input_binding_digest",
         },
         "Direct-shard input binding schema drifted.",
@@ -2894,6 +2932,46 @@ def _validate_inputs_structure(inputs: Mapping[str, Any]) -> dict[str, Any]:
         ),
         "Pre-heldout genesis public binding schema drifted.",
     )
+    activation_binding = inputs.get("quality_start_activation")
+    _require(isinstance(activation_binding, Mapping), "Quality-start activation is missing.")
+    activation_map = cast(Mapping[str, Any], activation_binding)
+    _require(
+        set(activation_map)
+        == {
+            "path",
+            "sha256",
+            "bytes",
+            "experiment_id",
+            "payload_sha256",
+            "attestation_mac",
+            "activation_root",
+            "matrix_lock_path",
+            "matrix_lock_device",
+            "matrix_lock_inode",
+            "base_prerequisites_sha256",
+            "sealed_source_bundle_sha256",
+            "sealed_launch_routing_sha256",
+        }
+        and isinstance(activation_map.get("path"), str)
+        and isinstance(activation_map.get("activation_root"), str)
+        and isinstance(activation_map.get("matrix_lock_path"), str)
+        and type(activation_map.get("bytes")) is int
+        and cast(int, activation_map["bytes"]) > 0
+        and type(activation_map.get("matrix_lock_device")) is int
+        and type(activation_map.get("matrix_lock_inode")) is int
+        and all(
+            contract.is_sha256(activation_map.get(field))
+            for field in (
+                "sha256",
+                "payload_sha256",
+                "attestation_mac",
+                "base_prerequisites_sha256",
+                "sealed_source_bundle_sha256",
+                "sealed_launch_routing_sha256",
+            )
+        ),
+        "Quality-start activation public binding schema drifted.",
+    )
     return dict(inputs)
 
 def _load_bound_json(binding: Mapping[str, Any]) -> dict[str, Any]:
@@ -2911,54 +2989,127 @@ def _load_bound_json(binding: Mapping[str, Any]) -> dict[str, Any]:
         opened.close()
 
 
-def _validate_external_inputs(
+def _external_quality_context(
     inputs: Mapping[str, Any],
-    coordinate: Mapping[str, Any],
-    *,
-    trust_root: attestation.TrustRoot,
-) -> tuple[dict[str, Any], dict[str, BuiltCausalArm], dict[str, Any]]:
+) -> admission.QualityContext:
     manifest_binding = cast(Mapping[str, Any], inputs["manifest"])
     manifest_path = manifest_binding.get("path")
-    _require(isinstance(manifest_path, str), "Bound v1.3 manifest path is missing.")
-    quality_context = admission.establish_quality_context(
+    _require(isinstance(manifest_path, str), "Bound v1.3.1 manifest path is missing.")
+    quality_context = admission.establish_v1_3_1_quality_context(
         Path(cast(str, manifest_path)),
-        experiment_id=contract.EXPERIMENT_ID,
-        implementation_paths=contract.IMPLEMENTATION_PATHS,
+        implementation_paths=contract.V1_3_1_IMPLEMENTATION_PATHS,
         repository_root=REPOSITORY_ROOT,
     )
     _require(
         quality_context.source == inputs.get("source")
         and quality_context.manifest_binding == inputs.get("manifest"),
-        "Direct-shard live v1.3 quality context drifted.",
+        "Direct-shard live v1.3.1 quality context drifted.",
     )
-    admission_binding = cast(Mapping[str, Any], inputs["reuse_admission"])
-    admission_path = admission_binding.get("path")
-    _require(isinstance(admission_path, str), "Bound reuse-admission path is missing.")
-    validated_admission = admission.load_validated_reuse_admission(
-        Path(cast(str, admission_path)),
-        trust_root=trust_root,
-        quality_context=quality_context,
-        verify_evidence=False,
-    )
-    _require(
-        dict(validated_admission.public_binding) == dict(admission_binding),
-        "Direct-shard reuse-admission binding drifted.",
-    )
+    return quality_context
+
+
+def _validate_external_consumer_authority(
+    consumer: admission.ActivatedConsumerAuthorityV1_3_1,
+    inputs: Mapping[str, Any],
+    coordinate: Mapping[str, Any],
+    *,
+    quality_context: admission.QualityContext,
+) -> admission.ActivatedConsumerAuthorityV1_3_1:
+    consumer = admission.require_activated_consumer_authority(consumer)
+    scale = cast(str, coordinate["scale"])
+    training_seed = cast(int, coordinate["training_seed"])
+    admitted_coordinate = (scale, training_seed)
+    calibration_binding = cast(Mapping[str, Any], inputs["calibration_artifact"])
+    checkpoint_binding = cast(Mapping[str, Any], inputs["checkpoint"])
+    reuse_binding = cast(Mapping[str, Any], inputs["reuse_admission"])
     genesis_binding = cast(Mapping[str, Any], inputs["preheldout_genesis"])
-    genesis_path = genesis_binding.get("path")
-    _require(isinstance(genesis_path, str), "Bound pre-heldout genesis path is missing.")
-    validated_genesis = admission.load_validated_preheldout_genesis(
-        Path(cast(str, genesis_path)),
-        admission=validated_admission,
+    activation_binding = cast(Mapping[str, Any], inputs["quality_start_activation"])
+    activation = consumer.activation
+    _require(
+        type(consumer) is admission.ActivatedConsumerAuthorityV1_3_1
+        and type(activation) is admission.ValidatedQualityStartActivationV1_3_1
+        and consumer.coordinate == admitted_coordinate
+        and activation.consumer_coordinate == admitted_coordinate
+        and activation.quality_context.source == quality_context.source
+        and activation.quality_context.manifest_binding == quality_context.manifest_binding
+        and dict(activation.public_binding) == dict(activation_binding)
+        and consumer.reuse_admission is activation.reuse_admission
+        and consumer.preheldout_genesis is activation.preheldout_genesis
+        and dict(consumer.reuse_admission.public_binding) == dict(reuse_binding)
+        and dict(consumer.preheldout_genesis.public_binding) == dict(genesis_binding)
+        and set(consumer.reuse_admission.calibrations) == {admitted_coordinate}
+        and set(consumer.reuse_admission.checkpoints) == {admitted_coordinate}
+        and {
+            field: consumer.reuse_admission.calibrations[
+                admitted_coordinate
+            ].public_binding[field]
+            for field in calibration_binding
+        }
+        == dict(calibration_binding)
+        and consumer.reuse_admission.checkpoints[
+            admitted_coordinate
+        ].public_binding
+        == dict(checkpoint_binding),
+        "Cached activated consumer authority escaped or changed its coordinate binding.",
+    )
+    return consumer
+
+
+def _load_external_consumer_authority(
+    inputs: Mapping[str, Any],
+    coordinate: Mapping[str, Any],
+    *,
+    trust_root: attestation.TrustRoot,
+) -> tuple[
+    admission.QualityContext,
+    admission.ActivatedConsumerAuthorityV1_3_1,
+]:
+    quality_context = _external_quality_context(inputs)
+    calibration_binding = cast(Mapping[str, Any], inputs["calibration_artifact"])
+    checkpoint_binding = cast(Mapping[str, Any], inputs["checkpoint"])
+    activation_binding = cast(Mapping[str, Any], inputs["quality_start_activation"])
+    consumer = admission.load_activated_consumer_authority(
+        quality_context=quality_context,
         trust_root=trust_root,
         expected_shards=contract.BUDGET_SHARDS_TOTAL,
         coordinate_digest=contract.quality_coordinate_digest(),
         exact_fill_arm_names=contract.ALL_ARM_NAMES,
+        scale=cast(str, coordinate["scale"]),
+        training_seed=cast(int, coordinate["training_seed"]),
+        calibration_binding=calibration_binding,
+        checkpoint_binding=checkpoint_binding,
+        expected_public_binding=activation_binding,
     )
-    _require(
-        dict(validated_genesis.public_binding) == dict(genesis_binding),
-        "Direct-shard pre-heldout genesis binding drifted.",
+    return quality_context, _validate_external_consumer_authority(
+        consumer,
+        inputs,
+        coordinate,
+        quality_context=quality_context,
     )
+
+
+def _validate_external_inputs(
+    inputs: Mapping[str, Any],
+    coordinate: Mapping[str, Any],
+    *,
+    trust_root: attestation.TrustRoot,
+    _consumer_authority: admission.ActivatedConsumerAuthorityV1_3_1 | None = None,
+) -> tuple[dict[str, Any], dict[str, BuiltCausalArm], dict[str, Any]]:
+    if _consumer_authority is None:
+        quality_context, consumer = _load_external_consumer_authority(
+            inputs,
+            coordinate,
+            trust_root=trust_root,
+        )
+    else:
+        quality_context = _external_quality_context(inputs)
+        consumer = _validate_external_consumer_authority(
+            _consumer_authority,
+            inputs,
+            coordinate,
+            quality_context=quality_context,
+        )
+    validated_admission = consumer.reuse_admission
     calibration_binding = cast(Mapping[str, Any], inputs["calibration_artifact"])
     calibration = _load_bound_json(calibration_binding)
     calibration = admission.validate_admitted_calibration(
@@ -2997,27 +3148,41 @@ def _validate_external_inputs(
     return calibration, arms, _json_clone(metadata)
 
 @dataclass(frozen=True)
+class _ExternalAuthorityCacheEntry:
+    authority_key: str
+    immutable_projection: dict[str, Any]
+    immutable_inputs: dict[str, Any]
+    trust_root_key_id: str
+    coordinate: dict[str, Any]
+    consumer: admission.ActivatedConsumerAuthorityV1_3_1
+
+
+@dataclass(frozen=True)
 class _ExternalValidationCacheEntry:
     input_binding_digest: str
     immutable_inputs: dict[str, Any]
     trust_root_key_id: str
     coordinate_cohort: tuple[Any, ...]
     coordinate: dict[str, Any]
+    authority_key: str
     calibration: dict[str, Any]
     arms: dict[str, BuiltCausalArm]
     arm_metadata: dict[str, Any]
 
-
 class DirectControllerExternalValidationCache:
-    """Run-local cache for immutable external provenance and arm construction.
+    """Run-local cache for coordinate authority and budget-specific arm construction.
 
-    Raw envelopes and all sidecars are deliberately excluded: those are authenticated
-    and streamed for every shard.  A digest may name only one exact input binding,
-    trust root, and scale/seed/budget construction cohort for the cache lifetime.
+    Every raw envelope and sidecar is still authenticated and streamed.  Activated
+    authority is loaded once per exact scale/seed provenance cohort, while arm
+    construction is cached independently per budget cohort.  Distinct input digests
+    cannot substitute authority or arm results.
     """
 
     def __init__(self) -> None:
-        self._entries: dict[str, _ExternalValidationCacheEntry] = {}
+        self._authorities: dict[str, _ExternalAuthorityCacheEntry] = {}
+        self._entries: dict[
+            tuple[str, tuple[Any, ...]], _ExternalValidationCacheEntry
+        ] = {}
 
     @staticmethod
     def _coordinate_cohort(coordinate: Mapping[str, Any]) -> tuple[Any, ...]:
@@ -3031,9 +3196,34 @@ class DirectControllerExternalValidationCache:
             tuple(cast(Sequence[Any], coordinate.get("csa_layers", ()))),
         )
 
+    @staticmethod
+    def _authority_projection(
+        inputs: Mapping[str, Any], coordinate: Mapping[str, Any]
+    ) -> dict[str, Any]:
+        return _json_clone(
+            {
+                "source": inputs.get("source"),
+                "manifest": inputs.get("manifest"),
+                "checkpoint": inputs.get("checkpoint"),
+                "training_summary": inputs.get("training_summary"),
+                "calibration_artifact": inputs.get("calibration_artifact"),
+                "reuse_admission": inputs.get("reuse_admission"),
+                "preheldout_genesis": inputs.get("preheldout_genesis"),
+                "quality_start_activation": inputs.get("quality_start_activation"),
+                "scale": coordinate.get("scale"),
+                "training_seed": coordinate.get("training_seed"),
+                "calibration_seed": coordinate.get("calibration_seed"),
+                "evaluation_seed": coordinate.get("evaluation_seed"),
+            }
+        )
+
     @property
     def entry_count(self) -> int:
         return len(self._entries)
+
+    @property
+    def authority_count(self) -> int:
+        return len(self._authorities)
 
     def validated_external_inputs(
         self,
@@ -3044,15 +3234,43 @@ class DirectControllerExternalValidationCache:
     ) -> tuple[dict[str, Any], dict[str, BuiltCausalArm], dict[str, Any]]:
         digest = inputs.get("input_binding_digest")
         _require(contract.is_sha256(digest), "Cached input binding digest is invalid.")
-        key = cast(str, digest)
+        input_digest = cast(str, digest)
         immutable_inputs = _json_clone(inputs)
         cohort = self._coordinate_cohort(coordinate)
-        cached = self._entries.get(key)
+        cache_key = (input_digest, cohort)
+        projection = self._authority_projection(inputs, coordinate)
+        authority_key = contract.json_digest(projection)
+
+        authority_entry = self._authorities.get(authority_key)
+        if authority_entry is None:
+            _context, consumer = _load_external_consumer_authority(
+                inputs,
+                coordinate,
+                trust_root=trust_root,
+            )
+            authority_entry = _ExternalAuthorityCacheEntry(
+                authority_key=authority_key,
+                immutable_projection=projection,
+                immutable_inputs=immutable_inputs,
+                trust_root_key_id=trust_root.key_id,
+                coordinate=_json_clone(coordinate),
+                consumer=consumer,
+            )
+            self._authorities[authority_key] = authority_entry
+        else:
+            _require(
+                authority_entry.immutable_projection == projection
+                and authority_entry.trust_root_key_id == trust_root.key_id,
+                "External authority cache substitution was rejected.",
+            )
+
+        cached = self._entries.get(cache_key)
         if cached is not None:
             _require(
                 cached.immutable_inputs == immutable_inputs
                 and cached.trust_root_key_id == trust_root.key_id
-                and cached.coordinate_cohort == cohort,
+                and cached.coordinate_cohort == cohort
+                and cached.authority_key == authority_key,
                 "External-validation cache substitution was rejected.",
             )
             return cached.calibration, cached.arms, cached.arm_metadata
@@ -3061,13 +3279,15 @@ class DirectControllerExternalValidationCache:
             inputs,
             coordinate,
             trust_root=trust_root,
+            _consumer_authority=authority_entry.consumer,
         )
-        self._entries[key] = _ExternalValidationCacheEntry(
-            input_binding_digest=key,
+        self._entries[cache_key] = _ExternalValidationCacheEntry(
+            input_binding_digest=input_digest,
             immutable_inputs=immutable_inputs,
             trust_root_key_id=trust_root.key_id,
             coordinate_cohort=cohort,
             coordinate=_json_clone(coordinate),
+            authority_key=authority_key,
             calibration=calibration,
             arms=arms,
             arm_metadata=metadata,
@@ -3075,25 +3295,52 @@ class DirectControllerExternalValidationCache:
         return calibration, arms, metadata
 
     def assert_unchanged(self, *, trust_root: attestation.TrustRoot) -> None:
-        """Revalidate every unique external cohort after the final raw shard."""
+        """Revalidate each authority once and every unique arm cohort at finalization."""
 
-        for cached in self._entries.values():
+        refreshed: dict[str, admission.ActivatedConsumerAuthorityV1_3_1] = {}
+        for authority_key, authority_cached in self._authorities.items():
             _require(
-                cached.trust_root_key_id == trust_root.key_id,
-                "External-validation cache trust root changed before finalization.",
+                authority_cached.trust_root_key_id == trust_root.key_id,
+                "External authority cache trust root changed before finalization.",
             )
-            calibration, arms, metadata = _validate_external_inputs(
-                cached.immutable_inputs,
-                cached.coordinate,
+            _context, consumer = _load_external_consumer_authority(
+                authority_cached.immutable_inputs,
+                authority_cached.coordinate,
                 trust_root=trust_root,
             )
             _require(
-                calibration == cached.calibration
-                and arms == cached.arms
-                and metadata == cached.arm_metadata,
+                self._authority_projection(
+                    authority_cached.immutable_inputs, authority_cached.coordinate
+                )
+                == authority_cached.immutable_projection
+                and dict(consumer.activation.public_binding)
+                == dict(authority_cached.consumer.activation.public_binding)
+                and dict(consumer.reuse_admission.public_binding)
+                == dict(authority_cached.consumer.reuse_admission.public_binding)
+                and dict(consumer.preheldout_genesis.public_binding)
+                == dict(authority_cached.consumer.preheldout_genesis.public_binding),
+                "External authority cache changed before finalization.",
+            )
+            refreshed[authority_key] = consumer
+
+        for entry_cached in self._entries.values():
+            _require(
+                entry_cached.trust_root_key_id == trust_root.key_id
+                and entry_cached.authority_key in refreshed,
+                "External-validation cache authority changed before finalization.",
+            )
+            calibration, arms, metadata = _validate_external_inputs(
+                entry_cached.immutable_inputs,
+                entry_cached.coordinate,
+                trust_root=trust_root,
+                _consumer_authority=refreshed[entry_cached.authority_key],
+            )
+            _require(
+                calibration == entry_cached.calibration
+                and arms == entry_cached.arms
+                and metadata == entry_cached.arm_metadata,
                 "External-validation cache changed before finalization.",
             )
-
 
 def _validate_envelope_semantics(
     payload: Mapping[str, Any],
@@ -4196,6 +4443,7 @@ def _run_persistent_session(
             calibration_path=args.calibration,
             reuse_admission_path=args.reuse_admission,
             preheldout_genesis_path=args.preheldout_genesis,
+            quality_start_activation_path=args.quality_start_activation,
             manifest_path=args.manifest,
             scale=args.scale,
             training_seed=args.training_seed,
@@ -4340,7 +4588,7 @@ def _run_persistent_session(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Run one paper-grade v1.3 exact-fill direct-controller shard."
+        description="Run one paper-grade v1.3.1 exact-fill direct-controller shard."
     )
     parser.add_argument("--checkpoint", type=Path, required=True)
     parser.add_argument("--training-summary", type=Path, required=True)
@@ -4348,7 +4596,8 @@ def main() -> None:
     parser.add_argument("--calibration", type=Path, required=True)
     parser.add_argument("--reuse-admission", type=Path, required=True)
     parser.add_argument("--preheldout-genesis", type=Path, required=True)
-    parser.add_argument("--manifest", type=Path, default=contract.MANIFEST_PATH)
+    parser.add_argument("--quality-start-activation", type=Path, required=True)
+    parser.add_argument("--manifest", type=Path, default=contract.V1_3_1_MANIFEST_PATH)
     parser.add_argument("--scale", choices=contract.SCALES, required=True)
     parser.add_argument("--training-seed", type=int, choices=contract.TRAINING_SEEDS, required=True)
     parser.add_argument("--budget", choices=contract.BUDGETS, required=True)
@@ -4370,10 +4619,9 @@ def main() -> None:
 
     _require(contract.is_sha256(args.launch_nonce), "--launch-nonce must be 64 lowercase hex.")
     _assert_repository_import_origins()
-    context = admission.establish_quality_context(
+    context = admission.establish_v1_3_1_quality_context(
         args.manifest,
-        experiment_id=contract.EXPERIMENT_ID,
-        implementation_paths=contract.IMPLEMENTATION_PATHS,
+        implementation_paths=contract.V1_3_1_IMPLEMENTATION_PATHS,
         repository_root=REPOSITORY_ROOT,
     )
     trust_root = attestation.trust_root_from_inherited_environment(
@@ -4390,6 +4638,7 @@ def main() -> None:
             calibration_path=args.calibration,
             reuse_admission_path=args.reuse_admission,
             preheldout_genesis_path=args.preheldout_genesis,
+            quality_start_activation_path=args.quality_start_activation,
             manifest_path=args.manifest,
             scale=args.scale,
             training_seed=args.training_seed,

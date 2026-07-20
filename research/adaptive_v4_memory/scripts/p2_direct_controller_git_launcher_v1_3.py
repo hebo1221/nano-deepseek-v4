@@ -14,10 +14,11 @@ from pathlib import Path, PurePosixPath
 from typing import Any, cast
 
 SCHEMA_VERSION = 1
-LAUNCHER_ID = "p2-direct-controller-git-object-launcher-v1-3"
+LAUNCHER_ID = "p2-direct-controller-git-object-launcher-v1-3-1"
 PINNED_GIT_EXECUTABLE = Path("/usr/bin/git")
 MANIFEST_RELATIVE_PATH = (
-    "research/adaptive_v4_memory/manifests/p2-post-rank-direct-controller-exact-fill-v1-3.json"
+    "research/adaptive_v4_memory/manifests/"
+    "p2-post-rank-direct-controller-exact-fill-v1-3-1.json"
 )
 LAUNCHER_RELATIVE_PATH = (
     "research/adaptive_v4_memory/scripts/p2_direct_controller_git_launcher_v1_3.py"
@@ -33,15 +34,18 @@ ENTRYPOINT_RELATIVE_PATHS = {
     "summary": SUMMARY_RELATIVE_PATH,
 }
 PYTHON_RELATIVE_PATH = ".venv/bin/python"
-EXPECTED_EXPERIMENT_ID = "p2-post-rank-direct-controller-exact-fill-v1.3"
-EXPECTED_MANIFEST_STATUS = "frozen_after_v1_2_top_p_feasibility_no_go_before_any_held_out_quality"
-RUNNER_FD_ENV = "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_GIT_RUNNER_FD"
-SOURCE_BUNDLE_FD_ENV = "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_GIT_SOURCE_BUNDLE_FD"
-LAUNCH_ROUTING_FD_ENV = "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_GIT_LAUNCH_ROUTING_FD"
-SEALED_LAUNCH_SENTINEL_NAME = "_ADAPTIVE_V4_GIT_OBJECT_LAUNCH_SENTINEL_V1_3"
-PYTHON_RUNTIME_BINDING_NAME = "_ADAPTIVE_V4_GIT_OBJECT_PYTHON_RUNTIME_V1_3"
-SOURCE_PROVENANCE_BINDING_NAME = "_ADAPTIVE_V4_GIT_OBJECT_SOURCE_PROVENANCE_V1_3"
-LAUNCH_ROUTING_BINDING_NAME = "_ADAPTIVE_V4_GIT_OBJECT_LAUNCH_ROUTING_V1_3"
+EXPECTED_EXPERIMENT_ID = "p2-post-rank-direct-controller-exact-fill-v1.3.1"
+EXPECTED_MANIFEST_STATUS = (
+    "frozen_v1_3_1_activation_amendment_after_signed_v1_3_empty_prefix_"
+    "before_any_held_out_quality"
+)
+RUNNER_FD_ENV = "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_1_GIT_RUNNER_FD"
+SOURCE_BUNDLE_FD_ENV = "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_1_GIT_SOURCE_BUNDLE_FD"
+LAUNCH_ROUTING_FD_ENV = "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_1_GIT_LAUNCH_ROUTING_FD"
+SEALED_LAUNCH_SENTINEL_NAME = "_ADAPTIVE_V4_GIT_OBJECT_LAUNCH_SENTINEL_V1_3_1"
+PYTHON_RUNTIME_BINDING_NAME = "_ADAPTIVE_V4_GIT_OBJECT_PYTHON_RUNTIME_V1_3_1"
+SOURCE_PROVENANCE_BINDING_NAME = "_ADAPTIVE_V4_GIT_OBJECT_SOURCE_PROVENANCE_V1_3_1"
+LAUNCH_ROUTING_BINDING_NAME = "_ADAPTIVE_V4_GIT_OBJECT_LAUNCH_ROUTING_V1_3_1"
 SEALED_LAUNCH_SENTINEL = {
     "schema_version": 1,
     "launcher": LAUNCHER_ID,
@@ -696,9 +700,9 @@ import os
 import stat
 import sys
 
-RUNNER_FD_ENV = "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_GIT_RUNNER_FD"
-BUNDLE_FD_ENV = "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_GIT_SOURCE_BUNDLE_FD"
-ROUTING_FD_ENV = "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_GIT_LAUNCH_ROUTING_FD"
+RUNNER_FD_ENV = "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_1_GIT_RUNNER_FD"
+BUNDLE_FD_ENV = "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_1_GIT_SOURCE_BUNDLE_FD"
+ROUTING_FD_ENV = "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_1_GIT_LAUNCH_ROUTING_FD"
 FULL_SEALS = fcntl.F_SEAL_SEAL | fcntl.F_SEAL_SHRINK | fcntl.F_SEAL_GROW | fcntl.F_SEAL_WRITE
 MAXIMUM_SOURCE_BUNDLE_BYTES = 128 << 20
 MAXIMUM_LAUNCH_ROUTING_BYTES = 16 << 10
@@ -787,7 +791,7 @@ require(
 )
 require(
     bundle["schema_version"] == 1
-    and bundle["launcher"] == "p2-direct-controller-git-object-launcher-v1-3",
+    and bundle["launcher"] == "p2-direct-controller-git-object-launcher-v1-3-1",
     "Frozen source bundle identity drifted.",
 )
 entrypoint_paths = {
@@ -813,6 +817,10 @@ require(
 require(isinstance(bundle["repository_root"], str), "Frozen repository root is invalid.")
 root = os.path.abspath(bundle["repository_root"])
 require(root == os.path.realpath(root) and os.path.isdir(root), "Frozen repository root is not exact.")
+require(
+    os.path.abspath(os.getcwd()) == root and os.path.realpath(os.getcwd()) == root,
+    "Frozen runner working directory differs from the exact repository root.",
+)
 
 
 def active_python_runtime_binding(repository_root):
@@ -1231,15 +1239,15 @@ globals_dict = {
     "__file__": runner_path,
     "__package__": None,
     "__spec__": None,
-    "_ADAPTIVE_V4_GIT_OBJECT_LAUNCH_SENTINEL_V1_3": {
+    "_ADAPTIVE_V4_GIT_OBJECT_LAUNCH_SENTINEL_V1_3_1": {
         "schema_version": 1,
-        "launcher": "p2-direct-controller-git-object-launcher-v1-3",
+        "launcher": "p2-direct-controller-git-object-launcher-v1-3-1",
         "sealed_runner": True,
         "sealed_inventory": True,
     },
-    "_ADAPTIVE_V4_GIT_OBJECT_PYTHON_RUNTIME_V1_3": dict(python_runtime),
-    "_ADAPTIVE_V4_GIT_OBJECT_SOURCE_PROVENANCE_V1_3": source_provenance,
-    "_ADAPTIVE_V4_GIT_OBJECT_LAUNCH_ROUTING_V1_3": dict(routing),
+    "_ADAPTIVE_V4_GIT_OBJECT_PYTHON_RUNTIME_V1_3_1": dict(python_runtime),
+    "_ADAPTIVE_V4_GIT_OBJECT_SOURCE_PROVENANCE_V1_3_1": source_provenance,
+    "_ADAPTIVE_V4_GIT_OBJECT_LAUNCH_ROUTING_V1_3_1": dict(routing),
 }
 exec(compile(runner_bytes, runner_path, "exec"), globals_dict, globals_dict)
 """
@@ -1254,7 +1262,8 @@ def launch_frozen_runner(
 ) -> int:
     repository_root = bundle.get("repository_root")
     _require(isinstance(repository_root, str), "Frozen repository root is invalid.")
-    runtime = _python_runtime_binding(Path(cast(str, repository_root)))
+    root = _exact_repository_root(Path(cast(str, repository_root)))
+    runtime = _python_runtime_binding(root)
     _require(
         bundle.get("python_runtime") == runtime,
         "Frozen source bundle Python runtime binding drifted before launch.",
@@ -1269,15 +1278,17 @@ def launch_frozen_runner(
         len(encoded_routing) <= MAXIMUM_LAUNCH_ROUTING_BYTES,
         "Frozen invocation routing binding exceeds its size limit.",
     )
-    runner_fd = _create_sealed_memfd("adaptive-v4-direct-exact-fill-v1-3-git-runner", runner_bytes)
+    runner_fd = _create_sealed_memfd(
+        "adaptive-v4-direct-exact-fill-v1-3-1-git-runner", runner_bytes
+    )
     bundle_fd: int | None = None
     routing_fd: int | None = None
     try:
         bundle_fd = _create_sealed_memfd(
-            "adaptive-v4-direct-exact-fill-v1-3-git-source-bundle", encoded_bundle
+            "adaptive-v4-direct-exact-fill-v1-3-1-git-source-bundle", encoded_bundle
         )
         routing_fd = _create_sealed_memfd(
-            "adaptive-v4-direct-exact-fill-v1-3-git-launch-routing", encoded_routing
+            "adaptive-v4-direct-exact-fill-v1-3-1-git-launch-routing", encoded_routing
         )
         environment = _python_environment()
         environment[RUNNER_FD_ENV] = str(runner_fd)
@@ -1294,6 +1305,7 @@ def launch_frozen_runner(
                 *runner_arguments,
             ],
             check=False,
+            cwd=root,
             env=environment,
             pass_fds=(runner_fd, bundle_fd, routing_fd),
         )

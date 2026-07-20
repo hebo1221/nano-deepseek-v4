@@ -52,7 +52,7 @@ def _imports(source: str) -> set[str]:
 def _sealed_common_provenance() -> tuple[dict[str, object], dict[str, object], dict[str, object]]:
     authority: dict[str, object] = {
         "schema_version": 1,
-        "launcher": "p2-direct-controller-git-object-launcher-v1-3",
+        "launcher": "p2-direct-controller-git-object-launcher-v1-3-1",
         "sealed_runner": True,
         "sealed_inventory": True,
     }
@@ -71,7 +71,7 @@ def _sealed_common_provenance() -> tuple[dict[str, object], dict[str, object], d
     }
     source: dict[str, object] = {
         "schema_version": 1,
-        "launcher": "p2-direct-controller-git-object-launcher-v1-3",
+        "launcher": "p2-direct-controller-git-object-launcher-v1-3-1",
         "repository_root": str(REPOSITORY_ROOT.resolve()),
         "bundle_sha256": "2" * 64,
         "pinned_head_oid": "3" * 40,
@@ -90,7 +90,7 @@ def _sealed_route(selector: str, *, sha_digit: str = "6") -> dict[str, object]:
     }
     return {
         "schema_version": 1,
-        "launcher": "p2-direct-controller-git-object-launcher-v1-3",
+        "launcher": "p2-direct-controller-git-object-launcher-v1-3-1",
         "entrypoint_selector": selector,
         "entrypoint_relative_path": paths[selector],
         "source_bundle_sha256": "2" * 64,
@@ -123,27 +123,27 @@ def test_generator_pins_and_preserves_every_v1_2_source_byte_for_byte() -> None:
 
 
 def test_generated_module_identity_and_paths_are_contract_derived() -> None:
-    assert evaluator.EXPERIMENT_ID == contract.SHARD_EXPERIMENT_ID
-    assert evaluator.ATTESTATION_PURPOSE == contract.SHARD_ATTESTATION_PURPOSE
-    assert matrix.EXPERIMENT_ID == contract.MATRIX_EXPERIMENT_ID
-    assert matrix.WORKER_EXPERIMENT_ID == contract.WORKER_LEDGER_EXPERIMENT_ID
-    assert matrix.MATRIX_ATTESTATION_PURPOSE == contract.MATRIX_ATTESTATION_PURPOSE
-    assert matrix.WORKER_ATTESTATION_PURPOSE == contract.WORKER_LEDGER_ATTESTATION_PURPOSE
-    assert audit.EXPERIMENT_ID == contract.INTEGRITY_EXPERIMENT_ID
-    assert audit.ATTESTATION_PURPOSE == contract.INTEGRITY_ATTESTATION_PURPOSE
-    assert summary.EXPERIMENT_ID == contract.SUMMARY_EXPERIMENT_ID
-    assert summary.ATTESTATION_PURPOSE == contract.SUMMARY_ATTESTATION_PURPOSE
-    assert matrix.OUTPUT_ROOT == contract.OUTPUT_ROOT
+    assert evaluator.EXPERIMENT_ID == contract.V1_3_1_SHARD_EXPERIMENT_ID
+    assert evaluator.ATTESTATION_PURPOSE == contract.V1_3_1_SHARD_ATTESTATION_PURPOSE
+    assert matrix.EXPERIMENT_ID == contract.V1_3_1_MATRIX_EXPERIMENT_ID
+    assert matrix.WORKER_EXPERIMENT_ID == contract.V1_3_1_WORKER_LEDGER_EXPERIMENT_ID
+    assert matrix.MATRIX_ATTESTATION_PURPOSE == contract.V1_3_1_MATRIX_ATTESTATION_PURPOSE
+    assert matrix.WORKER_ATTESTATION_PURPOSE == contract.V1_3_1_WORKER_LEDGER_ATTESTATION_PURPOSE
+    assert audit.EXPERIMENT_ID == contract.V1_3_1_INTEGRITY_EXPERIMENT_ID
+    assert audit.ATTESTATION_PURPOSE == contract.V1_3_1_INTEGRITY_ATTESTATION_PURPOSE
+    assert summary.EXPERIMENT_ID == contract.V1_3_1_SUMMARY_EXPERIMENT_ID
+    assert summary.ATTESTATION_PURPOSE == contract.V1_3_1_SUMMARY_ATTESTATION_PURPOSE
+    assert matrix.OUTPUT_ROOT == contract.V1_3_1_OUTPUT_ROOT
     assert matrix.MATRIX_SUMMARY_NAME == contract.MATRIX_SUMMARY_NAME
-    assert matrix.MATRIX_SUMMARY == contract.MATRIX_SUMMARY_PATH
-    assert matrix._matrix_lock_path(matrix.OUTPUT_ROOT) == contract.MATRIX_LOCK_PATH.resolve()
-    assert matrix._worker_ledger_root(matrix.OUTPUT_ROOT) == contract.WORKER_LEDGER_ROOT.resolve()
-    assert matrix.REUSE_ADMISSION_PATH == contract.REUSE_ADMISSION_PATH
-    assert matrix.PREHELDOUT_GENESIS_PATH == contract.PREHELDOUT_GENESIS_PATH
-    assert contract.ADMISSION_ROOT.parent == contract.OUTPUT_ROOT.parent
-    assert contract.ADMISSION_ROOT != contract.OUTPUT_ROOT
-    assert not contract.REUSE_ADMISSION_PATH.is_relative_to(contract.OUTPUT_ROOT)
-    assert not contract.PREHELDOUT_GENESIS_PATH.is_relative_to(contract.OUTPUT_ROOT)
+    assert matrix.MATRIX_SUMMARY == contract.V1_3_1_MATRIX_SUMMARY_PATH
+    assert matrix._matrix_lock_path(matrix.OUTPUT_ROOT) == contract.V1_3_1_ACTIVATION_MATRIX_LOCK_PATH.resolve()
+    assert matrix._worker_ledger_root(matrix.OUTPUT_ROOT) == contract.V1_3_1_WORKER_LEDGER_ROOT.resolve()
+    assert matrix.REUSE_ADMISSION_PATH == contract.V1_3_1_REUSE_ADMISSION_PATH
+    assert matrix.PREHELDOUT_GENESIS_PATH == contract.V1_3_1_PREHELDOUT_GENESIS_PATH
+    assert contract.V1_3_1_ADMISSION_ROOT.parent == contract.V1_3_1_OUTPUT_ROOT.parent
+    assert contract.V1_3_1_ADMISSION_ROOT != contract.V1_3_1_OUTPUT_ROOT
+    assert not contract.V1_3_1_REUSE_ADMISSION_PATH.is_relative_to(contract.V1_3_1_OUTPUT_ROOT)
+    assert not contract.V1_3_1_PREHELDOUT_GENESIS_PATH.is_relative_to(contract.V1_3_1_OUTPUT_ROOT)
 
 
 def test_generated_modules_import_only_the_v1_3_controller_pipeline() -> None:
@@ -206,12 +206,15 @@ def test_matrix_zero_prefix_binds_both_preheldout_artifacts() -> None:
     assert '"reuse_admission": dict(reuse_admission.public_binding)' in source
     assert '"preheldout_genesis": dict(preheldout_genesis.public_binding)' in source
     assert '"prerequisites": dict(prerequisites.public_binding)' in source
-    assert source.index("load_validated_reuse_admission(") < source.index(
-        "load_validated_preheldout_genesis("
-    )
-    assert source.index("load_validated_preheldout_genesis(") < source.index(
+    single = inspect.getsource(matrix.run_matrix)
+    assert single.index("load_and_validate_prestart_prerequisites(") < single.index(
         "_capture_selected_device_context("
     )
+    assert single.index("load_and_validate_prerequisites(") < single.index(
+        "_capture_selected_device_context("
+    )
+    assert "load_validated_reuse_admission(" not in source
+    assert "load_validated_preheldout_genesis(" not in source
 
 
 def test_nine_thousand_schedule_positions_are_balanced_at_every_rank() -> None:
@@ -257,6 +260,21 @@ def test_evaluator_input_schema_requires_admission_and_genesis_without_top_p() -
         "attestation_mac": "5" * 64,
         "experiment_id": "genesis",
     }
+    activation_binding = {
+        "path": "/tmp/activation.json",
+        "sha256": "6" * 64,
+        "bytes": 1,
+        "experiment_id": "activation",
+        "payload_sha256": "7" * 64,
+        "attestation_mac": "8" * 64,
+        "activation_root": "/tmp/activation",
+        "matrix_lock_path": "/tmp/activation/matrix.lock",
+        "matrix_lock_device": 1,
+        "matrix_lock_inode": 2,
+        "base_prerequisites_sha256": "9" * 64,
+        "sealed_source_bundle_sha256": "a" * 64,
+        "sealed_launch_routing_sha256": "b" * 64,
+    }
     source = {
         "source": {},
         "manifest": {},
@@ -265,6 +283,7 @@ def test_evaluator_input_schema_requires_admission_and_genesis_without_top_p() -
         "calibration_artifact": artifact_binding,
         "reuse_admission": reuse_binding,
         "preheldout_genesis": genesis_binding,
+        "quality_start_activation": activation_binding,
     }
     inputs = {**source, "input_binding_digest": contract.json_digest(source)}
 
@@ -291,6 +310,7 @@ def test_admission_failure_precedes_every_evaluator_cuda_probe(
         calibration=Path("calibration.json"),
         reuse_admission=Path("admission.json"),
         preheldout_genesis=Path("genesis.json"),
+        quality_start_activation=Path("activation.json"),
         scale=contract.SCALES[0],
         training_seed=contract.TRAINING_SEEDS[0],
         budget=contract.BUDGETS[0],
@@ -320,7 +340,11 @@ def test_admission_failure_precedes_every_evaluator_cuda_probe(
         lambda _self: arguments,
     )
     monkeypatch.setattr(evaluator, "_assert_repository_import_origins", lambda: None)
-    monkeypatch.setattr(evaluator.admission, "establish_quality_context", lambda *_a, **_k: context)
+    monkeypatch.setattr(
+        evaluator.admission,
+        "establish_v1_3_1_quality_context",
+        lambda *_a, **_k: context,
+    )
     monkeypatch.setattr(
         evaluator.attestation,
         "trust_root_from_inherited_environment",
@@ -334,26 +358,187 @@ def test_admission_failure_precedes_every_evaluator_cuda_probe(
     assert cuda_probes == 0
 
 
-def test_child_skips_full_historical_replay_but_parent_performs_it_once() -> None:
+def test_child_uses_scoped_activation_while_parent_owns_full_replay() -> None:
     evaluator_source = _source("evaluator")
     matrix_source = _source("matrix")
 
-    assert evaluator_source.count("verify_evidence=False") == 2
-    assert "verify_evidence=True" not in evaluator_source
-    assert matrix_source.count("verify_evidence=True") == 1
+    assert evaluator_source.count("load_activated_consumer_authority(") == 2
+    assert "load_activated_quality_authority(" not in evaluator_source
+    assert "require_activated_consumer_authority(" in evaluator_source
+    assert matrix_source.count("load_activated_quality_authority(") == 1
+    assert "revalidate_activated_quality_authority(" in matrix_source
     assert "validate_admitted_calibration(" in evaluator_source
     assert "load_admitted_checkpoint(" in evaluator_source
 
 
+def test_external_cache_loads_one_scoped_authority_for_two_budget_cohorts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    trust_root = SimpleNamespace(key_id="f" * 64)
+    shared_inputs = {
+        "source": {"source": "frozen"},
+        "manifest": {"manifest": "frozen"},
+        "checkpoint": {"checkpoint": "frozen"},
+        "training_summary": {"training": "frozen"},
+        "calibration_artifact": {"calibration": "frozen"},
+        "reuse_admission": {"admission": "frozen"},
+        "preheldout_genesis": {"genesis": "frozen"},
+        "quality_start_activation": {"activation": "frozen"},
+    }
+    inputs_by_budget = (
+        {**shared_inputs, "input_binding_digest": "a" * 64},
+        {**shared_inputs, "input_binding_digest": "b" * 64},
+    )
+    coordinates = tuple(
+        {
+            "scale": contract.SCALES[0],
+            "training_seed": contract.TRAINING_SEEDS[0],
+            "calibration_seed": contract.CALIBRATION_SEEDS[0],
+            "evaluation_seed": contract.EVALUATION_SEEDS[0],
+            "budget": budget,
+            "global_block_budget": contract.DIRECT_GLOBAL_BLOCK_BUDGETS[
+                contract.SCALES[0]
+            ][budget],
+            "csa_layers": list(contract.DIRECT_CSA_LAYERS_BY_SCALE[contract.SCALES[0]]),
+        }
+        for budget in contract.BUDGETS
+    )
+    assert len(coordinates) == 2
+    calls = SimpleNamespace(authority=0, validation=0)
+
+    def consumer() -> SimpleNamespace:
+        return SimpleNamespace(
+            activation=SimpleNamespace(public_binding={"activation": "frozen"}),
+            reuse_admission=SimpleNamespace(public_binding={"admission": "frozen"}),
+            preheldout_genesis=SimpleNamespace(public_binding={"genesis": "frozen"}),
+        )
+
+    def load_authority(*_args: object, **_kwargs: object) -> tuple[object, object]:
+        calls.authority += 1
+        return SimpleNamespace(), consumer()
+
+    def validate_inputs(
+        _inputs: object, coordinate: dict[str, object], **kwargs: object
+    ) -> tuple[dict[str, object], dict[str, object], dict[str, object]]:
+        calls.validation += 1
+        assert kwargs.get("_consumer_authority") is not None
+        budget = coordinate["budget"]
+        return ({"budget": budget}, {"arm": budget}, {"metadata": budget})
+
+    monkeypatch.setattr(evaluator, "_load_external_consumer_authority", load_authority)
+    monkeypatch.setattr(evaluator, "_validate_external_inputs", validate_inputs)
+    cache = evaluator.DirectControllerExternalValidationCache()
+    for inputs, coordinate in zip(inputs_by_budget, coordinates, strict=True):
+        cache.validated_external_inputs(inputs, coordinate, trust_root=trust_root)
+    assert cache.authority_count == 1
+    assert cache.entry_count == 2
+    assert calls.authority == 1
+    assert calls.validation == 2
+
+    for _ in range(5):
+        for inputs, coordinate in zip(inputs_by_budget, coordinates, strict=True):
+            cache.validated_external_inputs(inputs, coordinate, trust_root=trust_root)
+    assert calls.authority == 1
+    assert calls.validation == 2
+
+    cache.assert_unchanged(trust_root=trust_root)
+    assert calls.authority == 2
+    assert calls.validation == 4
+
+
+@pytest.mark.parametrize("with_callbacks", (False, True))
+def test_integrity_iterator_shares_one_nonnull_cache_for_every_shard(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    with_callbacks: bool,
+) -> None:
+    paths = (tmp_path / "one.json", tmp_path / "two.json")
+    bindings = {
+        str(path): {"path": str(path), "sha256": str(index) * 64}
+        for index, path in enumerate(paths, start=1)
+    }
+    inventory = [
+        {
+            "envelope": bindings[str(path)],
+            "matrix_record": {"coordinate_key": path.stem},
+        }
+        for path in paths
+    ]
+    cache_instances: list[object] = []
+    observed_caches: list[object] = []
+    callback_rows: list[tuple[str, str]] = []
+
+    class Cache:
+        def __init__(self) -> None:
+            self.finalized = 0
+            cache_instances.append(self)
+
+        def assert_unchanged(self, *, trust_root: object) -> None:
+            assert trust_root is sentinel_trust_root
+            self.finalized += 1
+
+    def consume(path: Path, **kwargs: object) -> dict[str, object]:
+        cache = kwargs["external_validation_cache"]
+        assert cache is not None
+        observed_caches.append(cache)
+        for name in ("outcome_callback", "token_callback", "failure_callback"):
+            callback = kwargs[name]
+            assert callable(callback)
+            callback({"kind": name})
+        return {"path": str(path)}
+
+    sentinel_trust_root = object()
+    monkeypatch.setattr(
+        audit,
+        "_evaluator_module",
+        lambda: SimpleNamespace(
+            consume_validated_direct_controller_shard=consume,
+            DirectControllerExternalValidationCache=Cache,
+        ),
+    )
+    monkeypatch.setattr(
+        audit,
+        "_file_binding",
+        lambda path, **_kwargs: bindings[str(path)],
+    )
+    callbacks = {}
+    if with_callbacks:
+        callbacks = {
+            "outcome_callback": lambda record, _row: callback_rows.append(
+                (record["coordinate_key"], "outcome")
+            ),
+            "token_callback": lambda record, _row: callback_rows.append(
+                (record["coordinate_key"], "token")
+            ),
+            "failure_callback": lambda record, _row: callback_rows.append(
+                (record["coordinate_key"], "failure")
+            ),
+        }
+    yielded = list(
+        audit.iter_validated_raw_shards(
+            {"bundle_inventory": inventory},
+            trust_root=sentinel_trust_root,
+            **callbacks,
+        )
+    )
+    assert len(yielded) == 2
+    assert len(cache_instances) == 1
+    assert cache_instances[0].finalized == 1
+    assert observed_caches == [cache_instances[0], cache_instances[0]]
+    assert len(callback_rows) == (6 if with_callbacks else 0)
+
+
 def test_runner_validates_admission_and_genesis_before_device_queries() -> None:
-    distributed = inspect.getsource(matrix._run_distributed_matrix)
     single = inspect.getsource(matrix.run_matrix)
 
-    assert distributed.index("load_and_validate_prerequisites(") < distributed.index(
+    assert single.index("load_and_validate_prestart_prerequisites(") < single.index(
         "_capture_selected_device_context("
     )
     assert single.index("load_and_validate_prerequisites(") < single.index(
         "_capture_selected_device_context("
+    )
+    assert single.index("_validate_quality_mutating_lock_path(", single.index("device_guard_path")) < single.index(
+        "_prepare_quality_start_authority("
     )
 
 
@@ -391,7 +576,7 @@ def test_child_uses_fresh_pycache_prefix_and_rejects_rogue_package_origin(
     try:
         monkeypatch.setattr(
             evaluator.contract,
-            "implementation_file_paths",
+            "v1_3_1_implementation_file_paths",
             lambda: (
                 "research/adaptive_v4_memory/scripts/evaluate_p2_direct_controller_shard_v1_3.py",
             ),
@@ -610,10 +795,197 @@ def test_child_uses_fresh_pycache_prefix_and_rejects_rogue_package_origin(
 def test_summary_cli_defaults_cannot_fall_back_to_the_v1_2_output_tree() -> None:
     source = _source("summary")
     assert "default=integrity_audit.INTEGRITY_OUTPUT" in source
-    assert "default=contract.MATRIX_SUMMARY_PATH" in source
-    assert "default=contract.OUTPUT_ROOT" in source
+    assert "default=contract.V1_3_1_MATRIX_SUMMARY_PATH" in source
+    assert "default=contract.V1_3_1_OUTPUT_ROOT" in source
     assert "confirmatory_comparator_rule" in source
     assert "strongest_fixed_comparator_rule" not in source
+
+
+def test_entrypoint_clis_forward_explicit_key_path_with_sanitized_environment(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    key_path = tmp_path / "external-attestation-key"
+    monkeypatch.delenv(matrix.attestation.KEY_PATH_ENV, raising=False)
+    matrix_call: dict[str, object] = {}
+    audit_call: dict[str, object] = {}
+
+    def fake_run_matrix(**kwargs: object) -> dict[str, object]:
+        matrix_call.update(kwargs)
+        return {
+            "experiment_id": contract.V1_3_1_MATRIX_EXPERIMENT_ID,
+            "status": "terminal",
+            "integrity_status": "INTEGRITY-PASS",
+            "completed_shards": matrix.EXPECTED_SHARDS,
+            "canonical_prefix_shards": matrix.EXPECTED_SHARDS,
+            "globally_committed_shards": matrix.EXPECTED_SHARDS,
+            "payload_sha256": "1" * 64,
+        }
+
+    def fake_audit_matrix(**kwargs: object) -> dict[str, object]:
+        audit_call.update(kwargs)
+        return {
+            "experiment_id": audit.EXPERIMENT_ID,
+            "status": "terminal",
+            "integrity_status": "INTEGRITY-PASS",
+            "validated_shards": matrix.EXPECTED_SHARDS,
+            "payload_sha256": "2" * 64,
+        }
+
+    monkeypatch.setattr(matrix, "run_matrix", fake_run_matrix)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "matrix-v1-3",
+            "--attestation-key-path",
+            str(key_path),
+            "--start-mode",
+            "resume",
+        ],
+    )
+    assert matrix.main() == 0
+    assert matrix_call["attestation_key_path"] == key_path
+    capsys.readouterr()
+
+    monkeypatch.setattr(audit, "audit_matrix", fake_audit_matrix)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["audit-v1-3", "--attestation-key-path", str(key_path)],
+    )
+    assert audit.main() == 0
+    assert audit_call["attestation_key_path"] == key_path
+    capsys.readouterr()
+
+    observed_summary: dict[str, object] = {}
+
+    class ExplicitSummaryKeyObserved(RuntimeError):
+        pass
+
+    def observe_summary_key(path: Path, **kwargs: object) -> object:
+        observed_summary["path"] = path
+        observed_summary.update(kwargs)
+        raise ExplicitSummaryKeyObserved
+
+    monkeypatch.setattr(summary.attestation, "load_trust_root", observe_summary_key)
+    monkeypatch.setattr(
+        summary.attestation,
+        "trust_root_from_environment",
+        lambda **_kwargs: pytest.fail("explicit summary key path fell back to the environment"),
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "summary-v1-3",
+            "--attestation-key-path",
+            str(key_path),
+            "--output",
+            str(tmp_path / "summary.json"),
+        ],
+    )
+    with pytest.raises(ExplicitSummaryKeyObserved):
+        summary.main()
+    assert observed_summary["path"] == key_path
+    assert observed_summary["repository_root"] == summary.REPOSITORY_ROOT
+
+
+def test_prerequisites_only_cli_has_a_dedicated_nonledger_result_schema(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    key_path = tmp_path / "key"
+    monkeypatch.delenv(matrix.attestation.KEY_PATH_ENV, raising=False)
+    monkeypatch.setattr(
+        matrix,
+        "run_matrix",
+        lambda **_kwargs: {
+            "experiment_id": contract.V1_3_1_MATRIX_EXPERIMENT_ID,
+            "status": "prerequisites_validated",
+            "expected_shards": matrix.EXPECTED_SHARDS,
+        },
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "matrix-v1-3-1",
+            "--attestation-key-path",
+            str(key_path),
+            "--start-mode",
+            "prerequisites-only",
+        ],
+    )
+    assert matrix.main() == 0
+    assert json.loads(capsys.readouterr().out) == {
+        "experiment_id": contract.V1_3_1_MATRIX_EXPERIMENT_ID,
+        "expected_shards": matrix.EXPECTED_SHARDS,
+        "status": "prerequisites_validated",
+    }
+
+
+def test_entrypoint_clis_reject_missing_key_transport_before_output_mutation(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.delenv(matrix.attestation.KEY_PATH_ENV, raising=False)
+    matrix_root = tmp_path / "matrix-output"
+    audit_output = tmp_path / "audit-output.json"
+    summary_output = tmp_path / "summary-output.json"
+
+    monkeypatch.setattr(
+        matrix,
+        "run_matrix",
+        lambda **_kwargs: pytest.fail("matrix ran without attestation-key transport"),
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "matrix-v1-3",
+            "--output-root",
+            str(matrix_root),
+            "--start-mode",
+            "resume",
+        ],
+    )
+    with pytest.raises(SystemExit) as matrix_exit:
+        matrix.main()
+    assert matrix_exit.value.code == 2
+    assert not matrix_root.exists()
+
+    monkeypatch.setattr(
+        audit,
+        "audit_matrix",
+        lambda **_kwargs: pytest.fail("audit ran without attestation-key transport"),
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["audit-v1-3", "--output", str(audit_output)],
+    )
+    with pytest.raises(SystemExit) as audit_exit:
+        audit.main()
+    assert audit_exit.value.code == 2
+    assert not audit_output.exists()
+
+    monkeypatch.setattr(
+        summary,
+        "_load_integrity_same_fd",
+        lambda *_args, **_kwargs: pytest.fail("summary read inputs without key transport"),
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["summary-v1-3", "--output", str(summary_output)],
+    )
+    with pytest.raises(SystemExit) as summary_exit:
+        summary.main()
+    assert summary_exit.value.code == 2
+    assert not summary_output.exists()
 
 
 def test_runner_parser_help_and_evaluator_family_flag_are_unambiguous(
@@ -623,8 +995,480 @@ def test_runner_parser_help_and_evaluator_family_flag_are_unambiguous(
     with pytest.raises(SystemExit) as exit_info:
         matrix.main()
     assert exit_info.value.code == 0
-    assert "--max-new-cells" in capsys.readouterr().out
+    help_output = capsys.readouterr().out
+    assert "--max-new-cells" in help_output
+    assert "--attestation-key-path" in help_output
     assert inspect.getsource(matrix.build_evaluator_command).count('"--family"') == 1
+
+
+def test_quality_start_mode_and_stop_limit_truth_table_precedes_layout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class ReachedPureLayout(RuntimeError):
+        pass
+
+    monkeypatch.setattr(matrix, "_require_launcher_authority", lambda: {})
+    monkeypatch.setattr(
+        matrix,
+        "_validate_matrix_layout",
+        lambda **_kwargs: (_ for _ in ()).throw(ReachedPureLayout),
+    )
+    valid = (("fresh", 1), ("resume", None), ("prerequisites-only", None))
+    for start_mode, limit in valid:
+        with pytest.raises(ReachedPureLayout):
+            matrix.run_matrix(start_mode=start_mode, max_new_cells=limit)
+
+    invalid = (
+        ("fresh", None),
+        ("fresh", 2),
+        ("resume", 1),
+        ("prerequisites-only", 1),
+        ("unknown", None),
+    )
+    for start_mode, limit in invalid:
+        with pytest.raises(ValueError):
+            matrix.run_matrix(start_mode=start_mode, max_new_cells=limit)
+
+
+def test_v1_3_1_single_worker_topology_rejects_before_any_mutating_lock(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(matrix, "_require_launcher_authority", lambda: {})
+    monkeypatch.setattr(matrix, "_validate_matrix_layout", lambda **_kwargs: SimpleNamespace())
+    monkeypatch.setattr(
+        matrix,
+        "_validate_quality_mutating_lock_path",
+        lambda *_args, **_kwargs: pytest.fail("topology rejection reached lock validation"),
+    )
+    for worker_index, worker_count, coordinator_only in (
+        (0, 2, False),
+        (1, 2, False),
+        (0, 2, True),
+        (0, 1, True),
+    ):
+        with pytest.raises(ValueError, match="frozen to worker-count 1"):
+            matrix.run_matrix(
+                start_mode="resume",
+                worker_index=worker_index,
+                worker_count=worker_count,
+                coordinator_only=coordinator_only,
+            )
+
+
+def test_prerequisites_only_does_not_acquire_gpu_activate_or_write(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    layout = SimpleNamespace(
+        output_root=tmp_path / "output",
+        matrix_summary=tmp_path / "output/matrix.json",
+        training_output_root=tmp_path / "training",
+        calibration_output_root=tmp_path / "calibration",
+        reuse_admission_path=tmp_path / "admission/reuse.json",
+        preheldout_genesis_path=tmp_path / "admission/genesis.json",
+    )
+    base = SimpleNamespace(public_binding={"base": "validated"})
+    prestart = SimpleNamespace(absence_witness={"absence": "validated"})
+    monkeypatch.setattr(matrix, "_require_launcher_authority", lambda: {})
+    monkeypatch.setattr(matrix, "_validate_matrix_layout", lambda **_kwargs: layout)
+    monkeypatch.setattr(matrix, "_validate_quality_mutating_lock_path", lambda *_a, **_k: Path("/tmp/lock"))
+    monkeypatch.setattr(
+        matrix,
+        "load_and_validate_prestart_prerequisites",
+        lambda **_kwargs: (base, prestart),
+    )
+    for name in (
+        "acquire_gpu_lock",
+        "_prepare_quality_start_authority",
+        "_atomic_write_json",
+        "_capture_selected_device_context",
+    ):
+        monkeypatch.setattr(
+            matrix,
+            name,
+            lambda *_args, _name=name, **_kwargs: pytest.fail(
+                f"prerequisites-only reached {_name}"
+            ),
+        )
+
+    before = tuple(tmp_path.iterdir())
+    result = matrix.run_matrix(start_mode="prerequisites-only")
+    after = tuple(tmp_path.iterdir())
+    assert result["status"] == "prerequisites_validated"
+    assert result["prerequisites"] == base.public_binding
+    assert before == after == ()
+
+
+def test_one_cell_full_resume_gate_uses_flat_canonical_record_and_integrity_pass() -> None:
+    coordinate = matrix.coordinates()[0]
+    valid = {
+        **coordinate.payload,
+        "coordinate_key": coordinate.key,
+        "integrity_decision": "INTEGRITY-PASS",
+    }
+    matrix._assert_one_cell_full_resume_gate([valid])
+
+    failed = {**valid, "integrity_decision": "INTEGRITY-FAIL"}
+    with pytest.raises(ValueError, match="canonical integrity gate"):
+        matrix._assert_one_cell_full_resume_gate([failed])
+    with pytest.raises(ValueError, match="canonical integrity gate"):
+        matrix._assert_one_cell_full_resume_gate([])
+    with pytest.raises(ValueError, match="canonical integrity gate"):
+        matrix._assert_one_cell_full_resume_gate([valid, valid])
+    nested = {
+        "coordinate": coordinate.payload,
+        "coordinate_key": coordinate.key,
+        "integrity_decision": "INTEGRITY-PASS",
+    }
+    with pytest.raises(ValueError, match="canonical integrity gate"):
+        matrix._assert_one_cell_full_resume_gate([nested])
+
+
+def test_activation_ledger_boundary_uses_held_lease_and_recovers_interrupted_zero(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    activation_binding = {"activation": "binding"}
+    lock_binding = {"path": str(tmp_path / "activation/matrix.lock")}
+    activation = SimpleNamespace(
+        public_binding=activation_binding,
+        matrix_lock_binding=lock_binding,
+    )
+
+    class Lease:
+        def __init__(self) -> None:
+            self.activation = activation
+            self.descriptor = 73
+            self.assertions = 0
+
+        def assert_held(self) -> None:
+            self.assertions += 1
+
+        def fileno(self) -> int:
+            return self.descriptor
+
+    prerequisites = SimpleNamespace(
+        public_binding={"quality_start_activation": activation_binding},
+        activation=activation,
+        trust_root=object(),
+    )
+
+    def layout_at(name: str) -> SimpleNamespace:
+        output = tmp_path / name
+        return SimpleNamespace(
+            output_root=output,
+            matrix_summary=output / matrix.MATRIX_SUMMARY_NAME,
+            lock_path=Path(lock_binding["path"]),
+        )
+
+    payload = {
+        "completed_shards": 0,
+        "prerequisites": prerequisites.public_binding,
+        "matrix_lock": lock_binding,
+        "worker_count": 1,
+    }
+    monkeypatch.setattr(matrix, "_matrix_payload", lambda *_args, **_kwargs: dict(payload))
+    monkeypatch.setattr(matrix, "_verify_attested_payload", lambda *_args, **_kwargs: None)
+
+    fresh_layout = layout_at("fresh")
+    lease = Lease()
+    descriptor_before = lease.fileno()
+    observed = matrix._complete_activation_ledger_boundary(
+        start_mode="fresh",
+        layout=fresh_layout,
+        prerequisites=prerequisites,
+        activation_lease=lease,
+        evaluator_binding={},
+        worker_count=1,
+        gpu_lease_binding={"gpu": "lease"},
+    )
+    assert observed == payload
+    assert lease.fileno() == descriptor_before
+    assert lease.assertions >= 2
+    assert json.loads(fresh_layout.matrix_summary.read_text(encoding="utf-8")) == payload
+
+    resumed = matrix._complete_activation_ledger_boundary(
+        start_mode="resume",
+        layout=fresh_layout,
+        prerequisites=prerequisites,
+        activation_lease=lease,
+        evaluator_binding={},
+        worker_count=1,
+        gpu_lease_binding={"gpu": "lease"},
+    )
+    assert resumed == payload
+
+    interrupted_layout = layout_at("interrupted")
+    interrupted_layout.output_root.mkdir(mode=0o700)
+    temporary = interrupted_layout.output_root / (
+        f".{interrupted_layout.matrix_summary.name}.deadbeef.tmp"
+    )
+    temporary.write_bytes(b"partial")
+    temporary.chmod(0o600)
+    recovered = matrix._complete_activation_ledger_boundary(
+        start_mode="resume",
+        layout=interrupted_layout,
+        prerequisites=prerequisites,
+        activation_lease=lease,
+        evaluator_binding={},
+        worker_count=1,
+        gpu_lease_binding={"gpu": "lease"},
+    )
+    assert recovered == payload
+    assert interrupted_layout.matrix_summary.is_file()
+    assert not temporary.exists()
+
+
+@pytest.mark.parametrize("start_mode", ("fresh", "resume"))
+def test_quality_start_authority_closes_untransferred_lease_and_allows_retry(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    start_mode: str,
+) -> None:
+    layout = SimpleNamespace(
+        training_output_root=tmp_path / "training",
+        calibration_output_root=tmp_path / "calibration",
+        reuse_admission_path=tmp_path / "admission/reuse.json",
+        preheldout_genesis_path=tmp_path / "admission/genesis.json",
+        output_root=tmp_path / "output",
+    )
+    state = SimpleNamespace(active=False, created=[], fail_post_acquisition=True)
+
+    class Lease:
+        def __init__(self, activation: object) -> None:
+            assert not state.active
+            state.active = True
+            state.created.append(self)
+            self.activation = activation
+            self.close_count = 0
+
+        def assert_held(self) -> None:
+            assert state.active
+
+        def close(self) -> None:
+            self.close_count += 1
+            assert self.close_count == 1
+            state.active = False
+
+    scheduler = SimpleNamespace(assert_held=lambda: None)
+    base = SimpleNamespace(trust_root=object(), public_binding={"base": "binding"})
+    activation = SimpleNamespace(public_binding={"activation": "binding"})
+    frozen = SimpleNamespace(
+        trust_root=base.trust_root,
+        activation=activation,
+        public_binding={
+            "frozen": "binding",
+            "quality_start_activation": activation.public_binding,
+        },
+        base_public_binding=base.public_binding,
+    )
+    monkeypatch.setattr(matrix, "_validated_source_provenance", lambda: {"source": "sealed"})
+    monkeypatch.setattr(
+        matrix,
+        "_validated_launch_routing",
+        lambda **_kwargs: {"routing": "sealed"},
+    )
+    monkeypatch.setattr(
+        matrix,
+        "load_and_validate_prestart_prerequisites",
+        lambda **_kwargs: (base, SimpleNamespace()),
+    )
+
+    if start_mode == "fresh":
+        monkeypatch.setattr(
+            matrix.admission,
+            "publish_quality_start_activation",
+            lambda **_kwargs: Lease(activation),
+        )
+
+        def promote(*_args: object, **_kwargs: object) -> object:
+            if state.fail_post_acquisition:
+                state.fail_post_acquisition = False
+                raise RuntimeError("post-acquisition validation failed")
+            return frozen
+
+        monkeypatch.setattr(matrix, "_promote_activated_prerequisites", promote)
+    else:
+        monkeypatch.setattr(
+            matrix.admission,
+            "acquire_quality_start_activation_lease",
+            lambda *_args, **_kwargs: Lease(activation),
+        )
+        monkeypatch.setattr(
+            matrix,
+            "load_and_validate_prerequisites",
+            lambda **_kwargs: frozen,
+        )
+
+        def revalidate(*_args: object, **_kwargs: object) -> object:
+            if state.fail_post_acquisition:
+                state.fail_post_acquisition = False
+                raise RuntimeError("post-acquisition validation failed")
+            return activation
+
+        monkeypatch.setattr(
+            matrix.admission,
+            "revalidate_activated_quality_authority",
+            revalidate,
+        )
+
+    arguments = {
+        "start_mode": start_mode,
+        "layout": layout,
+        "manifest_path": tmp_path / "manifest.json",
+        "attestation_key_path": None,
+        "worker_count": 1,
+        "scheduler_lease": scheduler,
+    }
+    with pytest.raises(RuntimeError, match="post-acquisition validation failed"):
+        matrix._prepare_quality_start_authority(**arguments)
+    assert len(state.created) == 1
+    assert state.created[0].close_count == 1
+    assert not state.active
+
+    prerequisites, retry_lease = matrix._prepare_quality_start_authority(**arguments)
+    assert prerequisites is frozen
+    assert retry_lease is state.created[1]
+    assert state.active
+    retry_lease.close()
+    assert not state.active
+
+
+def test_runner_rejects_nested_coordinate_scoped_activation_promotion() -> None:
+    public_binding = {"base": "binding"}
+    base = matrix.ValidatedBasePrerequisites(
+        context=SimpleNamespace(),
+        trust_root=SimpleNamespace(),
+        bundles={},
+        public_binding=public_binding,
+    )
+    scoped = matrix.admission.ValidatedQualityStartActivationV1_3_1(
+        _seal=object(),
+        payload={"base_prerequisites_binding": public_binding},
+        public_binding={"activation": "binding"},
+        quality_context=SimpleNamespace(),
+        reuse_admission=SimpleNamespace(),
+        preheldout_genesis=SimpleNamespace(),
+        superseded_empty_lineage=SimpleNamespace(),
+        consumer_coordinate=(contract.SCALES[0], contract.TRAINING_SEEDS[0]),
+        root_identity={},
+        matrix_lock_binding={},
+    )
+    with pytest.raises(ValueError, match="full-owner prerequisites"):
+        matrix._promote_activated_prerequisites(base, scoped)
+
+
+def test_selected_device_guard_closes_on_post_acquisition_failure_and_retries(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    state = SimpleNamespace(active=False, guards=[])
+
+    class Scheduler:
+        path = tmp_path / "scheduler.lock"
+
+        def __init__(self) -> None:
+            self.assertions = 0
+
+        def assert_held(self) -> None:
+            self.assertions += 1
+            if self.assertions == 2:
+                raise RuntimeError("scheduler changed after guard acquisition")
+
+    class Guard:
+        def __init__(self) -> None:
+            assert not state.active
+            state.active = True
+            state.guards.append(self)
+            self.close_count = 0
+
+        def assert_held(self) -> None:
+            assert state.active
+
+        def close(self) -> None:
+            self.close_count += 1
+            assert self.close_count == 1
+            state.active = False
+
+    scheduler = Scheduler()
+    guard_path = tmp_path / "device.lock"
+    monkeypatch.setattr(matrix, "canonical_device_guard_path", lambda _identity: guard_path)
+    monkeypatch.setattr(matrix, "acquire_device_guard", lambda *_args, **_kwargs: Guard())
+    context = {"selected_device_routing_identity": {"uuid": "GPU-test"}}
+
+    with pytest.raises(RuntimeError, match="scheduler changed"):
+        matrix._acquire_selected_device_guard(
+            label="test", device_context=context, scheduler_lease=scheduler
+        )
+    assert state.guards[0].close_count == 1
+    assert not state.active
+
+    guard = matrix._acquire_selected_device_guard(
+        label="test-retry", device_context=context, scheduler_lease=scheduler
+    )
+    assert guard is state.guards[1]
+    guard.close()
+    assert not state.active
+
+
+def test_mutating_lock_paths_reject_authority_key_and_hardlink_aliases(
+    tmp_path: Path,
+) -> None:
+    layout = SimpleNamespace(
+        output_root=(tmp_path / "output").resolve(),
+        matrix_summary=(tmp_path / "output/matrix.json").resolve(),
+        activation_root=(tmp_path / "activation").resolve(),
+        activation_path=(tmp_path / "activation/receipt.json").resolve(),
+        lock_path=(tmp_path / "activation/matrix.lock").resolve(),
+        training_output_root=(tmp_path / "training").resolve(),
+        calibration_output_root=(tmp_path / "calibration").resolve(),
+        reuse_admission_path=(tmp_path / "admission/reuse.json").resolve(),
+        preheldout_genesis_path=(tmp_path / "admission/genesis.json").resolve(),
+    )
+    manifest_path = (REPOSITORY_ROOT / "pyproject.toml").resolve()
+    canonical_scheduler = contract.DIRECT_GPU_SCHEDULER_LOCK_PATH.resolve()
+    with pytest.raises(ValueError, match="overlaps"):
+        matrix._validate_quality_mutating_lock_path(
+            canonical_scheduler,
+            layout=layout,
+            manifest_path=manifest_path,
+            attestation_key_path=canonical_scheduler,
+            label="GPU scheduler lock",
+            require_canonical_scheduler=True,
+        )
+    with pytest.raises(ValueError, match="overlaps"):
+        matrix._validate_quality_mutating_lock_path(
+            matrix.admission.V1_3_1_ACTIVATION_BOOTSTRAP_LOCK_PATH,
+            layout=layout,
+            manifest_path=manifest_path,
+            attestation_key_path=None,
+            label="GPU physical-device guard",
+            require_canonical_scheduler=False,
+        )
+    with pytest.raises(ValueError, match="canonical GPU scheduler"):
+        matrix._validate_quality_mutating_lock_path(
+            manifest_path,
+            layout=layout,
+            manifest_path=manifest_path,
+            attestation_key_path=None,
+            label="GPU scheduler lock",
+            require_canonical_scheduler=True,
+        )
+
+    key_path = tmp_path / "key"
+    guard_path = tmp_path / "guard"
+    key_path.write_bytes(b"secret")
+    key_path.chmod(0o600)
+    os.link(key_path, guard_path)
+    with pytest.raises(ValueError, match="unsafe pre-existing metadata|aliases"):
+        matrix._validate_quality_mutating_lock_path(
+            guard_path,
+            layout=layout,
+            manifest_path=manifest_path,
+            attestation_key_path=key_path,
+            label="GPU physical-device guard",
+            require_canonical_scheduler=False,
+        )
 
 
 def test_source_provenance_distinguishes_pinned_head_from_frozen_source_commit(
@@ -644,7 +1488,7 @@ def test_source_provenance_distinguishes_pinned_head_from_frozen_source_commit(
     ).encode()
     provenance = {
         "schema_version": 1,
-        "launcher": "p2-direct-controller-git-object-launcher-v1-3",
+        "launcher": "p2-direct-controller-git-object-launcher-v1-3-1",
         "repository_root": str(REPOSITORY_ROOT.resolve()),
         "bundle_sha256": "4" * 64,
         "pinned_head_oid": pinned_head,
@@ -659,13 +1503,13 @@ def test_source_provenance_distinguishes_pinned_head_from_frozen_source_commit(
             "source_base64": base64.b64encode(manifest_source).decode("ascii"),
         },
     }
-    monkeypatch.setattr(matrix, "SEALED_SOURCE_PROVENANCE_V1_3", provenance)
+    monkeypatch.setattr(matrix, "SEALED_SOURCE_PROVENANCE_V1_3_1", provenance)
     assert matrix._validated_source_provenance() == provenance
     assert source_commit != pinned_head
 
     mismatched = dict(provenance)
     mismatched["frozen_source_commit"] = "6" * 40
-    monkeypatch.setattr(matrix, "SEALED_SOURCE_PROVENANCE_V1_3", mismatched)
+    monkeypatch.setattr(matrix, "SEALED_SOURCE_PROVENANCE_V1_3_1", mismatched)
     with pytest.raises(ValueError, match="decoded HEAD manifest implementation"):
         matrix._validated_source_provenance()
 
@@ -678,15 +1522,15 @@ def test_audit_and_summary_routes_are_active_only_for_their_own_entrypoint(
     summary_route = _sealed_route("summary")
     alternate_audit_route = _sealed_route("audit", sha_digit="8")
     for module in (audit, summary):
-        monkeypatch.setattr(module, "SEALED_LAUNCH_AUTHORITY_V1_3", authority)
-        monkeypatch.setattr(module, "SEALED_PYTHON_RUNTIME_V1_3", runtime)
-        monkeypatch.setattr(module, "SEALED_SOURCE_PROVENANCE_V1_3", source_provenance)
-    monkeypatch.setattr(matrix, "SEALED_LAUNCH_AUTHORITY_V1_3", None)
-    monkeypatch.setattr(matrix, "SEALED_PYTHON_RUNTIME_V1_3", None)
-    monkeypatch.setattr(matrix, "SEALED_SOURCE_PROVENANCE_V1_3", None)
-    monkeypatch.setattr(matrix, "SEALED_LAUNCH_ROUTING_V1_3", None)
+        monkeypatch.setattr(module, "SEALED_LAUNCH_AUTHORITY_V1_3_1", authority)
+        monkeypatch.setattr(module, "SEALED_PYTHON_RUNTIME_V1_3_1", runtime)
+        monkeypatch.setattr(module, "SEALED_SOURCE_PROVENANCE_V1_3_1", source_provenance)
+    monkeypatch.setattr(matrix, "SEALED_LAUNCH_AUTHORITY_V1_3_1", None)
+    monkeypatch.setattr(matrix, "SEALED_PYTHON_RUNTIME_V1_3_1", None)
+    monkeypatch.setattr(matrix, "SEALED_SOURCE_PROVENANCE_V1_3_1", None)
+    monkeypatch.setattr(matrix, "SEALED_LAUNCH_ROUTING_V1_3_1", None)
 
-    monkeypatch.setattr(audit, "SEALED_LAUNCH_ROUTING_V1_3", audit_route)
+    monkeypatch.setattr(audit, "SEALED_LAUNCH_ROUTING_V1_3_1", audit_route)
     assert audit._active_audit_launch_routing() == audit_route
     assert (
         audit._validate_audit_launch_routing_snapshot(
@@ -699,7 +1543,7 @@ def test_audit_and_summary_routes_are_active_only_for_their_own_entrypoint(
             alternate_audit_route, source_provenance=source_provenance
         )
 
-    monkeypatch.setattr(audit, "SEALED_LAUNCH_ROUTING_V1_3", None)
+    monkeypatch.setattr(audit, "SEALED_LAUNCH_ROUTING_V1_3_1", None)
     assert (
         audit._validate_audit_launch_routing_snapshot(
             alternate_audit_route, source_provenance=source_provenance
@@ -711,10 +1555,10 @@ def test_audit_and_summary_routes_are_active_only_for_their_own_entrypoint(
             summary_route, source_provenance=source_provenance
         )
 
-    monkeypatch.setattr(summary, "SEALED_LAUNCH_ROUTING_V1_3", summary_route)
+    monkeypatch.setattr(summary, "SEALED_LAUNCH_ROUTING_V1_3_1", summary_route)
     assert summary._active_summary_launch_routing() == summary_route
-    assert audit.SEALED_LAUNCH_ROUTING_V1_3 is None
-    assert matrix.SEALED_LAUNCH_ROUTING_V1_3 is None
+    assert audit.SEALED_LAUNCH_ROUTING_V1_3_1 is None
+    assert matrix.SEALED_LAUNCH_ROUTING_V1_3_1 is None
 
 
 def test_matrix_session_crosscheck_binds_actual_argv_and_recovered_eof() -> None:

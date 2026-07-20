@@ -83,17 +83,107 @@ def _insert_generated_header(text: str) -> str:
     return text.replace(f"{marker}\n", f"{marker}\n{GENERATED_HEADER}", 1)
 
 
+def _upgrade_generated_contract_to_v1_3_1(text: str) -> str:
+    """Move every generated quality authority reference into the v1.3.1 namespace."""
+
+    replacements = (
+        ("contract.SHARD_EXPERIMENT_ID", "contract.V1_3_1_SHARD_EXPERIMENT_ID"),
+        ("contract.MATRIX_EXPERIMENT_ID", "contract.V1_3_1_MATRIX_EXPERIMENT_ID"),
+        (
+            "contract.WORKER_LEDGER_EXPERIMENT_ID",
+            "contract.V1_3_1_WORKER_LEDGER_EXPERIMENT_ID",
+        ),
+        ("contract.INTEGRITY_EXPERIMENT_ID", "contract.V1_3_1_INTEGRITY_EXPERIMENT_ID"),
+        ("contract.SUMMARY_EXPERIMENT_ID", "contract.V1_3_1_SUMMARY_EXPERIMENT_ID"),
+        ("contract.SHARD_ATTESTATION_PURPOSE", "contract.V1_3_1_SHARD_ATTESTATION_PURPOSE"),
+        ("contract.MATRIX_ATTESTATION_PURPOSE", "contract.V1_3_1_MATRIX_ATTESTATION_PURPOSE"),
+        (
+            "contract.WORKER_LEDGER_ATTESTATION_PURPOSE",
+            "contract.V1_3_1_WORKER_LEDGER_ATTESTATION_PURPOSE",
+        ),
+        (
+            "contract.INTEGRITY_ATTESTATION_PURPOSE",
+            "contract.V1_3_1_INTEGRITY_ATTESTATION_PURPOSE",
+        ),
+        ("contract.SUMMARY_ATTESTATION_PURPOSE", "contract.V1_3_1_SUMMARY_ATTESTATION_PURPOSE"),
+        ("contract.INTEGRITY_OUTPUT_PATH", "contract.V1_3_1_INTEGRITY_OUTPUT_PATH"),
+        ("contract.SUMMARY_OUTPUT_PATH", "contract.V1_3_1_SUMMARY_OUTPUT_PATH"),
+        ("contract.MATRIX_SUMMARY_PATH", "contract.V1_3_1_MATRIX_SUMMARY_PATH"),
+        ("contract.REUSE_ADMISSION_PATH", "contract.V1_3_1_REUSE_ADMISSION_PATH"),
+        (
+            "contract.PREHELDOUT_GENESIS_PATH",
+            "contract.V1_3_1_PREHELDOUT_GENESIS_PATH",
+        ),
+        ("contract.IMPLEMENTATION_PATHS", "contract.V1_3_1_IMPLEMENTATION_PATHS"),
+        ("contract.MANIFEST_PATH", "contract.V1_3_1_MANIFEST_PATH"),
+        ("contract.OUTPUT_ROOT", "contract.V1_3_1_OUTPUT_ROOT"),
+        ("contract.EXPERIMENT_ID", "contract.V1_3_1_EXPERIMENT_ID"),
+        (
+            "contract.implementation_tree_digest()",
+            "contract.v1_3_1_implementation_tree_digest()",
+        ),
+        (
+            "contract.implementation_file_paths()",
+            "contract.v1_3_1_implementation_file_paths()",
+        ),
+    )
+    for old, new in replacements:
+        text = text.replace(old, new)
+    global_upgrades = (
+        ("SEALED_LAUNCH_AUTHORITY_V1_3", "SEALED_LAUNCH_AUTHORITY_V1_3_1"),
+        ("SEALED_PYTHON_RUNTIME_V1_3", "SEALED_PYTHON_RUNTIME_V1_3_1"),
+        ("SEALED_SOURCE_PROVENANCE_V1_3", "SEALED_SOURCE_PROVENANCE_V1_3_1"),
+        ("SEALED_LAUNCH_ROUTING_V1_3", "SEALED_LAUNCH_ROUTING_V1_3_1"),
+    )
+    for index, (old, new) in enumerate(global_upgrades):
+        placeholder = f"__PRESERVED_V1_3_1_GLOBAL_{index}__"
+        text = text.replace(new, placeholder)
+        text = text.replace(old, new)
+        text = text.replace(placeholder, new)
+    for old, new in (
+        (
+            "ADAPTIVE_V4_CANONICAL_DIRECT_EXACT_FILL_V1_3_EVALUATOR_FD",
+            "ADAPTIVE_V4_CANONICAL_DIRECT_EXACT_FILL_V1_3_1_EVALUATOR_FD",
+        ),
+        (
+            "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_IMPORT_INVENTORY_FD",
+            "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_1_IMPORT_INVENTORY_FD",
+        ),
+        (
+            "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_PERSISTENT_PLAN_FD",
+            "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_1_PERSISTENT_PLAN_FD",
+        ),
+        (
+            "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_PROJECTED_REMAINING_SHARDS",
+            "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_1_PROJECTED_REMAINING_SHARDS",
+        ),
+        (
+            "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_PROJECTED_REMAINING_TOKEN_ROWS",
+            "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_1_PROJECTED_REMAINING_TOKEN_ROWS",
+        ),
+        ("exact-fill-v1-3-cell.claim", "exact-fill-v1-3-1-cell.claim"),
+        ("exact-fill-v1-3-import-inventory", "exact-fill-v1-3-1-import-inventory"),
+        ("exact-fill-v1-3-pycache", "exact-fill-v1-3-1-pycache"),
+        ("exact-fill-v1-3-matrix", "exact-fill-v1-3-1-matrix"),
+        ("paper-grade v1.3 exact-fill", "paper-grade v1.3.1 exact-fill"),
+        ("live v1.3 quality context", "live v1.3.1 quality context"),
+        ("Bound v1.3 manifest", "Bound v1.3.1 manifest"),
+    ):
+        text = text.replace(old, new)
+    return text
+
+
 def _sealed_entrypoint_preamble(*, selector: str, relative_path: str) -> str:
     return f'''if __name__ == "__main__":
-    _launcher_sentinel = globals().get("_ADAPTIVE_V4_GIT_OBJECT_LAUNCH_SENTINEL_V1_3")
+    _launcher_sentinel = globals().get("_ADAPTIVE_V4_GIT_OBJECT_LAUNCH_SENTINEL_V1_3_1")
     if _launcher_sentinel != {{
         "schema_version": 1,
-        "launcher": "p2-direct-controller-git-object-launcher-v1-3",
+        "launcher": "p2-direct-controller-git-object-launcher-v1-3-1",
         "sealed_runner": True,
         "sealed_inventory": True,
     }}:
         raise RuntimeError("Direct controller sealed launcher sentinel drifted.")
-    _python_runtime = globals().get("_ADAPTIVE_V4_GIT_OBJECT_PYTHON_RUNTIME_V1_3")
+    _python_runtime = globals().get("_ADAPTIVE_V4_GIT_OBJECT_PYTHON_RUNTIME_V1_3_1")
     if not isinstance(_python_runtime, dict) or set(_python_runtime) != {{
         "schema_version", "implementation", "cache_tag", "version", "executable",
         "venv_executable", "resolved_executable", "executable_sha256",
@@ -101,7 +191,7 @@ def _sealed_entrypoint_preamble(*, selector: str, relative_path: str) -> str:
     }}:
         raise RuntimeError("Direct controller sealed Python runtime binding is missing.")
     _source_provenance = globals().get(
-        "_ADAPTIVE_V4_GIT_OBJECT_SOURCE_PROVENANCE_V1_3"
+        "_ADAPTIVE_V4_GIT_OBJECT_SOURCE_PROVENANCE_V1_3_1"
     )
     if not isinstance(_source_provenance, dict) or set(_source_provenance) != {{
         "schema_version", "launcher", "repository_root", "bundle_sha256",
@@ -109,7 +199,7 @@ def _sealed_entrypoint_preamble(*, selector: str, relative_path: str) -> str:
         "head_manifest",
     }}:
         raise RuntimeError("Direct controller sealed source provenance is missing.")
-    _launch_routing = globals().get("_ADAPTIVE_V4_GIT_OBJECT_LAUNCH_ROUTING_V1_3")
+    _launch_routing = globals().get("_ADAPTIVE_V4_GIT_OBJECT_LAUNCH_ROUTING_V1_3_1")
     if not isinstance(_launch_routing, dict) or set(_launch_routing) != {{
         "schema_version", "launcher", "entrypoint_selector", "entrypoint_relative_path",
         "source_bundle_sha256", "git_mode", "git_blob_oid", "sha256", "bytes",
@@ -121,7 +211,7 @@ def _sealed_entrypoint_preamble(*, selector: str, relative_path: str) -> str:
     if (
         _launch_routing.get("schema_version") != 1
         or _launch_routing.get("launcher")
-        != "p2-direct-controller-git-object-launcher-v1-3"
+        != "p2-direct-controller-git-object-launcher-v1-3-1"
         or _launch_routing.get("entrypoint_selector") != {selector!r}
         or _launch_routing.get("entrypoint_relative_path") != {relative_path!r}
         or _launch_routing.get("source_bundle_sha256")
@@ -136,16 +226,16 @@ def _sealed_entrypoint_preamble(*, selector: str, relative_path: str) -> str:
         or globals().get("__file__") != _expected_entrypoint
     ):
         raise RuntimeError("Direct controller sealed launch routing drifted.")
-    SEALED_LAUNCH_AUTHORITY_V1_3 = dict(_launcher_sentinel)
-    SEALED_PYTHON_RUNTIME_V1_3 = dict(_python_runtime)
-    SEALED_SOURCE_PROVENANCE_V1_3 = dict(_source_provenance)
-    SEALED_LAUNCH_ROUTING_V1_3 = dict(_launch_routing)
+    SEALED_LAUNCH_AUTHORITY_V1_3_1 = dict(_launcher_sentinel)
+    SEALED_PYTHON_RUNTIME_V1_3_1 = dict(_python_runtime)
+    SEALED_SOURCE_PROVENANCE_V1_3_1 = dict(_source_provenance)
+    SEALED_LAUNCH_ROUTING_V1_3_1 = dict(_launch_routing)
     del _launcher_sentinel, _python_runtime, _source_provenance, _launch_routing
     del _expected_entrypoint
-    globals().pop("_ADAPTIVE_V4_GIT_OBJECT_LAUNCH_SENTINEL_V1_3", None)
-    globals().pop("_ADAPTIVE_V4_GIT_OBJECT_PYTHON_RUNTIME_V1_3", None)
-    globals().pop("_ADAPTIVE_V4_GIT_OBJECT_SOURCE_PROVENANCE_V1_3", None)
-    globals().pop("_ADAPTIVE_V4_GIT_OBJECT_LAUNCH_ROUTING_V1_3", None)
+    globals().pop("_ADAPTIVE_V4_GIT_OBJECT_LAUNCH_SENTINEL_V1_3_1", None)
+    globals().pop("_ADAPTIVE_V4_GIT_OBJECT_PYTHON_RUNTIME_V1_3_1", None)
+    globals().pop("_ADAPTIVE_V4_GIT_OBJECT_SOURCE_PROVENANCE_V1_3_1", None)
+    globals().pop("_ADAPTIVE_V4_GIT_OBJECT_LAUNCH_ROUTING_V1_3_1", None)
 
 '''
 
@@ -171,6 +261,7 @@ def establish_evaluator_inputs(
     calibration_path: Path,
     reuse_admission_path: Path,
     preheldout_genesis_path: Path,
+    quality_start_activation_path: Path,
     manifest_path: Path,
     scale: str,
     training_seed: int,
@@ -192,28 +283,65 @@ def establish_evaluator_inputs(
         context=contract.CONTEXTS[0],
         replicate=contract.REPLICATES[0],
     )
-    quality_context = admission.establish_quality_context(
+    quality_context = admission.establish_v1_3_1_quality_context(
         manifest_path,
-        experiment_id=contract.EXPERIMENT_ID,
         implementation_paths=contract.IMPLEMENTATION_PATHS,
         repository_root=REPOSITORY_ROOT,
     )
-    validated_admission = admission.load_validated_reuse_admission(
-        reuse_admission_path,
-        trust_root=trust_root,
-        quality_context=quality_context,
-        verify_evidence=False,
-    )
-    validated_genesis = admission.load_validated_preheldout_genesis(
-        preheldout_genesis_path,
-        admission=validated_admission,
-        trust_root=trust_root,
-        expected_shards=contract.BUDGET_SHARDS_TOTAL,
-        coordinate_digest=contract.quality_coordinate_digest(),
-        exact_fill_arm_names=contract.ALL_ARM_NAMES,
-    )
+    raw_sealed_source = globals().get("SEALED_SOURCE_PROVENANCE_V1_3_1")
+    raw_sealed_routing = globals().get("SEALED_LAUNCH_ROUTING_V1_3_1")
     calibration, opened_calibration = _opened_json(calibration_path)
     try:
+        raw_checkpoint_binding = calibration.get("checkpoint")
+        raw_training_binding = calibration.get("training_summary")
+        _require(
+            isinstance(raw_checkpoint_binding, Mapping)
+            and isinstance(raw_training_binding, Mapping),
+            "Calibration upstream bindings are missing before activated consumption.",
+        )
+        calibration_binding = _artifact_file_binding(
+            calibration_path,
+            calibration,
+            opened=opened_calibration,
+        )
+        consumer = admission.load_activated_consumer_authority(
+            quality_context=quality_context,
+            trust_root=trust_root,
+            expected_shards=contract.BUDGET_SHARDS_TOTAL,
+            coordinate_digest=contract.quality_coordinate_digest(),
+            exact_fill_arm_names=contract.ALL_ARM_NAMES,
+            scale=scale,
+            training_seed=training_seed,
+            calibration_binding=calibration_binding,
+            checkpoint_binding=cast(Mapping[str, Any], raw_checkpoint_binding),
+            sealed_source_provenance=(
+                cast(Mapping[str, Any], raw_sealed_source)
+                if isinstance(raw_sealed_source, Mapping)
+                else None
+            ),
+            sealed_launch_routing=(
+                cast(Mapping[str, Any], raw_sealed_routing)
+                if isinstance(raw_sealed_routing, Mapping)
+                else None
+            ),
+        )
+        activation = consumer.activation
+        validated_admission = consumer.reuse_admission
+        validated_genesis = consumer.preheldout_genesis
+        _require(
+            consumer.coordinate == (scale, training_seed)
+            and Path(cast(str, activation.public_binding["path"])).resolve(strict=True)
+            == quality_start_activation_path.resolve(strict=True)
+            and Path(cast(str, validated_admission.public_binding["path"])).resolve(
+                strict=True
+            )
+            == reuse_admission_path.resolve(strict=True)
+            and Path(cast(str, validated_genesis.public_binding["path"])).resolve(
+                strict=True
+            )
+            == preheldout_genesis_path.resolve(strict=True),
+            "Evaluator activated consumer paths or coordinate drifted.",
+        )
         admitted_calibration = validated_admission.calibrations[(scale, training_seed)]
         _require(
             opened_calibration.path == admitted_calibration.path.resolve(strict=True),
@@ -228,9 +356,7 @@ def establish_evaluator_inputs(
             expected_training_seed=training_seed,
         )
         calibration_binding = _artifact_file_binding(
-            calibration_path,
-            calibration,
-            opened=opened_calibration,
+            calibration_path, calibration, opened=opened_calibration
         )
         _require(
             calibration_binding
@@ -293,6 +419,7 @@ def establish_evaluator_inputs(
         "calibration_artifact": calibration_binding,
         "reuse_admission": dict(validated_admission.public_binding),
         "preheldout_genesis": dict(validated_genesis.public_binding),
+        "quality_start_activation": dict(activation.public_binding),
     }
     inputs = {**inputs_source, "input_binding_digest": contract.json_digest(inputs_source)}
     admission.assert_quality_context_unchanged(quality_context)
@@ -319,6 +446,7 @@ def _validate_inputs_structure(inputs: Mapping[str, Any]) -> dict[str, Any]:
             "calibration_artifact",
             "reuse_admission",
             "preheldout_genesis",
+            "quality_start_activation",
             "input_binding_digest",
         },
         "Direct-shard input binding schema drifted.",
@@ -379,23 +507,59 @@ def _validate_inputs_structure(inputs: Mapping[str, Any]) -> dict[str, Any]:
         ),
         "Pre-heldout genesis public binding schema drifted.",
     )
+    activation_binding = inputs.get("quality_start_activation")
+    _require(isinstance(activation_binding, Mapping), "Quality-start activation is missing.")
+    activation_map = cast(Mapping[str, Any], activation_binding)
+    _require(
+        set(activation_map)
+        == {
+            "path",
+            "sha256",
+            "bytes",
+            "experiment_id",
+            "payload_sha256",
+            "attestation_mac",
+            "activation_root",
+            "matrix_lock_path",
+            "matrix_lock_device",
+            "matrix_lock_inode",
+            "base_prerequisites_sha256",
+            "sealed_source_bundle_sha256",
+            "sealed_launch_routing_sha256",
+        }
+        and isinstance(activation_map.get("path"), str)
+        and isinstance(activation_map.get("activation_root"), str)
+        and isinstance(activation_map.get("matrix_lock_path"), str)
+        and type(activation_map.get("bytes")) is int
+        and cast(int, activation_map["bytes"]) > 0
+        and type(activation_map.get("matrix_lock_device")) is int
+        and type(activation_map.get("matrix_lock_inode")) is int
+        and all(
+            contract.is_sha256(activation_map.get(field))
+            for field in (
+                "sha256",
+                "payload_sha256",
+                "attestation_mac",
+                "base_prerequisites_sha256",
+                "sealed_source_bundle_sha256",
+                "sealed_launch_routing_sha256",
+            )
+        ),
+        "Quality-start activation public binding schema drifted.",
+    )
     return dict(inputs)
 '''
 
 
 EVALUATOR_VALIDATE_EXTERNAL = r'''
-def _validate_external_inputs(
+def _external_quality_context(
     inputs: Mapping[str, Any],
-    coordinate: Mapping[str, Any],
-    *,
-    trust_root: attestation.TrustRoot,
-) -> tuple[dict[str, Any], dict[str, BuiltCausalArm], dict[str, Any]]:
+) -> admission.QualityContext:
     manifest_binding = cast(Mapping[str, Any], inputs["manifest"])
     manifest_path = manifest_binding.get("path")
     _require(isinstance(manifest_path, str), "Bound v1.3 manifest path is missing.")
-    quality_context = admission.establish_quality_context(
+    quality_context = admission.establish_v1_3_1_quality_context(
         Path(cast(str, manifest_path)),
-        experiment_id=contract.EXPERIMENT_ID,
         implementation_paths=contract.IMPLEMENTATION_PATHS,
         repository_root=REPOSITORY_ROOT,
     )
@@ -404,34 +568,111 @@ def _validate_external_inputs(
         and quality_context.manifest_binding == inputs.get("manifest"),
         "Direct-shard live v1.3 quality context drifted.",
     )
-    admission_binding = cast(Mapping[str, Any], inputs["reuse_admission"])
-    admission_path = admission_binding.get("path")
-    _require(isinstance(admission_path, str), "Bound reuse-admission path is missing.")
-    validated_admission = admission.load_validated_reuse_admission(
-        Path(cast(str, admission_path)),
-        trust_root=trust_root,
-        quality_context=quality_context,
-        verify_evidence=False,
-    )
-    _require(
-        dict(validated_admission.public_binding) == dict(admission_binding),
-        "Direct-shard reuse-admission binding drifted.",
-    )
+    return quality_context
+
+
+def _validate_external_consumer_authority(
+    consumer: admission.ActivatedConsumerAuthorityV1_3_1,
+    inputs: Mapping[str, Any],
+    coordinate: Mapping[str, Any],
+    *,
+    quality_context: admission.QualityContext,
+) -> admission.ActivatedConsumerAuthorityV1_3_1:
+    consumer = admission.require_activated_consumer_authority(consumer)
+    scale = cast(str, coordinate["scale"])
+    training_seed = cast(int, coordinate["training_seed"])
+    admitted_coordinate = (scale, training_seed)
+    calibration_binding = cast(Mapping[str, Any], inputs["calibration_artifact"])
+    checkpoint_binding = cast(Mapping[str, Any], inputs["checkpoint"])
+    reuse_binding = cast(Mapping[str, Any], inputs["reuse_admission"])
     genesis_binding = cast(Mapping[str, Any], inputs["preheldout_genesis"])
-    genesis_path = genesis_binding.get("path")
-    _require(isinstance(genesis_path, str), "Bound pre-heldout genesis path is missing.")
-    validated_genesis = admission.load_validated_preheldout_genesis(
-        Path(cast(str, genesis_path)),
-        admission=validated_admission,
+    activation_binding = cast(Mapping[str, Any], inputs["quality_start_activation"])
+    activation = consumer.activation
+    _require(
+        type(consumer) is admission.ActivatedConsumerAuthorityV1_3_1
+        and type(activation) is admission.ValidatedQualityStartActivationV1_3_1
+        and consumer.coordinate == admitted_coordinate
+        and activation.consumer_coordinate == admitted_coordinate
+        and activation.quality_context.source == quality_context.source
+        and activation.quality_context.manifest_binding == quality_context.manifest_binding
+        and dict(activation.public_binding) == dict(activation_binding)
+        and consumer.reuse_admission is activation.reuse_admission
+        and consumer.preheldout_genesis is activation.preheldout_genesis
+        and dict(consumer.reuse_admission.public_binding) == dict(reuse_binding)
+        and dict(consumer.preheldout_genesis.public_binding) == dict(genesis_binding)
+        and set(consumer.reuse_admission.calibrations) == {admitted_coordinate}
+        and set(consumer.reuse_admission.checkpoints) == {admitted_coordinate}
+        and {
+            field: consumer.reuse_admission.calibrations[
+                admitted_coordinate
+            ].public_binding[field]
+            for field in calibration_binding
+        }
+        == dict(calibration_binding)
+        and consumer.reuse_admission.checkpoints[
+            admitted_coordinate
+        ].public_binding
+        == dict(checkpoint_binding),
+        "Cached activated consumer authority escaped or changed its coordinate binding.",
+    )
+    return consumer
+
+
+def _load_external_consumer_authority(
+    inputs: Mapping[str, Any],
+    coordinate: Mapping[str, Any],
+    *,
+    trust_root: attestation.TrustRoot,
+) -> tuple[
+    admission.QualityContext,
+    admission.ActivatedConsumerAuthorityV1_3_1,
+]:
+    quality_context = _external_quality_context(inputs)
+    calibration_binding = cast(Mapping[str, Any], inputs["calibration_artifact"])
+    checkpoint_binding = cast(Mapping[str, Any], inputs["checkpoint"])
+    activation_binding = cast(Mapping[str, Any], inputs["quality_start_activation"])
+    consumer = admission.load_activated_consumer_authority(
+        quality_context=quality_context,
         trust_root=trust_root,
         expected_shards=contract.BUDGET_SHARDS_TOTAL,
         coordinate_digest=contract.quality_coordinate_digest(),
         exact_fill_arm_names=contract.ALL_ARM_NAMES,
+        scale=cast(str, coordinate["scale"]),
+        training_seed=cast(int, coordinate["training_seed"]),
+        calibration_binding=calibration_binding,
+        checkpoint_binding=checkpoint_binding,
+        expected_public_binding=activation_binding,
     )
-    _require(
-        dict(validated_genesis.public_binding) == dict(genesis_binding),
-        "Direct-shard pre-heldout genesis binding drifted.",
+    return quality_context, _validate_external_consumer_authority(
+        consumer,
+        inputs,
+        coordinate,
+        quality_context=quality_context,
     )
+
+
+def _validate_external_inputs(
+    inputs: Mapping[str, Any],
+    coordinate: Mapping[str, Any],
+    *,
+    trust_root: attestation.TrustRoot,
+    _consumer_authority: admission.ActivatedConsumerAuthorityV1_3_1 | None = None,
+) -> tuple[dict[str, Any], dict[str, BuiltCausalArm], dict[str, Any]]:
+    if _consumer_authority is None:
+        quality_context, consumer = _load_external_consumer_authority(
+            inputs,
+            coordinate,
+            trust_root=trust_root,
+        )
+    else:
+        quality_context = _external_quality_context(inputs)
+        consumer = _validate_external_consumer_authority(
+            _consumer_authority,
+            inputs,
+            coordinate,
+            quality_context=quality_context,
+        )
+    validated_admission = consumer.reuse_admission
     calibration_binding = cast(Mapping[str, Any], inputs["calibration_artifact"])
     calibration = _load_bound_json(calibration_binding)
     calibration = admission.validate_admitted_calibration(
@@ -468,6 +709,207 @@ def _validate_external_inputs(
     )
     admission.assert_quality_context_unchanged(quality_context)
     return calibration, arms, _json_clone(metadata)
+'''
+
+
+EVALUATOR_EXTERNAL_CACHE_ENTRY = r'''
+@dataclass(frozen=True)
+class _ExternalAuthorityCacheEntry:
+    authority_key: str
+    immutable_projection: dict[str, Any]
+    immutable_inputs: dict[str, Any]
+    trust_root_key_id: str
+    coordinate: dict[str, Any]
+    consumer: admission.ActivatedConsumerAuthorityV1_3_1
+
+
+@dataclass(frozen=True)
+class _ExternalValidationCacheEntry:
+    input_binding_digest: str
+    immutable_inputs: dict[str, Any]
+    trust_root_key_id: str
+    coordinate_cohort: tuple[Any, ...]
+    coordinate: dict[str, Any]
+    authority_key: str
+    calibration: dict[str, Any]
+    arms: dict[str, BuiltCausalArm]
+    arm_metadata: dict[str, Any]
+'''
+
+
+EVALUATOR_EXTERNAL_CACHE = r'''
+class DirectControllerExternalValidationCache:
+    """Run-local cache for coordinate authority and budget-specific arm construction.
+
+    Every raw envelope and sidecar is still authenticated and streamed.  Activated
+    authority is loaded once per exact scale/seed provenance cohort, while arm
+    construction is cached independently per budget cohort.  Distinct input digests
+    cannot substitute authority or arm results.
+    """
+
+    def __init__(self) -> None:
+        self._authorities: dict[str, _ExternalAuthorityCacheEntry] = {}
+        self._entries: dict[
+            tuple[str, tuple[Any, ...]], _ExternalValidationCacheEntry
+        ] = {}
+
+    @staticmethod
+    def _coordinate_cohort(coordinate: Mapping[str, Any]) -> tuple[Any, ...]:
+        return (
+            coordinate.get("scale"),
+            coordinate.get("training_seed"),
+            coordinate.get("calibration_seed"),
+            coordinate.get("evaluation_seed"),
+            coordinate.get("budget"),
+            coordinate.get("global_block_budget"),
+            tuple(cast(Sequence[Any], coordinate.get("csa_layers", ()))),
+        )
+
+    @staticmethod
+    def _authority_projection(
+        inputs: Mapping[str, Any], coordinate: Mapping[str, Any]
+    ) -> dict[str, Any]:
+        return _json_clone(
+            {
+                "source": inputs.get("source"),
+                "manifest": inputs.get("manifest"),
+                "checkpoint": inputs.get("checkpoint"),
+                "training_summary": inputs.get("training_summary"),
+                "calibration_artifact": inputs.get("calibration_artifact"),
+                "reuse_admission": inputs.get("reuse_admission"),
+                "preheldout_genesis": inputs.get("preheldout_genesis"),
+                "quality_start_activation": inputs.get("quality_start_activation"),
+                "scale": coordinate.get("scale"),
+                "training_seed": coordinate.get("training_seed"),
+                "calibration_seed": coordinate.get("calibration_seed"),
+                "evaluation_seed": coordinate.get("evaluation_seed"),
+            }
+        )
+
+    @property
+    def entry_count(self) -> int:
+        return len(self._entries)
+
+    @property
+    def authority_count(self) -> int:
+        return len(self._authorities)
+
+    def validated_external_inputs(
+        self,
+        inputs: Mapping[str, Any],
+        coordinate: Mapping[str, Any],
+        *,
+        trust_root: attestation.TrustRoot,
+    ) -> tuple[dict[str, Any], dict[str, BuiltCausalArm], dict[str, Any]]:
+        digest = inputs.get("input_binding_digest")
+        _require(contract.is_sha256(digest), "Cached input binding digest is invalid.")
+        input_digest = cast(str, digest)
+        immutable_inputs = _json_clone(inputs)
+        cohort = self._coordinate_cohort(coordinate)
+        cache_key = (input_digest, cohort)
+        projection = self._authority_projection(inputs, coordinate)
+        authority_key = contract.json_digest(projection)
+
+        authority_entry = self._authorities.get(authority_key)
+        if authority_entry is None:
+            _context, consumer = _load_external_consumer_authority(
+                inputs,
+                coordinate,
+                trust_root=trust_root,
+            )
+            authority_entry = _ExternalAuthorityCacheEntry(
+                authority_key=authority_key,
+                immutable_projection=projection,
+                immutable_inputs=immutable_inputs,
+                trust_root_key_id=trust_root.key_id,
+                coordinate=_json_clone(coordinate),
+                consumer=consumer,
+            )
+            self._authorities[authority_key] = authority_entry
+        else:
+            _require(
+                authority_entry.immutable_projection == projection
+                and authority_entry.trust_root_key_id == trust_root.key_id,
+                "External authority cache substitution was rejected.",
+            )
+
+        cached = self._entries.get(cache_key)
+        if cached is not None:
+            _require(
+                cached.immutable_inputs == immutable_inputs
+                and cached.trust_root_key_id == trust_root.key_id
+                and cached.coordinate_cohort == cohort
+                and cached.authority_key == authority_key,
+                "External-validation cache substitution was rejected.",
+            )
+            return cached.calibration, cached.arms, cached.arm_metadata
+
+        calibration, arms, metadata = _validate_external_inputs(
+            inputs,
+            coordinate,
+            trust_root=trust_root,
+            _consumer_authority=authority_entry.consumer,
+        )
+        self._entries[cache_key] = _ExternalValidationCacheEntry(
+            input_binding_digest=input_digest,
+            immutable_inputs=immutable_inputs,
+            trust_root_key_id=trust_root.key_id,
+            coordinate_cohort=cohort,
+            coordinate=_json_clone(coordinate),
+            authority_key=authority_key,
+            calibration=calibration,
+            arms=arms,
+            arm_metadata=metadata,
+        )
+        return calibration, arms, metadata
+
+    def assert_unchanged(self, *, trust_root: attestation.TrustRoot) -> None:
+        """Revalidate each authority once and every unique arm cohort at finalization."""
+
+        refreshed: dict[str, admission.ActivatedConsumerAuthorityV1_3_1] = {}
+        for authority_key, authority_cached in self._authorities.items():
+            _require(
+                authority_cached.trust_root_key_id == trust_root.key_id,
+                "External authority cache trust root changed before finalization.",
+            )
+            _context, consumer = _load_external_consumer_authority(
+                authority_cached.immutable_inputs,
+                authority_cached.coordinate,
+                trust_root=trust_root,
+            )
+            _require(
+                self._authority_projection(
+                    authority_cached.immutable_inputs, authority_cached.coordinate
+                )
+                == authority_cached.immutable_projection
+                and dict(consumer.activation.public_binding)
+                == dict(authority_cached.consumer.activation.public_binding)
+                and dict(consumer.reuse_admission.public_binding)
+                == dict(authority_cached.consumer.reuse_admission.public_binding)
+                and dict(consumer.preheldout_genesis.public_binding)
+                == dict(authority_cached.consumer.preheldout_genesis.public_binding),
+                "External authority cache changed before finalization.",
+            )
+            refreshed[authority_key] = consumer
+
+        for entry_cached in self._entries.values():
+            _require(
+                entry_cached.trust_root_key_id == trust_root.key_id
+                and entry_cached.authority_key in refreshed,
+                "External-validation cache authority changed before finalization.",
+            )
+            calibration, arms, metadata = _validate_external_inputs(
+                entry_cached.immutable_inputs,
+                entry_cached.coordinate,
+                trust_root=trust_root,
+                _consumer_authority=refreshed[entry_cached.authority_key],
+            )
+            _require(
+                calibration == entry_cached.calibration
+                and arms == entry_cached.arms
+                and metadata == entry_cached.arm_metadata,
+                "External-validation cache changed before finalization.",
+            )
 '''
 
 
@@ -514,6 +956,7 @@ def main() -> None:
     parser.add_argument("--calibration", type=Path, required=True)
     parser.add_argument("--reuse-admission", type=Path, required=True)
     parser.add_argument("--preheldout-genesis", type=Path, required=True)
+    parser.add_argument("--quality-start-activation", type=Path, required=True)
     parser.add_argument("--manifest", type=Path, default=contract.MANIFEST_PATH)
     parser.add_argument("--scale", choices=contract.SCALES, required=True)
     parser.add_argument("--training-seed", type=int, choices=contract.TRAINING_SEEDS, required=True)
@@ -536,9 +979,8 @@ def main() -> None:
 
     _require(contract.is_sha256(args.launch_nonce), "--launch-nonce must be 64 lowercase hex.")
     _assert_repository_import_origins()
-    context = admission.establish_quality_context(
+    context = admission.establish_v1_3_1_quality_context(
         args.manifest,
-        experiment_id=contract.EXPERIMENT_ID,
         implementation_paths=contract.IMPLEMENTATION_PATHS,
         repository_root=REPOSITORY_ROOT,
     )
@@ -556,6 +998,7 @@ def main() -> None:
             calibration_path=args.calibration,
             reuse_admission_path=args.reuse_admission,
             preheldout_genesis_path=args.preheldout_genesis,
+            quality_start_activation_path=args.quality_start_activation,
             manifest_path=args.manifest,
             scale=args.scale,
             training_seed=args.training_seed,
@@ -719,6 +1162,7 @@ def _run_persistent_session(
             calibration_path=args.calibration,
             reuse_admission_path=args.reuse_admission,
             preheldout_genesis_path=args.preheldout_genesis,
+            quality_start_activation_path=args.quality_start_activation,
             manifest_path=args.manifest,
             scale=args.scale,
             training_seed=args.training_seed,
@@ -859,6 +1303,29 @@ def _run_persistent_session(
             trust_root=trust_root,
         )
     )
+'''
+
+
+RUNNER_ACQUIRE_SELECTED_DEVICE_GUARD = r'''
+def _acquire_selected_device_guard(
+    *, label: str, device_context: Mapping[str, Any], scheduler_lease: GPULockLease
+) -> GPULockLease:
+    scheduler_lease.assert_held()
+    identity = cast(Mapping[str, Any], device_context["selected_device_routing_identity"])
+    guard_path = canonical_device_guard_path(identity)
+    if scheduler_lease.path == guard_path:
+        return scheduler_lease
+    guard: GPULockLease | None = None
+    returned = False
+    try:
+        guard = acquire_device_guard(label, identity)
+        scheduler_lease.assert_held()
+        guard.assert_held()
+        returned = True
+        return guard
+    finally:
+        if guard is not None and not returned:
+            guard.close()
 '''
 
 
@@ -1254,6 +1721,238 @@ exec(compile(data, p, "exec"), g, g)
 '''
 
 
+RUNNER_MATRIX_LAYOUT = r'''
+class MatrixLayout:
+    output_root: Path
+    matrix_summary: Path
+    activation_root: Path
+    activation_path: Path
+    lock_path: Path
+    training_output_root: Path
+    calibration_output_root: Path
+    reuse_admission_path: Path
+    preheldout_genesis_path: Path
+'''
+
+
+RUNNER_INPUT_BUNDLES = r'''
+class BaseInputBundle:
+    coordinate: tuple[str, int, str]
+    checkpoint_path: Path
+    training_summary_path: Path
+    training_matrix_summary_path: Path
+    calibration_path: Path
+    reuse_admission_path: Path
+    preheldout_genesis_path: Path
+    calibration_payload: Mapping[str, Any]
+    binding: Mapping[str, Any]
+
+
+@dataclass(frozen=True)
+class InputBundle:
+    coordinate: tuple[str, int, str]
+    checkpoint_path: Path
+    training_summary_path: Path
+    training_matrix_summary_path: Path
+    calibration_path: Path
+    reuse_admission_path: Path
+    preheldout_genesis_path: Path
+    quality_start_activation_path: Path
+    calibration_payload: Mapping[str, Any]
+    binding: Mapping[str, Any]
+'''
+
+
+RUNNER_PREREQUISITE_TYPES = r'''
+class ValidatedBasePrerequisites:
+    context: admission.QualityContext
+    trust_root: attestation.TrustRoot
+    bundles: Mapping[tuple[str, int, str], BaseInputBundle]
+    public_binding: Mapping[str, Any]
+
+
+@dataclass(frozen=True)
+class FrozenPrerequisites:
+    context: admission.QualityContext
+    trust_root: attestation.TrustRoot
+    activation: admission.ValidatedQualityStartActivationV1_3_1
+    bundles: Mapping[tuple[str, int, str], InputBundle]
+    base_public_binding: Mapping[str, Any]
+    public_binding: Mapping[str, Any]
+'''
+
+
+RUNNER_WORKER_LEDGER_ROOT = r'''
+def _worker_ledger_root(output_root: Path) -> Path:
+    root = _absolute(output_root)
+    canonical_output = _absolute(contract.V1_3_1_OUTPUT_ROOT)
+    if root == canonical_output:
+        canonical_worker_root = _absolute(contract.V1_3_1_WORKER_LEDGER_ROOT)
+        _require(
+            canonical_worker_root.parent == root.parent,
+            "Canonical v1.3.1 worker-ledger root drifted.",
+        )
+        return canonical_worker_root
+    suffix = contract.V1_3_1_WORKER_LEDGER_ROOT.name.removeprefix(
+        f".{contract.V1_3_1_OUTPUT_ROOT.name}."
+    )
+    _require(bool(suffix), "V1.3.1 worker-ledger suffix is empty.")
+    return root.parent / f".{root.name}.{suffix}"
+'''
+
+
+RUNNER_MATRIX_LOCK_PATH = r'''
+def _matrix_lock_path(output_root: Path) -> Path:
+    root = _absolute(output_root)
+    _require(
+        root == _absolute(contract.V1_3_1_OUTPUT_ROOT),
+        "V1.3.1 matrix lock is defined only for the canonical quality output root.",
+    )
+    return _absolute(contract.V1_3_1_ACTIVATION_MATRIX_LOCK_PATH)
+'''
+
+
+RUNNER_OPENED_MATRIX_LOCK_BINDING = r'''
+def _opened_matrix_lock_binding(
+    path: Path, *, create: bool, retain_process_guardian: bool = False
+) -> dict[str, Any]:
+    _require(
+        create is False and retain_process_guardian is False,
+        "V1.3.1 matrix locks can only be adopted from typed activation authority.",
+    )
+    no_follow = getattr(os, "O_NOFOLLOW", None)
+    _require(no_follow is not None, "Controller locking requires O_NOFOLLOW.")
+    try:
+        descriptor = os.open(
+            path,
+            os.O_RDWR | getattr(os, "O_CLOEXEC", 0) | cast(int, no_follow),
+        )
+    except FileNotFoundError as error:
+        raise ValueError("Activated controller matrix lock is missing.") from error
+    try:
+        opened = os.fstat(descriptor)
+        current = os.stat(path, follow_symlinks=False)
+        _require(
+            stat.S_ISREG(opened.st_mode)
+            and (opened.st_dev, opened.st_ino) == (current.st_dev, current.st_ino)
+            and opened.st_uid == current.st_uid == os.getuid()
+            and opened.st_nlink == current.st_nlink == 1
+            and stat.S_IMODE(opened.st_mode) == stat.S_IMODE(current.st_mode) == 0o600,
+            "Activated controller lock identity or metadata is unsafe.",
+        )
+        return {
+            "path": str(path),
+            "semantics": MATRIX_LOCK_SEMANTICS,
+            "persistent_inode": True,
+            "device": opened.st_dev,
+            "inode": opened.st_ino,
+            "uid": opened.st_uid,
+            "mode": 0o600,
+            "nlink": opened.st_nlink,
+            "unlink_on_release": False,
+        }
+    finally:
+        os.close(descriptor)
+'''
+
+
+RUNNER_ATOMIC_WRITE_JSON = r'''
+def _atomic_write_json(path: Path, payload: Mapping[str, Any]) -> None:
+    parent = path.parent
+    parent_created = False
+    try:
+        parent.mkdir(mode=0o700, parents=False, exist_ok=False)
+        parent_created = True
+    except FileExistsError:
+        pass
+    no_follow = getattr(os, "O_NOFOLLOW", None)
+    _require(no_follow is not None, "Atomic JSON publication requires O_NOFOLLOW.")
+    parent_descriptor = os.open(
+        parent,
+        os.O_RDONLY
+        | getattr(os, "O_DIRECTORY", 0)
+        | getattr(os, "O_CLOEXEC", 0)
+        | cast(int, no_follow),
+    )
+    try:
+        if parent_created:
+            os.fchmod(parent_descriptor, 0o700)
+        opened_parent = os.fstat(parent_descriptor)
+        current_parent = os.stat(parent, follow_symlinks=False)
+        _require(
+            stat.S_ISDIR(opened_parent.st_mode)
+            and (opened_parent.st_dev, opened_parent.st_ino)
+            == (current_parent.st_dev, current_parent.st_ino)
+            and opened_parent.st_uid == current_parent.st_uid == os.getuid()
+            and stat.S_IMODE(opened_parent.st_mode)
+            == stat.S_IMODE(current_parent.st_mode)
+            == 0o700,
+            "Atomic JSON parent ownership, identity, or mode is unsafe.",
+        )
+        os.fsync(parent_descriptor)
+    finally:
+        os.close(parent_descriptor)
+    ancestor_descriptor = os.open(
+        parent.parent,
+        os.O_RDONLY
+        | getattr(os, "O_DIRECTORY", 0)
+        | getattr(os, "O_CLOEXEC", 0)
+        | cast(int, no_follow),
+    )
+    try:
+        os.fsync(ancestor_descriptor)
+    finally:
+        os.close(ancestor_descriptor)
+    encoded = (
+        json.dumps(payload, indent=2, sort_keys=True, allow_nan=False) + "\n"
+    ).encode()
+    temporary: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="wb",
+            dir=parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as handle:
+            temporary = Path(handle.name)
+            os.fchmod(handle.fileno(), 0o600)
+            temporary_metadata = os.fstat(handle.fileno())
+            _require(
+                stat.S_ISREG(temporary_metadata.st_mode)
+                and temporary_metadata.st_uid == os.getuid()
+                and temporary_metadata.st_nlink == 1
+                and stat.S_IMODE(temporary_metadata.st_mode) == 0o600,
+                "Atomic JSON temporary metadata is unsafe.",
+            )
+            handle.write(encoded)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+        temporary = None
+        directory_descriptor = os.open(
+            parent,
+            os.O_RDONLY | getattr(os, "O_CLOEXEC", 0),
+        )
+        try:
+            os.fsync(directory_descriptor)
+        finally:
+            os.close(directory_descriptor)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+'''
+
+
+RUNNER_INITIALIZE_MATRIX_LOCK = r'''
+def _initialize_matrix_lock_binding(path: Path) -> dict[str, Any]:
+    del path
+    raise RuntimeError(
+        "V1.3.1 matrix lock creation is private to publish_quality_start_activation."
+    )
+'''
+
+
 RUNNER_VALIDATE_LAYOUT = r'''
 def _validate_matrix_layout(
     *,
@@ -1265,17 +1964,50 @@ def _validate_matrix_layout(
     preheldout_genesis_path: Path,
     attestation_key_path: Path | None,
 ) -> MatrixLayout:
-    root = _exact_resolved_path(output_root, label="Controller v1.3 output root")
-    summary = _exact_resolved_path(matrix_summary, label="Controller v1.3 matrix summary")
+    root = _exact_resolved_path(output_root, label="Controller v1.3.1 output root")
+    summary = _exact_resolved_path(matrix_summary, label="Controller v1.3.1 matrix summary")
     _require(
-        summary == root / MATRIX_SUMMARY_NAME,
-        "Controller matrix summary must use its canonical output-root path.",
+        root == _exact_resolved_path(
+            contract.V1_3_1_OUTPUT_ROOT, label="Canonical controller v1.3.1 output root"
+        )
+        and summary == root / MATRIX_SUMMARY_NAME,
+        "Controller v1.3.1 output and matrix summary must be canonical.",
     )
     training_root = _exact_resolved_path(training_output_root, label="Training input root")
     calibration_root = _exact_resolved_path(calibration_output_root, label="Calibration input root")
     admission_path = _exact_resolved_path(reuse_admission_path, label="Reuse admission")
     genesis_path = _exact_resolved_path(
         preheldout_genesis_path, label="Pre-heldout genesis"
+    )
+    _require(
+        admission_path
+        == _exact_resolved_path(
+            contract.V1_3_1_REUSE_ADMISSION_PATH,
+            label="Canonical v1.3.1 reuse admission",
+        )
+        and genesis_path
+        == _exact_resolved_path(
+            contract.V1_3_1_PREHELDOUT_GENESIS_PATH,
+            label="Canonical v1.3.1 pre-heldout genesis",
+        ),
+        "Controller v1.3.1 admission/genesis paths must be canonical.",
+    )
+    activation_root = _exact_resolved_path(
+        contract.V1_3_1_ACTIVATION_ROOT, label="Quality-start activation root"
+    )
+    activation_path = _exact_resolved_path(
+        contract.V1_3_1_QUALITY_START_ACTIVATION_PATH,
+        label="Quality-start activation receipt",
+    )
+    lock_path = _exact_resolved_path(
+        contract.V1_3_1_ACTIVATION_MATRIX_LOCK_PATH,
+        label="Quality-start activation matrix lock",
+    )
+    _require(
+        activation_path.parent == activation_root
+        and lock_path.parent == activation_root
+        and activation_path.name != lock_path.name,
+        "Quality-start activation exact2 layout drifted.",
     )
     prerequisite_paths = (training_root, calibration_root, admission_path, genesis_path)
     session_ledger_root = _exact_resolved_path(
@@ -1317,9 +2049,8 @@ def _validate_matrix_layout(
         all(not _paths_overlap(root, item) for item in prerequisite_paths),
         "Controller output root must be disjoint from every prerequisite.",
     )
-    lock_path = _exact_resolved_path(_matrix_lock_path(root), label="Controller matrix lock")
     sibling_paths = (
-        lock_path,
+        activation_root,
         worker_ledger_root,
         session_ledger_root,
         session_ledger_lock,
@@ -1349,6 +2080,21 @@ def _validate_matrix_layout(
         )
         _require(
             not _paths_overlap(key, root)
+            and not _paths_overlap(key, activation_root)
+            and not _paths_overlap(
+                key,
+                _exact_resolved_path(
+                    admission.V1_3_1_ACTIVATION_BOOTSTRAP_LOCK_PATH,
+                    label="Activation bootstrap lock",
+                ),
+            )
+            and not _paths_overlap(
+                key,
+                _exact_resolved_path(
+                    contract.DIRECT_GPU_SCHEDULER_LOCK_PATH,
+                    label="Canonical GPU scheduler lock",
+                ),
+            )
             and all(not _paths_overlap(key, item) for item in sibling_paths)
             and all(not _paths_overlap(key, item) for item in prerequisite_paths),
             "Attestation key must be disjoint from all controller paths.",
@@ -1365,6 +2111,8 @@ def _validate_matrix_layout(
     return MatrixLayout(
         output_root=root,
         matrix_summary=summary,
+        activation_root=activation_root,
+        activation_path=activation_path,
         lock_path=lock_path,
         training_output_root=training_root,
         calibration_output_root=calibration_root,
@@ -1403,7 +2151,7 @@ def coordinates() -> tuple[ShardCoordinate, ...]:
 
 RUNNER_COORDINATE_DIGEST = r'''
 def coordinate_digest() -> str:
-    digest = cast(str, contract.quality_coordinate_digest())
+    digest = contract.quality_coordinate_digest()
     _require(
         digest == contract.json_digest([item.payload for item in coordinates()]),
         "Runner coordinate digest differs from the v1.3 contract.",
@@ -1437,9 +2185,8 @@ def load_and_validate_prerequisites(
     sealed_source_provenance = _validate_live_manifest_against_sealed_source(
         manifest_path
     )
-    context = admission.establish_quality_context(
+    context = admission.establish_v1_3_1_quality_context(
         manifest_path,
-        experiment_id=contract.EXPERIMENT_ID,
         implementation_paths=contract.IMPLEMENTATION_PATHS,
         repository_root=REPOSITORY_ROOT,
     )
@@ -1600,6 +2347,776 @@ def load_and_validate_prerequisites(
 '''
 
 
+RUNNER_PREREQUISITES_V1_3_1 = r'''
+def _establish_prerequisite_context(
+    *,
+    manifest_path: Path,
+    training_output_root: Path,
+    calibration_output_root: Path,
+    output_root: Path,
+    attestation_key_path: Path | None,
+) -> tuple[admission.QualityContext, attestation.TrustRoot, dict[str, Any]]:
+    sealed_source_provenance = _validate_live_manifest_against_sealed_source(
+        manifest_path
+    )
+    context = admission.establish_v1_3_1_quality_context(
+        manifest_path,
+        implementation_paths=contract.V1_3_1_IMPLEMENTATION_PATHS,
+        repository_root=REPOSITORY_ROOT,
+    )
+    raw_attestation = context.manifest_binding.get("attestation")
+    _require(isinstance(raw_attestation, Mapping), "Manifest attestation binding is missing.")
+    expected_key_id = cast(Mapping[str, Any], raw_attestation).get("key_id")
+    _require(contract.is_sha256(expected_key_id), "Manifest attestation key ID is invalid.")
+    roots = (
+        training_output_root,
+        calibration_output_root,
+        output_root,
+        _absolute(contract.V1_3_1_ADMISSION_ROOT),
+        _absolute(contract.V1_3_1_ACTIVATION_ROOT),
+    )
+    if attestation_key_path is None:
+        trust_root = attestation.trust_root_from_environment(
+            repository_root=REPOSITORY_ROOT,
+            artifact_roots=roots,
+            expected_key_id=cast(str, expected_key_id),
+        )
+    else:
+        trust_root = attestation.load_trust_root(
+            attestation_key_path,
+            repository_root=REPOSITORY_ROOT,
+            artifact_roots=roots,
+            expected_key_id=cast(str, expected_key_id),
+        )
+    return context, trust_root, sealed_source_provenance
+
+
+def _build_base_prerequisites(
+    *,
+    context: admission.QualityContext,
+    trust_root: attestation.TrustRoot,
+    sealed_source_provenance: Mapping[str, Any],
+    reuse_admission: admission.ValidatedReuseAdmission,
+    preheldout_genesis: admission.ValidatedPreheldoutGenesis,
+    training_output_root: Path,
+    calibration_output_root: Path,
+    reuse_admission_path: Path,
+    preheldout_genesis_path: Path,
+    worker_count: int,
+) -> ValidatedBasePrerequisites:
+    _require(
+        type(worker_count) is int and worker_count == 1,
+        "Controller v1.3.1 quality execution is frozen to one worker.",
+    )
+    _require(
+        Path(cast(str, reuse_admission.public_binding["path"])).resolve(strict=True)
+        == reuse_admission_path.resolve(strict=True)
+        and Path(cast(str, preheldout_genesis.public_binding["path"])).resolve(strict=True)
+        == preheldout_genesis_path.resolve(strict=True),
+        "Activated admission/genesis paths differ from the canonical runner layout.",
+    )
+    projection = reuse_admission.execution_environment_projection
+    _require(
+        isinstance(projection, Mapping)
+        and isinstance(cast(Mapping[str, Any], projection).get("selected_device_class"), Mapping),
+        "Reuse admission lacks the frozen execution-environment projection.",
+    )
+    bundles: dict[tuple[str, int, str], BaseInputBundle] = {}
+    validated_calibrations = 0
+    for scale in FROZEN_SCALES:
+        for training_seed in FROZEN_TRAINING_SEEDS:
+            admitted_calibration = reuse_admission.calibrations[(scale, training_seed)]
+            calibration_path = admitted_calibration.path
+            _require(
+                calibration_path.resolve(strict=True).is_relative_to(
+                    calibration_output_root.resolve(strict=True)
+                ),
+                "Admitted calibration is outside the declared calibration root.",
+            )
+            calibration_payload = _load_json_nofollow(
+                calibration_path, label="admitted direct calibration artifact"
+            )
+            calibration_payload = admission.validate_admitted_calibration(
+                calibration_payload,
+                artifact_path=calibration_path,
+                admission=reuse_admission,
+                trust_root=trust_root,
+                expected_scale=scale,
+                expected_training_seed=training_seed,
+            )
+            _require(
+                _artifact_input_binding(calibration_path, calibration_payload)
+                == {
+                    field: admitted_calibration.public_binding[field]
+                    for field in (
+                        "path",
+                        "sha256",
+                        "bytes",
+                        "payload_sha256",
+                        "attestation_mac",
+                        "experiment_id",
+                    )
+                },
+                "Admitted calibration binding changed during runner validation.",
+            )
+            validated_calibrations += 1
+            checkpoint = calibration_payload.get("checkpoint")
+            training_summary = calibration_payload.get("training_summary")
+            _require(isinstance(checkpoint, Mapping), "Calibration checkpoint binding is missing.")
+            _require(
+                isinstance(training_summary, Mapping),
+                "Calibration training-summary binding is missing.",
+            )
+            checkpoint_map = cast(Mapping[str, Any], checkpoint)
+            training_summary_map = cast(Mapping[str, Any], training_summary)
+            training_matrix_binding = training_summary_map.get("terminal_matrix_ledger")
+            _require(
+                isinstance(training_matrix_binding, Mapping),
+                "Calibration terminal-training-ledger binding is missing.",
+            )
+            for budget in FROZEN_BUDGETS:
+                arms, _metadata = contract.build_direct_controller_arms(
+                    calibration_payload,
+                    budget,
+                    reuse_admission=reuse_admission,
+                    trust_root=trust_root,
+                    expected_scale=scale,
+                    expected_training_seed=training_seed,
+                    expected_global_block_budget=contract.DIRECT_GLOBAL_BLOCK_BUDGETS[scale][budget],
+                    expected_csa_layers=contract.DIRECT_CSA_LAYERS_BY_SCALE[scale],
+                )
+                _require(tuple(arms) == ARM_NAMES, "Validated quality arm inventory drifted.")
+                input_source = {
+                    "source": context.source,
+                    "manifest": context.manifest_binding,
+                    "checkpoint": dict(checkpoint_map),
+                    "training_summary": dict(training_summary_map),
+                    "calibration_artifact": _artifact_input_binding(
+                        calibration_path, calibration_payload
+                    ),
+                    "reuse_admission": dict(reuse_admission.public_binding),
+                    "preheldout_genesis": dict(preheldout_genesis.public_binding),
+                }
+                bundles[(scale, training_seed, budget)] = BaseInputBundle(
+                    coordinate=(scale, training_seed, budget),
+                    checkpoint_path=Path(cast(str, checkpoint_map["path"])),
+                    training_summary_path=Path(cast(str, training_summary_map["path"])),
+                    training_matrix_summary_path=Path(
+                        cast(str, cast(Mapping[str, Any], training_matrix_binding)["path"])
+                    ),
+                    calibration_path=calibration_path,
+                    reuse_admission_path=reuse_admission_path,
+                    preheldout_genesis_path=preheldout_genesis_path,
+                    calibration_payload=calibration_payload,
+                    binding={
+                        **input_source,
+                        "input_binding_digest": contract.json_digest(input_source),
+                    },
+                )
+    _require(validated_calibrations == 10, "Admitted calibration inventory is incomplete.")
+    _require(len(bundles) == 20, "Direct prerequisite bundle inventory is incomplete.")
+    public_binding = {
+        "sealed_source_provenance": dict(sealed_source_provenance),
+        "manifest": context.manifest_binding,
+        "reuse_admission": dict(reuse_admission.public_binding),
+        "preheldout_genesis": dict(preheldout_genesis.public_binding),
+        "execution_environment_projection": dict(cast(Mapping[str, Any], projection)),
+        "validated_admitted_calibrations": validated_calibrations,
+        "validated_scale_seed_budget_bundles": len(bundles),
+        "quality_execution_topology": {
+            "worker_count": worker_count,
+            "assignment_rule": WORKER_ASSIGNMENT_RULE,
+            "shared_local_filesystem_only": True,
+        },
+    }
+    admission.assert_quality_context_unchanged(context)
+    return ValidatedBasePrerequisites(
+        context=context,
+        trust_root=trust_root,
+        bundles=bundles,
+        public_binding=public_binding,
+    )
+
+
+def load_and_validate_prestart_prerequisites(
+    *,
+    manifest_path: Path,
+    training_output_root: Path,
+    calibration_output_root: Path,
+    reuse_admission_path: Path,
+    preheldout_genesis_path: Path,
+    output_root: Path,
+    attestation_key_path: Path | None,
+    worker_count: int,
+) -> tuple[ValidatedBasePrerequisites, admission.PrestartQualityAuthorityV1_3_1]:
+    context, trust_root, sealed_source = _establish_prerequisite_context(
+        manifest_path=manifest_path,
+        training_output_root=training_output_root,
+        calibration_output_root=calibration_output_root,
+        output_root=output_root,
+        attestation_key_path=attestation_key_path,
+    )
+    prestart = admission.load_prestart_quality_authority(
+        quality_context=context,
+        trust_root=trust_root,
+        expected_shards=EXPECTED_SHARDS,
+        coordinate_digest=coordinate_digest(),
+        exact_fill_arm_names=ARM_NAMES,
+    )
+    base = _build_base_prerequisites(
+        context=context,
+        trust_root=trust_root,
+        sealed_source_provenance=sealed_source,
+        reuse_admission=prestart.reuse_admission,
+        preheldout_genesis=prestart.preheldout_genesis,
+        training_output_root=training_output_root,
+        calibration_output_root=calibration_output_root,
+        reuse_admission_path=reuse_admission_path,
+        preheldout_genesis_path=preheldout_genesis_path,
+        worker_count=worker_count,
+    )
+    return base, prestart
+
+
+def _promote_activated_prerequisites(
+    base: ValidatedBasePrerequisites,
+    activation: admission.ValidatedQualityStartActivationV1_3_1,
+) -> FrozenPrerequisites:
+    _require(
+        type(base) is ValidatedBasePrerequisites
+        and type(activation) is admission.ValidatedQualityStartActivationV1_3_1
+        and activation.consumer_coordinate is None
+        and activation.payload.get("base_prerequisites_binding")
+        == dict(base.public_binding),
+        "Activated full-owner prerequisites do not match the frozen prestart base.",
+    )
+    activation_binding = dict(activation.public_binding)
+    activation_path = Path(cast(str, activation_binding["path"]))
+    bundles: dict[tuple[str, int, str], InputBundle] = {}
+    for coordinate, source_bundle in base.bundles.items():
+        input_source = {
+            key: value
+            for key, value in source_bundle.binding.items()
+            if key != "input_binding_digest"
+        }
+        input_source["quality_start_activation"] = activation_binding
+        bundles[coordinate] = InputBundle(
+            coordinate=source_bundle.coordinate,
+            checkpoint_path=source_bundle.checkpoint_path,
+            training_summary_path=source_bundle.training_summary_path,
+            training_matrix_summary_path=source_bundle.training_matrix_summary_path,
+            calibration_path=source_bundle.calibration_path,
+            reuse_admission_path=source_bundle.reuse_admission_path,
+            preheldout_genesis_path=source_bundle.preheldout_genesis_path,
+            quality_start_activation_path=activation_path,
+            calibration_payload=source_bundle.calibration_payload,
+            binding={
+                **input_source,
+                "input_binding_digest": contract.json_digest(input_source),
+            },
+        )
+    public_binding = {
+        **dict(base.public_binding),
+        "base_prerequisites_sha256": contract.json_digest(base.public_binding),
+        "quality_start_activation": activation_binding,
+    }
+    return FrozenPrerequisites(
+        context=base.context,
+        trust_root=base.trust_root,
+        activation=activation,
+        bundles=bundles,
+        base_public_binding=dict(base.public_binding),
+        public_binding=public_binding,
+    )
+
+
+def load_and_validate_prerequisites(
+    *,
+    manifest_path: Path,
+    training_output_root: Path,
+    calibration_output_root: Path,
+    reuse_admission_path: Path,
+    preheldout_genesis_path: Path,
+    output_root: Path,
+    attestation_key_path: Path | None,
+    expected_worker_count: int | None = None,
+    expected_activation_binding: Mapping[str, Any] | None = None,
+    sealed_source_provenance: Mapping[str, Any] | None = None,
+    sealed_launch_routing: Mapping[str, Any] | None = None,
+    gpu_lease: GPULockLease | None = None,
+    device_guard_lease: GPULockLease | None = None,
+) -> FrozenPrerequisites:
+    """Authenticate only the immutable postactivation authority chain."""
+
+    _require(
+        (gpu_lease is None) == (device_guard_lease is None),
+        "Controller prerequisites require both scheduler and physical-device leases.",
+    )
+    if gpu_lease is not None and device_guard_lease is not None:
+        gpu_lease.assert_held()
+        device_guard_lease.assert_held()
+    context, trust_root, active_source = _establish_prerequisite_context(
+        manifest_path=manifest_path,
+        training_output_root=training_output_root,
+        calibration_output_root=calibration_output_root,
+        output_root=output_root,
+        attestation_key_path=attestation_key_path,
+    )
+    source = active_source if sealed_source_provenance is None else dict(sealed_source_provenance)
+    route = sealed_launch_routing
+    if route is None:
+        raw_route = globals().get("SEALED_LAUNCH_ROUTING_V1_3_1")
+        if isinstance(raw_route, Mapping) and raw_route.get("entrypoint_selector") == "matrix":
+            route = cast(Mapping[str, Any], raw_route)
+    activation = admission.load_activated_quality_authority(
+        quality_context=context,
+        trust_root=trust_root,
+        expected_shards=EXPECTED_SHARDS,
+        coordinate_digest=coordinate_digest(),
+        exact_fill_arm_names=ARM_NAMES,
+        sealed_source_provenance=source,
+        sealed_launch_routing=route,
+        expected_public_binding=expected_activation_binding,
+    )
+    raw_base = activation.payload.get("base_prerequisites_binding")
+    _require(isinstance(raw_base, Mapping), "Activation base prerequisites are missing.")
+    topology = cast(Mapping[str, Any], raw_base).get("quality_execution_topology")
+    _require(isinstance(topology, Mapping), "Activated execution topology is missing.")
+    bound_worker_count = cast(Mapping[str, Any], topology).get("worker_count")
+    _require(
+        type(bound_worker_count) is int
+        and (expected_worker_count is None or bound_worker_count == expected_worker_count),
+        "Activated execution topology differs from the requested worker count.",
+    )
+    reuse = admission.load_activated_reuse_admission(
+        activation,
+        trust_root=trust_root,
+    )
+    genesis = admission.load_activated_preheldout_genesis(
+        activation,
+        trust_root=trust_root,
+        expected_shards=EXPECTED_SHARDS,
+        coordinate_digest=coordinate_digest(),
+        exact_fill_arm_names=ARM_NAMES,
+    )
+    base = _build_base_prerequisites(
+        context=context,
+        trust_root=trust_root,
+        sealed_source_provenance=source,
+        reuse_admission=reuse,
+        preheldout_genesis=genesis,
+        training_output_root=training_output_root,
+        calibration_output_root=calibration_output_root,
+        reuse_admission_path=reuse_admission_path,
+        preheldout_genesis_path=preheldout_genesis_path,
+        worker_count=cast(int, bound_worker_count),
+    )
+    _require(
+        dict(base.public_binding) == dict(cast(Mapping[str, Any], raw_base)),
+        "Rebuilt activated prerequisites differ from the activation receipt.",
+    )
+    activation = admission.revalidate_activated_quality_authority(
+        activation,
+        trust_root=trust_root,
+    )
+    _require(
+        activation.payload.get("base_prerequisites_binding")
+        == dict(base.public_binding),
+        "Revalidated activation differs from the rebuilt prerequisite base.",
+    )
+    result = _promote_activated_prerequisites(base, activation)
+    admission.assert_quality_context_unchanged(context)
+    if gpu_lease is not None and device_guard_lease is not None:
+        gpu_lease.assert_held()
+        device_guard_lease.assert_held()
+    return result
+'''
+
+
+RUNNER_ACTIVATION_START_HELPERS = r'''
+QUALITY_START_MODES = ("fresh", "resume", "prerequisites-only")
+
+
+def _assert_one_cell_full_resume_gate(
+    completed: Sequence[Mapping[str, Any]],
+) -> None:
+    first = coordinates()[0]
+    _require(
+        len(completed) == 1
+        and completed[0].get("coordinate_key") == first.key
+        and all(
+            completed[0].get(field) == expected
+            for field, expected in first.payload.items()
+        )
+        and completed[0].get("integrity_decision") == "INTEGRITY-PASS",
+        "One-cell activation prefix failed its canonical integrity gate.",
+    )
+
+
+def _quality_lock_protected_paths(
+    *,
+    layout: MatrixLayout,
+    manifest_path: Path,
+    attestation_key_path: Path | None,
+) -> tuple[Path, ...]:
+    paths = [
+        _exact_resolved_path(manifest_path, label="Controller v1.3.1 manifest"),
+        layout.output_root,
+        layout.matrix_summary,
+        layout.activation_root,
+        layout.activation_path,
+        layout.lock_path,
+        layout.training_output_root,
+        layout.calibration_output_root,
+        layout.reuse_admission_path,
+        layout.preheldout_genesis_path,
+        _exact_resolved_path(
+            admission.V1_3_1_ACTIVATION_BOOTSTRAP_LOCK_PATH,
+            label="Activation bootstrap lock",
+        ),
+        _exact_resolved_path(
+            _worker_ledger_root(layout.output_root),
+            label="Controller worker-ledger root",
+        ),
+        _exact_resolved_path(
+            persistent_session.session_ledger_root(layout.output_root),
+            label="Persistent session ledger root",
+        ),
+        _exact_resolved_path(
+            persistent_session.session_ledger_lock_path(layout.output_root),
+            label="Persistent session ledger lock",
+        ),
+        _exact_resolved_path(
+            contract.V1_3_1_INTEGRITY_OUTPUT_PATH,
+            label="Controller integrity artifact",
+        ),
+        _exact_resolved_path(
+            contract.V1_3_1_SUMMARY_OUTPUT_PATH,
+            label="Controller summary artifact",
+        ),
+    ]
+    paths.extend(
+        _exact_resolved_path(
+            REPOSITORY_ROOT / relative,
+            label="Frozen implementation path",
+        )
+        for relative in contract.V1_3_1_IMPLEMENTATION_PATHS
+    )
+    if attestation_key_path is not None:
+        paths.append(
+            _exact_resolved_path(attestation_key_path, label="Attestation key")
+        )
+    return tuple(paths)
+
+
+def _validate_quality_mutating_lock_path(
+    path: Path,
+    *,
+    layout: MatrixLayout,
+    manifest_path: Path,
+    attestation_key_path: Path | None,
+    label: str,
+    require_canonical_scheduler: bool,
+) -> Path:
+    candidate = _exact_resolved_path(path, label=label)
+    if require_canonical_scheduler:
+        _require(
+            candidate
+            == _exact_resolved_path(
+                contract.DIRECT_GPU_SCHEDULER_LOCK_PATH,
+                label="Canonical GPU scheduler lock",
+            ),
+            "Controller v1.3.1 requires the canonical GPU scheduler lock path.",
+        )
+    _require(
+        not candidate.is_relative_to(REPOSITORY_ROOT.resolve(strict=True)),
+        f"{label} must be outside the repository.",
+    )
+    protected = _quality_lock_protected_paths(
+        layout=layout,
+        manifest_path=manifest_path,
+        attestation_key_path=attestation_key_path,
+    )
+    if not require_canonical_scheduler:
+        protected = (
+            *protected,
+            _exact_resolved_path(
+                contract.DIRECT_GPU_SCHEDULER_LOCK_PATH,
+                label="Canonical GPU scheduler lock",
+            ),
+        )
+    _require(
+        all(not _paths_overlap(candidate, item) for item in protected),
+        f"{label} overlaps a controller input, artifact, authority, or key path.",
+    )
+    if os.path.lexists(candidate):
+        metadata = os.stat(candidate, follow_symlinks=False)
+        _require(
+            stat.S_ISREG(metadata.st_mode)
+            and metadata.st_uid == os.getuid()
+            and metadata.st_nlink == 1
+            and stat.S_IMODE(metadata.st_mode) == GPU_LOCK_MODE,
+            f"{label} has unsafe pre-existing metadata.",
+        )
+        candidate_identity = (metadata.st_dev, metadata.st_ino)
+        for item in protected:
+            if not os.path.lexists(item):
+                continue
+            item_metadata = os.stat(item, follow_symlinks=False)
+            _require(
+                (item_metadata.st_dev, item_metadata.st_ino) != candidate_identity,
+                f"{label} aliases a protected controller inode.",
+            )
+    return candidate
+
+
+def _prepare_quality_start_authority(
+    *,
+    start_mode: str,
+    layout: MatrixLayout,
+    manifest_path: Path,
+    attestation_key_path: Path | None,
+    worker_count: int,
+    scheduler_lease: GPULockLease | None,
+    fresh_prestart: tuple[
+        ValidatedBasePrerequisites,
+        admission.PrestartQualityAuthorityV1_3_1,
+    ] | None = None,
+    resume_initial: FrozenPrerequisites | None = None,
+) -> tuple[
+    FrozenPrerequisites,
+    admission.QualityStartActivationLeaseV1_3_1,
+]:
+    _require(start_mode in {"fresh", "resume"}, "Quality start mode is not mutable.")
+    if scheduler_lease is not None:
+        scheduler_lease.assert_held()
+    sealed_source = _validated_source_provenance()
+    sealed_routing = _validated_launch_routing(expected_selector="matrix")
+    lease: admission.QualityStartActivationLeaseV1_3_1 | None = None
+    returned = False
+    try:
+        if start_mode == "fresh":
+            _require(
+                scheduler_lease is not None,
+                "Fresh quality activation requires the canonical GPU scheduler lease.",
+            )
+            _require(resume_initial is None, "Fresh start received resume prerequisites.")
+            if fresh_prestart is None:
+                base, prestart = load_and_validate_prestart_prerequisites(
+                    manifest_path=manifest_path,
+                    training_output_root=layout.training_output_root,
+                    calibration_output_root=layout.calibration_output_root,
+                    reuse_admission_path=layout.reuse_admission_path,
+                    preheldout_genesis_path=layout.preheldout_genesis_path,
+                    output_root=layout.output_root,
+                    attestation_key_path=attestation_key_path,
+                    worker_count=worker_count,
+                )
+            else:
+                base, prestart = fresh_prestart
+                _require(
+                    type(base) is ValidatedBasePrerequisites
+                    and type(prestart) is admission.PrestartQualityAuthorityV1_3_1,
+                    "Fresh read-only prerequisite handoff is invalid.",
+                )
+            cast(GPULockLease, scheduler_lease).assert_held()
+            lease = admission.publish_quality_start_activation(
+                prestart=prestart,
+                trust_root=base.trust_root,
+                base_prerequisites_binding=base.public_binding,
+                sealed_source_provenance=sealed_source,
+                sealed_launch_routing=sealed_routing,
+            )
+            lease.assert_held()
+            prerequisites = _promote_activated_prerequisites(base, lease.activation)
+            _require(
+                prerequisites.base_public_binding == base.public_binding,
+                "Fresh activated prerequisites differ from the signed prestart base.",
+            )
+        else:
+            _require(fresh_prestart is None, "Resume received fresh prestart authority.")
+            initial = resume_initial
+            if initial is None:
+                initial = load_and_validate_prerequisites(
+                    manifest_path=manifest_path,
+                    training_output_root=layout.training_output_root,
+                    calibration_output_root=layout.calibration_output_root,
+                    reuse_admission_path=layout.reuse_admission_path,
+                    preheldout_genesis_path=layout.preheldout_genesis_path,
+                    output_root=layout.output_root,
+                    attestation_key_path=attestation_key_path,
+                    expected_worker_count=worker_count,
+                    sealed_source_provenance=sealed_source,
+                    sealed_launch_routing=sealed_routing,
+                )
+            else:
+                _require(
+                    type(initial) is FrozenPrerequisites,
+                    "Resume read-only prerequisite handoff is invalid.",
+                )
+            lease = admission.acquire_quality_start_activation_lease(
+                initial.activation,
+                trust_root=initial.trust_root,
+            )
+            lease.assert_held()
+            revalidated = admission.revalidate_activated_quality_authority(
+                lease.activation,
+                trust_root=initial.trust_root,
+            )
+            _require(
+                revalidated.public_binding == lease.activation.public_binding
+                and revalidated.public_binding
+                == initial.public_binding["quality_start_activation"],
+                "Activated prerequisites changed while acquiring the resume lease.",
+            )
+            prerequisites = initial
+        lease.assert_held()
+        if scheduler_lease is not None:
+            scheduler_lease.assert_held()
+        returned = True
+        return prerequisites, lease
+    finally:
+        if lease is not None and not returned:
+            lease.close()
+
+
+def _activation_lock_binding(
+    prerequisites: FrozenPrerequisites,
+    lease: admission.QualityStartActivationLeaseV1_3_1,
+) -> dict[str, Any]:
+    lease.assert_held()
+    _require(
+        lease.activation.public_binding
+        == prerequisites.public_binding["quality_start_activation"]
+        and lease.activation.matrix_lock_binding
+        == prerequisites.activation.matrix_lock_binding,
+        "Held activation lease differs from frozen prerequisites.",
+    )
+    return dict(lease.activation.matrix_lock_binding)
+
+
+def _complete_activation_ledger_boundary(
+    *,
+    start_mode: str,
+    layout: MatrixLayout,
+    prerequisites: FrozenPrerequisites,
+    activation_lease: admission.QualityStartActivationLeaseV1_3_1,
+    evaluator_binding: Mapping[str, Any],
+    worker_count: int,
+    gpu_lease_binding: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    """Publish or authenticate the first ledger while the activation FD is held."""
+
+    activation_lease.assert_held()
+    lock_binding = _activation_lock_binding(prerequisites, activation_lease)
+    _require(
+        lock_binding["path"] == str(layout.lock_path),
+        "Activation matrix-lock path differs from the canonical layout.",
+    )
+    if os.path.lexists(layout.matrix_summary):
+        _require(start_mode == "resume", "Fresh activation observed a pre-existing matrix ledger.")
+        payload = _load_json_nofollow(
+            layout.matrix_summary, label="activated resume matrix ledger"
+        )
+        _verify_attested_payload(
+            payload,
+            trust_root=prerequisites.trust_root,
+        )
+        _require(
+            payload.get("prerequisites") == dict(prerequisites.public_binding)
+            and payload.get("matrix_lock") == lock_binding
+            and payload.get("worker_count") == worker_count,
+            "Resume matrix ledger differs from activated authority.",
+        )
+        directory_descriptor = os.open(
+            layout.output_root,
+            os.O_RDONLY | getattr(os, "O_CLOEXEC", 0),
+        )
+        try:
+            os.fsync(directory_descriptor)
+        finally:
+            os.close(directory_descriptor)
+    else:
+        if os.path.lexists(layout.output_root):
+            _require(
+                start_mode == "resume",
+                "Fresh activation observed an unexpected canonical output root.",
+            )
+            root_metadata = os.stat(layout.output_root, follow_symlinks=False)
+            _require(
+                stat.S_ISDIR(root_metadata.st_mode)
+                and root_metadata.st_uid == os.getuid()
+                and stat.S_IMODE(root_metadata.st_mode) == 0o700,
+                "Activation-only recovery output root is unsafe.",
+            )
+            interrupted_prefix = f".{layout.matrix_summary.name}."
+            interrupted_suffix = ".tmp"
+            for member in tuple(layout.output_root.iterdir()):
+                metadata = os.stat(member, follow_symlinks=False)
+                _require(
+                    member.name.startswith(interrupted_prefix)
+                    and member.name.endswith(interrupted_suffix)
+                    and stat.S_ISREG(metadata.st_mode)
+                    and metadata.st_uid == os.getuid()
+                    and metadata.st_nlink == 1
+                    and stat.S_IMODE(metadata.st_mode) == 0o600,
+                    "Activation-only recovery found a non-temporary output entry.",
+                )
+                member.unlink()
+            directory_descriptor = os.open(
+                layout.output_root,
+                os.O_RDONLY | getattr(os, "O_CLOEXEC", 0),
+            )
+            try:
+                os.fsync(directory_descriptor)
+            finally:
+                os.close(directory_descriptor)
+            _require(
+                not tuple(layout.output_root.iterdir()),
+                "Activation-only recovery output root did not become empty.",
+            )
+        if worker_count == 1:
+            _require(
+                gpu_lease_binding is not None,
+                "Single-worker zero ledger requires its selected GPU lease binding.",
+            )
+            payload = _matrix_payload(
+                (),
+                output_root=layout.output_root,
+                prerequisites=prerequisites,
+                evaluator_binding=evaluator_binding,
+                matrix_lock_binding=lock_binding,
+                worker_count=1,
+                gpu_worker_leases={
+                    0: dict(cast(Mapping[str, Any], gpu_lease_binding))
+                },
+            )
+        else:
+            payload = _matrix_payload(
+                (),
+                output_root=layout.output_root,
+                prerequisites=prerequisites,
+                evaluator_binding=evaluator_binding,
+                matrix_lock_binding=lock_binding,
+                worker_count=worker_count,
+                gpu_worker_leases={},
+                worker_ledger_root=_worker_ledger_root_binding(
+                    layout.output_root, worker_count=worker_count
+                ),
+            )
+        _atomic_write_json(layout.matrix_summary, payload)
+        _require(
+            _load_json_nofollow(
+                layout.matrix_summary, label="initial activated matrix ledger"
+            )
+            == payload,
+            "Initial activated matrix ledger changed after durable publication.",
+        )
+    activation_lease.assert_held()
+    return payload
+'''
+
+
 RUNNER_BUILD_COMMAND = r'''
 def _validated_source_provenance() -> dict[str, Any]:
     value = globals().get("SEALED_SOURCE_PROVENANCE_V1_3")
@@ -1623,7 +3140,7 @@ def _validated_source_provenance() -> dict[str, Any]:
     _require(
         checked.get("schema_version") == 1
         and checked.get("launcher")
-        == "p2-direct-controller-git-object-launcher-v1-3"
+        == "p2-direct-controller-git-object-launcher-v1-3-1"
         and checked.get("repository_root")
         == str(REPOSITORY_ROOT.resolve(strict=True))
         and contract.is_sha256(checked.get("bundle_sha256"))
@@ -1698,7 +3215,7 @@ def _require_launcher_authority() -> dict[str, Any]:
         authority
         == {
             "schema_version": 1,
-            "launcher": "p2-direct-controller-git-object-launcher-v1-3",
+            "launcher": "p2-direct-controller-git-object-launcher-v1-3-1",
             "sealed_runner": True,
             "sealed_inventory": True,
         },
@@ -1754,7 +3271,7 @@ def _validated_launch_routing(*, expected_selector: str) -> dict[str, Any]:
     _require(
         checked.get("schema_version") == 1
         and checked.get("launcher")
-        == "p2-direct-controller-git-object-launcher-v1-3"
+        == "p2-direct-controller-git-object-launcher-v1-3-1"
         and checked.get("entrypoint_selector") == expected_selector
         and checked.get("entrypoint_relative_path") == relative
         and checked.get("source_bundle_sha256") == source["bundle_sha256"]
@@ -1983,6 +3500,8 @@ def build_evaluator_command(
         str(inputs.reuse_admission_path.resolve()),
         "--preheldout-genesis",
         str(inputs.preheldout_genesis_path.resolve()),
+        "--quality-start-activation",
+        str(inputs.quality_start_activation_path.resolve()),
         "--manifest",
         str(manifest_path.resolve()),
         "--scale",
@@ -2917,7 +4436,7 @@ def _validate_launcher_binding_snapshot(value: Mapping[str, Any]) -> dict[str, A
         and value.get("launcher")
         == {
             "schema_version": 1,
-            "launcher": "p2-direct-controller-git-object-launcher-v1-3",
+            "launcher": "p2-direct-controller-git-object-launcher-v1-3-1",
             "sealed_runner": True,
             "sealed_inventory": True,
         }
@@ -2971,7 +4490,7 @@ def _validate_launcher_binding_snapshot(value: Mapping[str, Any]) -> dict[str, A
             active_authority
             == {
                 "schema_version": 1,
-                "launcher": "p2-direct-controller-git-object-launcher-v1-3",
+                "launcher": "p2-direct-controller-git-object-launcher-v1-3-1",
                 "sealed_runner": True,
                 "sealed_inventory": True,
             }
@@ -3022,7 +4541,7 @@ def _validate_launch_routing_snapshot(
         }
         and value.get("schema_version") == 1
         and value.get("launcher")
-        == "p2-direct-controller-git-object-launcher-v1-3"
+        == "p2-direct-controller-git-object-launcher-v1-3-1"
         and value.get("entrypoint_selector") == expected_selector
         and value.get("entrypoint_relative_path") == expected_paths[expected_selector]
         and value.get("source_bundle_sha256")
@@ -4121,6 +5640,17 @@ def _generate_evaluator(source: str) -> str:
     text = _replace_definition(text, "establish_evaluator_inputs", EVALUATOR_ESTABLISH_INPUTS)
     text = _replace_definition(text, "_validate_inputs_structure", EVALUATOR_VALIDATE_INPUTS)
     text = _replace_definition(text, "_validate_external_inputs", EVALUATOR_VALIDATE_EXTERNAL)
+    text = _replace_exact(
+        text,
+        "@dataclass(frozen=True)\nclass _ExternalValidationCacheEntry:\n",
+        "class _ExternalValidationCacheEntry:\n",
+    )
+    text = _replace_definition(
+        text, "_ExternalValidationCacheEntry", EVALUATOR_EXTERNAL_CACHE_ENTRY
+    )
+    text = _replace_definition(
+        text, "DirectControllerExternalValidationCache", EVALUATOR_EXTERNAL_CACHE
+    )
     text = _replace_definition(text, "arm_execution_order", EVALUATOR_ARM_ORDER)
     text = _replace_definition(text, "main", EVALUATOR_MAIN)
     main_start, _main_end = _top_level_span(text, "main")
@@ -4144,7 +5674,7 @@ def _generate_evaluator(source: str) -> str:
     _require("top_p_match" not in text, "Evaluator retained a top-p match input.")
     _require("validate_calibration_artifact" not in text, "Evaluator retained live v1.2 validation.")
     _require("establish_provenance" not in text, "Evaluator retained live v1.2 provenance.")
-    return _insert_generated_header(text)
+    return _insert_generated_header(_upgrade_generated_contract_to_v1_3_1(text))
 
 
 def _generate_runner(source: str) -> str:
@@ -4158,11 +5688,10 @@ def _generate_runner(source: str) -> str:
         "        * len(ARM_NAMES)\n"
         "    )\n",
         "def expected_decode_token_rows(coordinate: ShardCoordinate) -> int:\n"
-        "    return cast(\n"
-        "        int,\n"
+        "    return (\n"
         "        contract.DECODE_TOKENS_PER_EXAMPLE_BY_FAMILY_CONTEXT[coordinate.family][coordinate.context]\n"
         "        * EXAMPLES_PER_SHARD\n"
-        "        * len(ARM_NAMES),\n"
+        "        * len(ARM_NAMES)\n"
         "    )\n",
     )
     text = _replace_exact(
@@ -4170,7 +5699,7 @@ def _generate_runner(source: str) -> str:
         "def _sha256_fd(file_descriptor: int) -> str:\n"
         "    return attestation.checksum_fd(file_descriptor)\n",
         "def _sha256_fd(file_descriptor: int) -> str:\n"
-        "    return cast(str, attestation.checksum_fd(file_descriptor))\n",
+        "    return attestation.checksum_fd(file_descriptor)\n",
     )
     text = _replace_exact(
         text,
@@ -4185,6 +5714,7 @@ def _generate_runner(source: str) -> str:
         "        opened.close()\n\n\n"
         "def _atomic_write_json(path: Path, payload: Mapping[str, Any]) -> None:\n",
     )
+    text = _replace_definition(text, "_atomic_write_json", RUNNER_ATOMIC_WRITE_JSON)
     text = _replace_exact(
         text,
         "import argparse\nimport fcntl\n",
@@ -4290,6 +5820,13 @@ def _generate_runner(source: str) -> str:
     )
     text = _replace_exact(
         text,
+        'MATRIX_LOCK_SEMANTICS = "persistent-sibling-flock-exclusive-process-owner-v1"\n',
+        "MATRIX_LOCK_SEMANTICS = "
+        "admission.V1_3_1_ACTIVATION_MATRIX_LOCK_SEMANTICS\n",
+    )
+    text = _replace_exact(text, "MATRIX_LOCK_SUFFIX = contract.MATRIX_LOCK_SUFFIX\n", "")
+    text = _replace_exact(
+        text,
         '        "storage_aggregation_scope",\n'
         '        "storage",\n'
         '        "records",\n',
@@ -4320,12 +5857,53 @@ def _generate_runner(source: str) -> str:
         "    context: training_matrix.FrozenContext\n",
         "    context: admission.QualityContext\n",
     )
+    text = _replace_definition(text, "MatrixLayout", RUNNER_MATRIX_LAYOUT)
+    text = _replace_definition(text, "InputBundle", RUNNER_INPUT_BUNDLES)
+    text = _replace_definition(text, "FrozenPrerequisites", RUNNER_PREREQUISITE_TYPES)
+    text = _replace_definition(text, "_worker_ledger_root", RUNNER_WORKER_LEDGER_ROOT)
+    text = _replace_definition(text, "_matrix_lock_path", RUNNER_MATRIX_LOCK_PATH)
+    text = _replace_definition(
+        text, "_opened_matrix_lock_binding", RUNNER_OPENED_MATRIX_LOCK_BINDING
+    )
+    text = _replace_definition(
+        text, "_initialize_matrix_lock_binding", RUNNER_INITIALIZE_MATRIX_LOCK
+    )
+    text = _replace_exact(
+        text,
+        "        lock_path.parent.mkdir(parents=True, exist_ok=True)\n"
+        "        no_follow = getattr(os, \"O_NOFOLLOW\", None)\n",
+        "        _require(\n"
+        "            lock_path.parent.is_dir() and not lock_path.parent.is_symlink(),\n"
+        "            \"Activated matrix-lock parent is missing or unsafe.\",\n"
+        "        )\n"
+        "        no_follow = getattr(os, \"O_NOFOLLOW\", None)\n",
+        count=1,
+    )
+    text = _replace_exact(
+        text,
+        "            os.O_RDWR | os.O_CREAT | getattr(os, \"O_CLOEXEC\", 0) | cast(int, no_follow),\n"
+        "            0o600,\n",
+        "            os.O_RDWR | getattr(os, \"O_CLOEXEC\", 0) | cast(int, no_follow),\n",
+        count=1,
+    )
     text = _replace_definition(text, "_validate_matrix_layout", RUNNER_VALIDATE_LAYOUT)
     text = _replace_definition(text, "coordinates", RUNNER_COORDINATES)
     text = _replace_definition(text, "coordinate_digest", RUNNER_COORDINATE_DIGEST)
+    text = _replace_definition(
+        text, "_acquire_selected_device_guard", RUNNER_ACQUIRE_SELECTED_DEVICE_GUARD
+    )
     text = _remove_definition(text, "_top_p_artifact_path")
     text = _remove_definition(text, "_load_terminal_top_p_matrix")
-    text = _replace_definition(text, "load_and_validate_prerequisites", RUNNER_PREREQUISITES)
+    text = _replace_definition(
+        text, "load_and_validate_prerequisites", RUNNER_PREREQUISITES_V1_3_1
+    )
+    _prerequisite_start, prerequisite_end = _top_level_span(
+        text, "load_and_validate_prerequisites"
+    )
+    text = (
+        f"{text[:prerequisite_end]}\n{RUNNER_ACTIVATION_START_HELPERS.strip()}\n\n"
+        f"{text[prerequisite_end:]}"
+    )
     text = _replace_definition(text, "build_evaluator_command", RUNNER_BUILD_COMMAND)
     _command_start, command_end = _top_level_span(text, "build_evaluator_command")
     text = f"{text[:command_end]}\n{RUNNER_PERSISTENT_SESSION.strip()}\n\n{text[command_end:]}"
@@ -4333,6 +5911,15 @@ def _generate_runner(source: str) -> str:
     text = (
         f"{text[:matrix_payload_start]}{RUNNER_SESSION_LEDGER_HELPERS.strip()}\n\n\n"
         f"{text[matrix_payload_start:]}"
+    )
+    text = _replace_exact(
+        text,
+        "    attestation_key_path: Path | None = None,\n"
+        "    max_new_cells: int | None = None,\n",
+        "    attestation_key_path: Path | None = None,\n"
+        "    start_mode: str,\n"
+        "    max_new_cells: int | None = None,\n",
+        count=1,
     )
     text = _replace_exact(
         text,
@@ -4844,6 +6431,60 @@ def _generate_runner(source: str) -> str:
     )
     text = _replace_exact(
         text,
+        "    canonical = _canonical_evaluator(evaluator_script)\n"
+        "    lock_binding = _initialize_matrix_lock_binding(layout.lock_path)\n"
+        '    gpu_lease = acquire_gpu_lock("p2-direct-controller-matrix-single", path=gpu_lock_path)\n',
+        "    canonical = _canonical_evaluator(evaluator_script)\n"
+        '    gpu_lease = acquire_gpu_lock("p2-direct-controller-matrix-single", path=gpu_lock_path)\n',
+        count=1,
+    )
+    text = _replace_exact(
+        text,
+        "        gpu_binding = _gpu_lease_binding(\n"
+        "            gpu_lease,\n"
+        "            device_guard_lease=device_guard_lease,\n"
+        "            device_context=device_context,\n"
+        "        )\n"
+        "        completed: list[dict[str, Any]] = []\n",
+        "        gpu_binding = _gpu_lease_binding(\n"
+        "            gpu_lease,\n"
+        "            device_guard_lease=device_guard_lease,\n"
+        "            device_context=device_context,\n"
+        "        )\n"
+        "        activation_boundary = _complete_activation_ledger_boundary(\n"
+        "            start_mode=start_mode,\n"
+        "            layout=layout,\n"
+        "            prerequisites=prerequisites,\n"
+        "            activation_lease=activation_lease,\n"
+        "            evaluator_binding=evaluator_binding,\n"
+        "            worker_count=1,\n"
+        "            gpu_lease_binding=gpu_binding,\n"
+        "        )\n"
+        "        activation_boundary_completed = activation_boundary.get(\n"
+        '            "completed_shards"\n'
+        "        )\n"
+        "        _require(\n"
+        "            type(activation_boundary_completed) is int\n"
+        "            and 0 <= activation_boundary_completed <= EXPECTED_SHARDS,\n"
+        '            "Activation-bound matrix prefix count is invalid.",\n'
+        "        )\n"
+        "        operational_prefix_only = activation_boundary_completed == 0\n"
+        "        activation_lease.close()\n"
+        "        completed: list[dict[str, Any]] = []\n",
+        count=1,
+    )
+    text = _replace_exact(
+        text,
+        "        while len(completed) < len(coordinates()):\n"
+        "            if max_new_cells is not None and new_cells >= max_new_cells:\n",
+        "        while len(completed) < len(coordinates()):\n"
+        "            if operational_prefix_only and len(completed) >= 1:\n"
+        "                break\n"
+        "            if max_new_cells is not None and new_cells >= max_new_cells:\n",
+        count=1,
+    )
+    text = _replace_exact(
+        text,
         "            claim_binding = cast(Mapping[str, Any], claim_manager.__enter__())\n"
         "            _assert_cell_claim_binding(claim_binding)\n"
         "            claim_active = True\n"
@@ -4965,7 +6606,11 @@ def _generate_runner(source: str) -> str:
         "            inputs = prerequisites.bundles[\n",
         "            coordinate = coordinates()[len(completed)]\n"
         "            remaining_limit = (\n"
-        "                None if max_new_cells is None else max_new_cells - new_cells\n"
+        "                1 - new_cells\n"
+        "                if operational_prefix_only\n"
+        "                else None\n"
+        "                if max_new_cells is None\n"
+        "                else max_new_cells - new_cells\n"
         "            )\n"
         "            plan_coordinates = _persistent_plan_coordinates(\n"
         "                coordinates()[len(completed) :],\n"
@@ -5485,8 +7130,18 @@ def _generate_runner(source: str) -> str:
     )
     text = _replace_exact(
         text,
-        "        layout.reuse_admission_path,\n",
-        "        layout.reuse_admission_path,\n        layout.preheldout_genesis_path,\n",
+        "        layout.calibration_output_root,\n"
+        "        layout.reuse_admission_path,\n"
+        "    )\n"
+        "    _require(\n"
+        "        all(not _paths_overlap(worker_root, path) for path in protected),\n",
+        "        layout.calibration_output_root,\n"
+        "        layout.reuse_admission_path,\n"
+        "        layout.preheldout_genesis_path,\n"
+        "    )\n"
+        "    _require(\n"
+        "        all(not _paths_overlap(worker_root, path) for path in protected),\n",
+        count=1,
     )
     text = _replace_exact(
         text,
@@ -5531,6 +7186,8 @@ def _generate_runner(source: str) -> str:
         '    parser.add_argument(\n'
         '        "--preheldout-genesis", type=Path, default=PREHELDOUT_GENESIS_PATH\n'
         '    )\n'
+        '    parser.add_argument("--attestation-key-path", type=Path)\n'
+        '    parser.add_argument("--start-mode", choices=QUALITY_START_MODES, required=True)\n'
         '    parser.add_argument("--output-root", type=Path, default=OUTPUT_ROOT)\n',
     )
     text = text.replace("args.reuse_admission_path", "args.reuse_admission")
@@ -5541,6 +7198,31 @@ def _generate_runner(source: str) -> str:
         "            reuse_admission_path=args.reuse_admission,\n"
         "            preheldout_genesis_path=args.preheldout_genesis,\n"
         "            output_root=args.output_root,\n",
+    )
+    text = _replace_exact(
+        text,
+        "    args = parser.parse_args()\n"
+        "    try:\n",
+        "    args = parser.parse_args()\n"
+        "    if args.attestation_key_path is None and not os.environ.get(\n"
+        "        attestation.KEY_PATH_ENV\n"
+        "    ):\n"
+        "        parser.error(\n"
+        "            \"--attestation-key-path is required when the external \"\n"
+        "            f\"{attestation.KEY_PATH_ENV} transport is unavailable.\"\n"
+        "        )\n"
+        "    try:\n",
+        count=1,
+    )
+    text = _replace_exact(
+        text,
+        "            evaluator_script=EVALUATOR_SCRIPT,\n"
+        "            max_new_cells=args.max_new_cells,\n",
+        "            evaluator_script=EVALUATOR_SCRIPT,\n"
+        "            attestation_key_path=args.attestation_key_path,\n"
+        "            start_mode=args.start_mode,\n"
+        "            max_new_cells=args.max_new_cells,\n",
+        count=1,
     )
     distributed_probe_before_admission = '''        try:
             if gpu_lease is not None:
@@ -5613,6 +7295,56 @@ def _generate_runner(source: str) -> str:
         )
 '''
     single_admission_before_probe = '''        gpu_lease.assert_held()
+        fresh_prestart_authority: tuple[
+            ValidatedBasePrerequisites,
+            admission.PrestartQualityAuthorityV1_3_1,
+        ] | None = None
+        resume_initial_prerequisites: FrozenPrerequisites | None = None
+        if start_mode == "fresh":
+            fresh_prestart_authority = load_and_validate_prestart_prerequisites(
+                manifest_path=manifest_path,
+                training_output_root=layout.training_output_root,
+                calibration_output_root=layout.calibration_output_root,
+                reuse_admission_path=layout.reuse_admission_path,
+                preheldout_genesis_path=layout.preheldout_genesis_path,
+                output_root=layout.output_root,
+                attestation_key_path=attestation_key_path,
+                worker_count=1,
+            )
+        else:
+            resume_initial_prerequisites = load_and_validate_prerequisites(
+                manifest_path=manifest_path,
+                training_output_root=layout.training_output_root,
+                calibration_output_root=layout.calibration_output_root,
+                reuse_admission_path=layout.reuse_admission_path,
+                preheldout_genesis_path=layout.preheldout_genesis_path,
+                output_root=layout.output_root,
+                attestation_key_path=attestation_key_path,
+                expected_worker_count=1,
+            )
+        device_context = _capture_selected_device_context(gpu_lease)
+        device_guard_path = canonical_device_guard_path(
+            cast(
+                Mapping[str, Any],
+                device_context["selected_device_routing_identity"],
+            )
+        )
+        _validate_quality_mutating_lock_path(
+            device_guard_path,
+            layout=layout,
+            manifest_path=manifest_path,
+            attestation_key_path=key_path_for_layout,
+            label="GPU physical-device guard",
+            require_canonical_scheduler=False,
+        )
+        device_guard_lease = _acquire_selected_device_guard(
+            label="p2-direct-controller-exact-fill-v1-3-matrix-single",
+            device_context=device_context,
+            scheduler_lease=gpu_lease,
+        )
+        if device_guard_lease is not gpu_lease:
+            execution_stack.callback(device_guard_lease.close)
+        device_guard_lease.assert_held()
         prerequisites = load_and_validate_prerequisites(
             manifest_path=manifest_path,
             training_output_root=layout.training_output_root,
@@ -5623,17 +7355,37 @@ def _generate_runner(source: str) -> str:
             attestation_key_path=attestation_key_path,
         )
         admission.assert_quality_context_unchanged(prerequisites.context)
-        device_context = _capture_selected_device_context(gpu_lease)
-        device_guard_lease = _acquire_selected_device_guard(
-            label="p2-direct-controller-exact-fill-v1-3-matrix-single",
-            device_context=device_context,
-            scheduler_lease=gpu_lease,
-        )
-        if device_guard_lease is not gpu_lease:
-            execution_stack.callback(device_guard_lease.close)
-        device_guard_lease.assert_held()
 '''
     text = _replace_exact(text, single_probe_before_admission, single_admission_before_probe)
+    text = _replace_exact(
+        text,
+        "        prerequisites = load_and_validate_prerequisites(\n"
+        "            manifest_path=manifest_path,\n"
+        "            training_output_root=layout.training_output_root,\n"
+        "            calibration_output_root=layout.calibration_output_root,\n"
+        "            reuse_admission_path=layout.reuse_admission_path,\n"
+        "            preheldout_genesis_path=layout.preheldout_genesis_path,\n"
+        "            output_root=layout.output_root,\n"
+        "            attestation_key_path=attestation_key_path,\n"
+        "        )\n"
+        "        admission.assert_quality_context_unchanged(prerequisites.context)\n",
+        "        prerequisites, activation_lease = _prepare_quality_start_authority(\n"
+        "            start_mode=start_mode,\n"
+        "            layout=layout,\n"
+        "            manifest_path=manifest_path,\n"
+        "            attestation_key_path=attestation_key_path,\n"
+        "            worker_count=1,\n"
+        "            scheduler_lease=gpu_lease,\n"
+        "            fresh_prestart=fresh_prestart_authority,\n"
+        "            resume_initial=resume_initial_prerequisites,\n"
+        "        )\n"
+        "        execution_stack.callback(activation_lease.close)\n"
+        "        lock_binding = _activation_lock_binding(\n"
+        "            prerequisites, activation_lease\n"
+        "        )\n"
+        "        admission.assert_quality_context_unchanged(prerequisites.context)\n",
+        count=1,
+    )
     text = _replace_exact(
         text,
         "        if device_guard_lease is not gpu_lease:\n"
@@ -5689,6 +7441,8 @@ def _generate_runner(source: str) -> str:
         text,
         "        launch_authority_nonce = secrets.token_hex(32)\n"
         "        persistent_evaluator: PersistentEvaluatorProcess | None = None\n",
+        "        if activation_boundary_completed == 1:\n"
+        "            _assert_one_cell_full_resume_gate(completed)\n"
         "        _register_persistent_projection_refresher(\n"
         "            gpu_lease,\n"
         "            lambda active: _refresh_single_scope_session_projection(\n"
@@ -5753,14 +7507,455 @@ def _generate_runner(source: str) -> str:
         '    "Frozen direct-controller exact-fill arm inventory drifted.",\n'
         ')\n',
     )
+    text = _replace_exact(
+        text,
+        "    attestation_key_path: Path | None,\n"
+        "    max_new_cells: int | None,\n"
+        "    worker_index: int,\n",
+        "    attestation_key_path: Path | None,\n"
+        "    start_mode: str,\n"
+        "    max_new_cells: int | None,\n"
+        "    worker_index: int,\n",
+        count=1,
+    )
+    text = _replace_exact(
+        text,
+        "                attestation_key_path=attestation_key_path,\n"
+        "                max_new_cells=max_new_cells,\n",
+        "                attestation_key_path=attestation_key_path,\n"
+        "                start_mode=start_mode,\n"
+        "                max_new_cells=max_new_cells,\n",
+        count=1,
+    )
+    text = _replace_exact(
+        text,
+        "            attestation_key_path=attestation_key_path,\n"
+        "            max_new_cells=max_new_cells,\n",
+        "            attestation_key_path=attestation_key_path,\n"
+        "            start_mode=start_mode,\n"
+        "            max_new_cells=max_new_cells,\n",
+        count=1,
+    )
+    text = _replace_exact(
+        text,
+        "    _require_launcher_authority()\n"
+        "    if max_new_cells is not None:\n",
+        "    _require_launcher_authority()\n"
+        "    _require(\n"
+        "        start_mode in QUALITY_START_MODES,\n"
+        "        \"Explicit quality start mode is required.\",\n"
+        "    )\n"
+        "    _require(\n"
+        '        (start_mode == "fresh" and max_new_cells == 1)\n'
+        '        or (start_mode in {"resume", "prerequisites-only"} and max_new_cells is None),\n'
+        '        "Fresh requires exactly one new cell; resume/prerequisites-only forbid a stop limit.",\n'
+        "    )\n"
+        "    if max_new_cells is not None:\n",
+        count=1,
+    )
+    text = _replace_exact(
+        text,
+        "    _require(\n"
+        "        not coordinator_only or worker_count > 1,\n"
+        '        "coordinator-only requires distributed worker-count > 1.",\n'
+        "    )\n"
+        "    if worker_count > 1:\n",
+        "    _require(\n"
+        "        worker_count == 1 and worker_index == 0 and not coordinator_only,\n"
+        '        "Controller v1.3.1 is frozen to worker-count 1, worker-index 0, and no coordinator-only mode.",\n'
+        "    )\n"
+        "    _validate_quality_mutating_lock_path(\n"
+        "        gpu_lock_path,\n"
+        "        layout=layout,\n"
+        "        manifest_path=manifest_path,\n"
+        "        attestation_key_path=key_path_for_layout,\n"
+        '        label="GPU scheduler lock",\n'
+        "        require_canonical_scheduler=True,\n"
+        "    )\n"
+        '    if start_mode == "prerequisites-only":\n'
+        "        base, prestart = load_and_validate_prestart_prerequisites(\n"
+        "            manifest_path=manifest_path,\n"
+        "            training_output_root=layout.training_output_root,\n"
+        "            calibration_output_root=layout.calibration_output_root,\n"
+        "            reuse_admission_path=layout.reuse_admission_path,\n"
+        "            preheldout_genesis_path=layout.preheldout_genesis_path,\n"
+        "            output_root=layout.output_root,\n"
+        "            attestation_key_path=attestation_key_path,\n"
+        "            worker_count=worker_count,\n"
+        "        )\n"
+        "        return {\n"
+        '            "experiment_id": EXPERIMENT_ID,\n'
+        '            "status": "prerequisites_validated",\n'
+        '            "integrity_status": None,\n'
+        '            "completed_shards": 0,\n'
+        '            "canonical_prefix_shards": 0,\n'
+        '            "expected_shards": EXPECTED_SHARDS,\n'
+        '            "storage": None,\n'
+        '            "prerequisites": dict(base.public_binding),\n'
+        '            "prestart_absence_witness": dict(prestart.absence_witness),\n'
+        "        }\n"
+        "    _require(\n"
+        '        start_mode != "fresh"\n'
+        "        or (worker_index == 0 and not coordinator_only),\n"
+        '        "Fresh activation requires an executing worker 0.",\n'
+        "    )\n"
+        "    if worker_count > 1:\n",
+        count=1,
+    )
+    text = _replace_exact(
+        text,
+        "    if _prepared is None:\n"
+        "        canonical = _canonical_evaluator(evaluator_script)\n"
+        "        lock_binding = _initialize_matrix_lock_binding(layout.lock_path)\n"
+        "        gpu_lease = (\n",
+        "    if _prepared is None:\n"
+        "        canonical = _canonical_evaluator(evaluator_script)\n"
+        "        activation_lease: admission.QualityStartActivationLeaseV1_3_1 | None = None\n"
+        "        gpu_lease = (\n",
+        count=1,
+    )
+    text = _replace_exact(
+        text,
+        "            prerequisites = load_and_validate_prerequisites(\n"
+        "                manifest_path=manifest_path,\n"
+        "                training_output_root=layout.training_output_root,\n"
+        "                calibration_output_root=layout.calibration_output_root,\n"
+        "                reuse_admission_path=layout.reuse_admission_path,\n"
+        "                preheldout_genesis_path=layout.preheldout_genesis_path,\n"
+        "                output_root=layout.output_root,\n"
+        "                attestation_key_path=attestation_key_path,\n"
+        "            )\n"
+        "            admission.assert_quality_context_unchanged(prerequisites.context)\n",
+        "            prerequisites, activation_lease = _prepare_quality_start_authority(\n"
+        "                start_mode=start_mode,\n"
+        "                layout=layout,\n"
+        "                manifest_path=manifest_path,\n"
+        "                attestation_key_path=attestation_key_path,\n"
+        "                worker_count=worker_count,\n"
+        "                scheduler_lease=gpu_lease,\n"
+        "            )\n"
+        "            lock_binding = _activation_lock_binding(\n"
+        "                prerequisites, activation_lease\n"
+        "            )\n"
+        "            admission.assert_quality_context_unchanged(prerequisites.context)\n",
+        count=1,
+    )
+    text = _replace_exact(
+        text,
+        "            prepared_result = _run_distributed_matrix(\n",
+        "            _require(\n"
+        "                activation_lease is not None,\n"
+        '                "Distributed activation lease disappeared before ledger adoption.",\n'
+        "            )\n"
+        "            _complete_activation_ledger_boundary(\n"
+        "                start_mode=start_mode,\n"
+        "                layout=layout,\n"
+        "                prerequisites=prerequisites,\n"
+        "                activation_lease=activation_lease,\n"
+        "                evaluator_binding=evaluator_binding,\n"
+        "                worker_count=worker_count,\n"
+        "                gpu_lease_binding=gpu_binding,\n"
+        "            )\n"
+        "            activation_lease.close()\n"
+        "            activation_lease = None\n"
+        "            prepared_result = _run_distributed_matrix(\n",
+        count=1,
+    )
+    text = _replace_exact(
+        text,
+        "        finally:\n"
+        "            if gpu_lease is not None:\n"
+        "                scope_exc_type, scope_error, scope_traceback = sys.exc_info()\n",
+        "        finally:\n"
+        "            if activation_lease is not None:\n"
+        "                activation_lease.close()\n"
+        "            if gpu_lease is not None:\n"
+        "                scope_exc_type, scope_error, scope_traceback = sys.exc_info()\n",
+        count=1,
+    )
+    text = _replace_exact(
+        text,
+        "    print(\n"
+        "        json.dumps(\n"
+        "            {\n"
+        '                "experiment_id": result["experiment_id"],\n'
+        '                "status": result["status"],\n',
+        "    if result[\"status\"] == \"prerequisites_validated\":\n"
+        "        print(\n"
+        "            json.dumps(\n"
+        "                {\n"
+        '                    "experiment_id": result["experiment_id"],\n'
+        '                    "status": result["status"],\n'
+        '                    "expected_shards": result["expected_shards"],\n'
+        "                },\n"
+        "                sort_keys=True,\n"
+        "            )\n"
+        "        )\n"
+        "        return 0\n"
+        "    print(\n"
+        "        json.dumps(\n"
+        "            {\n"
+        '                "experiment_id": result["experiment_id"],\n'
+        '                "status": result["status"],\n',
+        count=1,
+    )
+    text = text.replace(
+        'help="Device-scoped nonblocking scheduler lease path; use one distinct path per GPU.",',
+        'help="Frozen canonical v1.3.1 scheduler lock path; custom paths are rejected.",',
+    )
+    text = text.replace(
+        'help="Zero-based local worker index; distributed claims use /proc PID identity.",',
+        'help="Frozen v1.3.1 worker index; must remain 0.",',
+    )
+    text = text.replace(
+        '"Worker count on one host with a shared local filesystem; multi-host PID claims "\n'
+        '            "are intentionally unsupported."',
+        '"Frozen v1.3.1 worker count; must remain 1."',
+    )
+    text = text.replace(
+        'help="Validate and publish a terminal merge only after every local worker ledger completes.",',
+        'help="Unsupported by the frozen v1.3.1 single-worker topology.",',
+    )
     _require("top_p" not in text.lower(), "Runner retained a top-p prerequisite or identifier.")
-    generated = _insert_generated_header(text)
+    generated = _insert_generated_header(_upgrade_generated_contract_to_v1_3_1(text))
     return _insert_sealed_entrypoint_preamble(
         generated,
         selector="matrix",
         relative_path="research/adaptive_v4_memory/scripts/"
         "run_p2_direct_controller_matrix_v1_3.py",
     )
+
+
+AUDIT_LOAD_TERMINAL_V1_3_1 = r'''
+def _load_validated_terminal_matrix(
+    *,
+    manifest_path: Path,
+    training_output_root: Path,
+    calibration_output_root: Path,
+    reuse_admission_path: Path,
+    preheldout_genesis_path: Path,
+    output_root: Path,
+    matrix_summary: Path,
+    evaluator_script: Path,
+    attestation_key_path: Path | None,
+) -> tuple[
+    dict[str, Any],
+    list[dict[str, Any]],
+    matrix.FrozenPrerequisites,
+    Mapping[str, Any],
+    Mapping[str, Any],
+]:
+    layout = matrix._validate_matrix_layout(
+        output_root=output_root,
+        matrix_summary=matrix_summary,
+        training_output_root=training_output_root,
+        calibration_output_root=calibration_output_root,
+        reuse_admission_path=reuse_admission_path,
+        preheldout_genesis_path=preheldout_genesis_path,
+        attestation_key_path=attestation_key_path,
+    )
+    payload = _load_json_nofollow(layout.matrix_summary, label="terminal controller matrix")
+    raw_prerequisites = payload.get("prerequisites")
+    _require(isinstance(raw_prerequisites, Mapping), "Matrix prerequisites are missing.")
+    activation_binding = cast(Mapping[str, Any], raw_prerequisites).get(
+        "quality_start_activation"
+    )
+    worker_count = payload.get("worker_count")
+    _require(
+        isinstance(activation_binding, Mapping)
+        and type(worker_count) is int
+        and worker_count >= 1,
+        "Terminal matrix activation or topology binding is missing.",
+    )
+    prerequisites = matrix.load_and_validate_prerequisites(
+        manifest_path=manifest_path,
+        training_output_root=layout.training_output_root,
+        calibration_output_root=layout.calibration_output_root,
+        reuse_admission_path=layout.reuse_admission_path,
+        preheldout_genesis_path=layout.preheldout_genesis_path,
+        output_root=layout.output_root,
+        attestation_key_path=attestation_key_path,
+        expected_worker_count=cast(int, worker_count),
+        expected_activation_binding=cast(Mapping[str, Any], activation_binding),
+    )
+    canonical = matrix._canonical_evaluator(evaluator_script)
+    descriptor, snapshot = matrix._open_evaluator(canonical)
+    os.close(descriptor)
+    evaluator_binding = snapshot.public_binding
+    lock_binding = dict(prerequisites.activation.matrix_lock_binding)
+    _require(
+        matrix._matrix_lock_binding(layout.lock_path) == lock_binding,
+        "Live activation matrix-lock identity drifted before audit replay.",
+    )
+    records = matrix.validate_matrix_summary(
+        payload,
+        output_root=layout.output_root,
+        prerequisites=prerequisites,
+        evaluator_script=canonical,
+        evaluator_binding=evaluator_binding,
+        matrix_lock_binding=lock_binding,
+        verify_bundles=True,
+    )
+    _require(
+        payload.get("status") == "terminal"
+        and len(records) == matrix.EXPECTED_SHARDS
+        and payload.get("completed_shards") == matrix.EXPECTED_SHARDS,
+        "Integrity audit requires the terminal 9,000-shard matrix.",
+    )
+    matrix._preflight_output_tree(
+        output_root=layout.output_root,
+        matrix_summary=layout.matrix_summary,
+        completed_shards=len(records),
+    )
+    return payload, records, prerequisites, evaluator_binding, lock_binding
+'''
+
+
+AUDIT_MATRIX_V1_3_1 = r'''
+def audit_matrix(
+    *,
+    manifest_path: Path = contract.V1_3_1_MANIFEST_PATH,
+    training_output_root: Path = matrix.TRAINING_OUTPUT_ROOT,
+    calibration_output_root: Path = matrix.CALIBRATION_OUTPUT_ROOT,
+    reuse_admission_path: Path = matrix.REUSE_ADMISSION_PATH,
+    preheldout_genesis_path: Path = matrix.PREHELDOUT_GENESIS_PATH,
+    output_root: Path = matrix.OUTPUT_ROOT,
+    matrix_summary: Path = matrix.MATRIX_SUMMARY,
+    evaluator_script: Path = matrix.EVALUATOR_SCRIPT,
+    output: Path = INTEGRITY_OUTPUT,
+    attestation_key_path: Path | None = None,
+) -> dict[str, Any]:
+    canonical_output = matrix._exact_resolved_path(output, label="Integrity audit output")
+    _require(
+        not matrix._paths_overlap(
+            canonical_output,
+            matrix._exact_resolved_path(output_root, label="Controller output root"),
+        ),
+        "Integrity artifact must be outside the raw controller output tree.",
+    )
+    _require(
+        not canonical_output.exists() and not canonical_output.is_symlink(),
+        f"Refusing to overwrite integrity artifact: {canonical_output}",
+    )
+    payload, records, prerequisites, _evaluator, _lock = _load_validated_terminal_matrix(
+        manifest_path=manifest_path,
+        training_output_root=training_output_root,
+        calibration_output_root=calibration_output_root,
+        reuse_admission_path=reuse_admission_path,
+        preheldout_genesis_path=preheldout_genesis_path,
+        output_root=output_root,
+        matrix_summary=matrix_summary,
+        evaluator_script=evaluator_script,
+        attestation_key_path=attestation_key_path,
+    )
+    unsigned = _integrity_payload(
+        matrix_payload=payload,
+        matrix_summary=matrix_summary,
+        records=records,
+        prerequisites=prerequisites,
+    )
+    result = _attested_payload(unsigned, trust_root=prerequisites.trust_root)
+    validate_integrity_artifact(
+        result,
+        matrix_summary=matrix_summary,
+        output_root=output_root,
+        trust_root=prerequisites.trust_root,
+        verify_bindings=False,
+    )
+    _exclusive_atomic_write_json(canonical_output, result)
+    return result
+'''
+
+
+AUDIT_RAW_SHARD_ITERATOR = r'''
+def iter_validated_raw_shards(
+    integrity_payload: Mapping[str, Any],
+    *,
+    trust_root: attestation.TrustRoot,
+    outcome_callback: Callable[[Mapping[str, Any], Mapping[str, Any]], None] | None = None,
+    token_callback: Callable[[Mapping[str, Any], Mapping[str, Any]], None] | None = None,
+    failure_callback: Callable[[Mapping[str, Any], Mapping[str, Any]], None] | None = None,
+) -> Iterator[tuple[dict[str, Any], dict[str, Any]]]:
+    """Yield every fully authenticated raw bundle through one shared authority cache."""
+
+    inventory = integrity_payload.get("bundle_inventory")
+    _require(isinstance(inventory, list), "Integrity bundle inventory is invalid.")
+    callbacks = (outcome_callback, token_callback, failure_callback)
+    _require(
+        all(callback is None for callback in callbacks)
+        or all(callback is not None for callback in callbacks),
+        "Integrity raw iteration requires all three row callbacks or none.",
+    )
+    evaluator = _evaluator_module()
+    consumer = getattr(evaluator, "consume_validated_direct_controller_shard", None)
+    cache_type = getattr(evaluator, "DirectControllerExternalValidationCache", None)
+    _require(callable(consumer), "Direct evaluator one-pass consumer is unavailable.")
+    _require(callable(cache_type), "Direct evaluator external-validation cache is unavailable.")
+    validation_cache = cast(Callable[[], Any], cache_type)()
+
+    def no_op(_record: Mapping[str, Any], _row: Mapping[str, Any]) -> None:
+        return None
+
+    on_outcome = no_op if outcome_callback is None else outcome_callback
+    on_token = no_op if token_callback is None else token_callback
+    on_failure = no_op if failure_callback is None else failure_callback
+    for raw in cast(list[Mapping[str, Any]], inventory):
+        envelope_binding = raw.get("envelope")
+        _require(isinstance(envelope_binding, Mapping), "Integrity envelope binding is missing.")
+        envelope_binding_map = cast(Mapping[str, Any], envelope_binding)
+        path = Path(cast(str, envelope_binding_map["path"]))
+        matrix_record = raw.get("matrix_record")
+        _require(isinstance(matrix_record, Mapping), "Integrity matrix-record binding is missing.")
+        matrix_record_map = cast(Mapping[str, Any], matrix_record)
+        envelope = cast(Any, consumer)(
+            path,
+            outcome_callback=lambda row, record=matrix_record_map: on_outcome(record, row),
+            token_callback=lambda row, record=matrix_record_map: on_token(record, row),
+            failure_callback=lambda row, record=matrix_record_map: on_failure(record, row),
+            external_validation_cache=validation_cache,
+            trust_root=trust_root,
+        )
+        _require(
+            isinstance(envelope, Mapping)
+            and _file_binding(path, payload=cast(Mapping[str, Any], envelope))
+            == dict(envelope_binding_map),
+            "Integrity raw envelope binding drifted.",
+        )
+        yield dict(matrix_record_map), cast(dict[str, Any], envelope)
+    finalizer = getattr(validation_cache, "assert_unchanged", None)
+    _require(callable(finalizer), "External-validation cache finalizer is unavailable.")
+    cast(Callable[..., Any], finalizer)(trust_root=trust_root)
+'''
+
+
+AUDIT_ACTIVATION_VALIDATOR = r'''
+def _validate_quality_start_activation_binding(
+    binding: Mapping[str, Any],
+    *,
+    manifest_binding: Mapping[str, Any],
+    trust_root: attestation.TrustRoot,
+) -> dict[str, Any]:
+    manifest_path = manifest_binding.get("path")
+    _require(isinstance(manifest_path, str), "Activation-bound manifest path is missing.")
+    context = matrix.admission.establish_v1_3_1_quality_context(
+        Path(cast(str, manifest_path)),
+        implementation_paths=contract.V1_3_1_IMPLEMENTATION_PATHS,
+        repository_root=matrix.REPOSITORY_ROOT,
+    )
+    _require(
+        context.manifest_binding == dict(manifest_binding),
+        "Activation-bound live manifest drifted.",
+    )
+    activation = matrix.admission.load_activated_quality_authority(
+        quality_context=context,
+        trust_root=trust_root,
+        expected_shards=matrix.EXPECTED_SHARDS,
+        coordinate_digest=matrix.coordinate_digest(),
+        exact_fill_arm_names=matrix.ARM_NAMES,
+        expected_public_binding=binding,
+    )
+    return dict(activation.public_binding)
+'''
 
 
 def _generate_audit(source: str) -> str:
@@ -5994,6 +8189,7 @@ def _integrity_payload(
         '        type=Path,\n'
         '        default=matrix.PREHELDOUT_GENESIS_PATH,\n'
         '    )\n'
+        '    parser.add_argument("--attestation-key-path", type=Path)\n'
         '    parser.add_argument("--output-root", type=Path, default=matrix.OUTPUT_ROOT)\n',
     )
     text = text.replace("args.reuse_admission_path", "args.reuse_admission")
@@ -6005,8 +8201,110 @@ def _integrity_payload(
         "        preheldout_genesis_path=args.preheldout_genesis,\n"
         "        output_root=args.output_root,\n",
     )
+    text = _replace_exact(
+        text,
+        "    args = parser.parse_args()\n"
+        "    result = audit_matrix(\n",
+        "    args = parser.parse_args()\n"
+        "    if args.attestation_key_path is None and not os.environ.get(\n"
+        "        attestation.KEY_PATH_ENV\n"
+        "    ):\n"
+        "        parser.error(\n"
+        "            \"--attestation-key-path is required when the external \"\n"
+        "            f\"{attestation.KEY_PATH_ENV} transport is unavailable.\"\n"
+        "        )\n"
+        "    result = audit_matrix(\n",
+        count=1,
+    )
+    text = _replace_exact(
+        text,
+        "        evaluator_script=matrix.EVALUATOR_SCRIPT,\n"
+        "        output=args.output,\n",
+        "        evaluator_script=matrix.EVALUATOR_SCRIPT,\n"
+        "        output=args.output,\n"
+        "        attestation_key_path=args.attestation_key_path,\n",
+        count=1,
+    )
+    text = _replace_definition(
+        text, "_load_validated_terminal_matrix", AUDIT_LOAD_TERMINAL_V1_3_1
+    )
+    text = _replace_definition(text, "audit_matrix", AUDIT_MATRIX_V1_3_1)
+    text = _replace_definition(
+        text, "iter_validated_raw_shards", AUDIT_RAW_SHARD_ITERATOR
+    )
+    integrity_start, _integrity_end = _top_level_span(text, "_integrity_payload")
+    text = (
+        f"{text[:integrity_start]}{AUDIT_ACTIVATION_VALIDATOR.strip()}\n\n\n"
+        f"{text[integrity_start:]}"
+    )
+    text = _replace_exact(
+        text,
+        '    "no_outcome_dependent_selection_or_stopping",\n'
+        ")\n",
+        '    "no_outcome_dependent_selection_or_stopping",\n'
+        '    "quality_start_activation_hmac_and_lock_identity_verified",\n'
+        ")\n",
+        count=1,
+    )
+    text = _replace_exact(
+        text,
+        '        "manifest",\n'
+        '        "matrix",\n',
+        '        "manifest",\n'
+        '        "quality_start_activation",\n'
+        '        "matrix",\n',
+        count=1,
+    )
+    text = _replace_exact(
+        text,
+        '        "manifest": prerequisites.context.manifest_binding,\n'
+        '        "matrix": _file_binding(matrix_summary, payload=matrix_payload),\n',
+        '        "manifest": prerequisites.context.manifest_binding,\n'
+        '        "quality_start_activation": dict(\n'
+        '            prerequisites.activation.public_binding\n'
+        '        ),\n'
+        '        "matrix": _file_binding(matrix_summary, payload=matrix_payload),\n',
+        count=1,
+    )
+    text = _replace_exact(
+        text,
+        '    manifest = payload.get("manifest")\n'
+        '    _require(isinstance(manifest, Mapping), "Integrity manifest binding is missing.")\n',
+        '    manifest = payload.get("manifest")\n'
+        '    activation_binding = payload.get("quality_start_activation")\n'
+        '    _require(\n'
+        '        isinstance(manifest, Mapping) and isinstance(activation_binding, Mapping),\n'
+        '        "Integrity manifest or activation binding is missing.",\n'
+        '    )\n',
+        count=1,
+    )
+    text = _replace_exact(
+        text,
+        "    active_trust_root = trust_root\n"
+        "    _verify_attestation(payload, trust_root=active_trust_root)\n",
+        "    active_trust_root = trust_root\n"
+        "    _verify_attestation(payload, trust_root=active_trust_root)\n"
+        "    _validate_quality_start_activation_binding(\n"
+        "        cast(Mapping[str, Any], activation_binding),\n"
+        "        manifest_binding=cast(Mapping[str, Any], manifest),\n"
+        "        trust_root=active_trust_root,\n"
+        "    )\n",
+        count=1,
+    )
+    text = _replace_exact(
+        text,
+        '            payload.get("source") == matrix_payload.get("source")\n'
+        '            and payload.get("manifest") == matrix_payload.get("manifest")\n',
+        '            payload.get("source") == matrix_payload.get("source")\n'
+        '            and payload.get("manifest") == matrix_payload.get("manifest")\n'
+        '            and payload.get("quality_start_activation")\n'
+        '            == cast(Mapping[str, Any], matrix_payload.get("prerequisites", {})).get(\n'
+        '                "quality_start_activation"\n'
+        '            )\n',
+        count=1,
+    )
     _require("top_p" not in text.lower(), "Audit retained a top-p prerequisite or identifier.")
-    generated = _insert_generated_header(text)
+    generated = _insert_generated_header(_upgrade_generated_contract_to_v1_3_1(text))
     return _insert_sealed_entrypoint_preamble(
         generated,
         selector="audit",
@@ -6150,6 +8448,7 @@ def _validate_summary_source(
         '            "matrix_launch_routing",\n'
         '            "audit_launch_routing",\n'
         '            "summary_launch_routing",\n'
+        '            "quality_start_activation",\n'
         '        },\n'
         '        "Summary sealed execution provenance",\n'
         '    )\n'
@@ -6181,6 +8480,24 @@ def _validate_summary_source(
         '    )\n'
         '    provenance = _exact_mapping(\n'
         '        source["frozen_analysis_provenance"],\n',
+        count=1,
+    )
+    text = _replace_exact(
+        text,
+        '    manifest = provenance["manifest_binding"]\n'
+        '    _require(isinstance(manifest, Mapping), "Summary manifest provenance is missing.")\n',
+        '    manifest = provenance["manifest_binding"]\n'
+        '    _require(isinstance(manifest, Mapping), "Summary manifest provenance is missing.")\n'
+        '    activation = execution["quality_start_activation"]\n'
+        '    _require(\n'
+        '        isinstance(activation, Mapping),\n'
+        '        "Summary activation provenance is missing.",\n'
+        '    )\n'
+        '    integrity_audit._validate_quality_start_activation_binding(\n'
+        '        cast(Mapping[str, Any], activation),\n'
+        '        manifest_binding=cast(Mapping[str, Any], manifest),\n'
+        '        trust_root=trust_root,\n'
+        '    )\n',
         count=1,
     )
     text = _replace_exact(
@@ -6220,7 +8537,8 @@ def _validate_summary_source(
         "        default_factory=dict\n"
         "    )\n",
         "    reuse_admission_binding: dict[str, Any] | None = None\n"
-        "    preheldout_genesis_binding: dict[str, Any] | None = None\n",
+        "    preheldout_genesis_binding: dict[str, Any] | None = None\n"
+        "    quality_start_activation_binding: dict[str, Any] | None = None\n",
     )
     text = _replace_definition(
         text,
@@ -6237,9 +8555,16 @@ def _register_external_bindings(
     calibration = cast(Mapping[str, Any], inputs).get("calibration_artifact")
     reuse_admission = cast(Mapping[str, Any], inputs).get("reuse_admission")
     preheldout_genesis = cast(Mapping[str, Any], inputs).get("preheldout_genesis")
+    quality_start_activation = cast(Mapping[str, Any], inputs).get(
+        "quality_start_activation"
+    )
     _require(isinstance(calibration, Mapping), "Calibration binding is missing.")
     _require(isinstance(reuse_admission, Mapping), "Reuse-admission binding is missing.")
     _require(isinstance(preheldout_genesis, Mapping), "Pre-heldout genesis binding is missing.")
+    _require(
+        isinstance(quality_start_activation, Mapping),
+        "Quality-start activation binding is missing.",
+    )
     calibration_key = (
         cast(str, coordinate["scale"]),
         cast(int, coordinate["training_seed"]),
@@ -6268,6 +8593,14 @@ def _register_external_bindings(
         _require(
             accumulator.preheldout_genesis_binding == genesis_copy,
             "Pre-heldout genesis binding changed within the quality study.",
+        )
+    activation_copy = dict(cast(Mapping[str, Any], quality_start_activation))
+    if accumulator.quality_start_activation_binding is None:
+        accumulator.quality_start_activation_binding = activation_copy
+    else:
+        _require(
+            accumulator.quality_start_activation_binding == activation_copy,
+            "Quality-start activation binding changed within the quality study.",
         )
 ''',
     )
@@ -6302,13 +8635,18 @@ def _register_external_bindings(
         isinstance(accumulator.preheldout_genesis_binding, Mapping),
         "Pre-heldout genesis binding is absent from the quality study.",
     )
+    _require(
+        isinstance(accumulator.quality_start_activation_binding, Mapping),
+        "Quality-start activation binding is absent from the quality study.",
+    )
 ''',
     )
     text = _replace_exact(
         text,
         '        "top_p_physical_match_artifacts": len(accumulator.top_p_match_bindings),\n',
         '        "reuse_admission_artifacts": 1,\n'
-        '        "preheldout_genesis_artifacts": 1,\n',
+        '        "preheldout_genesis_artifacts": 1,\n'
+        '        "quality_start_activation_artifacts": 1,\n',
     )
     text = _remove_definition(text, "_load_bound_json")
     text = _remove_definition(text, "top_p_calibration_match_summary")
@@ -6345,6 +8683,9 @@ def _register_external_bindings(
         "    sealed_launcher = integrity_payload.get(\"sealed_launcher\")\n"
         "    matrix_launch_routing = integrity_payload.get(\"matrix_launch_routing\")\n"
         "    audit_launch_routing = integrity_payload.get(\"audit_launch_routing\")\n"
+        "    quality_start_activation = integrity_payload.get(\n"
+        "        \"quality_start_activation\"\n"
+        "    )\n"
         "    persistent_session_ledger = integrity_payload.get(\n"
         "        \"persistent_session_ledger\"\n"
         "    )\n"
@@ -6352,6 +8693,7 @@ def _register_external_bindings(
         "        isinstance(sealed_launcher, Mapping)\n"
         "        and isinstance(matrix_launch_routing, Mapping)\n"
         "        and isinstance(audit_launch_routing, Mapping)\n"
+        "        and isinstance(quality_start_activation, Mapping)\n"
         "        and isinstance(persistent_session_ledger, Mapping),\n"
         "        \"Integrity sealed execution provenance is missing.\",\n"
         "    )\n"
@@ -6364,11 +8706,31 @@ def _register_external_bindings(
         "            cast(Mapping[str, Any], audit_launch_routing)\n"
         "        ),\n"
         "        \"summary_launch_routing\": _active_summary_launch_routing(),\n"
+        "        \"quality_start_activation\": dict(\n"
+        "            cast(Mapping[str, Any], quality_start_activation)\n"
+        "        ),\n"
         "        \"persistent_session_ledger\": dict(\n"
         "            cast(Mapping[str, Any], persistent_session_ledger)\n"
         "        ),\n"
         "    }\n"
         "    implementation_tree_sha256 = contract.implementation_tree_digest()\n",
+        count=1,
+    )
+    text = _replace_exact(
+        text,
+        "    _require(not active_streams, \"One-pass summary retained an uncommitted shard stream.\")\n"
+        "    validate_study_coverage(accumulator)\n"
+        "    return accumulator\n",
+        "    _require(not active_streams, \"One-pass summary retained an uncommitted shard stream.\")\n"
+        "    validate_study_coverage(accumulator)\n"
+        "    integrity_activation = integrity_payload.get(\"quality_start_activation\")\n"
+        "    _require(\n"
+        "        isinstance(integrity_activation, Mapping)\n"
+        "        and accumulator.quality_start_activation_binding\n"
+        "        == dict(cast(Mapping[str, Any], integrity_activation)),\n"
+        '        "Raw shard activation binding differs from the integrity authority.",\n'
+        "    )\n"
+        "    return accumulator\n",
         count=1,
     )
     text = _replace_exact(
@@ -6400,6 +8762,9 @@ def _register_external_bindings(
         '            "summary_launch_routing": cast(\n'
         '                Mapping[str, Any], source["sealed_execution_provenance"]\n'
         '            )["summary_launch_routing"],\n'
+        '            "quality_start_activation": integrity_payload.get(\n'
+        '                "quality_start_activation"\n'
+        '            ),\n'
         '            "persistent_session_ledger": integrity_payload.get(\n'
         '                "persistent_session_ledger"\n'
         '            ),\n'
@@ -6419,7 +8784,8 @@ def _register_external_bindings(
         '            "calibration_artifacts",\n',
         '            "calibration_artifacts",\n'
         '            "reuse_admission_artifacts",\n'
-        '            "preheldout_genesis_artifacts",\n',
+        '            "preheldout_genesis_artifacts",\n'
+        '            "quality_start_activation_artifacts",\n',
     )
     coverage_fixed = '''        "top_p_physical_match_artifacts": (
             len(contract.SCALES)
@@ -6434,7 +8800,8 @@ def _register_external_bindings(
         '        "calibration_artifacts": len(contract.SCALES) * len(contract.TRAINING_SEEDS),\n',
         '        "calibration_artifacts": len(contract.SCALES) * len(contract.TRAINING_SEEDS),\n'
         '        "reuse_admission_artifacts": 1,\n'
-        '        "preheldout_genesis_artifacts": 1,\n',
+        '        "preheldout_genesis_artifacts": 1,\n'
+        '        "quality_start_activation_artifacts": 1,\n',
     )
     text = _replace_exact(text, '            "calibration_only_top_p_physical_match",\n', "")
     text = _replace_exact(
@@ -6449,8 +8816,44 @@ def _register_external_bindings(
         '        "top_p_descriptive_sensitivity": TOP_P_SENSITIVITY_CONTRASTS,\n',
         "",
     )
+    text = _replace_exact(
+        text,
+        '    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)\n'
+        "    return parser.parse_args()\n",
+        '    parser.add_argument("--attestation-key-path", type=Path)\n'
+        '    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)\n'
+        "    args = parser.parse_args()\n"
+        "    if args.attestation_key_path is None and not os.environ.get(\n"
+        "        attestation.KEY_PATH_ENV\n"
+        "    ):\n"
+        "        parser.error(\n"
+        "            \"--attestation-key-path is required when the external \"\n"
+        "            f\"{attestation.KEY_PATH_ENV} transport is unavailable.\"\n"
+        "        )\n"
+        "    return args\n",
+        count=1,
+    )
+    text = _replace_exact(
+        text,
+        "    trust_root = attestation.trust_root_from_environment(\n"
+        "        repository_root=REPOSITORY_ROOT,\n"
+        "        artifact_roots=(output.parent, integrity_path.parent, raw_output_root),\n"
+        "    )\n",
+        "    if args.attestation_key_path is None:\n"
+        "        trust_root = attestation.trust_root_from_environment(\n"
+        "            repository_root=REPOSITORY_ROOT,\n"
+        "            artifact_roots=(output.parent, integrity_path.parent, raw_output_root),\n"
+        "        )\n"
+        "    else:\n"
+        "        trust_root = attestation.load_trust_root(\n"
+        "            args.attestation_key_path,\n"
+        "            repository_root=REPOSITORY_ROOT,\n"
+        "            artifact_roots=(output.parent, integrity_path.parent, raw_output_root),\n"
+        "        )\n",
+        count=1,
+    )
     _require("top_p" not in text.lower(), "Summary retained top-p quality data or schema.")
-    generated = _insert_generated_header(text)
+    generated = _insert_generated_header(_upgrade_generated_contract_to_v1_3_1(text))
     return _insert_sealed_entrypoint_preamble(
         generated,
         selector="summary",
