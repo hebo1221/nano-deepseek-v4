@@ -139,52 +139,58 @@ class HCACSAReadSidecar:
         if self._active:
             raise RuntimeError("HCA--CSA read sidecar is already active.")
         self._active = True
-        for layer_index, layer in enumerate(self.model.model.layers):
-            attention = layer.self_attn
-            compressor = attention.hca if attention.hca is not None else attention.csa
-            if compressor is None:
-                continue
-            memory_type: Literal["hca", "csa"] = "hca" if attention.hca is not None else "csa"
-
-            def hook(
-                _module: Any,
-                args: tuple[Any, ...],
-                output: tuple[Any, ...],
-                *,
-                captured_layer: int = layer_index,
-                captured_type: Literal["hca", "csa"] = memory_type,
-            ) -> None:
-                self._capture_compressor(captured_layer, captured_type, args, output)
-
-            self._handles.append(compressor.register_forward_hook(hook))
-            had_instance_method = "_core_attention" in attention.__dict__
-            prior_instance_method = attention.__dict__.get("_core_attention")
-            original = attention._core_attention
-
-            def wrapped(
-                _attention: Any,
-                q: torch.Tensor,
-                keys: torch.Tensor,
-                values: torch.Tensor,
-                mask: torch.Tensor,
-                *,
-                captured_attention: Any = attention,
-                captured_layer: int = layer_index,
-                captured_original: Any = original,
-            ) -> torch.Tensor:
-                context = captured_original(q, keys, values, mask)
-                self._capture_read(
-                    attention=captured_attention,
-                    layer_index=captured_layer,
-                    q=q,
-                    keys=keys,
-                    values=values,
-                    mask=mask,
+        try:
+            for layer_index, layer in enumerate(self.model.model.layers):
+                attention = layer.self_attn
+                compressor = attention.hca if attention.hca is not None else attention.csa
+                if compressor is None:
+                    continue
+                memory_type: Literal["hca", "csa"] = (
+                    "hca" if attention.hca is not None else "csa"
                 )
-                return context
 
-            attention._core_attention = MethodType(wrapped, attention)
-            self._restores.append((attention, had_instance_method, prior_instance_method))
+                def hook(
+                    _module: Any,
+                    args: tuple[Any, ...],
+                    output: tuple[Any, ...],
+                    *,
+                    captured_layer: int = layer_index,
+                    captured_type: Literal["hca", "csa"] = memory_type,
+                ) -> None:
+                    self._capture_compressor(captured_layer, captured_type, args, output)
+
+                self._handles.append(compressor.register_forward_hook(hook))
+                had_instance_method = "_core_attention" in attention.__dict__
+                prior_instance_method = attention.__dict__.get("_core_attention")
+                original = attention._core_attention
+
+                def wrapped(
+                    _attention: Any,
+                    q: torch.Tensor,
+                    keys: torch.Tensor,
+                    values: torch.Tensor,
+                    mask: torch.Tensor,
+                    *,
+                    captured_attention: Any = attention,
+                    captured_layer: int = layer_index,
+                    captured_original: Any = original,
+                ) -> torch.Tensor:
+                    context = captured_original(q, keys, values, mask)
+                    self._capture_read(
+                        attention=captured_attention,
+                        layer_index=captured_layer,
+                        q=q,
+                        keys=keys,
+                        values=values,
+                        mask=mask,
+                    )
+                    return context
+
+                attention._core_attention = MethodType(wrapped, attention)
+                self._restores.append((attention, had_instance_method, prior_instance_method))
+        except BaseException:
+            self.__exit__(None, None, None)
+            raise
         return self
 
     def __exit__(self, _type: Any, _value: Any, _traceback: Any) -> None:

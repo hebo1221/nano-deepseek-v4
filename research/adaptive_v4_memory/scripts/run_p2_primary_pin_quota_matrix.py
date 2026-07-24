@@ -318,21 +318,81 @@ def _run_cell(
 def validate_cell(payload: dict[str, Any], coordinate: dict[str, Any]) -> None:
     source = dict(payload)
     observed_digest = source.pop("payload_sha256", None)
+    scale = cast(str, coordinate["scale"])
+    seed = cast(int, coordinate["training_seed"])
+    budget = cast(str, coordinate["budget"])
+    family = cast(str, coordinate["family"])
+    context = cast(int, coordinate["context"])
+    replicate = cast(int, coordinate["replicate"])
+    calibration_seed, evaluation_seed = evaluator._validate_coordinate(
+        scale=scale,
+        training_seed=seed,
+        budget=budget,
+        family=family,
+        context=context,
+        replicate=replicate,
+    )
+    expected_coordinate = {
+        **coordinate,
+        "calibration_seed": calibration_seed,
+        "evaluation_seed": evaluation_seed,
+        "generation_seed": contract.generation_seed(
+            evaluation_seed, family, context, replicate
+        ),
+        "global_block_budget": contract.DIRECT_GLOBAL_BLOCK_BUDGETS[scale][budget],
+    }
     if (
-        payload.get("experiment_id") != EXPERIMENT_ID
+        payload.get("schema_version") != 1
+        or payload.get("experiment_id") != EXPERIMENT_ID
         or payload.get("status") != "terminal"
-        or any(payload.get("coordinate", {}).get(key) != value for key, value in coordinate.items())
+        or payload.get("coordinate") != expected_coordinate
         or tuple(payload.get("arms", ())) != ARMS
         or len(payload.get("examples", ())) != contract.EXAMPLES_PER_SHARD
         or len(payload.get("outcomes", ())) != contract.EXAMPLES_PER_SHARD * len(ARMS)
         or observed_digest != _digest(source)
     ):
         raise ValueError(f"Invalid primary pin/quota cell: {coordinate}")
+    expected_orders = {
+        example_index: tuple(
+            name
+            for name in evaluator.arm_execution_order(
+                evaluator.shard_schedule_index(
+                    family=family,
+                    context=context,
+                    replicate=replicate,
+                    example_index=example_index,
+                )
+            )
+            if name in ARMS
+        )
+        for example_index in range(contract.EXAMPLES_PER_SHARD)
+    }
+    examples = cast(list[dict[str, Any]], payload["examples"])
+    if (
+        {cast(int, example["example_index"]) for example in examples}
+        != set(expected_orders)
+        or any(
+            tuple(example.get("execution_order", ()))
+            != expected_orders[cast(int, example["example_index"])]
+            for example in examples
+        )
+    ):
+        raise ValueError("Primary pin/quota example inventory or execution order drifted.")
     grouped: dict[int, list[dict[str, Any]]] = {}
     for row in cast(list[dict[str, Any]], payload["outcomes"]):
         grouped.setdefault(cast(int, row["example_index"]), []).append(row)
-    for rows in grouped.values():
-        if len(rows) != len(ARMS) or {cast(str, row["arm"]) for row in rows} != set(ARMS):
+    if set(grouped) != set(expected_orders):
+        raise ValueError("Primary pin/quota outcome example inventory drifted.")
+    for example_index, rows in grouped.items():
+        observed_order = {
+            cast(int, row["execution_index"]): cast(str, row["arm"]) for row in rows
+        }
+        if (
+            len(rows) != len(ARMS)
+            or len(observed_order) != len(ARMS)
+            or tuple(observed_order.get(index) for index in range(len(ARMS)))
+            != expected_orders[example_index]
+        ):
             raise ValueError("Primary pin/quota arm inventory drifted.")
         for field in ("hot_blocks_sequence_sha256", "hot_bytes_sequence_sha256"):
             if len({cast(dict[str, Any], row["token_summary"])[field] for row in rows}) != 1:

@@ -94,3 +94,25 @@ def test_research_sidecar_is_output_neutral_and_restores_model() -> None:
 def test_research_sidecar_rejects_training_mode() -> None:
     with pytest.raises(ValueError, match="requires eval mode"):
         HCACSAReadSidecar(_hca_csa_model().train())
+
+
+def test_research_sidecar_restores_partial_installation_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    model = _hca_csa_model().eval()
+    sidecar = HCACSAReadSidecar(model)
+    second_compressor = model.model.layers[1].self_attn.hca
+    assert second_compressor is not None
+
+    def fail_registration(_hook: object) -> object:
+        raise RuntimeError("injected hook failure")
+
+    monkeypatch.setattr(second_compressor, "register_forward_hook", fail_registration)
+    with pytest.raises(RuntimeError, match="injected hook failure"):
+        sidecar.__enter__()
+
+    assert not sidecar._active
+    assert not sidecar._handles
+    assert not sidecar._restores
+    for layer in model.model.layers:
+        assert "_core_attention" not in layer.self_attn.__dict__
