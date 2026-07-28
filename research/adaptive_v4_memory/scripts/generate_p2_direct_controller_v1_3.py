@@ -8831,12 +8831,6 @@ def _generate_runner(source: str) -> str:
         f"found {fallback_call_count}.",
     )
     text = "".join(patched_lines)
-    preflight_start, preflight_end = _top_level_span(text, "_preflight_distributed_output_tree")
-    preflight = text[preflight_start:preflight_end]
-    preflight = _replace_exact(preflight, "    allowed: set[Path] = {summary}\n", "    allowed: set[Path] = {summary}\n    concurrent_bundle_members: set[Path] = set()\n    concurrent_temporary_bundles: dict[Path, Mapping[str, Path]] = {}\n")
-    preflight = _replace_exact(preflight, "            allowed.add(claim_path)\n            for path in bundle.values():\n", "            allowed.add(claim_path)\n            allowed.update(bundle.values())\n            concurrent_bundle_members.update(bundle.values())\n            concurrent_temporary_bundles[output_dir] = bundle\n            for path in bundle.values():\n")
-    preflight = _replace_exact(preflight, '    for item in root.rglob("*"):\n        _require(not item.is_symlink(), f"Controller output tree contains a symlink: {item}")\n        _require(\n            _absolute(item) in allowed,\n            f"Controller output tree contains an unregistered orphan: {item}",\n        )\n', '    for item in root.rglob("*"):\n        if not os.path.lexists(item):\n            continue\n        _require(not item.is_symlink(), f"Controller output tree contains a symlink: {item}")\n        absolute = _absolute(item)\n        if absolute in allowed:\n            _require(\n                absolute not in concurrent_bundle_members or item.is_file(),\n                f"Active distributed bundle member is unsafe: {item}",\n            )\n            continue\n        live_bundle = concurrent_temporary_bundles.get(item.parent)\n        _require(\n            live_bundle is not None and item.is_file() and _is_evaluator_temporary(item, live_bundle),\n            f"Controller output tree contains an unregistered orphan: {item}",\n        )\n')
-    text = f"{text[:preflight_start]}{preflight}{text[preflight_end:]}"
     _require("top_p" not in text.lower(), "Runner retained a top-p prerequisite or identifier.")
     generated = _insert_generated_header(_upgrade_generated_contract_to_v1_3_4(text))
     return _insert_sealed_entrypoint_preamble(

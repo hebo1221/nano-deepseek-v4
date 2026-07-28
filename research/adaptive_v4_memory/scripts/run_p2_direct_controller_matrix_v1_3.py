@@ -6158,8 +6158,6 @@ def _preflight_distributed_output_tree(
         return active_claims
     _require(root.is_dir() and not root.is_symlink(), "Controller output root is unsafe.")
     allowed: set[Path] = {summary}
-    concurrent_bundle_members: set[Path] = set()
-    concurrent_temporary_bundles: dict[Path, Mapping[str, Path]] = {}
     for index, coordinate in enumerate(coordinates()):
         output_dir = shard_output_dir(root, coordinate)
         cursor = output_dir
@@ -6188,9 +6186,6 @@ def _preflight_distributed_output_tree(
                 worker_count=worker_count,
             )
             allowed.add(claim_path)
-            allowed.update(bundle.values())
-            concurrent_bundle_members.update(bundle.values())
-            concurrent_temporary_bundles[output_dir] = bundle
             for path in bundle.values():
                 if path.exists():
                     _require(
@@ -6220,19 +6215,9 @@ def _preflight_distributed_output_tree(
                     f"Unclaimed distributed cell contains orphan evidence: {coordinate.key}.",
                 )
     for item in root.rglob("*"):
-        if not os.path.lexists(item):
-            continue
         _require(not item.is_symlink(), f"Controller output tree contains a symlink: {item}")
-        absolute = _absolute(item)
-        if absolute in allowed:
-            _require(
-                absolute not in concurrent_bundle_members or item.is_file(),
-                f"Active distributed bundle member is unsafe: {item}",
-            )
-            continue
-        live_bundle = concurrent_temporary_bundles.get(item.parent)
         _require(
-            live_bundle is not None and item.is_file() and _is_evaluator_temporary(item, live_bundle),
+            _absolute(item) in allowed,
             f"Controller output tree contains an unregistered orphan: {item}",
         )
     return active_claims
