@@ -158,8 +158,30 @@ def test_builder_preserves_unpublished_arm_semantics_failure_before_final_namesp
     assert not lineage["volatile_execution_disclosure"][
         "quality_values_read_by_supervisor_or_retry_decision"
     ]
+    assert lineage["retry"]["output_root"] == str(
+        contract.V1_3_5_SUPERSEDED_PERSISTENT_RESET_OUTPUT_ROOT
+    )
+    assert "parallel-final" in lineage["retry"]["output_root"]
+
+
+def test_builder_preserves_persistent_reset_failure_before_final_retry() -> None:
+    child = _manifest(worker_count=3, probe_worker_count=1)
+    lineage = child["lineage_and_adaptation_disclosure"][
+        "v1_3_5_superseded_persistent_reset_attempt"
+    ]
+
+    assert lineage == contract.superseded_persistent_reset_attempt()
+    assert lineage["closed_world_inventory"]["file_count"] == 45
+    assert lineage["durable_quality_state"]["canonical_prefix_shards"] == 3
+    assert lineage["durable_quality_state"]["globally_committed_shards"] == 4
+    assert lineage["durable_quality_state"]["orphan_claim_count"] == 1
+    assert lineage["durable_quality_state"]["complete_uncommitted_bundle_count"] == 1
+    assert lineage["failure"]["stage"] == (
+        "post-publication-persistent-reset-followed-by-concurrent-drain"
+    )
+    assert lineage["quality_values_read_by_supervisor_or_retry_decision"] is False
     assert lineage["retry"]["output_root"] == str(contract.V1_3_5_OUTPUT_ROOT)
-    assert "parallel-final" in str(contract.V1_3_5_OUTPUT_ROOT)
+    assert "parallel-final-2" in lineage["retry"]["output_root"]
 
 
 def test_builder_rejects_unregistered_probe_override() -> None:

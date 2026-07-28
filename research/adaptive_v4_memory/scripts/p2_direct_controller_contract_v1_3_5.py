@@ -3,6 +3,8 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import os
+import stat
 import subprocess
 from collections.abc import Mapping
 from pathlib import Path
@@ -13,7 +15,7 @@ from p2_direct_controller_contract_v1_3 import *  # noqa: F403
 
 V1_3_5_EXPERIMENT_ID = "p2-post-rank-direct-controller-exact-fill-v1.3.5"
 V1_3_5_MANIFEST_STATUS = (
-    "frozen_v1_3_5_three_worker_parallel_final_after_unpublished_arm_semantics_failure"
+    "frozen_v1_3_5_three_worker_parallel_final_after_persistent_reset_failure"
 )
 V1_3_5_MANIFEST_PATH = Path(
     "research/adaptive_v4_memory/manifests/p2-post-rank-direct-controller-exact-fill-v1-3-5.json"
@@ -65,18 +67,40 @@ V1_3_5_SUPERSEDED_ARM_SEMANTICS_PERSISTENT_SESSION_ROOT = (
     / ".controller-exact-fill-v1-3-5-parallel-retry-2."
     "p2-direct-controller-persistent-sessions-v1-3-5"
 )
-V1_3_5_OUTPUT_ROOT = Path(
+V1_3_5_SUPERSEDED_PERSISTENT_RESET_OUTPUT_ROOT = Path(
     "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/"
     "controller-exact-fill-v1-3-5-parallel-final"
+)
+V1_3_5_SUPERSEDED_PERSISTENT_RESET_ACTIVATION_ROOT = (
+    V1_3_5_SUPERSEDED_PERSISTENT_RESET_OUTPUT_ROOT.parent
+    / "controller-exact-fill-v1-3-5-parallel-final-activation"
+)
+V1_3_5_SUPERSEDED_PERSISTENT_RESET_WORKER_ROOT = (
+    V1_3_5_SUPERSEDED_PERSISTENT_RESET_OUTPUT_ROOT.parent
+    / ".controller-exact-fill-v1-3-5-parallel-final."
+    "p2-direct-controller-workers-v1-3-5"
+)
+V1_3_5_SUPERSEDED_PERSISTENT_RESET_SESSION_ROOT = (
+    V1_3_5_SUPERSEDED_PERSISTENT_RESET_OUTPUT_ROOT.parent
+    / ".controller-exact-fill-v1-3-5-parallel-final."
+    "p2-direct-controller-persistent-sessions-v1-3-5"
+)
+V1_3_5_SUPERSEDED_PERSISTENT_RESET_SESSION_LOCK = (
+    V1_3_5_SUPERSEDED_PERSISTENT_RESET_SESSION_ROOT.parent
+    / f"{V1_3_5_SUPERSEDED_PERSISTENT_RESET_SESSION_ROOT.name}.lock"
+)
+V1_3_5_OUTPUT_ROOT = Path(
+    "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/"
+    "controller-exact-fill-v1-3-5-parallel-final-2"
 )
 V1_3_5_MATRIX_SUMMARY_PATH = V1_3_5_OUTPUT_ROOT / base.MATRIX_SUMMARY_NAME
 V1_3_5_INTEGRITY_OUTPUT_PATH = (
     V1_3_5_OUTPUT_ROOT.parent
-    / "controller-exact-fill-v1-3-5-parallel-final.integrity.json"
+    / "controller-exact-fill-v1-3-5-parallel-final-2.integrity.json"
 )
 V1_3_5_SUMMARY_OUTPUT_PATH = (
     V1_3_5_OUTPUT_ROOT.parent
-    / "controller-exact-fill-v1-3-5-parallel-final.summary.json"
+    / "controller-exact-fill-v1-3-5-parallel-final-2.summary.json"
 )
 # The authenticated calibration/checkpoint inventory remains the exact,
 # read-only v1.3.4 predecessor pair.  No v1.3.5 copy or re-attestation exists.
@@ -85,7 +109,7 @@ V1_3_5_REUSE_ADMISSION_PATH = base.V1_3_4_REUSE_ADMISSION_PATH
 V1_3_5_PREHELDOUT_GENESIS_PATH = base.V1_3_4_PREHELDOUT_GENESIS_PATH
 V1_3_5_ACTIVATION_ROOT = (
     V1_3_5_OUTPUT_ROOT.parent
-    / "controller-exact-fill-v1-3-5-parallel-final-activation"
+    / "controller-exact-fill-v1-3-5-parallel-final-2-activation"
 )
 V1_3_5_ACTIVATION_MATRIX_LOCK_PATH = V1_3_5_ACTIVATION_ROOT / "matrix.lock"
 V1_3_5_QUALITY_START_ACTIVATION_PATH = V1_3_5_ACTIVATION_ROOT / "quality-start-activation.json"
@@ -148,6 +172,12 @@ V1_3_4_STATIC_ADMISSION_SHA256 = "80671b6b7344bbc12afbb1029f75f6ab9b3c8c45f9d8b0
 V1_3_4_STATIC_ADMISSION_BYTES = 88_361
 V1_3_4_STATIC_GENESIS_SHA256 = "e3b1947b2e333a794aa41c7c695491a392f18d8bb8db4cd8ca785166e90acc47"
 V1_3_4_STATIC_GENESIS_BYTES = 87_925
+V1_3_5_SUPERSEDED_PERSISTENT_RESET_INVENTORY_SHA256 = (
+    "08b41cec4569aafa2f7d99c71e9b891756ce6abc637254e2ff4805c40b949032"
+)
+V1_3_5_SUPERSEDED_PERSISTENT_RESET_DIRECTORY_COUNT = 14
+V1_3_5_SUPERSEDED_PERSISTENT_RESET_FILE_COUNT = 45
+V1_3_5_SUPERSEDED_PERSISTENT_RESET_TOTAL_BYTES = 4_500_389
 
 V1_3_5_IMPLEMENTATION_PATHS = (
     *base.V1_3_4_IMPLEMENTATION_PATHS,
@@ -569,8 +599,8 @@ def superseded_unpublished_arm_semantics_attempt() -> dict[str, Any]:
             ),
         },
         "retry": {
-            "output_root": str(V1_3_5_OUTPUT_ROOT),
-            "activation_root": str(V1_3_5_ACTIVATION_ROOT),
+            "output_root": str(V1_3_5_SUPERSEDED_PERSISTENT_RESET_OUTPUT_ROOT),
+            "activation_root": str(V1_3_5_SUPERSEDED_PERSISTENT_RESET_ACTIVATION_ROOT),
             "scientific_grid_arm_estimand_or_success_gate_changed": False,
             "quality_values_used_to_configure_retry": False,
         },
@@ -580,6 +610,182 @@ def superseded_unpublished_arm_semantics_attempt() -> dict[str, Any]:
 def _require(condition: bool, message: str) -> None:
     if not condition:
         raise ValueError(message)
+
+
+def _superseded_persistent_reset_inventory() -> dict[str, Any]:
+    roots = (
+        V1_3_5_SUPERSEDED_PERSISTENT_RESET_OUTPUT_ROOT,
+        V1_3_5_SUPERSEDED_PERSISTENT_RESET_ACTIVATION_ROOT,
+        V1_3_5_SUPERSEDED_PERSISTENT_RESET_WORKER_ROOT,
+        V1_3_5_SUPERSEDED_PERSISTENT_RESET_SESSION_ROOT,
+    )
+    standalone_paths = (V1_3_5_SUPERSEDED_PERSISTENT_RESET_SESSION_LOCK,)
+    directories: list[str] = []
+    files: list[dict[str, Any]] = []
+    for root in roots:
+        _require(
+            root.is_dir() and not root.is_symlink(),
+            f"Superseded persistent-reset root is missing or unsafe: {root}",
+        )
+        directories.append(str(root))
+        for path in sorted(root.rglob("*")):
+            _require(
+                not path.is_symlink(),
+                f"Superseded persistent-reset inventory contains a symlink: {path}",
+            )
+            if path.is_dir():
+                directories.append(str(path))
+                continue
+            metadata = os.stat(path, follow_symlinks=False)
+            _require(
+                stat.S_ISREG(metadata.st_mode),
+                f"Superseded persistent-reset inventory contains a non-file: {path}",
+            )
+            raw = path.read_bytes()
+            files.append(
+                {
+                    "path": str(path),
+                    "bytes": len(raw),
+                    "sha256": hashlib.sha256(raw).hexdigest(),
+                    "mode": oct(stat.S_IMODE(metadata.st_mode)),
+                }
+            )
+    for path in standalone_paths:
+        metadata = os.stat(path, follow_symlinks=False)
+        _require(
+            stat.S_ISREG(metadata.st_mode) and not path.is_symlink(),
+            f"Superseded persistent-reset standalone file is unsafe: {path}",
+        )
+        raw = path.read_bytes()
+        files.append(
+            {
+                "path": str(path),
+                "bytes": len(raw),
+                "sha256": hashlib.sha256(raw).hexdigest(),
+                "mode": oct(stat.S_IMODE(metadata.st_mode)),
+            }
+        )
+    source = {
+        "roots": [str(path) for path in roots],
+        "standalone_paths": [str(path) for path in standalone_paths],
+        "directories": sorted(directories),
+        "files": files,
+    }
+    digest = base.json_digest(source)
+    _require(
+        len(directories) == V1_3_5_SUPERSEDED_PERSISTENT_RESET_DIRECTORY_COUNT
+        and len(files) == V1_3_5_SUPERSEDED_PERSISTENT_RESET_FILE_COUNT
+        and sum(cast(int, row["bytes"]) for row in files)
+        == V1_3_5_SUPERSEDED_PERSISTENT_RESET_TOTAL_BYTES
+        and digest == V1_3_5_SUPERSEDED_PERSISTENT_RESET_INVENTORY_SHA256,
+        "Superseded persistent-reset inventory drifted.",
+    )
+    return {
+        "roots": [str(path) for path in roots],
+        "standalone_paths": [str(path) for path in standalone_paths],
+        "directory_count": len(directories),
+        "file_count": len(files),
+        "total_bytes": sum(cast(int, row["bytes"]) for row in files),
+        "inventory_sha256": digest,
+    }
+
+
+def superseded_persistent_reset_attempt() -> dict[str, Any]:
+    output_root = V1_3_5_SUPERSEDED_PERSISTENT_RESET_OUTPUT_ROOT
+    claim_path = (
+        output_root
+        / "s55/seed-6071406/2x/single-remote-retrieval/context-80/replicate-3"
+        / ".p2-direct-controller-exact-fill-v1-3-5-cell.claim"
+    )
+    envelope_path = claim_path.with_name(
+        "direct-s55-train-6071406-2x-single-remote-retrieval-context-80-replicate-3.json"
+    )
+    return {
+        "lineage_type": "signed-superseded-persistent-reset-and-drain-failure",
+        "manifest_commit": "a11933e9cae2eed84d795631826e2eb605a8e091",
+        "implementation_source_commit": "db4d425ac61e3df49b5a44a7a0f37edf3db17870",
+        "manifest": {
+            "path": str(V1_3_5_MANIFEST_PATH),
+            "sha256": "7a257b7a75563ca323b3bd8b12613dbb85d999f7bad48a77624b939026e63692",
+            "bytes": 124_514,
+        },
+        "activation": {
+            "path": str(
+                V1_3_5_SUPERSEDED_PERSISTENT_RESET_ACTIVATION_ROOT
+                / "quality-start-activation.json"
+            ),
+            "sha256": "8e3379036eb1356d7b199081049a033a6baf4e9b9a8af3162b5a82cc39ca0911",
+            "bytes": 350_442,
+            "payload_sha256": "94b05e7645128a8153696665a895527d87536c61377997ddfc13536048beb08b",
+            "attestation_mac": "43eb7d013f7a864dab9f52a50b711558e6311f7603479c3ac2f6770b0a93c7b3",
+        },
+        "matrix": {
+            "path": str(output_root / base.MATRIX_SUMMARY_NAME),
+            "sha256": "8e59d2b0f9d7c9897354d639f08743ebf9240fda4eb437cf122b53888f37de87",
+            "bytes": 675_527,
+            "payload_sha256": "8081d42821f88f0dc17e80c5f947b42c167823c004f3537bf13b6d7d78f4b5da",
+            "attestation_mac": "9056e99376abdd8fd266c2c5e275b86ea49a5454ac65d0344ef75b76640a8868",
+            "status": "in_progress",
+        },
+        "closed_world_inventory": _superseded_persistent_reset_inventory(),
+        "durable_quality_state": {
+            "completed_shards": 4,
+            "canonical_prefix_shards": 3,
+            "globally_committed_shards": 4,
+            "worker_completed_shards": [1, 2, 1],
+            "committed_coordinate_keys": [
+                "s55/train-6071406/2x/single-remote-retrieval/context-80/replicate-0",
+                "s55/train-6071406/2x/single-remote-retrieval/context-80/replicate-1",
+                "s55/train-6071406/2x/single-remote-retrieval/context-80/replicate-2",
+                "s55/train-6071406/2x/single-remote-retrieval/context-80/replicate-4",
+            ],
+            "orphan_claim_count": 1,
+            "complete_uncommitted_bundle_count": 1,
+        },
+        "orphan_claim": {
+            "path": str(claim_path),
+            "sha256": "c46072cdca8c41d1dc4869482b155d3b7637d711ce9efeb5df468feca93d6a1a",
+            "bytes": 526,
+            "worker_index": 0,
+            "worker_count": 3,
+        },
+        "uncommitted_envelope": {
+            "path": str(envelope_path),
+            "sha256": "fc9aad825cc89748edfbb801d982eff30822122569d13f6162e12ad40ad2f4f7",
+            "bytes": 37_827,
+            "payload_sha256": "3c49fb5812ab0eb26147173d83a4200581fbc2d97401647394c2a7e996129d78",
+            "attestation_mac": "df13353b715c85db0930c893e0fe3538b1d0ac784dbe3cc292918c8fe0535352",
+        },
+        "persistent_sessions": {
+            "launch_count": 6,
+            "terminal_count": 6,
+            "child_eof_count": 4,
+            "parent_crash_recovered_count": 1,
+            "controlled_stop_count": 1,
+            "published_bundle_reingestion_count": 4,
+        },
+        "failure": {
+            "stage": "post-publication-persistent-reset-followed-by-concurrent-drain",
+            "exception": (
+                "ValueError: Persistent evaluator did not return to its model-resident "
+                "allocation baseline."
+            ),
+            "cause": (
+                "the child required byte-exact equality to the pre-first-work CUDA allocation; "
+                "each quality child exited after publishing its first bundle when the "
+                "post-first-work allocation was higher, and concurrent drain left one complete "
+                "uncommitted bundle under a dead claim"
+            ),
+        },
+        "retry": {
+            "output_root": str(V1_3_5_OUTPUT_ROOT),
+            "activation_root": str(V1_3_5_ACTIVATION_ROOT),
+            "scientific_grid_arm_estimand_or_success_gate_changed": False,
+            "quality_values_used_to_configure_retry": False,
+            "retry_trigger_used_only_integrity_schema_device_and_process_state": True,
+        },
+        "quality_values_read_by_supervisor_or_retry_decision": False,
+    }
 
 
 def _parent_manifest_payload() -> dict[str, Any]:
@@ -717,6 +923,18 @@ def build_v1_3_5_manifest_payload(
             "superseded_v1_3_5_arm_semantics_worker_root": str(
                 V1_3_5_SUPERSEDED_ARM_SEMANTICS_WORKER_ROOT
             ),
+            "superseded_v1_3_5_persistent_reset_activation_root": str(
+                V1_3_5_SUPERSEDED_PERSISTENT_RESET_ACTIVATION_ROOT
+            ),
+            "superseded_v1_3_5_persistent_reset_output_root": str(
+                V1_3_5_SUPERSEDED_PERSISTENT_RESET_OUTPUT_ROOT
+            ),
+            "superseded_v1_3_5_persistent_reset_persistent_session_root": str(
+                V1_3_5_SUPERSEDED_PERSISTENT_RESET_SESSION_ROOT
+            ),
+            "superseded_v1_3_5_persistent_reset_worker_root": str(
+                V1_3_5_SUPERSEDED_PERSISTENT_RESET_WORKER_ROOT
+            ),
             "v1_3_4_quality_output_namespace_reused": False,
             "v1_3_4_static_admission_namespace_reused_read_only": True,
             "v1_3_5_superseded_zero_quality_namespace_reused": False,
@@ -790,6 +1008,9 @@ def build_v1_3_5_manifest_payload(
     disclosure["v1_3_5_superseded_unpublished_arm_semantics_attempt"] = (
         superseded_unpublished_arm_semantics_attempt()
     )
+    disclosure["v1_3_5_superseded_persistent_reset_attempt"] = (
+        superseded_persistent_reset_attempt()
+    )
     execution = cast(dict[str, Any], payload["execution_contract"])
     execution["v1_3_5_quality_manifest_context_required"] = True
     execution["v1_3_4_quality_manifest_context_required"] = False
@@ -799,6 +1020,15 @@ def build_v1_3_5_manifest_payload(
     sealed["canonical_git_object_launcher_id"] = V1_3_5_CANONICAL_GIT_OBJECT_LAUNCHER_ID
     sealed["quality_session_normal_path_model_loads"] = 10 * selected_worker_count
     sealed["total_normal_path_checkpoint_model_loads"] = 1 + 10 * selected_worker_count
+    sealed["persistent_model_allocation_reset"] = {
+        "model_parameter_and_buffer_identity_shape_dtype_device_version_exact": True,
+        "pre_first_work_cuda_allocation_recorded": True,
+        "first_completed_cell_may_raise_allocation_baseline_once": True,
+        "first_completed_cell_baseline_stabilization_requires_unchanged_model_state": True,
+        "every_later_cell_requires_exact_stabilized_allocation_equality": True,
+        "stabilization_scope": "one-persistent-child-process",
+        "quality_values_used_to_set_or_validate_baseline": False,
+    }
     activation = cast(dict[str, Any], sealed["quality_start_activation"])
     activation["canonical_v1_3_4_entrypoint_status"] = "retired-static-predecessor-only"
     activation["quality_execution_topology"] = {

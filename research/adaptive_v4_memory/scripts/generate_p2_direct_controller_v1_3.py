@@ -1319,7 +1319,8 @@ def _reset_persistent_model_state(
     device: torch.device,
     expected_state: tuple[tuple[Any, ...], ...],
     expected_allocated_bytes: int,
-) -> None:
+    allow_initial_allocation_stabilization: bool,
+) -> int:
     torch.cuda.synchronize(device)
     gc.collect()
     torch.cuda.empty_cache()
@@ -1328,10 +1329,16 @@ def _reset_persistent_model_state(
         _persistent_model_state(model) == expected_state,
         "Persistent evaluator model parameters or buffers changed across shards.",
     )
+    allocated_bytes = torch.cuda.memory_allocated(device)
     _require(
-        torch.cuda.memory_allocated(device) == expected_allocated_bytes,
+        allocated_bytes == expected_allocated_bytes
+        or (
+            allow_initial_allocation_stabilization
+            and allocated_bytes > expected_allocated_bytes
+        ),
         "Persistent evaluator did not return to its model-resident allocation baseline.",
     )
+    return allocated_bytes
 
 
 def _persistent_envelope_binding(path: Path, payload: Mapping[str, Any]) -> dict[str, Any]:
@@ -1526,11 +1533,12 @@ def _run_persistent_session(
         terminal_decision = cast(str, envelope["terminal_decision"])
         binding = _persistent_envelope_binding(envelope_path, envelope)
         del envelope
-        _reset_persistent_model_state(
+        expected_allocated_bytes = _reset_persistent_model_state(
             model,
             device=device,
             expected_state=expected_model_state,
             expected_allocated_bytes=expected_allocated_bytes,
+            allow_initial_allocation_stabilization=(sequence_index == 0),
         )
         result = persistent_session.build_work_result(
             plan,

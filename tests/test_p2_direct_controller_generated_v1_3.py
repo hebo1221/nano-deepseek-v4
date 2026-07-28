@@ -43,6 +43,38 @@ def _source(name: str) -> str:
     return GENERATED_PATHS[name].read_text(encoding="utf-8")
 
 
+def test_persistent_reset_allows_only_initial_allocation_stabilization(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    observed_allocations = iter((120, 121))
+    monkeypatch.setattr(evaluator, "_persistent_model_state", lambda _model: ())
+    monkeypatch.setattr(evaluator.torch.cuda, "synchronize", lambda _device: None)
+    monkeypatch.setattr(evaluator.torch.cuda, "empty_cache", lambda: None)
+    monkeypatch.setattr(
+        evaluator.torch.cuda,
+        "memory_allocated",
+        lambda _device: next(observed_allocations),
+    )
+    monkeypatch.setattr(evaluator.gc, "collect", lambda: 0)
+
+    stabilized = evaluator._reset_persistent_model_state(
+        object(),
+        device=object(),
+        expected_state=(),
+        expected_allocated_bytes=100,
+        allow_initial_allocation_stabilization=True,
+    )
+    assert stabilized == 120
+    with pytest.raises(ValueError, match="allocation baseline"):
+        evaluator._reset_persistent_model_state(
+            object(),
+            device=object(),
+            expected_state=(),
+            expected_allocated_bytes=stabilized,
+            allow_initial_allocation_stabilization=False,
+        )
+
+
 def _imports(source: str) -> set[str]:
     result: set[str] = set()
     for node in ast.walk(ast.parse(source)):
