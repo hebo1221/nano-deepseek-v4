@@ -1,7 +1,7 @@
 {
   "artifact_namespaces": {
-    "activation_matrix_lock_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-mixed-rtx4090-retry-1-activation/matrix.lock",
-    "activation_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-mixed-rtx4090-retry-1-activation",
+    "activation_matrix_lock_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-mixed-rtx4090-retry-2-activation/matrix.lock",
+    "activation_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-mixed-rtx4090-retry-2-activation",
     "activation_root_exact_member_count": 2,
     "activation_root_is_immutable_sibling_outside_quality_closed_world": true,
     "admission_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-4-admission",
@@ -29,14 +29,14 @@
       "worker_ledger": "p2-post-rank-direct-controller-exact-fill-worker-ledger-v1.3.5"
     },
     "final_3_bridge_output_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-parallel-final-3",
-    "integrity_output_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-mixed-rtx4090-retry-1.integrity.json",
+    "integrity_output_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-mixed-rtx4090-retry-2.integrity.json",
     "matrix_binds_role_tagged_preflight_hmac_evidence": true,
     "matrix_lock_is_precreated_before_first_quality_mutation": true,
-    "matrix_summary_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-mixed-rtx4090-retry-1/controller-matrix.summary.json",
+    "matrix_summary_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-mixed-rtx4090-retry-2/controller-matrix.summary.json",
     "mixed_device_site": "rtx4090",
-    "output_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-mixed-rtx4090-retry-1",
-    "persistent_session_ledger_lock_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/.controller-exact-fill-v1-3-5-mixed-rtx4090-retry-1.p2-direct-controller-persistent-sessions-v1-3-5.lock",
-    "persistent_session_ledger_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/.controller-exact-fill-v1-3-5-mixed-rtx4090-retry-1.p2-direct-controller-persistent-sessions-v1-3-5",
+    "output_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-mixed-rtx4090-retry-2",
+    "persistent_session_ledger_lock_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/.controller-exact-fill-v1-3-5-mixed-rtx4090-retry-2.p2-direct-controller-persistent-sessions-v1-3-5.lock",
+    "persistent_session_ledger_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/.controller-exact-fill-v1-3-5-mixed-rtx4090-retry-2.p2-direct-controller-persistent-sessions-v1-3-5",
     "persistent_session_roles": {
       "quality_work": "quality",
       "ready_only_preflight": "ready_only_preflight"
@@ -48,9 +48,9 @@
       "terminal"
     ],
     "preheldout_genesis_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-4-admission/preheldout-genesis.json",
-    "quality_start_activation_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-mixed-rtx4090-retry-1-activation/quality-start-activation.json",
+    "quality_start_activation_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-mixed-rtx4090-retry-2-activation/quality-start-activation.json",
     "reuse_admission_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-4-admission/historical-reuse-admission.json",
-    "summary_output_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-mixed-rtx4090-retry-1.summary.json",
+    "summary_output_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-mixed-rtx4090-retry-2.summary.json",
     "superseded_v1_3_2_static_admission_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-2-admission",
     "superseded_v1_3_2_static_pair_is_read_only_lineage": true,
     "superseded_v1_3_3_activation_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-3-activation",
@@ -80,7 +80,7 @@
     "v1_3_4_static_admission_namespace_reused_read_only": true,
     "v1_3_5_superseded_zero_quality_namespace_reused": false,
     "v1_3_output_or_admission_namespace_reused": false,
-    "worker_ledger_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/.controller-exact-fill-v1-3-5-mixed-rtx4090-retry-1.p2-direct-controller-workers-v1-3-5"
+    "worker_ledger_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/.controller-exact-fill-v1-3-5-mixed-rtx4090-retry-2.p2-direct-controller-workers-v1-3-5"
   },
   "attestation": {
     "key_compromise_in_scope": false,
@@ -497,7 +497,7 @@
             3,
             4
           ],
-          "path": "/home/hebo1221/nano-deepseek-v4/artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/topology-probe-v3/topology-probe.summary.json",
+          "path": "/home/dilab/nano-deepseek-v4/artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/topology-probe-v3/topology-probe.summary.json",
           "payload_sha256": "c55471c78d879ee81db908ac9780443fa35684135c0c2c5aa5d30020e60dac68",
           "quality_values_accessed": false,
           "selected_worker_count": 1,
@@ -800,8 +800,8 @@
       "research/adaptive_v4_memory/scripts/p2_direct_controller_topology_v1_3_5.py",
       "research/adaptive_v4_memory/scripts/probe_p2_direct_controller_topology_v1_3_5.py"
     ],
-    "source_commit": "6f07ca2b26ce54a21157033be408e0cb7ee76279",
-    "tree_digest": "fbc05e70cb0e8c143e059482647d5446f54f0d050cd441c2f454734c6b4385a3"
+    "source_commit": "a58530b9031c37d3fa31388325e210bc88e2e7ea",
+    "tree_digest": "290043ac57b73c71c1da299b1c364f14f037d7a7669cce4ce2cc55e3feeaf58a"
   },
   "lineage_and_adaptation_disclosure": {
     "amendment_trigger": "explicit-user-request-to-shorten-full17-with-a-gb10-plus-rtx4090-quality-blind-balanced-device-block-design",
