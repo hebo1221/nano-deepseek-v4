@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import json
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -73,9 +74,7 @@ def test_builder_moves_only_mutable_output_namespaces() -> None:
 
     assert namespaces["output_root"] == str(contract.V1_3_5_OUTPUT_ROOT)
     assert namespaces["activation_root"] == str(contract.V1_3_5_ACTIVATION_ROOT)
-    assert namespaces["reuse_admission_path"] == str(
-        contract.base.V1_3_4_REUSE_ADMISSION_PATH
-    )
+    assert namespaces["reuse_admission_path"] == str(contract.base.V1_3_4_REUSE_ADMISSION_PATH)
     assert namespaces["preheldout_genesis_path"] == str(
         contract.base.V1_3_4_PREHELDOUT_GENESIS_PATH
     )
@@ -93,9 +92,7 @@ def test_manifest_validation_rejects_topology_or_scientific_tampering() -> None:
         "quality_start_activation"
     ]["quality_execution_topology"]["worker_count"] = 2
     with pytest.raises(ValueError, match="probe binding|canonical builder"):
-        contract.validate_v1_3_5_manifest_payload(
-            topology_tamper, verify_implementation=False
-        )
+        contract.validate_v1_3_5_manifest_payload(topology_tamper, verify_implementation=False)
 
     science_tamper = copy.deepcopy(payload)
     science_tamper["grid"]["replicates"] = [999]
@@ -126,3 +123,20 @@ def test_parent_manifest_is_bound_by_exact_bytes(
 
     with pytest.raises(ValueError, match="predecessor manifest bytes drifted"):
         contract._parent_manifest_payload()
+
+
+def test_implementation_inventory_expands_package_root_and_matches_head() -> None:
+    files = contract.v1_3_5_implementation_file_paths()
+    head = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+    assert "nano_deepseek_v4/modeling.py" in files
+    assert "nano_deepseek_v4" not in files
+    assert (
+        contract.v1_3_5_implementation_tree_digest()
+        == contract.v1_3_5_implementation_tree_digest_at_commit(head)
+    )

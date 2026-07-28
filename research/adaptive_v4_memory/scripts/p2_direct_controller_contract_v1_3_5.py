@@ -16,32 +16,24 @@ V1_3_5_MANIFEST_STATUS = (
     "frozen_v1_3_5_same_gpu_topology_storage_amendment_after_v1_3_4_zero_quality_lineage"
 )
 V1_3_5_MANIFEST_PATH = Path(
-    "research/adaptive_v4_memory/manifests/"
-    "p2-post-rank-direct-controller-exact-fill-v1-3-5.json"
+    "research/adaptive_v4_memory/manifests/p2-post-rank-direct-controller-exact-fill-v1-3-5.json"
 )
 V1_3_5_OUTPUT_ROOT = Path(
-    "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/"
-    "controller-exact-fill-v1-3-5"
+    "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5"
 )
 V1_3_5_MATRIX_SUMMARY_PATH = V1_3_5_OUTPUT_ROOT / base.MATRIX_SUMMARY_NAME
 V1_3_5_INTEGRITY_OUTPUT_PATH = (
     V1_3_5_OUTPUT_ROOT.parent / "controller-exact-fill-v1-3-5.integrity.json"
 )
-V1_3_5_SUMMARY_OUTPUT_PATH = (
-    V1_3_5_OUTPUT_ROOT.parent / "controller-exact-fill-v1-3-5.summary.json"
-)
+V1_3_5_SUMMARY_OUTPUT_PATH = V1_3_5_OUTPUT_ROOT.parent / "controller-exact-fill-v1-3-5.summary.json"
 # The authenticated calibration/checkpoint inventory remains the exact,
 # read-only v1.3.4 predecessor pair.  No v1.3.5 copy or re-attestation exists.
 V1_3_5_ADMISSION_ROOT = base.V1_3_4_ADMISSION_ROOT
 V1_3_5_REUSE_ADMISSION_PATH = base.V1_3_4_REUSE_ADMISSION_PATH
 V1_3_5_PREHELDOUT_GENESIS_PATH = base.V1_3_4_PREHELDOUT_GENESIS_PATH
-V1_3_5_ACTIVATION_ROOT = (
-    V1_3_5_OUTPUT_ROOT.parent / "controller-exact-fill-v1-3-5-activation"
-)
+V1_3_5_ACTIVATION_ROOT = V1_3_5_OUTPUT_ROOT.parent / "controller-exact-fill-v1-3-5-activation"
 V1_3_5_ACTIVATION_MATRIX_LOCK_PATH = V1_3_5_ACTIVATION_ROOT / "matrix.lock"
-V1_3_5_QUALITY_START_ACTIVATION_PATH = (
-    V1_3_5_ACTIVATION_ROOT / "quality-start-activation.json"
-)
+V1_3_5_QUALITY_START_ACTIVATION_PATH = V1_3_5_ACTIVATION_ROOT / "quality-start-activation.json"
 V1_3_5_WORKER_LEDGER_ROOT = V1_3_5_OUTPUT_ROOT.parent / (
     f".{V1_3_5_OUTPUT_ROOT.name}.p2-direct-controller-workers-v1-3-5"
 )
@@ -58,33 +50,15 @@ V1_3_5_MATRIX_EXPERIMENT_ID = "p2-post-rank-direct-controller-exact-fill-matrix-
 V1_3_5_WORKER_LEDGER_EXPERIMENT_ID = (
     "p2-post-rank-direct-controller-exact-fill-worker-ledger-v1.3.5"
 )
-V1_3_5_INTEGRITY_EXPERIMENT_ID = (
-    "p2-post-rank-direct-controller-exact-fill-integrity-v1.3.5"
-)
-V1_3_5_SUMMARY_EXPERIMENT_ID = (
-    "p2-post-rank-direct-controller-exact-fill-summary-v1.3.5"
-)
-V1_3_5_CANONICAL_GIT_OBJECT_LAUNCHER_ID = (
-    "p2-direct-controller-git-object-launcher-v1-3-5"
-)
-V1_3_5_QUALITY_START_ACTIVATION_ATTESTATION_PURPOSE = (
-    "p2-direct-v1.3.5-quality-start-activation-v1"
-)
-V1_3_5_SHARD_ATTESTATION_PURPOSE = (
-    "p2-direct-controller-exact-fill-shard-v1-3-5"
-)
-V1_3_5_MATRIX_ATTESTATION_PURPOSE = (
-    "p2-direct-controller-exact-fill-matrix-v1-3-5"
-)
-V1_3_5_WORKER_LEDGER_ATTESTATION_PURPOSE = (
-    "p2-direct-controller-exact-fill-worker-ledger-v1-3-5"
-)
-V1_3_5_INTEGRITY_ATTESTATION_PURPOSE = (
-    "p2-direct-controller-exact-fill-integrity-v1-3-5"
-)
-V1_3_5_SUMMARY_ATTESTATION_PURPOSE = (
-    "p2-direct-controller-exact-fill-summary-v1-3-5"
-)
+V1_3_5_INTEGRITY_EXPERIMENT_ID = "p2-post-rank-direct-controller-exact-fill-integrity-v1.3.5"
+V1_3_5_SUMMARY_EXPERIMENT_ID = "p2-post-rank-direct-controller-exact-fill-summary-v1.3.5"
+V1_3_5_CANONICAL_GIT_OBJECT_LAUNCHER_ID = "p2-direct-controller-git-object-launcher-v1-3-5"
+V1_3_5_QUALITY_START_ACTIVATION_ATTESTATION_PURPOSE = "p2-direct-v1.3.5-quality-start-activation-v1"
+V1_3_5_SHARD_ATTESTATION_PURPOSE = "p2-direct-controller-exact-fill-shard-v1-3-5"
+V1_3_5_MATRIX_ATTESTATION_PURPOSE = "p2-direct-controller-exact-fill-matrix-v1-3-5"
+V1_3_5_WORKER_LEDGER_ATTESTATION_PURPOSE = "p2-direct-controller-exact-fill-worker-ledger-v1-3-5"
+V1_3_5_INTEGRITY_ATTESTATION_PURPOSE = "p2-direct-controller-exact-fill-integrity-v1-3-5"
+V1_3_5_SUMMARY_ATTESTATION_PURPOSE = "p2-direct-controller-exact-fill-summary-v1-3-5"
 V1_3_5_PERSISTENT_SESSION_PLAN_ATTESTATION_PURPOSE = (
     "p2-direct-controller-exact-fill-v1-3-5-persistent-session-plan-v1"
 )
@@ -107,25 +81,17 @@ V1_3_5_READY_ONLY_PREFLIGHT_SESSION_ROLE = base.V1_3_4_READY_ONLY_PREFLIGHT_SESS
 V1_3_5_QUALITY_SESSION_ROLE = base.V1_3_4_QUALITY_SESSION_ROLE
 # These remain per persistent evaluator.  The manifest separately binds the
 # aggregate normal-path bound as 1 + (10 * selected_worker_count).
-V1_3_5_QUALITY_SESSION_NORMAL_PATH_MODEL_LOADS = (
-    base.V1_3_4_QUALITY_SESSION_NORMAL_PATH_MODEL_LOADS
-)
+V1_3_5_QUALITY_SESSION_NORMAL_PATH_MODEL_LOADS = base.V1_3_4_QUALITY_SESSION_NORMAL_PATH_MODEL_LOADS
 V1_3_5_READY_ONLY_PREFLIGHT_MODEL_LOADS = base.V1_3_4_READY_ONLY_PREFLIGHT_MODEL_LOADS
 V1_3_5_TOTAL_NORMAL_PATH_CHECKPOINT_MODEL_LOADS = (
     base.V1_3_4_TOTAL_NORMAL_PATH_CHECKPOINT_MODEL_LOADS
 )
 
-V1_3_4_STATIC_MANIFEST_SHA256 = (
-    "571a3eb28d442fda3bdc33d2129ba578dd7bcc54c7e870b6372d22757ebc7566"
-)
+V1_3_4_STATIC_MANIFEST_SHA256 = "571a3eb28d442fda3bdc33d2129ba578dd7bcc54c7e870b6372d22757ebc7566"
 V1_3_4_STATIC_MANIFEST_BYTES = 103_485
-V1_3_4_STATIC_ADMISSION_SHA256 = (
-    "80671b6b7344bbc12afbb1029f75f6ab9b3c8c45f9d8b0f7c26251daee70a8b6"
-)
+V1_3_4_STATIC_ADMISSION_SHA256 = "80671b6b7344bbc12afbb1029f75f6ab9b3c8c45f9d8b0f7c26251daee70a8b6"
 V1_3_4_STATIC_ADMISSION_BYTES = 88_361
-V1_3_4_STATIC_GENESIS_SHA256 = (
-    "e3b1947b2e333a794aa41c7c695491a392f18d8bb8db4cd8ca785166e90acc47"
-)
+V1_3_4_STATIC_GENESIS_SHA256 = "e3b1947b2e333a794aa41c7c695491a392f18d8bb8db4cd8ca785166e90acc47"
 V1_3_4_STATIC_GENESIS_BYTES = 87_925
 
 V1_3_5_IMPLEMENTATION_PATHS = (
@@ -229,9 +195,7 @@ def build_v1_3_5_manifest_payload(
             "integrity_output_path": str(V1_3_5_INTEGRITY_OUTPUT_PATH),
             "matrix_summary_path": str(V1_3_5_MATRIX_SUMMARY_PATH),
             "output_root": str(V1_3_5_OUTPUT_ROOT),
-            "persistent_session_ledger_lock_path": str(
-                V1_3_5_PERSISTENT_SESSION_LEDGER_LOCK_PATH
-            ),
+            "persistent_session_ledger_lock_path": str(V1_3_5_PERSISTENT_SESSION_LEDGER_LOCK_PATH),
             "persistent_session_ledger_root": str(V1_3_5_PERSISTENT_SESSION_LEDGER_ROOT),
             "preheldout_genesis_path": str(V1_3_5_PREHELDOUT_GENESIS_PATH),
             "quality_start_activation_path": str(V1_3_5_QUALITY_START_ACTIVATION_PATH),
@@ -249,9 +213,7 @@ def build_v1_3_5_manifest_payload(
             V1_3_5_PERSISTENT_SESSION_LAUNCH_LEDGER_ATTESTATION_PURPOSE
         ),
         "persistent_session_plan": V1_3_5_PERSISTENT_SESSION_PLAN_ATTESTATION_PURPOSE,
-        "persistent_session_receipt": (
-            V1_3_5_PERSISTENT_SESSION_RECEIPT_ATTESTATION_PURPOSE
-        ),
+        "persistent_session_receipt": (V1_3_5_PERSISTENT_SESSION_RECEIPT_ATTESTATION_PURPOSE),
         "persistent_session_result": V1_3_5_PERSISTENT_SESSION_RESULT_ATTESTATION_PURPOSE,
         "persistent_session_terminal_ledger": (
             V1_3_5_PERSISTENT_SESSION_TERMINAL_LEDGER_ATTESTATION_PURPOSE
@@ -360,16 +322,7 @@ def _index_entries(paths: tuple[str, ...]) -> tuple[tuple[str, str], ...]:
             "V1.3.5 implementation index entry is invalid.",
         )
         parsed.append((path, entry))
-    _require(
-        tuple(path for path, _entry in parsed) == tuple(sorted(paths))
-        and len(set(paths)) == len(paths),
-        "V1.3.5 implementation index is incomplete.",
-    )
-    _require(
-        tuple(entry for _path, entry in parsed)
-        == tuple(entry for _path, entry in sorted(parsed)),
-        "V1.3.5 implementation index is not canonical.",
-    )
+    _validate_implementation_entries(parsed)
     untracked = subprocess.run(
         ["git", "ls-files", "--others", "--exclude-standard", "--", *paths],
         check=True,
@@ -383,6 +336,28 @@ def _index_entries(paths: tuple[str, ...]) -> tuple[tuple[str, str], ...]:
     return tuple(parsed)
 
 
+def _validate_implementation_entries(
+    parsed: list[tuple[str, str]],
+) -> tuple[str, ...]:
+    _require(
+        len(V1_3_5_IMPLEMENTATION_PATHS) == len(set(V1_3_5_IMPLEMENTATION_PATHS)),
+        "V1.3.5 implementation roots contain duplicates.",
+    )
+    canonical = base._v1_3_4_validate_implementation_inventory(parsed)
+    tracked = {path for path, _entry in parsed}
+    missing_roots = [
+        root
+        for root in V1_3_5_IMPLEMENTATION_PATHS
+        if root not in tracked
+        and not any(path.startswith(root.rstrip("/") + "/") for path in tracked)
+    ]
+    _require(
+        not missing_roots,
+        f"V1.3.5 implementation roots are missing: {missing_roots}",
+    )
+    return canonical
+
+
 def v1_3_5_implementation_tree_digest(
     paths: tuple[str, ...] = V1_3_5_IMPLEMENTATION_PATHS,
 ) -> str:
@@ -391,9 +366,10 @@ def v1_3_5_implementation_tree_digest(
         "Implementation path inventory drifted from the v1.3.5 contract.",
     )
     parsed = _index_entries(paths)
+    canonical = _validate_implementation_entries(list(parsed))
     return base._implementation_index_digest(
         paths,
-        tuple(entry for _path, entry in parsed),
+        canonical,
     )
 
 
@@ -409,6 +385,12 @@ def v1_3_5_implementation_file_paths(
 
 def v1_3_5_implementation_tree_digest_at_commit(source_commit: str) -> str:
     _require(base.is_git_oid(source_commit), "V1.3.5 source commit is invalid.")
+    commit_check = subprocess.run(
+        ["git", "cat-file", "-e", f"{source_commit}^{{commit}}"],
+        capture_output=True,
+        text=True,
+    )
+    _require(commit_check.returncode == 0, "V1.3.5 source commit is not a commit object.")
     output = subprocess.run(
         [
             "git",
@@ -436,14 +418,7 @@ def v1_3_5_implementation_tree_digest_at_commit(source_commit: str) -> str:
             "V1.3.5 implementation commit-tree entry is invalid.",
         )
         parsed.append((path, f"{fields[0]} {fields[2]} 0\t{path}"))
-    _require(
-        tuple(path for path, _entry in parsed)
-        == tuple(sorted(V1_3_5_IMPLEMENTATION_PATHS))
-        and len(set(V1_3_5_IMPLEMENTATION_PATHS))
-        == len(V1_3_5_IMPLEMENTATION_PATHS),
-        "V1.3.5 implementation commit tree is incomplete.",
-    )
-    canonical = tuple(entry for _path, entry in sorted(parsed))
+    canonical = _validate_implementation_entries(parsed)
     return base._implementation_index_digest(
         V1_3_5_IMPLEMENTATION_PATHS,
         canonical,
@@ -456,8 +431,7 @@ def validate_v1_3_5_manifest_payload(
     implementation = payload.get("implementation")
     execution = payload.get("execution_contract")
     _require(
-        isinstance(implementation, Mapping)
-        and isinstance(execution, Mapping),
+        isinstance(implementation, Mapping) and isinstance(execution, Mapping),
         "V1.3.5 manifest implementation or execution contract is missing.",
     )
     checked_implementation = cast(Mapping[str, Any], implementation)
