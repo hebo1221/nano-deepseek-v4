@@ -131,6 +131,81 @@ def test_generator_reproduces_all_committed_v1_3_sources() -> None:
     assert "exact-fill-v1-3-5-worker-" in matrix_source
 
 
+@pytest.mark.parametrize("arm_name", contract.ALL_ARM_NAMES)
+def test_success_outcome_accepts_json_round_tripped_arm_semantics(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    arm_name: str,
+) -> None:
+    observed_config = object()
+    monkeypatch.setattr(
+        evaluator,
+        "_runtime_config_from_payload",
+        lambda _payload: observed_config,
+    )
+    example = {
+        "example_index": 0,
+        "schedule_index": 7,
+        "prefix_length": 2,
+        "input_token_count": 4,
+        "targets": [1, 2],
+    }
+    runtime_config = {"fixture": "schema-only"}
+    row = evaluator._seal_row(
+        evaluator.OUTCOME_SUCCESS_SCHEMA_ID,
+        {
+            "example_index": 0,
+            "arm": arm_name,
+            "execution_index": 0,
+            "schedule_index": 7,
+            "status": "success",
+            "config_variant": "schema-only",
+            "semantics": evaluator.asdict(contract.EXPECTED_ARM_SEMANTICS[arm_name]),
+            "runtime_config": runtime_config,
+            "config_sha256": contract.json_digest(runtime_config),
+            "prefix_length": 2,
+            "decoded_tokens": 2,
+            "wall_time_ns": 2,
+            "tokens_per_second": 1_000_000_000.0,
+            "predictions": [1, 3],
+            "correct": [True, False],
+            "correct_count": 1,
+            "total": 2,
+            "accuracy": 0.5,
+            "all_queries_correct": False,
+            "token_rows_digest": "a" * 64,
+        },
+    )
+    spool = evaluator.DeterministicJsonlGzipSpool(
+        kind="outcomes",
+        final_path=tmp_path / f"{arm_name}.outcomes.jsonl.gz",
+    )
+    try:
+        spool.write(row)
+        finalized = spool.finish()
+        reopened = list(
+            evaluator._iter_sidecar_rows_from_path(
+                finalized.temporary_path,
+                kind="outcomes",
+                binding=finalized.binding,
+            )
+        )
+        assert len(reopened) == 1
+        result = evaluator._validate_success_outcome(
+            reopened[0],
+            example=example,
+            arm_name=arm_name,
+            execution_index=0,
+            calibration=None,
+            arms=None,
+            budget="50",
+        )
+    finally:
+        spool.abort()
+
+    assert result is observed_config
+
+
 def test_generated_operational_sources_contain_no_superseded_live_namespace() -> None:
     stale_tokens = (
         "V1_3_2",

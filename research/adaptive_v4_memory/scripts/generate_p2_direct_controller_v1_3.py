@@ -6205,6 +6205,12 @@ def _generate_evaluator(source: str) -> str:
         text, "DirectControllerExternalValidationCache", EVALUATOR_EXTERNAL_CACHE
     )
     text = _replace_definition(text, "arm_execution_order", EVALUATOR_ARM_ORDER)
+    text = _replace_exact(
+        text,
+        '        row.get("semantics") == asdict(contract.EXPECTED_ARM_SEMANTICS[arm_name]),\n',
+        '        row.get("semantics")\n'
+        '        == _json_clone(asdict(contract.EXPECTED_ARM_SEMANTICS[arm_name])),\n',
+    )
     text = _replace_definition(text, "main", EVALUATOR_MAIN)
     main_start, _main_end = _top_level_span(text, "main")
     text = f"{text[:main_start]}{EVALUATOR_PERSISTENT_SESSION.strip()}\n\n\n{text[main_start:]}"

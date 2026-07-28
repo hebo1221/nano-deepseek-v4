@@ -3766,7 +3766,8 @@ def _validate_success_outcome(
         "Successful outcome coordinate drifted.",
     )
     _require(
-        row.get("semantics") == asdict(contract.EXPECTED_ARM_SEMANTICS[arm_name]),
+        row.get("semantics")
+        == _json_clone(asdict(contract.EXPECTED_ARM_SEMANTICS[arm_name])),
         "Arm semantics drifted.",
     )
     runtime_config = row.get("runtime_config")
