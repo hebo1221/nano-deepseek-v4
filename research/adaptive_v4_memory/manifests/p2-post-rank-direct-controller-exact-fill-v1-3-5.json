@@ -760,8 +760,8 @@
       "research/adaptive_v4_memory/scripts/p2_direct_controller_topology_v1_3_5.py",
       "research/adaptive_v4_memory/scripts/probe_p2_direct_controller_topology_v1_3_5.py"
     ],
-    "source_commit": "9ce02508e9a3ddeed6452e8e1de449e87d0b17bb",
-    "tree_digest": "9cf2ce6de3b4bd184fd2739786e8cebe41b951711e6af8434f8e8c67c70c4d01"
+    "source_commit": "0c0f96ba36eee5db75902ba4cb7805a2b98638ad",
+    "tree_digest": "df8fd36b4e0cb536691694b63a113145fd36ab7b01df81a2b679f702811c6fd1"
   },
   "lineage_and_adaptation_disclosure": {
     "amendment_trigger": "explicit-user-request-for-three-worker-full17-after-quality-blind-probe-selected-one-worker-with-no-measured-parallel-speedup",
