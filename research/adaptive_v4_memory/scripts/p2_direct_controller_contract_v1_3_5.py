@@ -15,15 +15,31 @@ from p2_direct_controller_contract_v1_3 import *  # noqa: F403
 
 V1_3_5_EXPERIMENT_ID = "p2-post-rank-direct-controller-exact-fill-v1.3.5"
 V1_3_5_MANIFEST_STATUS = "frozen_v1_3_5_mixed_device_block_site"
-V1_3_5_MIXED_DEVICE_SITE = "gb10"
+V1_3_5_MIXED_DEVICE_SITE = "rtx4090"
 V1_3_5_MIXED_DEVICE_SITES = ("gb10", "rtx4090")
 V1_3_5_MIXED_ASSIGNMENT_RULE = (
     "latin-rotated-four-gb10-six-rtx4090-per-full-stratum-then-site-index-modulo-worker-count-v1"
 )
 V1_3_5_MIXED_SITE_COORDINATE_COUNTS = {"gb10": 3_600, "rtx4090": 5_400}
-# GB10 inherits the exact static v1.3.4 environment projection.  The RTX 4090
-# implementation branch freezes its separately measured projection here.
-V1_3_5_MIXED_EXECUTION_ENVIRONMENT_PROJECTION: Mapping[str, Any] | None = None
+# This branch freezes the exact quality-blind RTX 4090 execution projection.
+V1_3_5_MIXED_EXECUTION_ENVIRONMENT_PROJECTION: Mapping[str, Any] | None = {
+    "schema_version": 1,
+    "python_implementation": "CPython",
+    "python_version": "3.13.9",
+    "python_executable": "/home/dilab/miniconda3/bin/python3.13",
+    "torch_version": "2.9.1+cu128",
+    "cuda_runtime_version": "12.8",
+    "cuda_driver_version": "555.42.06",
+    "platform_system": "Linux",
+    "platform_release": "5.15.0-139-generic",
+    "platform_machine": "x86_64",
+    "platform_string": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+    "selected_device_class": {
+        "name": "NVIDIA GeForce RTX 4090",
+        "compute_capability": [8, 9],
+        "total_memory_bytes": 25_280_184_320,
+    },
+}
 V1_3_5_MANIFEST_PATH = Path(
     "research/adaptive_v4_memory/manifests/p2-post-rank-direct-controller-exact-fill-v1-3-5.json"
 )
