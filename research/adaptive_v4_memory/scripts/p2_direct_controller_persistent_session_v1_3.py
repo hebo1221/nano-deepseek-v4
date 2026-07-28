@@ -2355,7 +2355,7 @@ def ready_only_preflight_binding(
     ]
     if not rows:
         return None
-    first_coordinate = dict(contract.quality_coordinates()[0])
+    first_coordinate = assigned_coordinates(worker_index=0, worker_count=1)[0]
     expected_coordinate_digest = contract.json_digest([first_coordinate])
     successes: list[Mapping[str, Any]] = []
     for row in rows:
