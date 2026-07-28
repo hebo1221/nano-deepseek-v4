@@ -25,9 +25,7 @@ def test_launcher_uses_only_the_v1_3_5_operational_namespace() -> None:
     assert launcher.LAUNCHER_ID == "p2-direct-controller-git-object-launcher-v1-3-5"
     assert launcher.EXPECTED_EXPERIMENT_ID.endswith("v1.3.5")
     assert launcher.MANIFEST_RELATIVE_PATH.endswith("v1-3-5.json")
-    assert launcher.EXPECTED_MANIFEST_STATUS == (
-        "frozen_v1_3_5_three_worker_parallel_final_after_live_claim_preflight_failure"
-    )
+    assert launcher.EXPECTED_MANIFEST_STATUS == "frozen_v1_3_5_mixed_device_block_site"
     assert "V1_3_5" in launcher.RUNNER_FD_ENV
     assert "V1_3_5" in launcher.SOURCE_BUNDLE_FD_ENV
     assert "V1_3_5" in launcher.LAUNCH_ROUTING_FD_ENV

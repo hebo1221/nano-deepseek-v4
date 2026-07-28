@@ -67,6 +67,7 @@ if __name__ == "__main__":
 import argparse
 import base64
 import fcntl
+import functools
 import hashlib
 import importlib
 import json
@@ -115,7 +116,7 @@ SCHEMA_VERSION = 1
 MATRIX_ATTESTATION_PURPOSE = contract.V1_3_5_MATRIX_ATTESTATION_PURPOSE
 WORKER_ATTESTATION_PURPOSE = contract.V1_3_5_WORKER_LEDGER_ATTESTATION_PURPOSE
 WORKER_ARTIFACT_TYPE = "direct-controller-exact-fill-worker-ledger"
-WORKER_ASSIGNMENT_RULE = "canonical-coordinate-index-modulo-worker-count-v1"
+WORKER_ASSIGNMENT_RULE = contract.V1_3_5_MIXED_ASSIGNMENT_RULE
 GPU_LEASE_SEMANTICS = "device-scoped-nonblocking-persistent-inode-worker-lease-v1"
 GPU_LOCK_IMPLEMENTATION_PATH = "research/adaptive_v4_memory/scripts/adaptive_v4_gpu_lock.py"
 DEVICE_GUARD_PATH_DERIVATION = "fixed-tmp-root-full-sha256-of-identity-type-nul-identity-v1"
@@ -1603,7 +1604,9 @@ def _build_base_prerequisites(
         == preheldout_genesis_path.resolve(strict=True),
         "Activated admission/genesis paths differ from the canonical runner layout.",
     )
-    projection = reuse_admission.execution_environment_projection
+    projection = contract.v1_3_5_execution_environment_projection(
+        reuse_admission.execution_environment_projection
+    )
     _require(
         isinstance(projection, Mapping)
         and isinstance(cast(Mapping[str, Any], projection).get("selected_device_class"), Mapping),
@@ -5484,8 +5487,8 @@ def validate_matrix_summary(
     pass_count = 0
     fail_count = 0
     canonical = _canonical_evaluator(evaluator_script)
-    for coordinate_index, (record, coordinate) in enumerate(
-        zip(records, coordinates()[: len(records)], strict=True)
+    for record, coordinate in zip(
+        records, coordinates()[: len(records)], strict=True
     ):
         _require(isinstance(record, Mapping), "Controller matrix record is invalid.")
         validated_record = _validate_record_against_coordinate(
@@ -5495,7 +5498,14 @@ def validate_matrix_summary(
             prerequisites=prerequisites,
             evaluator_script=canonical,
             gpu_lease_binding=observed_gpu_bindings[
-                0 if cast(int, worker_count) == 1 else coordinate_index % cast(int, worker_count)
+                0
+                if cast(int, worker_count) == 1
+                else cast(
+                    int,
+                    _coordinate_worker_index(
+                        coordinate, worker_count=cast(int, worker_count)
+                    ),
+                )
             ],
             verify_bundle=verify_bundles,
         )
@@ -5790,14 +5800,58 @@ def _validate_worker_identity(*, worker_index: int, worker_count: int) -> None:
     )
 
 
+@functools.cache
+def _mixed_device_coordinates(site: str) -> tuple[ShardCoordinate, ...]:
+    """Return one quality-blind, factor-balanced device block."""
+
+    _require(
+        site in contract.V1_3_5_MIXED_DEVICE_SITES,
+        "Mixed-device assignment site is not registered.",
+    )
+    selected: list[ShardCoordinate] = []
+    for coordinate in coordinates():
+        offset = (
+            FROZEN_SCALES.index(coordinate.scale)
+            + FROZEN_TRAINING_SEEDS.index(coordinate.training_seed)
+            + 5 * FROZEN_BUDGETS.index(coordinate.budget)
+            + FROZEN_FAMILIES.index(coordinate.family)
+            + 2 * FROZEN_CONTEXTS.index(coordinate.context)
+        ) % len(FROZEN_REPLICATES)
+        replicate_index = FROZEN_REPLICATES.index(coordinate.replicate)
+        gb10 = (replicate_index - offset) % len(FROZEN_REPLICATES) < 4
+        if (site == "gb10") == gb10:
+            selected.append(coordinate)
+    expected = contract.V1_3_5_MIXED_SITE_COORDINATE_COUNTS[site]
+    _require(
+        len(selected) == expected,
+        "Mixed-device site cardinality drifted.",
+    )
+    return tuple(selected)
+
+
+@functools.cache
+def _mixed_device_worker_map(site: str, worker_count: int) -> Mapping[str, int]:
+    _validate_worker_identity(worker_index=0, worker_count=worker_count)
+    return {
+        coordinate.key: index % worker_count
+        for index, coordinate in enumerate(_mixed_device_coordinates(site))
+    }
+
+
+def _coordinate_worker_index(
+    coordinate: ShardCoordinate, *, worker_count: int
+) -> int | None:
+    if worker_count == 1:
+        return 0
+    return _mixed_device_worker_map(
+        contract.V1_3_5_MIXED_DEVICE_SITE, worker_count
+    ).get(coordinate.key)
+
+
 def _assigned_coordinates(*, worker_index: int, worker_count: int) -> tuple[ShardCoordinate, ...]:
     _validate_worker_identity(worker_index=worker_index, worker_count=worker_count)
-    return tuple(
-        coordinate
-        for index, coordinate in enumerate(coordinates())
-        if index % worker_count == worker_index
-    )
-
+    site_coordinates = _mixed_device_coordinates(contract.V1_3_5_MIXED_DEVICE_SITE)
+    return tuple(site_coordinates[worker_index::worker_count])
 
 def _worker_payload(
     records: Sequence[Mapping[str, Any]],
@@ -6006,7 +6060,11 @@ def _merge_worker_records(
             _require(key in coordinate_index, "Worker ledger contains an unknown coordinate.")
             index = coordinate_index[key]
             _require(
-                index % worker_count == worker_index and index not in merged,
+                _coordinate_worker_index(
+                    coordinate_items[index], worker_count=worker_count
+                )
+                == worker_index
+                and index not in merged,
                 "Worker ledgers overlap or violate their partition.",
             )
             merged[index] = dict(record)
@@ -6091,7 +6149,8 @@ def _validated_live_claim(
         },
         f"Distributed cell claim schema drifted: {coordinate.key}.",
     )
-    worker_index = canonical_index % worker_count
+    worker_index = _coordinate_worker_index(coordinate, worker_count=worker_count)
+    _require(worker_index is not None, "Claim coordinate is outside this device block.")
     pid = payload.get("pid")
     start_ticks = payload.get("process_start_ticks")
     _require(
@@ -7811,14 +7870,14 @@ def _run_distributed_matrix(
                 "Coordinator-only finalization refuses live distributed cell claims.",
             )
             _require(
-                summary_payload.get("status") == "terminal"
+                summary_payload.get("status") in {"terminal", "in_progress"}
                 and len(ledgers) == worker_count
                 and all(
                     len(ledgers[index])
                     == len(_assigned_coordinates(worker_index=index, worker_count=worker_count))
                     for index in range(worker_count)
                 ),
-                "Coordinator-only finalization requires every worker ledger to be terminal.",
+                "Coordinator-only site finalization requires every worker ledger to be terminal.",
             )
             _atomic_write_json(layout.matrix_summary, summary_payload)
             validate_matrix_summary(
@@ -7835,7 +7894,9 @@ def _run_distributed_matrix(
             )
             return summary_payload
         _require(
-            not any(index % worker_count == worker_index for index in active_claims),
+            not any(_coordinate_worker_index(coordinates()[index], worker_count=worker_count)
+                == worker_index
+                for index in active_claims),
             "This distributed worker already owns a live cell claim.",
         )
         if worker_index not in ledgers:
@@ -7951,7 +8012,9 @@ def _run_distributed_matrix(
                 worker_count=worker_count,
             )
             _require(
-                not any(index % worker_count == worker_index for index in active_claims),
+                not any(_coordinate_worker_index(coordinates()[index], worker_count=worker_count)
+                == worker_index
+                for index in active_claims),
                 "This distributed worker already owns a live cell claim.",
             )
             if len(current_records) == len(assigned):

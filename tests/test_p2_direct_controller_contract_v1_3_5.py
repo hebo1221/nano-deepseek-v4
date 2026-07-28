@@ -96,7 +96,7 @@ def test_builder_records_explicit_three_worker_override_without_rewriting_probe(
         == contract.V1_3_5_USER_DIRECTED_PARALLEL_OVERRIDE
     )
     assert activation["quality_execution_topology"]["worker_count"] == 3
-    assert "no-measured-parallel-speedup" in child["lineage_and_adaptation_disclosure"][
+    assert "balanced-device-block-design" in child["lineage_and_adaptation_disclosure"][
         "amendment_trigger"
     ]
 
@@ -180,7 +180,9 @@ def test_builder_preserves_failures_before_final_retry() -> None:
         "post-publication-persistent-reset-followed-by-concurrent-drain"
     )
     assert lineage["quality_values_read_by_supervisor_or_retry_decision"] is False
-    assert lineage["retry"]["output_root"] == str(contract.V1_3_5_OUTPUT_ROOT)
+    assert lineage["retry"]["output_root"] == str(
+        contract.V1_3_5_FINAL_3_BRIDGE_OUTPUT_ROOT
+    )
     assert "parallel-final-3" in lineage["retry"]["output_root"]
     toctou = child["lineage_and_adaptation_disclosure"][
         "v1_3_5_superseded_live_claim_preflight_attempt"

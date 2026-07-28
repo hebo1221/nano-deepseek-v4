@@ -34,9 +34,7 @@ ENTRYPOINT_RELATIVE_PATHS = {
 }
 PYTHON_RELATIVE_PATH = ".venv/bin/python"
 EXPECTED_EXPERIMENT_ID = "p2-post-rank-direct-controller-exact-fill-v1.3.5"
-EXPECTED_MANIFEST_STATUS = (
-    "frozen_v1_3_5_three_worker_parallel_final_after_live_claim_preflight_failure"
-)
+EXPECTED_MANIFEST_STATUS = "frozen_v1_3_5_mixed_device_block_site"
 RUNNER_FD_ENV = "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_5_GIT_RUNNER_FD"
 SOURCE_BUNDLE_FD_ENV = "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_5_GIT_SOURCE_BUNDLE_FD"
 LAUNCH_ROUTING_FD_ENV = "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_5_GIT_LAUNCH_ROUTING_FD"
@@ -168,7 +166,7 @@ def _git_environment() -> dict[str, str]:
 
 
 def _python_runtime_binding(repository_root: Path) -> dict[str, Any]:
-    """Bind the active root-owned interpreter and one inert venv import directory."""
+    """Bind an exact non-shared-writable interpreter and inert venv import directory."""
 
     root = _exact_repository_root(repository_root)
     _require(
@@ -185,7 +183,7 @@ def _python_runtime_binding(repository_root: Path) -> dict[str, Any]:
     metadata = os.stat(active_target, follow_symlinks=False)
     _require(
         stat.S_ISREG(metadata.st_mode)
-        and metadata.st_uid == 0
+        and metadata.st_uid in {0, os.getuid()}
         and metadata.st_mode & (stat.S_IWGRP | stat.S_IWOTH) == 0
         and 0 < metadata.st_size <= MAXIMUM_PYTHON_EXECUTABLE_BYTES
         and os.access(active_target, os.X_OK),
@@ -842,7 +840,7 @@ def active_python_runtime_binding(repository_root):
     metadata = os.stat(active_target, follow_symlinks=False)
     require(
         stat.S_ISREG(metadata.st_mode)
-        and metadata.st_uid == 0
+        and metadata.st_uid in {0, os.getuid()}
         and metadata.st_mode & (stat.S_IWGRP | stat.S_IWOTH) == 0
         and 0 < metadata.st_size <= MAXIMUM_PYTHON_EXECUTABLE_BYTES
         and os.access(active_target, os.X_OK),

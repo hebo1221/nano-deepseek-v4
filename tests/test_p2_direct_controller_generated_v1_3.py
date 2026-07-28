@@ -1549,6 +1549,56 @@ def test_v1_3_5_valid_parallel_topology_dispatches_one_same_gpu_supervisor(
     assert observed["max_new_cells"] is None
 
 
+def test_mixed_device_assignment_is_complete_disjoint_and_factor_balanced() -> None:
+    all_coordinates = matrix.coordinates()
+    gb10 = matrix._mixed_device_coordinates("gb10")
+    rtx4090 = matrix._mixed_device_coordinates("rtx4090")
+    assert len(gb10) == 3_600
+    assert len(rtx4090) == 5_400
+    assert {item.key for item in gb10}.isdisjoint(item.key for item in rtx4090)
+    assert {item.key for item in (*gb10, *rtx4090)} == {
+        item.key for item in all_coordinates
+    }
+    assert gb10[0] == all_coordinates[0]
+    assert rtx4090[0] == all_coordinates[4]
+
+    strata: dict[tuple[object, ...], Counter[str]] = {}
+    for site, items in (("gb10", gb10), ("rtx4090", rtx4090)):
+        for item in items:
+            key = (
+                item.scale,
+                item.training_seed,
+                item.budget,
+                item.family,
+                item.context,
+            )
+            strata.setdefault(key, Counter())[site] += 1
+    assert len(strata) == 900
+    assert all(counts == {"gb10": 4, "rtx4090": 6} for counts in strata.values())
+
+    factors = (
+        ("scale", matrix.FROZEN_SCALES),
+        ("training_seed", matrix.FROZEN_TRAINING_SEEDS),
+        ("budget", matrix.FROZEN_BUDGETS),
+        ("family", matrix.FROZEN_FAMILIES),
+        ("context", matrix.FROZEN_CONTEXTS),
+    )
+    for field, levels in factors:
+        for level in levels:
+            counts = Counter(
+                item.replicate for item in gb10 if getattr(item, field) == level
+            )
+            assert set(counts) == set(matrix.FROZEN_REPLICATES)
+            assert len(set(counts.values())) == 1
+
+    workers = [
+        matrix._assigned_coordinates(worker_index=index, worker_count=3)
+        for index in range(3)
+    ]
+    assert [len(items) for items in workers] == [1_200, 1_200, 1_200]
+    assert len({item.key for items in workers for item in items}) == 3_600
+
+
 def test_prerequisites_only_does_not_acquire_gpu_activate_or_write(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

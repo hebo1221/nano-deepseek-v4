@@ -6331,6 +6331,61 @@ def _run_same_gpu_worker_group(
     return tuple(cast(dict[str, Any], result) for result in results)
 '''
 
+RUNNER_MIXED_DEVICE_ASSIGNMENT_V1_3_5 = r'''
+@functools.cache
+def _mixed_device_coordinates(site: str) -> tuple[ShardCoordinate, ...]:
+    """Return one quality-blind, factor-balanced device block."""
+
+    _require(
+        site in contract.V1_3_5_MIXED_DEVICE_SITES,
+        "Mixed-device assignment site is not registered.",
+    )
+    selected: list[ShardCoordinate] = []
+    for coordinate in coordinates():
+        offset = (
+            FROZEN_SCALES.index(coordinate.scale)
+            + FROZEN_TRAINING_SEEDS.index(coordinate.training_seed)
+            + 5 * FROZEN_BUDGETS.index(coordinate.budget)
+            + FROZEN_FAMILIES.index(coordinate.family)
+            + 2 * FROZEN_CONTEXTS.index(coordinate.context)
+        ) % len(FROZEN_REPLICATES)
+        replicate_index = FROZEN_REPLICATES.index(coordinate.replicate)
+        gb10 = (replicate_index - offset) % len(FROZEN_REPLICATES) < 4
+        if (site == "gb10") == gb10:
+            selected.append(coordinate)
+    expected = contract.V1_3_5_MIXED_SITE_COORDINATE_COUNTS[site]
+    _require(
+        len(selected) == expected,
+        "Mixed-device site cardinality drifted.",
+    )
+    return tuple(selected)
+
+
+@functools.cache
+def _mixed_device_worker_map(site: str, worker_count: int) -> Mapping[str, int]:
+    _validate_worker_identity(worker_index=0, worker_count=worker_count)
+    return {
+        coordinate.key: index % worker_count
+        for index, coordinate in enumerate(_mixed_device_coordinates(site))
+    }
+
+
+def _coordinate_worker_index(
+    coordinate: ShardCoordinate, *, worker_count: int
+) -> int | None:
+    if worker_count == 1:
+        return 0
+    return _mixed_device_worker_map(
+        contract.V1_3_5_MIXED_DEVICE_SITE, worker_count
+    ).get(coordinate.key)
+
+
+def _assigned_coordinates(*, worker_index: int, worker_count: int) -> tuple[ShardCoordinate, ...]:
+    _validate_worker_identity(worker_index=worker_index, worker_count=worker_count)
+    site_coordinates = _mixed_device_coordinates(contract.V1_3_5_MIXED_DEVICE_SITE)
+    return tuple(site_coordinates[worker_index::worker_count])
+'''
+
 
 def _amend_runner_source_for_same_gpu_v1_3_5(text: str) -> str:
     """Add thread-safe local coordination without changing the historical source bytes."""
@@ -6700,6 +6755,68 @@ def _generate_runner(source: str) -> str:
     text = _amend_runner_source_for_same_gpu_v1_3_5(source)
     text = _replace_exact(
         text,
+        'WORKER_ASSIGNMENT_RULE = "canonical-coordinate-index-modulo-worker-count-v1"\n',
+        "WORKER_ASSIGNMENT_RULE = contract.V1_3_5_MIXED_ASSIGNMENT_RULE\n",
+    )
+    text = _replace_definition(
+        text, "_assigned_coordinates", RUNNER_MIXED_DEVICE_ASSIGNMENT_V1_3_5
+    )
+    text = _replace_exact(
+        text,
+        "                0 if cast(int, worker_count) == 1 else coordinate_index % cast(int, worker_count)\n",
+        "                0\n"
+        "                if cast(int, worker_count) == 1\n"
+        "                else cast(\n"
+        "                    int,\n"
+        "                    _coordinate_worker_index(\n"
+        "                        coordinate, worker_count=cast(int, worker_count)\n"
+        "                    ),\n"
+        "                )\n",
+    )
+    text = _replace_exact(
+        text,
+        "    for coordinate_index, (record, coordinate) in enumerate(\n"
+        "        zip(records, coordinates()[: len(records)], strict=True)\n"
+        "    ):\n",
+        "    for record, coordinate in zip(\n"
+        "        records, coordinates()[: len(records)], strict=True\n"
+        "    ):\n",
+    )
+    text = _replace_exact(
+        text,
+        "                index % worker_count == worker_index and index not in merged,\n",
+        "                _coordinate_worker_index(\n"
+        "                    coordinate_items[index], worker_count=worker_count\n"
+        "                )\n"
+        "                == worker_index\n"
+        "                and index not in merged,\n",
+    )
+    text = _replace_exact(
+        text,
+        "    worker_index = canonical_index % worker_count\n",
+        "    worker_index = _coordinate_worker_index(coordinate, worker_count=worker_count)\n"
+        "    _require(worker_index is not None, \"Claim coordinate is outside this device block.\")\n",
+    )
+    text = text.replace(
+        "index % worker_count == worker_index for index in active_claims",
+        "_coordinate_worker_index(coordinates()[index], worker_count=worker_count)\n"
+        "                == worker_index\n"
+        "                for index in active_claims",
+    )
+    text = _replace_exact(
+        text,
+        '                summary_payload.get("status") == "terminal"\n'
+        "                and len(ledgers) == worker_count\n",
+        '                summary_payload.get("status") in {"terminal", "in_progress"}\n'
+        "                and len(ledgers) == worker_count\n",
+    )
+    text = _replace_exact(
+        text,
+        '                "Coordinator-only finalization requires every worker ledger to be terminal.",\n',
+        '                "Coordinator-only site finalization requires every worker ledger to be terminal.",\n',
+    )
+    text = _replace_exact(
+        text,
         "def expected_decode_token_rows(coordinate: ShardCoordinate) -> int:\n"
         "    return (\n"
         "        contract.DECODE_TOKENS_PER_EXAMPLE_BY_FAMILY_CONTEXT[coordinate.family][coordinate.context]\n"
@@ -6742,7 +6859,7 @@ def _generate_runner(source: str) -> str:
     text = _replace_exact(
         text,
         "import fcntl\nimport importlib\n",
-        "import fcntl\nimport hashlib\nimport importlib\n",
+        "import fcntl\nimport functools\nimport hashlib\nimport importlib\n",
     )
     text = _replace_exact(
         text,
@@ -6912,6 +7029,13 @@ def _generate_runner(source: str) -> str:
     text = _remove_definition(text, "_top_p_artifact_path")
     text = _remove_definition(text, "_load_terminal_top_p_matrix")
     text = _replace_definition(text, "load_and_validate_prerequisites", RUNNER_PREREQUISITES_V1_3_1)
+    text = _replace_exact(
+        text,
+        "    projection = reuse_admission.execution_environment_projection\n",
+        "    projection = contract.v1_3_5_execution_environment_projection(\n"
+        "        reuse_admission.execution_environment_projection\n"
+        "    )\n",
+    )
     _prerequisite_start, prerequisite_end = _top_level_span(text, "load_and_validate_prerequisites")
     text = (
         f"{text[:prerequisite_end]}\n{RUNNER_ACTIVATION_START_HELPERS.strip()}\n\n"

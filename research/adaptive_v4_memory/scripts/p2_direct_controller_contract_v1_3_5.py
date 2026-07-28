@@ -14,9 +14,16 @@ import p2_direct_controller_contract_v1_3 as base
 from p2_direct_controller_contract_v1_3 import *  # noqa: F403
 
 V1_3_5_EXPERIMENT_ID = "p2-post-rank-direct-controller-exact-fill-v1.3.5"
-V1_3_5_MANIFEST_STATUS = (
-    "frozen_v1_3_5_three_worker_parallel_final_after_live_claim_preflight_failure"
+V1_3_5_MANIFEST_STATUS = "frozen_v1_3_5_mixed_device_block_site"
+V1_3_5_MIXED_DEVICE_SITE = "gb10"
+V1_3_5_MIXED_DEVICE_SITES = ("gb10", "rtx4090")
+V1_3_5_MIXED_ASSIGNMENT_RULE = (
+    "latin-rotated-four-gb10-six-rtx4090-per-full-stratum-then-site-index-modulo-worker-count-v1"
 )
+V1_3_5_MIXED_SITE_COORDINATE_COUNTS = {"gb10": 3_600, "rtx4090": 5_400}
+# GB10 inherits the exact static v1.3.4 environment projection.  The RTX 4090
+# implementation branch freezes its separately measured projection here.
+V1_3_5_MIXED_EXECUTION_ENVIRONMENT_PROJECTION: Mapping[str, Any] | None = None
 V1_3_5_MANIFEST_PATH = Path(
     "research/adaptive_v4_memory/manifests/p2-post-rank-direct-controller-exact-fill-v1-3-5.json"
 )
@@ -93,9 +100,13 @@ V1_3_5_SUPERSEDED_TOCTOU_OUTPUT_ROOT = Path(
     "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/"
     "controller-exact-fill-v1-3-5-parallel-final-2"
 )
-V1_3_5_OUTPUT_ROOT = Path(
+V1_3_5_FINAL_3_BRIDGE_OUTPUT_ROOT = Path(
     "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/"
     "controller-exact-fill-v1-3-5-parallel-final-3"
+)
+V1_3_5_OUTPUT_ROOT = Path(
+    "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/"
+    f"controller-exact-fill-v1-3-5-mixed-{V1_3_5_MIXED_DEVICE_SITE}"
 )
 V1_3_5_MATRIX_SUMMARY_PATH = V1_3_5_OUTPUT_ROOT / base.MATRIX_SUMMARY_NAME
 V1_3_5_INTEGRITY_OUTPUT_PATH = (
@@ -182,6 +193,8 @@ V1_3_5_SUPERSEDED_PERSISTENT_RESET_TOTAL_BYTES = 4_500_389
 
 V1_3_5_IMPLEMENTATION_PATHS = (
     *base.V1_3_4_IMPLEMENTATION_PATHS,
+    "research/adaptive_v4_memory/reports/2026-07-28-p2-mixed-device-block-amendment.md",
+    "research/adaptive_v4_memory/scripts/freeze_p2_mixed_device_manifest_v1_3_5.py",
     "research/adaptive_v4_memory/scripts/p2_direct_controller_contract_v1_3_5.py",
     "research/adaptive_v4_memory/scripts/p2_direct_controller_topology_v1_3_5.py",
     "research/adaptive_v4_memory/scripts/probe_p2_direct_controller_topology_v1_3_5.py",
@@ -204,11 +217,37 @@ TOPOLOGY_PROBE_BINDING_FIELDS = frozenset(
 V1_3_5_USER_DIRECTED_PARALLEL_OVERRIDE = {
     "probe_selected_worker_count": 1,
     "execution_worker_count": 3,
-    "selection_authority": "explicit-user-directive-after-quality-blind-probe",
+    "selection_authority": "explicit-user-directive-for-mixed-device-block-execution",
     "probe_recommendation_overridden": True,
     "measured_speedup_over_single_worker_claimed": False,
-    "directive": "run-full17-with-actual-three-worker-same-gpu-parallelism",
+    "directive": "run-full17-as-balanced-gb10-and-rtx4090-device-blocks-with-three-workers-per-site",
 }
+
+
+def v1_3_5_execution_environment_projection(
+    static_projection: Mapping[str, Any],
+) -> dict[str, Any]:
+    _require(
+        V1_3_5_MIXED_DEVICE_SITE in V1_3_5_MIXED_DEVICE_SITES,
+        "Mixed-device site is not registered.",
+    )
+    selected = (
+        static_projection
+        if V1_3_5_MIXED_EXECUTION_ENVIRONMENT_PROJECTION is None
+        else V1_3_5_MIXED_EXECUTION_ENVIRONMENT_PROJECTION
+    )
+    checked = copy.deepcopy(dict(selected))
+    device = checked.get("selected_device_class")
+    _require(
+        checked.get("schema_version") == 1
+        and isinstance(device, Mapping)
+        and isinstance(cast(Mapping[str, Any], device).get("name"), str)
+        and isinstance(checked.get("python_version"), str)
+        and isinstance(checked.get("torch_version"), str)
+        and isinstance(checked.get("cuda_runtime_version"), str),
+        "Mixed-device execution-environment projection is invalid.",
+    )
+    return checked
 
 
 def superseded_zero_quality_parallel_attempt() -> dict[str, Any]:
@@ -779,8 +818,11 @@ def superseded_persistent_reset_attempt() -> dict[str, Any]:
             ),
         },
         "retry": {
-            "output_root": str(V1_3_5_OUTPUT_ROOT),
-            "activation_root": str(V1_3_5_ACTIVATION_ROOT),
+            "output_root": str(V1_3_5_FINAL_3_BRIDGE_OUTPUT_ROOT),
+            "activation_root": str(
+                V1_3_5_FINAL_3_BRIDGE_OUTPUT_ROOT.parent
+                / f"{V1_3_5_FINAL_3_BRIDGE_OUTPUT_ROOT.name}-activation"
+            ),
             "scientific_grid_arm_estimand_or_success_gate_changed": False,
             "quality_values_used_to_configure_retry": False,
             "retry_trigger_used_only_integrity_schema_device_and_process_state": True,
@@ -797,7 +839,7 @@ def superseded_live_claim_preflight_attempt() -> dict[str, Any]:
         "output_root": str(V1_3_5_SUPERSEDED_TOCTOU_OUTPUT_ROOT),
         "durable_state_counts": "committed=7;integrity_pass=7;integrity_fail=0;uncommitted=3;stale_claims=2",
         "failure": "coordinator closed-world scan raced live-claim bundle publication",
-        "retry_output_root": str(V1_3_5_OUTPUT_ROOT),
+        "retry_output_root": str(V1_3_5_FINAL_3_BRIDGE_OUTPUT_ROOT),
         "scientific_grid_arm_estimand_or_success_gate_changed": False,
         "quality_values_read_by_supervisor_or_retry_decision": False,
     }
@@ -905,6 +947,8 @@ def build_v1_3_5_manifest_payload(
             "reuse_admission_path": str(V1_3_5_REUSE_ADMISSION_PATH),
             "summary_output_path": str(V1_3_5_SUMMARY_OUTPUT_PATH),
             "worker_ledger_root": str(V1_3_5_WORKER_LEDGER_ROOT),
+            "final_3_bridge_output_root": str(V1_3_5_FINAL_3_BRIDGE_OUTPUT_ROOT),
+            "mixed_device_site": V1_3_5_MIXED_DEVICE_SITE,
             "superseded_v1_3_5_toctou_output_root": str(V1_3_5_SUPERSEDED_TOCTOU_OUTPUT_ROOT),
             "superseded_v1_3_5_zero_quality_activation_root": str(
                 V1_3_5_SUPERSEDED_ZERO_QUALITY_ACTIVATION_ROOT
@@ -985,15 +1029,13 @@ def build_v1_3_5_manifest_payload(
     }
     disclosure = cast(dict[str, Any], payload["lineage_and_adaptation_disclosure"])
     disclosure["protocol_relation_to_v1_3"] = (
-        "topology-and-storage-only-same-gpu-parallel-amendment-after-byte-exact-v1.3.4-"
-        "zero-quality-lineage;scientific-grid-arms-estimands-and-success-gates-unchanged"
+        "device-blocked-mixed-gpu-execution-amendment-after-v1.3.5-final-3-bridge;"
+        "scientific-grid-arms-estimands-and-success-gates-unchanged;"
+        "device-by-arm-interactions-preregistered"
     )
     disclosure["amendment_trigger"] = (
-        "explicit-user-request-for-three-worker-full17-after-quality-blind-probe-selected-"
-        "one-worker-with-no-measured-parallel-speedup"
-        if topology_selection["probe_recommendation_overridden"]
-        else "single-worker-gb10-underutilization-with-preregistered-quality-blind-"
-        "topology-probe"
+        "explicit-user-request-to-shorten-full17-with-a-gb10-plus-rtx4090-"
+        "quality-blind-balanced-device-block-design"
     )
     disclosure["scientific-grid-arm-estimand-or-success-gate_changed"] = False
     disclosure["quality_outcome_used_to_create_fork"] = False
@@ -1050,10 +1092,22 @@ def build_v1_3_5_manifest_payload(
     activation["canonical_v1_3_4_entrypoint_status"] = "retired-static-predecessor-only"
     activation["quality_execution_topology"] = {
         "distributed_execution_supported": selected_worker_count > 1,
-        "device_topology": "one-physical-gpu-one-supervisor-owned-scheduler-and-device-guard",
+        "device_topology": "one-physical-gpu-per-device-block-site",
+        "device_block_site": V1_3_5_MIXED_DEVICE_SITE,
+        "device_block_sites": list(V1_3_5_MIXED_DEVICE_SITES),
+        "site_coordinate_count": V1_3_5_MIXED_SITE_COORDINATE_COUNTS[
+            V1_3_5_MIXED_DEVICE_SITE
+        ],
+        "site_coordinate_counts": dict(V1_3_5_MIXED_SITE_COORDINATE_COUNTS),
+        "replicates_per_full_stratum": {"gb10": 4, "rtx4090": 6},
+        "execution_environment_projection": (
+            "static-v1.3.4-predecessor"
+            if V1_3_5_MIXED_EXECUTION_ENVIRONMENT_PROJECTION is None
+            else copy.deepcopy(V1_3_5_MIXED_EXECUTION_ENVIRONMENT_PROJECTION)
+        ),
         "worker_count": selected_worker_count,
         "worker_indices": list(range(selected_worker_count)),
-        "assignment_rule": "canonical-coordinate-index-modulo-worker-count-v1",
+        "assignment_rule": V1_3_5_MIXED_ASSIGNMENT_RULE,
         "same_gpu_borrowed_lease_views": True,
         "coordinator_only_publication": True,
     }
