@@ -42,3 +42,10 @@ because the persistent-session planner still used the superseded global modulo
 assignment. That namespace remains immutable. Retry-1 changes only the planner's
 assignment source to the preregistered device block followed by site-local modulo;
 the grid, arms, seeds, within-cell order, estimands, and success gates remain unchanged.
+
+Retry-1 also committed zero shards and materialized no prediction on either site.
+RTX 4090 stopped before evaluator launch; GB10 was operator-interrupted during the
+zero-work readiness check after the same caller defect was identified. The runner's
+readiness caller still selected the global first coordinate. Retry-2 binds readiness,
+snapshot validation, and the one-cell resume gate to the preregistered site-first
+coordinate. No other experimental or execution semantics change.

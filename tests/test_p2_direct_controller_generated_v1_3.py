@@ -1657,7 +1657,9 @@ def test_prerequisites_only_does_not_acquire_gpu_activate_or_write(
 
 
 def test_one_cell_full_resume_gate_uses_flat_canonical_record_and_integrity_pass() -> None:
-    coordinate = matrix.coordinates()[0]
+    coordinate = matrix._mixed_device_coordinates(
+        contract.V1_3_5_MIXED_DEVICE_SITE
+    )[0]
     valid = {
         **coordinate.payload,
         "coordinate_key": coordinate.key,
@@ -2574,7 +2576,9 @@ def test_ready_only_preflight_runs_zero_work_once_and_leaves_quality_tree_absent
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    first = matrix.coordinates()[0]
+    first = matrix._mixed_device_coordinates(
+        contract.V1_3_5_MIXED_DEVICE_SITE
+    )[0]
     output_root = (tmp_path / "quality").resolve()
     layout = SimpleNamespace(
         output_root=output_root,

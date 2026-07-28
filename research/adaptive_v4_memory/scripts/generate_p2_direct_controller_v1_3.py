@@ -3003,7 +3003,7 @@ QUALITY_START_MODES = ("fresh", "resume", "prerequisites-only")
 def _assert_one_cell_full_resume_gate(
     completed: Sequence[Mapping[str, Any]],
 ) -> None:
-    first = coordinates()[0]
+    first = _mixed_device_coordinates(contract.V1_3_5_MIXED_DEVICE_SITE)[0]
     _require(
         len(completed) == 1
         and completed[0].get("coordinate_key") == first.key
@@ -4835,7 +4835,7 @@ def _ensure_ready_only_preflight(
         )
     binding = persistent_session.ready_only_preflight_binding(projection)
     if binding is None:
-        first = coordinates()[0]
+        first = _mixed_device_coordinates(contract.V1_3_5_MIXED_DEVICE_SITE)[0]
         inputs = prerequisites.bundles[
             (first.scale, first.training_seed, first.budget)
         ]
@@ -5135,7 +5135,7 @@ def _validate_ready_only_preflight_snapshot(
         "Matrix ready-only preflight differs from its authenticated ledger reconstruction.",
     )
     checked = cast(dict[str, Any], reconstructed)
-    first = coordinates()[0]
+    first = _mixed_device_coordinates(contract.V1_3_5_MIXED_DEVICE_SITE)[0]
     inputs = prerequisites.bundles[
         (first.scale, first.training_seed, first.budget)
     ]
