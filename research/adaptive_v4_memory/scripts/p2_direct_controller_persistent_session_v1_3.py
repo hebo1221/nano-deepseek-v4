@@ -330,10 +330,11 @@ def assigned_coordinates(*, worker_index: int, worker_count: int) -> tuple[dict[
         type(worker_index) is int and 0 <= worker_index < worker_count,
         "Persistent worker index is invalid.",
     )
+    site_coordinates = contract.v1_3_5_mixed_site_coordinates(
+        contract.V1_3_5_MIXED_DEVICE_SITE
+    )
     return tuple(
-        dict(coordinate)
-        for index, coordinate in enumerate(contract.quality_coordinates())
-        if index % worker_count == worker_index
+        dict(coordinate) for coordinate in site_coordinates[worker_index::worker_count]
     )
 
 

@@ -1595,8 +1595,19 @@ def test_mixed_device_assignment_is_complete_disjoint_and_factor_balanced() -> N
         matrix._assigned_coordinates(worker_index=index, worker_count=3)
         for index in range(3)
     ]
-    assert [len(items) for items in workers] == [1_200, 1_200, 1_200]
-    assert len({item.key for items in workers for item in items}) == 3_600
+    site_count = contract.V1_3_5_MIXED_SITE_COORDINATE_COUNTS[
+        contract.V1_3_5_MIXED_DEVICE_SITE
+    ]
+    assert [len(items) for items in workers] == [site_count // 3] * 3
+    assert len({item.key for items in workers for item in items}) == site_count
+    assert [
+        tuple(item.payload for item in items) for items in workers
+    ] == [
+        matrix.persistent_session.assigned_coordinates(
+            worker_index=index, worker_count=3
+        )
+        for index in range(3)
+    ]
 
 
 def test_prerequisites_only_does_not_acquire_gpu_activate_or_write(

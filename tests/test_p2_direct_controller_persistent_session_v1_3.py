@@ -83,8 +83,8 @@ def _plan(
     controlled_stop: bool = True,
     session_role: str = session.QUALITY_SESSION_ROLE,
 ) -> dict[str, object]:
-    selected = coordinates or [dict(item) for item in contract.quality_coordinates()[:3]]
-    frozen = [dict(item) for item in contract.quality_coordinates()]
+    frozen = list(session.assigned_coordinates(worker_index=0, worker_count=1))
+    selected = coordinates or frozen[:3]
     start = frozen.index(selected[0])
     return session.build_session_plan(
         selected,
@@ -348,7 +348,7 @@ def test_sealed_plan_transport_rejects_mutable_descriptor(
 
 
 def test_normal_model_load_bound_is_unique_worker_scale_seed_assignments() -> None:
-    coordinates = [dict(item) for item in contract.quality_coordinates()]
+    coordinates = list(session.assigned_coordinates(worker_index=0, worker_count=1))
     assert (
         session.normal_model_load_upper_bound(coordinates, worker_index=0, worker_count=1)
         == len(contract.SCALES) * len(contract.TRAINING_SEEDS)
@@ -362,15 +362,14 @@ def test_normal_model_load_bound_is_unique_worker_scale_seed_assignments() -> No
 def test_efficiency_counter_counts_sessions_not_shards(
     tmp_path: Path, trust_root: attestation.TrustRoot
 ) -> None:
-    first_coordinates = [dict(item) for item in contract.quality_coordinates()[:3]]
+    assigned = list(session.assigned_coordinates(worker_index=0, worker_count=1))
+    first_coordinates = assigned[:3]
     second_start = next(
         index
-        for index, item in enumerate(contract.quality_coordinates())
+        for index, item in enumerate(assigned)
         if item["training_seed"] != first_coordinates[0]["training_seed"]
     )
-    second_coordinates = [
-        dict(item) for item in contract.quality_coordinates()[second_start : second_start + 3]
-    ]
+    second_coordinates = assigned[second_start : second_start + 3]
     first = _plan(tmp_path, trust_root, coordinates=first_coordinates, session_digit="1")
     second = _plan(tmp_path, trust_root, coordinates=second_coordinates, session_digit="2")
     first_work, first_results = _result_sequence(tmp_path, trust_root, first, count=3)
@@ -840,16 +839,17 @@ def test_ready_only_binding_is_exact_zero_work_and_metrics_exclude_quality(
 ) -> None:
     output_root = (tmp_path / "quality").resolve()
     preflight = _publish_ready_only_success(output_root, trust_root, session_digit="1")
+    assigned = session.assigned_coordinates(worker_index=0, worker_count=1)
     second_cohort_start = next(
         index
-        for index, item in enumerate(contract.quality_coordinates())
+        for index, item in enumerate(assigned)
         if (item["scale"], item["training_seed"])
         != (preflight["scale"], preflight["training_seed"])
     )
     quality = _plan(
         output_root,
         trust_root,
-        coordinates=[dict(contract.quality_coordinates()[second_cohort_start])],
+        coordinates=[dict(assigned[second_cohort_start])],
         session_digit="2",
         authority_digit="b",
     )
