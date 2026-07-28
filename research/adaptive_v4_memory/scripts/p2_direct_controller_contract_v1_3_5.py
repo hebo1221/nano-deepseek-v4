@@ -13,7 +13,7 @@ from p2_direct_controller_contract_v1_3 import *  # noqa: F403
 
 V1_3_5_EXPERIMENT_ID = "p2-post-rank-direct-controller-exact-fill-v1.3.5"
 V1_3_5_MANIFEST_STATUS = (
-    "frozen_v1_3_5_three_worker_parallel_retry_2_after_unpublished_binding_schema_failure"
+    "frozen_v1_3_5_three_worker_parallel_final_after_unpublished_arm_semantics_failure"
 )
 V1_3_5_MANIFEST_PATH = Path(
     "research/adaptive_v4_memory/manifests/p2-post-rank-direct-controller-exact-fill-v1-3-5.json"
@@ -47,18 +47,36 @@ V1_3_5_SUPERSEDED_BINDING_SCHEMA_PERSISTENT_SESSION_ROOT = (
     / ".controller-exact-fill-v1-3-5-parallel-retry-1."
     "p2-direct-controller-persistent-sessions-v1-3-5"
 )
-V1_3_5_OUTPUT_ROOT = Path(
+V1_3_5_SUPERSEDED_ARM_SEMANTICS_OUTPUT_ROOT = Path(
     "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/"
     "controller-exact-fill-v1-3-5-parallel-retry-2"
+)
+V1_3_5_SUPERSEDED_ARM_SEMANTICS_ACTIVATION_ROOT = (
+    V1_3_5_SUPERSEDED_ARM_SEMANTICS_OUTPUT_ROOT.parent
+    / "controller-exact-fill-v1-3-5-parallel-retry-2-activation"
+)
+V1_3_5_SUPERSEDED_ARM_SEMANTICS_WORKER_ROOT = (
+    V1_3_5_SUPERSEDED_ARM_SEMANTICS_OUTPUT_ROOT.parent
+    / ".controller-exact-fill-v1-3-5-parallel-retry-2."
+    "p2-direct-controller-workers-v1-3-5"
+)
+V1_3_5_SUPERSEDED_ARM_SEMANTICS_PERSISTENT_SESSION_ROOT = (
+    V1_3_5_SUPERSEDED_ARM_SEMANTICS_OUTPUT_ROOT.parent
+    / ".controller-exact-fill-v1-3-5-parallel-retry-2."
+    "p2-direct-controller-persistent-sessions-v1-3-5"
+)
+V1_3_5_OUTPUT_ROOT = Path(
+    "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/"
+    "controller-exact-fill-v1-3-5-parallel-final"
 )
 V1_3_5_MATRIX_SUMMARY_PATH = V1_3_5_OUTPUT_ROOT / base.MATRIX_SUMMARY_NAME
 V1_3_5_INTEGRITY_OUTPUT_PATH = (
     V1_3_5_OUTPUT_ROOT.parent
-    / "controller-exact-fill-v1-3-5-parallel-retry-2.integrity.json"
+    / "controller-exact-fill-v1-3-5-parallel-final.integrity.json"
 )
 V1_3_5_SUMMARY_OUTPUT_PATH = (
     V1_3_5_OUTPUT_ROOT.parent
-    / "controller-exact-fill-v1-3-5-parallel-retry-2.summary.json"
+    / "controller-exact-fill-v1-3-5-parallel-final.summary.json"
 )
 # The authenticated calibration/checkpoint inventory remains the exact,
 # read-only v1.3.4 predecessor pair.  No v1.3.5 copy or re-attestation exists.
@@ -67,7 +85,7 @@ V1_3_5_REUSE_ADMISSION_PATH = base.V1_3_4_REUSE_ADMISSION_PATH
 V1_3_5_PREHELDOUT_GENESIS_PATH = base.V1_3_4_PREHELDOUT_GENESIS_PATH
 V1_3_5_ACTIVATION_ROOT = (
     V1_3_5_OUTPUT_ROOT.parent
-    / "controller-exact-fill-v1-3-5-parallel-retry-2-activation"
+    / "controller-exact-fill-v1-3-5-parallel-final-activation"
 )
 V1_3_5_ACTIVATION_MATRIX_LOCK_PATH = V1_3_5_ACTIVATION_ROOT / "matrix.lock"
 V1_3_5_QUALITY_START_ACTIVATION_PATH = V1_3_5_ACTIVATION_ROOT / "quality-start-activation.json"
@@ -384,6 +402,173 @@ def superseded_unpublished_binding_schema_attempt() -> dict[str, Any]:
             ),
         },
         "retry": {
+            "output_root": str(V1_3_5_SUPERSEDED_ARM_SEMANTICS_OUTPUT_ROOT),
+            "activation_root": str(V1_3_5_SUPERSEDED_ARM_SEMANTICS_ACTIVATION_ROOT),
+            "scientific_grid_arm_estimand_or_success_gate_changed": False,
+            "quality_values_used_to_configure_retry": False,
+        },
+    }
+
+
+def superseded_unpublished_arm_semantics_attempt() -> dict[str, Any]:
+    session_root = V1_3_5_SUPERSEDED_ARM_SEMANTICS_PERSISTENT_SESSION_ROOT
+    quality_session_nonce = (
+        "8d249f1336f06bfea74c11c2dd355818de401a2d2b876ee561a51d744beed757"
+    )
+    ready_session_nonce = (
+        "b715e8a7506bddeb1892da7ed377b1867ca4e328a748238f264112924b225763"
+    )
+    claim_path = (
+        V1_3_5_SUPERSEDED_ARM_SEMANTICS_OUTPUT_ROOT
+        / "s55/seed-6071406/2x/single-remote-retrieval/context-80/replicate-0"
+        / ".p2-direct-controller-exact-fill-v1-3-5-cell.claim"
+    )
+    return {
+        "lineage_type": "signed-superseded-unpublished-arm-semantics-schema-failure",
+        "manifest_commit": "6bff60145b484b111a613ba086237be8ccb2ce8d",
+        "implementation_source_commit": "8e057bc1fb9909a3bb1dbf536356cf3ce79f9357",
+        "manifest": {
+            "path": str(V1_3_5_MANIFEST_PATH),
+            "sha256": "a2079b96078ba67aaef7d8d91c055508ba9a968323db420aefee248a8da7d85b",
+            "bytes": 117_196,
+        },
+        "activation": {
+            "path": str(
+                V1_3_5_SUPERSEDED_ARM_SEMANTICS_ACTIVATION_ROOT
+                / "quality-start-activation.json"
+            ),
+            "sha256": "bbbf0d34d391e0fa06407085a3eb29a1569f03c6007f237c3cf7c22a8987af46",
+            "bytes": 330_952,
+            "payload_sha256": (
+                "eb384467a092ae083aa7769288524456a296952ff228805584f992414b0ec6d8"
+            ),
+            "attestation_mac": (
+                "54f4c8e678951db2ebf56f6f2b63557da3bc2d515a0818885eaf36c7252dd36b"
+            ),
+        },
+        "matrix": {
+            "path": str(
+                V1_3_5_SUPERSEDED_ARM_SEMANTICS_OUTPUT_ROOT / base.MATRIX_SUMMARY_NAME
+            ),
+            "sha256": "c5ae40e210fda6e7fc5681bee0470090abbfb3fe5928a677e1f283167ed6fc8d",
+            "bytes": 386_934,
+            "payload_sha256": (
+                "e84f8db1da19055a198e06b8dcb41254b90149cefd12fe134aad4d4f00f7af23"
+            ),
+            "attestation_mac": (
+                "fd918371543b0cbd8e003d582d900d5cbeb237a698dfd15631b861e640cf6099"
+            ),
+        },
+        "worker_zero_ledger": {
+            "path": str(
+                V1_3_5_SUPERSEDED_ARM_SEMANTICS_WORKER_ROOT
+                / "worker-00000-of-00003.summary.json"
+            ),
+            "sha256": "14944e87830628ec60ee2cc6f89ccfe6f09b4384cf726f98607ea15df0ef0222",
+            "bytes": 169_170,
+            "payload_sha256": (
+                "9801d1f97a9c95ff78644af5a9f91fb6a7e12dfe2b22f61469d106f90193ec3e"
+            ),
+            "attestation_mac": (
+                "1a5009dfa133624b4269541e67e981ff579fb3b897e18399ddac5d8e63c56753"
+            ),
+            "completed_shards": 0,
+            "records": [],
+        },
+        "ready_only_preflight": {
+            "launch": {
+                "path": str(session_root / f"{ready_session_nonce}.launch.json"),
+                "sha256": (
+                    "d6cacc5ec5c2819d39bcd05b9cf88009fe68c5f8c6f6dd9b75bccd8b470052b9"
+                ),
+                "bytes": 22_071,
+                "payload_sha256": (
+                    "f8b456b2f8822e7ed521df755e029471e53854496664bc9ae409aab5f5199e22"
+                ),
+                "attestation_mac": (
+                    "6cde8cb06b874966c03c9151d923bc040d97354417eca25684f6ea9831d7c16a"
+                ),
+            },
+            "terminal": {
+                "path": str(session_root / f"{ready_session_nonce}.terminal.json"),
+                "sha256": (
+                    "06d836b88ecab51ef509969f9a3613676ac5e2d461428b8b7978a665592855a2"
+                ),
+                "bytes": 22_615,
+                "payload_sha256": (
+                    "74d4e96cc7320990ae372e694f90ecb6780727c5431a20a8bc7af38edefa2689"
+                ),
+                "attestation_mac": (
+                    "4c7cb2a91a4a3f10d5caa093c27e3bf70d0d1101ca52f9fe1343f35aab284858"
+                ),
+                "status": "stopped",
+                "child_process_returncode": 0,
+            },
+        },
+        "quality_session": {
+            "launch": {
+                "path": str(session_root / f"{quality_session_nonce}.launch.json"),
+                "sha256": (
+                    "2a5d5880e4d70429916c989143463530743eca5a7bce39e2749e4982cc99f07a"
+                ),
+                "bytes": 22_058,
+                "payload_sha256": (
+                    "87928d8d7c87e729833efd1b1d1c36b3703985ef6995704f76bc7789f9edbe66"
+                ),
+                "attestation_mac": (
+                    "287259c55daee56bbf0ab722cc1468478fb24f401f3c4cb17bd9bdc1c5051f71"
+                ),
+            },
+            "terminal": {
+                "path": str(session_root / f"{quality_session_nonce}.terminal.json"),
+                "sha256": (
+                    "095f507866f20a9c7c6bf37a8fceae5556033fca15a8106167e0d07b66f6217b"
+                ),
+                "bytes": 21_195,
+                "payload_sha256": (
+                    "41658b36bfb98bba30a20b61a3ea073b712cfcec714973d18a293516c2d19020"
+                ),
+                "attestation_mac": (
+                    "3622f9cf400ab176df8a429dea78be264fc8e6dec7c40a16521086e256df4ac5"
+                ),
+                "status": "child_eof",
+                "child_process_returncode": 1,
+                "completed_work_count": 0,
+                "completed_result_count": 0,
+            },
+        },
+        "dead_claim": {
+            "path": str(claim_path),
+            "sha256": "6c1109af7098919562de3167f8c2c9029104d47562e7e0948495aad9f0299f54",
+            "bytes": 526,
+            "worker_index": 0,
+            "worker_count": 3,
+        },
+        "durable_quality_state": {
+            "completed_shards": 0,
+            "canonical_prefix_shards": 0,
+            "globally_committed_shards": 0,
+            "matrix_records": [],
+            "worker_records": [],
+            "published_bundle_count": 0,
+            "published_envelope_count": 0,
+            "published_sidecar_count": 0,
+            "orphan_claim_count": 1,
+        },
+        "volatile_execution_disclosure": {
+            "quality_evaluator_started": True,
+            "quality_computation_completed_before_bundle_validation": True,
+            "quality_values_read_by_supervisor_or_retry_decision": False,
+        },
+        "failure": {
+            "stage": "first-cell-bundle-validation-before-atomic-publication",
+            "exception": "ValueError: Arm semantics drifted.",
+            "cause": (
+                "the producer serialized tuple-valued signal_weights as a JSON list while "
+                "the generated validator compared the reopened row against the raw dataclass tuple"
+            ),
+        },
+        "retry": {
             "output_root": str(V1_3_5_OUTPUT_ROOT),
             "activation_root": str(V1_3_5_ACTIVATION_ROOT),
             "scientific_grid_arm_estimand_or_success_gate_changed": False,
@@ -520,6 +705,18 @@ def build_v1_3_5_manifest_payload(
             "superseded_v1_3_5_binding_schema_worker_root": str(
                 V1_3_5_SUPERSEDED_BINDING_SCHEMA_WORKER_ROOT
             ),
+            "superseded_v1_3_5_arm_semantics_activation_root": str(
+                V1_3_5_SUPERSEDED_ARM_SEMANTICS_ACTIVATION_ROOT
+            ),
+            "superseded_v1_3_5_arm_semantics_output_root": str(
+                V1_3_5_SUPERSEDED_ARM_SEMANTICS_OUTPUT_ROOT
+            ),
+            "superseded_v1_3_5_arm_semantics_persistent_session_root": str(
+                V1_3_5_SUPERSEDED_ARM_SEMANTICS_PERSISTENT_SESSION_ROOT
+            ),
+            "superseded_v1_3_5_arm_semantics_worker_root": str(
+                V1_3_5_SUPERSEDED_ARM_SEMANTICS_WORKER_ROOT
+            ),
             "v1_3_4_quality_output_namespace_reused": False,
             "v1_3_4_static_admission_namespace_reused_read_only": True,
             "v1_3_5_superseded_zero_quality_namespace_reused": False,
@@ -589,6 +786,9 @@ def build_v1_3_5_manifest_payload(
     )
     disclosure["v1_3_5_superseded_unpublished_binding_schema_attempt"] = (
         superseded_unpublished_binding_schema_attempt()
+    )
+    disclosure["v1_3_5_superseded_unpublished_arm_semantics_attempt"] = (
+        superseded_unpublished_arm_semantics_attempt()
     )
     execution = cast(dict[str, Any], payload["execution_contract"])
     execution["v1_3_5_quality_manifest_context_required"] = True

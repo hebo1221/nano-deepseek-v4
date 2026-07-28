@@ -137,8 +137,29 @@ def test_builder_preserves_unpublished_schema_failure_without_quality_selection(
     assert not lineage["volatile_execution_disclosure"][
         "quality_values_read_by_supervisor_or_retry_decision"
     ]
+    assert lineage["retry"]["output_root"] == str(
+        contract.V1_3_5_SUPERSEDED_ARM_SEMANTICS_OUTPUT_ROOT
+    )
+    assert "parallel-retry-2" in lineage["retry"]["output_root"]
+
+
+def test_builder_preserves_unpublished_arm_semantics_failure_before_final_namespace() -> None:
+    child = _manifest(worker_count=3, probe_worker_count=1)
+    lineage = child["lineage_and_adaptation_disclosure"][
+        "v1_3_5_superseded_unpublished_arm_semantics_attempt"
+    ]
+
+    assert lineage == contract.superseded_unpublished_arm_semantics_attempt()
+    assert lineage["ready_only_preflight"]["terminal"]["child_process_returncode"] == 0
+    assert lineage["durable_quality_state"]["matrix_records"] == []
+    assert lineage["durable_quality_state"]["published_bundle_count"] == 0
+    assert lineage["durable_quality_state"]["orphan_claim_count"] == 1
+    assert lineage["failure"]["exception"] == "ValueError: Arm semantics drifted."
+    assert not lineage["volatile_execution_disclosure"][
+        "quality_values_read_by_supervisor_or_retry_decision"
+    ]
     assert lineage["retry"]["output_root"] == str(contract.V1_3_5_OUTPUT_ROOT)
-    assert "parallel-retry-2" in str(contract.V1_3_5_OUTPUT_ROOT)
+    assert "parallel-final" in str(contract.V1_3_5_OUTPUT_ROOT)
 
 
 def test_builder_rejects_unregistered_probe_override() -> None:
