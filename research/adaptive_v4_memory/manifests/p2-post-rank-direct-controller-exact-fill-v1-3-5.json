@@ -1,7 +1,7 @@
 {
   "artifact_namespaces": {
-    "activation_matrix_lock_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-activation/matrix.lock",
-    "activation_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-activation",
+    "activation_matrix_lock_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-parallel-retry-1-activation/matrix.lock",
+    "activation_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-parallel-retry-1-activation",
     "activation_root_exact_member_count": 2,
     "activation_root_is_immutable_sibling_outside_quality_closed_world": true,
     "admission_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-4-admission",
@@ -28,13 +28,13 @@
       "summary": "p2-post-rank-direct-controller-exact-fill-summary-v1.3.5",
       "worker_ledger": "p2-post-rank-direct-controller-exact-fill-worker-ledger-v1.3.5"
     },
-    "integrity_output_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5.integrity.json",
+    "integrity_output_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-parallel-retry-1.integrity.json",
     "matrix_binds_role_tagged_preflight_hmac_evidence": true,
     "matrix_lock_is_precreated_before_first_quality_mutation": true,
-    "matrix_summary_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5/controller-matrix.summary.json",
-    "output_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5",
-    "persistent_session_ledger_lock_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/.controller-exact-fill-v1-3-5.p2-direct-controller-persistent-sessions-v1-3-5.lock",
-    "persistent_session_ledger_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/.controller-exact-fill-v1-3-5.p2-direct-controller-persistent-sessions-v1-3-5",
+    "matrix_summary_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-parallel-retry-1/controller-matrix.summary.json",
+    "output_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-parallel-retry-1",
+    "persistent_session_ledger_lock_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/.controller-exact-fill-v1-3-5-parallel-retry-1.p2-direct-controller-persistent-sessions-v1-3-5.lock",
+    "persistent_session_ledger_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/.controller-exact-fill-v1-3-5-parallel-retry-1.p2-direct-controller-persistent-sessions-v1-3-5",
     "persistent_session_roles": {
       "quality_work": "quality",
       "ready_only_preflight": "ready_only_preflight"
@@ -46,22 +46,26 @@
       "terminal"
     ],
     "preheldout_genesis_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-4-admission/preheldout-genesis.json",
-    "quality_start_activation_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-activation/quality-start-activation.json",
+    "quality_start_activation_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-parallel-retry-1-activation/quality-start-activation.json",
     "reuse_admission_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-4-admission/historical-reuse-admission.json",
-    "summary_output_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5.summary.json",
+    "summary_output_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-parallel-retry-1.summary.json",
     "superseded_v1_3_2_static_admission_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-2-admission",
     "superseded_v1_3_2_static_pair_is_read_only_lineage": true,
     "superseded_v1_3_3_activation_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-3-activation",
     "superseded_v1_3_3_admission_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-3-admission",
     "superseded_v1_3_3_persistent_session_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/.controller-exact-fill-v1-3-3.p2-direct-controller-persistent-sessions-v1-3-3",
     "superseded_v1_3_3_runtime_state_is_read_only_lineage": true,
+    "superseded_v1_3_5_zero_quality_activation_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-activation",
+    "superseded_v1_3_5_zero_quality_output_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5",
+    "superseded_v1_3_5_zero_quality_persistent_session_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/.controller-exact-fill-v1-3-5.p2-direct-controller-persistent-sessions-v1-3-5",
     "v1_3_1_output_or_admission_namespace_reused": false,
     "v1_3_2_output_or_admission_namespace_reused": false,
     "v1_3_3_output_or_admission_namespace_reused": false,
     "v1_3_4_quality_output_namespace_reused": false,
     "v1_3_4_static_admission_namespace_reused_read_only": true,
+    "v1_3_5_superseded_zero_quality_namespace_reused": false,
     "v1_3_output_or_admission_namespace_reused": false,
-    "worker_ledger_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/.controller-exact-fill-v1-3-5.p2-direct-controller-workers-v1-3-5"
+    "worker_ledger_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/.controller-exact-fill-v1-3-5-parallel-retry-1.p2-direct-controller-workers-v1-3-5"
   },
   "attestation": {
     "key_compromise_in_scope": false,
@@ -735,8 +739,8 @@
       "research/adaptive_v4_memory/scripts/p2_direct_controller_topology_v1_3_5.py",
       "research/adaptive_v4_memory/scripts/probe_p2_direct_controller_topology_v1_3_5.py"
     ],
-    "source_commit": "01b82111a0c6e3d6fc70062f3815c841ffd7e1fb",
-    "tree_digest": "7aba98c35da43cfeffa27ab4793fca7c8c730fb07ac88c9e4c31508f84d4a356"
+    "source_commit": "58c17ac404acf671b556b911fbe149c4cae97576",
+    "tree_digest": "baff6dc3fca2b0bda6d8aa7b0cff7bf7caa47f3c6c110ced424b85a06ee7ac59"
   },
   "lineage_and_adaptation_disclosure": {
     "amendment_trigger": "explicit-user-request-for-three-worker-full17-after-quality-blind-probe-selected-one-worker-with-no-measured-parallel-speedup",
@@ -1480,6 +1484,71 @@
       },
       "reuse_mode": "read-only-static-predecessor-no-v1.3.4-activation-reuse"
     },
+    "v1_3_5_superseded_zero_quality_parallel_attempt": {
+      "activation": {
+        "attestation_mac": "6b96286126129f390c78ebdd135245dc978ed35659837d5b7bdddab6b88e1e75",
+        "bytes": 302045,
+        "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-activation/quality-start-activation.json",
+        "payload_sha256": "d1d9a4b67f6136f1c60f7f9b06a850d2873b3acac436597e77b93b1f49b48325",
+        "sha256": "ff924b355215cc433c4080b926ebf362c4c9778d53036a7ba72e7fd026c96c4f"
+      },
+      "failure": {
+        "cause": "ready-only preflight validation indexed an intentionally empty distributed GPU worker registry before the live supervisor fallback was wired",
+        "exception": "KeyError: 0",
+        "stage": "distributed-zero-ledger-validation-before-first-worker-ledger-or-cell-claim"
+      },
+      "implementation_source_commit": "01b82111a0c6e3d6fc70062f3815c841ffd7e1fb",
+      "lineage_type": "signed-superseded-zero-quality-parallel-launch-failure",
+      "manifest": {
+        "bytes": 106426,
+        "path": "research/adaptive_v4_memory/manifests/p2-post-rank-direct-controller-exact-fill-v1-3-5.json",
+        "sha256": "87e4f5ecc197cc9aff1e6575323d9128cb281dfc98efd09b842aaa63247e9a3a"
+      },
+      "manifest_commit": "69bd328d08a1df2bcdb0a01f6db93923a503e551",
+      "matrix": {
+        "attestation_mac": "ec9be6a03e843485938f67379efa925cc0615584a1d275f55f32a0e1925f2b15",
+        "bytes": 332444,
+        "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5/controller-matrix.summary.json",
+        "payload_sha256": "09e43ec7ca42e7539cfb19eec402512b5e4badf0fcebbb116d8acbabe9d622dc",
+        "sha256": "b33b1b94537dc1cf1a997ecc32609fc5c38047fb2df52bdd67b1824ec0932b4c"
+      },
+      "persistent_ready_only_session": {
+        "launch": {
+          "attestation_mac": "4bf99ca9bbe7c6d0a72e7d115626901098b698e21910d9402b0dbf2c106d7dbf",
+          "bytes": 22020,
+          "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/.controller-exact-fill-v1-3-5.p2-direct-controller-persistent-sessions-v1-3-5/08aaf2ba81f195194b1f5bbb0ced3b0f9254f4e67508de1dc5297b7ceda07f01.launch.json",
+          "payload_sha256": "09d127004e4ae32e6920249e0ebff9cb7626339e153967924ae4f64500d6666e",
+          "sha256": "c08eec37a689c989e7a95e6dcaaf9af73f41c3df8a8d77bd49e75a932edff50a"
+        },
+        "terminal": {
+          "attestation_mac": "8978f15f18fd13a1b37b44bb601dfe23a32efe7c2fc597db151746367ab0fafd",
+          "bytes": 22581,
+          "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/.controller-exact-fill-v1-3-5.p2-direct-controller-persistent-sessions-v1-3-5/08aaf2ba81f195194b1f5bbb0ced3b0f9254f4e67508de1dc5297b7ceda07f01.terminal.json",
+          "payload_sha256": "d4ab37c892e8731f5a1428c6b7153ad676c3eb957b662384289005de35c89d59",
+          "sha256": "98593477741ebd05227398345ad41ecc04c92d9b2638c759fdc537dbca58572d"
+        }
+      },
+      "quality_state": {
+        "canonical_prefix_shards": 0,
+        "completed_shards": 0,
+        "evaluation_inputs_materialized": 0,
+        "globally_committed_shards": 0,
+        "gpu_worker_lease_count": 0,
+        "outcome_selection_performed": false,
+        "quality_aggregates_materialized": 0,
+        "quality_evaluation_started": false,
+        "quality_outcomes_materialized": 0,
+        "quality_predictions_materialized": 0,
+        "records": [],
+        "worker_ledger_count": 0
+      },
+      "retry": {
+        "activation_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-parallel-retry-1-activation",
+        "output_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-parallel-retry-1",
+        "quality_outcome_used_to_configure_retry": false,
+        "scientific_grid_arm_estimand_or_success_gate_changed": false
+      }
+    },
     "v1_3_quality_outcomes_observed_before_amendment": false,
     "v1_3_signed_empty_lineage": {
       "attestation_key_id": "67f433c02a291f9b1c9e65218171b6da46ef019567ee24406b4738c2ddf765bf",
@@ -2140,5 +2209,5 @@
     "worst_family_context_slice_reported": true,
     "worst_joint_training_seed_family_context_slice_reported": true
   },
-  "status": "frozen_v1_3_5_same_gpu_topology_storage_amendment_after_v1_3_4_zero_quality_lineage"
+  "status": "frozen_v1_3_5_three_worker_parallel_retry_after_exact_zero_quality_validator_failure"
 }
