@@ -780,8 +780,8 @@
       "research/adaptive_v4_memory/scripts/p2_direct_controller_topology_v1_3_5.py",
       "research/adaptive_v4_memory/scripts/probe_p2_direct_controller_topology_v1_3_5.py"
     ],
-    "source_commit": "1ebaa58c3df0535eb0216c2b661622f168be8aa2",
-    "tree_digest": "a270956481e1a679061d08292c8932ca49a1cdedf00f783777af65c8dfab706b"
+    "source_commit": "9c93c4818e406d207801d8f549ec072fcf6274c7",
+    "tree_digest": "70534edc3a051a11808572f08a7c41bb3f7c3a35750734ced8963ffc65b1ce62"
   },
   "lineage_and_adaptation_disclosure": {
     "amendment_trigger": "explicit-user-request-to-shorten-full17-with-a-gb10-plus-rtx4090-quality-blind-balanced-device-block-design",
