@@ -19,9 +19,9 @@ from pathlib import Path
 from typing import Any, cast
 
 import p2_direct_attestation as attestation
-import p2_direct_controller_contract_v1_3 as contract
+import p2_direct_controller_contract_v1_3_5 as contract
 import p2_direct_controller_persistent_session_v1_3 as persistent_session
-import p2_direct_controller_reuse_admission_v1_3 as admission
+import p2_direct_controller_topology_v1_3_5 as admission
 import torch
 from calibrate_p2_direct_soft_lag import _load_checkpoint_model, _policy_from_payload
 from freeze_p2_causal_factorial_arms import BuiltCausalArm
@@ -40,10 +40,10 @@ from nano_deepseek_v4 import (
     generate_adaptive_memory_workload,
 )
 
-EXPERIMENT_ID = contract.V1_3_4_SHARD_EXPERIMENT_ID
+EXPERIMENT_ID = contract.V1_3_5_SHARD_EXPERIMENT_ID
 ARTIFACT_TYPE = "raw-direct-controller-exact-fill-shard"
 SCHEMA_VERSION = 1
-ATTESTATION_PURPOSE = contract.V1_3_4_SHARD_ATTESTATION_PURPOSE
+ATTESTATION_PURPOSE = contract.V1_3_5_SHARD_ATTESTATION_PURPOSE
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 
 TERMINAL_PASS = "INTEGRITY-PASS"
@@ -51,9 +51,9 @@ TERMINAL_FAIL = "INTEGRITY-FAIL"
 DTYPE_NAME = "bfloat16"
 DEVICE_TYPE = "cuda"
 ASYNC_TRANSFER = False
-STORAGE_PROJECTED_SHARDS_ENV = "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_4_PROJECTED_REMAINING_SHARDS"
-STORAGE_PROJECTED_TOKEN_ROWS_ENV = "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_4_PROJECTED_REMAINING_TOKEN_ROWS"
-PERSISTENT_PLAN_FD_ENV = "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_4_PERSISTENT_PLAN_FD"
+STORAGE_PROJECTED_SHARDS_ENV = "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_5_PROJECTED_REMAINING_SHARDS"
+STORAGE_PROJECTED_TOKEN_ROWS_ENV = "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_5_PROJECTED_REMAINING_TOKEN_ROWS"
+PERSISTENT_PLAN_FD_ENV = "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_5_PERSISTENT_PLAN_FD"
 ENVELOPE_PLANNING_ALLOWANCE_BYTES = 1024 * 1024
 TOP_LEVEL_FIELDS = {
     "schema_version",
@@ -429,11 +429,11 @@ def arm_execution_order(schedule_index: int) -> tuple[str, ...]:
     _strict_int(schedule_index, "schedule_index")
     return contract.arm_execution_order(schedule_index)
 
-def _sealed_site_packages_root_v1_3_4() -> Path:
-    raw = globals().get("_ADAPTIVE_V4_SEALED_SITE_PACKAGES_V1_3_4")
+def _sealed_site_packages_root_v1_3_5() -> Path:
+    raw = globals().get("_ADAPTIVE_V4_SEALED_SITE_PACKAGES_V1_3_5")
     _require(
         isinstance(raw, str) and bool(raw),
-        "Sealed v1.3.4 site-packages authority is missing.",
+        "Sealed v1.3.5 site-packages authority is missing.",
     )
     sealed = cast(str, raw)
     repository_root = REPOSITORY_ROOT.resolve(strict=True)
@@ -451,7 +451,7 @@ def _sealed_site_packages_root_v1_3_4() -> Path:
         resolved = lexical.resolve(strict=True)
         expected_resolved = expected.resolve(strict=True)
     except (OSError, RuntimeError) as error:
-        raise ValueError("Sealed v1.3.4 site-packages authority is not exact.") from error
+        raise ValueError("Sealed v1.3.5 site-packages authority is not exact.") from error
     _require(
         sealed == str(lexical)
         and lexical == resolved
@@ -459,7 +459,7 @@ def _sealed_site_packages_root_v1_3_4() -> Path:
         and expected == expected_resolved
         and lexical.is_dir()
         and not lexical.is_symlink(),
-        "Sealed v1.3.4 site-packages authority is not the exact verified runtime root.",
+        "Sealed v1.3.5 site-packages authority is not the exact verified runtime root.",
     )
     return lexical
 
@@ -468,10 +468,10 @@ def _assert_repository_import_origins(
     modules: Mapping[str, Any] | None = None,
 ) -> None:
     repository_root = REPOSITORY_ROOT.resolve(strict=True)
-    site_packages_root = _sealed_site_packages_root_v1_3_4()
+    site_packages_root = _sealed_site_packages_root_v1_3_5()
     allowed_files = {
         (repository_root / relative).resolve(strict=True)
-        for relative in contract.v1_3_4_implementation_file_paths()
+        for relative in contract.v1_3_5_implementation_file_paths()
     }
     active_modules = sys.modules if modules is None else modules
     for module_name, module in tuple(active_modules.items()):
@@ -1345,13 +1345,13 @@ def establish_evaluator_inputs(
         context=contract.CONTEXTS[0],
         replicate=contract.REPLICATES[0],
     )
-    quality_context = admission.establish_v1_3_4_quality_context(
+    quality_context = admission.establish_v1_3_5_quality_context(
         manifest_path,
-        implementation_paths=contract.V1_3_4_IMPLEMENTATION_PATHS,
+        implementation_paths=contract.V1_3_5_IMPLEMENTATION_PATHS,
         repository_root=REPOSITORY_ROOT,
     )
-    raw_sealed_source = globals().get("SEALED_SOURCE_PROVENANCE_V1_3_4")
-    raw_sealed_routing = globals().get("SEALED_LAUNCH_ROUTING_V1_3_4")
+    raw_sealed_source = globals().get("SEALED_SOURCE_PROVENANCE_V1_3_5")
+    raw_sealed_routing = globals().get("SEALED_LAUNCH_ROUTING_V1_3_5")
     calibration, opened_calibration = _opened_json(calibration_path)
     try:
         raw_checkpoint_binding = calibration.get("checkpoint")
@@ -3196,27 +3196,27 @@ def _external_quality_context(
 ) -> admission.QualityContext:
     manifest_binding = cast(Mapping[str, Any], inputs["manifest"])
     manifest_path = manifest_binding.get("path")
-    _require(isinstance(manifest_path, str), "Bound v1.3.4 manifest path is missing.")
-    quality_context = admission.establish_v1_3_4_quality_context(
+    _require(isinstance(manifest_path, str), "Bound v1.3.5 manifest path is missing.")
+    quality_context = admission.establish_v1_3_5_quality_context(
         Path(cast(str, manifest_path)),
-        implementation_paths=contract.V1_3_4_IMPLEMENTATION_PATHS,
+        implementation_paths=contract.V1_3_5_IMPLEMENTATION_PATHS,
         repository_root=REPOSITORY_ROOT,
     )
     _require(
         quality_context.source == inputs.get("source")
         and quality_context.manifest_binding == inputs.get("manifest"),
-        "Direct-shard live v1.3.4 quality context drifted.",
+        "Direct-shard live v1.3.5 quality context drifted.",
     )
     return quality_context
 
 
 def _validate_external_consumer_authority(
-    consumer: admission.ActivatedConsumerAuthorityV1_3_4,
+    consumer: admission.ActivatedConsumerAuthorityV1_3_5,
     inputs: Mapping[str, Any],
     coordinate: Mapping[str, Any],
     *,
     quality_context: admission.QualityContext,
-) -> admission.ActivatedConsumerAuthorityV1_3_4:
+) -> admission.ActivatedConsumerAuthorityV1_3_5:
     consumer = admission.require_activated_consumer_authority(consumer)
     scale = cast(str, coordinate["scale"])
     training_seed = cast(int, coordinate["training_seed"])
@@ -3228,8 +3228,8 @@ def _validate_external_consumer_authority(
     activation_binding = cast(Mapping[str, Any], inputs["quality_start_activation"])
     activation = consumer.activation
     _require(
-        type(consumer) is admission.ActivatedConsumerAuthorityV1_3_4
-        and type(activation) is admission.ValidatedQualityStartActivationV1_3_4
+        type(consumer) is admission.ActivatedConsumerAuthorityV1_3_5
+        and type(activation) is admission.ValidatedQualityStartActivationV1_3_5
         and consumer.coordinate == admitted_coordinate
         and activation.consumer_coordinate == admitted_coordinate
         and activation.quality_context.source == quality_context.source
@@ -3264,7 +3264,7 @@ def _load_external_consumer_authority(
     trust_root: attestation.TrustRoot,
 ) -> tuple[
     admission.QualityContext,
-    admission.ActivatedConsumerAuthorityV1_3_4,
+    admission.ActivatedConsumerAuthorityV1_3_5,
 ]:
     quality_context = _external_quality_context(inputs)
     calibration_binding = cast(Mapping[str, Any], inputs["calibration_artifact"])
@@ -3295,7 +3295,7 @@ def _validate_external_inputs(
     coordinate: Mapping[str, Any],
     *,
     trust_root: attestation.TrustRoot,
-    _consumer_authority: admission.ActivatedConsumerAuthorityV1_3_4 | None = None,
+    _consumer_authority: admission.ActivatedConsumerAuthorityV1_3_5 | None = None,
 ) -> tuple[dict[str, Any], dict[str, BuiltCausalArm], dict[str, Any]]:
     if _consumer_authority is None:
         quality_context, consumer = _load_external_consumer_authority(
@@ -3356,7 +3356,7 @@ class _ExternalAuthorityCacheEntry:
     immutable_inputs: dict[str, Any]
     trust_root_key_id: str
     coordinate: dict[str, Any]
-    consumer: admission.ActivatedConsumerAuthorityV1_3_4
+    consumer: admission.ActivatedConsumerAuthorityV1_3_5
 
 
 @dataclass(frozen=True)
@@ -3499,7 +3499,7 @@ class DirectControllerExternalValidationCache:
     def assert_unchanged(self, *, trust_root: attestation.TrustRoot) -> None:
         """Revalidate each authority once and every unique arm cohort at finalization."""
 
-        refreshed: dict[str, admission.ActivatedConsumerAuthorityV1_3_4] = {}
+        refreshed: dict[str, admission.ActivatedConsumerAuthorityV1_3_5] = {}
         for authority_key, authority_cached in self._authorities.items():
             _require(
                 authority_cached.trust_root_key_id == trust_root.key_id,
@@ -4803,7 +4803,7 @@ def _run_persistent_session(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Run one paper-grade v1.3.4 exact-fill direct-controller shard."
+        description="Run one paper-grade v1.3.5 exact-fill direct-controller shard."
     )
     parser.add_argument("--checkpoint", type=Path, required=True)
     parser.add_argument("--training-summary", type=Path, required=True)
@@ -4812,7 +4812,7 @@ def main() -> None:
     parser.add_argument("--reuse-admission", type=Path, required=True)
     parser.add_argument("--preheldout-genesis", type=Path, required=True)
     parser.add_argument("--quality-start-activation", type=Path, required=True)
-    parser.add_argument("--manifest", type=Path, default=contract.V1_3_4_MANIFEST_PATH)
+    parser.add_argument("--manifest", type=Path, default=contract.V1_3_5_MANIFEST_PATH)
     parser.add_argument("--scale", choices=contract.SCALES, required=True)
     parser.add_argument("--training-seed", type=int, choices=contract.TRAINING_SEEDS, required=True)
     parser.add_argument("--budget", choices=contract.BUDGETS, required=True)
@@ -4834,9 +4834,9 @@ def main() -> None:
 
     _require(contract.is_sha256(args.launch_nonce), "--launch-nonce must be 64 lowercase hex.")
     _assert_repository_import_origins()
-    context = admission.establish_v1_3_4_quality_context(
+    context = admission.establish_v1_3_5_quality_context(
         args.manifest,
-        implementation_paths=contract.V1_3_4_IMPLEMENTATION_PATHS,
+        implementation_paths=contract.V1_3_5_IMPLEMENTATION_PATHS,
         repository_root=REPOSITORY_ROOT,
     )
     trust_root = attestation.trust_root_from_inherited_environment(

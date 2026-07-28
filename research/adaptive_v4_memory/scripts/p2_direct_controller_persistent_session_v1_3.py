@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any, cast
 
 import p2_direct_attestation as attestation
-import p2_direct_controller_contract_v1_3 as contract
+import p2_direct_controller_contract_v1_3_5 as contract
 
 SCHEMA_VERSION = 1
 PLAN_MESSAGE_TYPE = contract.PERSISTENT_SESSION_PLAN_MESSAGE_TYPE
@@ -24,27 +24,25 @@ RECEIPT_MESSAGE_TYPE = contract.PERSISTENT_SESSION_RECEIPT_MESSAGE_TYPE
 LAUNCH_ARTIFACT_TYPE = contract.PERSISTENT_SESSION_LAUNCH_ARTIFACT_TYPE
 TERMINAL_ARTIFACT_TYPE = contract.PERSISTENT_SESSION_TERMINAL_ARTIFACT_TYPE
 
-PLAN_ATTESTATION_PURPOSE = contract.V1_3_4_PERSISTENT_SESSION_PLAN_ATTESTATION_PURPOSE
-WORK_ATTESTATION_PURPOSE = contract.V1_3_4_PERSISTENT_SESSION_WORK_ATTESTATION_PURPOSE
-RESULT_ATTESTATION_PURPOSE = contract.V1_3_4_PERSISTENT_SESSION_RESULT_ATTESTATION_PURPOSE
-RECEIPT_ATTESTATION_PURPOSE = contract.V1_3_4_PERSISTENT_SESSION_RECEIPT_ATTESTATION_PURPOSE
+PLAN_ATTESTATION_PURPOSE = contract.V1_3_5_PERSISTENT_SESSION_PLAN_ATTESTATION_PURPOSE
+WORK_ATTESTATION_PURPOSE = contract.V1_3_5_PERSISTENT_SESSION_WORK_ATTESTATION_PURPOSE
+RESULT_ATTESTATION_PURPOSE = contract.V1_3_5_PERSISTENT_SESSION_RESULT_ATTESTATION_PURPOSE
+RECEIPT_ATTESTATION_PURPOSE = contract.V1_3_5_PERSISTENT_SESSION_RECEIPT_ATTESTATION_PURPOSE
 LAUNCH_LEDGER_ATTESTATION_PURPOSE = (
-    contract.V1_3_4_PERSISTENT_SESSION_LAUNCH_LEDGER_ATTESTATION_PURPOSE
+    contract.V1_3_5_PERSISTENT_SESSION_LAUNCH_LEDGER_ATTESTATION_PURPOSE
 )
 TERMINAL_LEDGER_ATTESTATION_PURPOSE = (
-    contract.V1_3_4_PERSISTENT_SESSION_TERMINAL_LEDGER_ATTESTATION_PURPOSE
+    contract.V1_3_5_PERSISTENT_SESSION_TERMINAL_LEDGER_ATTESTATION_PURPOSE
 )
-_CANONICAL_OUTPUT_ROOT = contract.V1_3_4_OUTPUT_ROOT
-_CANONICAL_SESSION_LEDGER_ROOT = contract.V1_3_4_PERSISTENT_SESSION_LEDGER_ROOT
-_CANONICAL_SESSION_LEDGER_LOCK_PATH = (
-    contract.V1_3_4_PERSISTENT_SESSION_LEDGER_LOCK_PATH
-)
+_CANONICAL_OUTPUT_ROOT = contract.V1_3_5_OUTPUT_ROOT
+_CANONICAL_SESSION_LEDGER_ROOT = contract.V1_3_5_PERSISTENT_SESSION_LEDGER_ROOT
+_CANONICAL_SESSION_LEDGER_LOCK_PATH = contract.V1_3_5_PERSISTENT_SESSION_LEDGER_LOCK_PATH
 SESSION_LEDGER_ROOT_SUFFIX = _CANONICAL_SESSION_LEDGER_ROOT.name.removeprefix(
     f".{_CANONICAL_OUTPUT_ROOT.name}."
 )
 _require_suffix = f".{_CANONICAL_OUTPUT_ROOT.name}.{SESSION_LEDGER_ROOT_SUFFIX}"
 if _CANONICAL_SESSION_LEDGER_ROOT.name != _require_suffix:
-    raise RuntimeError("Canonical v1.3.4 persistent-session ledger layout drifted.")
+    raise RuntimeError("Canonical v1.3.5 persistent-session ledger layout drifted.")
 del _require_suffix
 
 MAXIMUM_PLAN_BYTES = 4 << 20
@@ -52,24 +50,18 @@ MAXIMUM_JSONL_MESSAGE_BYTES = 1 << 20
 MAXIMUM_LEDGER_BYTES = 8 << 20
 CHILD_FULL_HISTORICAL_EVIDENCE_REPLAY_COUNT = 0
 MODEL_LOADS_PER_SESSION = 1
-READY_ONLY_PREFLIGHT_SESSION_ROLE = contract.V1_3_4_READY_ONLY_PREFLIGHT_SESSION_ROLE
-QUALITY_SESSION_ROLE = contract.V1_3_4_QUALITY_SESSION_ROLE
+READY_ONLY_PREFLIGHT_SESSION_ROLE = contract.V1_3_5_READY_ONLY_PREFLIGHT_SESSION_ROLE
+QUALITY_SESSION_ROLE = contract.V1_3_5_QUALITY_SESSION_ROLE
 if READY_ONLY_PREFLIGHT_SESSION_ROLE == QUALITY_SESSION_ROLE:
     raise RuntimeError("Ready-only and quality persistent session roles must be distinct.")
-SESSION_ROLES = frozenset(
-    {READY_ONLY_PREFLIGHT_SESSION_ROLE, QUALITY_SESSION_ROLE}
-)
+SESSION_ROLES = frozenset({READY_ONLY_PREFLIGHT_SESSION_ROLE, QUALITY_SESSION_ROLE})
 
 # Frozen planning constants. Durable receipts below distinguish launch-time
 # upper bounds from model loads that actually reached the ready boundary.
-NORMAL_PATH_UNIQUE_MODEL_COHORTS = (
-    contract.V1_3_4_QUALITY_SESSION_NORMAL_PATH_MODEL_LOADS
-)
-READY_ONLY_PREFLIGHT_MODEL_LOAD_UPPER_BOUND = (
-    contract.V1_3_4_READY_ONLY_PREFLIGHT_MODEL_LOADS
-)
+NORMAL_PATH_UNIQUE_MODEL_COHORTS = contract.V1_3_5_QUALITY_SESSION_NORMAL_PATH_MODEL_LOADS
+READY_ONLY_PREFLIGHT_MODEL_LOAD_UPPER_BOUND = contract.V1_3_5_READY_ONLY_PREFLIGHT_MODEL_LOADS
 SINGLE_WORKER_TOTAL_MODEL_LOAD_UPPER_BOUND = (
-    contract.V1_3_4_TOTAL_NORMAL_PATH_CHECKPOINT_MODEL_LOADS
+    contract.V1_3_5_TOTAL_NORMAL_PATH_CHECKPOINT_MODEL_LOADS
 )
 if SINGLE_WORKER_TOTAL_MODEL_LOAD_UPPER_BOUND != (
     READY_ONLY_PREFLIGHT_MODEL_LOAD_UPPER_BOUND + NORMAL_PATH_UNIQUE_MODEL_COHORTS
@@ -104,17 +96,28 @@ def _normal_path_claim_semantics(
     launch_authority_count: int,
     worker_counts: Sequence[int],
 ) -> tuple[int, bool]:
+    selected_counts = set(worker_counts)
+    valid_topology = not worker_counts or (
+        len(selected_counts) == 1 and 1 <= next(iter(selected_counts)) <= 4
+    )
+    expected_authorities = (
+        0
+        if launch_count == 0
+        else next(iter(selected_counts))
+        if valid_topology and selected_counts
+        else 0
+    )
     additional_attempts = max(
         max(0, launch_count - cohort_count),
-        max(0, launch_authority_count - 1),
+        max(0, launch_authority_count - expected_authorities),
     )
     applicable = (
         terminal_count == launch_count
         and graceful_terminal_count == launch_count
         and controlled_stop_count == 0
         and additional_attempts == 0
-        and (launch_count == 0 or launch_authority_count == 1)
-        and all(worker_count == 1 for worker_count in worker_counts)
+        and valid_topology
+        and launch_authority_count == expected_authorities
     )
     return additional_attempts, applicable
 
@@ -1012,7 +1015,7 @@ def create_sealed_plan_fd(plan: Mapping[str, Any]) -> int:
         "Persistent plan transport requires sealed memfd support.",
     )
     descriptor = cast(Any, create)(
-        "adaptive-v4-direct-exact-fill-v1-3-4-persistent-plan",
+        "adaptive-v4-direct-exact-fill-v1-3-5-persistent-plan",
         cast(int, getattr(os, "MFD_CLOEXEC", 0)) | cast(int, allow_sealing),
     )
     try:
@@ -1074,7 +1077,7 @@ def session_ledger_root(output_root: Path) -> Path:
         canonical_ledger_root = Path(os.path.abspath(_CANONICAL_SESSION_LEDGER_ROOT))
         _require(
             canonical_ledger_root.parent == root.parent,
-            "Canonical v1.3.4 persistent-session ledger root drifted.",
+            "Canonical v1.3.5 persistent-session ledger root drifted.",
         )
         return canonical_ledger_root
     return root.parent / f".{root.name}.{SESSION_LEDGER_ROOT_SUFFIX}"
@@ -1099,7 +1102,7 @@ def session_ledger_lock_path(output_root: Path) -> Path:
         canonical_lock = Path(os.path.abspath(_CANONICAL_SESSION_LEDGER_LOCK_PATH))
         _require(
             canonical_lock == root.parent / f"{root.name}.lock",
-            "Canonical v1.3.4 persistent-session ledger lock drifted.",
+            "Canonical v1.3.5 persistent-session ledger lock drifted.",
         )
         return canonical_lock
     return root.parent / f"{root.name}.lock"
@@ -1126,12 +1129,7 @@ def _session_ledger_lock(
     lock_path = root.parent / f"{root.name}.lock"
     nofollow = getattr(os, "O_NOFOLLOW", None)
     _require(nofollow is not None, "Persistent session ledger locking requires O_NOFOLLOW.")
-    flags = (
-        os.O_RDWR
-        | os.O_NONBLOCK
-        | getattr(os, "O_CLOEXEC", 0)
-        | cast(int, nofollow)
-    )
+    flags = os.O_RDWR | os.O_NONBLOCK | getattr(os, "O_CLOEXEC", 0) | cast(int, nofollow)
     if create:
         flags |= os.O_CREAT
     if exclusive_create:
@@ -1195,12 +1193,9 @@ def _publish_json_exclusive_locked(path: Path, payload: Mapping[str, Any]) -> di
         metadata = os.stat(root, follow_symlinks=False)
         _require(
             stat.S_ISDIR(opened_root.st_mode)
-            and (opened_root.st_dev, opened_root.st_ino)
-            == (metadata.st_dev, metadata.st_ino)
+            and (opened_root.st_dev, opened_root.st_ino) == (metadata.st_dev, metadata.st_ino)
             and opened_root.st_uid == metadata.st_uid == os.getuid()
-            and stat.S_IMODE(opened_root.st_mode)
-            == stat.S_IMODE(metadata.st_mode)
-            == 0o700,
+            and stat.S_IMODE(opened_root.st_mode) == stat.S_IMODE(metadata.st_mode) == 0o700,
             "Persistent session ledger root is unsafe.",
         )
         os.fsync(root_descriptor)
@@ -1459,21 +1454,11 @@ def _receipt_projection(value: Mapping[str, Any]) -> dict[str, Any]:
         "child_full_historical_evidence_replay_count": value[
             "child_full_historical_evidence_replay_count"
         ],
-        "active_activation_validation_count": value[
-            "active_activation_validation_count"
-        ],
-        "active_admission_validation_count": value[
-            "active_admission_validation_count"
-        ],
-        "active_genesis_validation_count": value[
-            "active_genesis_validation_count"
-        ],
-        "active_calibration_validation_count": value[
-            "active_calibration_validation_count"
-        ],
-        "active_checkpoint_validation_count": value[
-            "active_checkpoint_validation_count"
-        ],
+        "active_activation_validation_count": value["active_activation_validation_count"],
+        "active_admission_validation_count": value["active_admission_validation_count"],
+        "active_genesis_validation_count": value["active_genesis_validation_count"],
+        "active_calibration_validation_count": value["active_calibration_validation_count"],
+        "active_checkpoint_validation_count": value["active_checkpoint_validation_count"],
         "model_state_reset_count": value["model_state_reset_count"],
         "outcome_dependent_selection": value["outcome_dependent_selection"],
     }
@@ -1684,9 +1669,7 @@ def _load_session_ledger_projection_locked(
                     cast(int, plan["training_seed"]),
                 )
             )
-            quality_controlled_stop_sessions += (
-                plan.get("max_new_cells_stop_limit") is not None
-            )
+            quality_controlled_stop_sessions += plan.get("max_new_cells_stop_limit") is not None
         terminal = terminals.get(nonce)
         if terminal is None:
             session_rows.append(
@@ -1698,9 +1681,7 @@ def _load_session_ledger_projection_locked(
                     "input_binding_digest": plan["input_binding_digest"],
                     "canonical_evaluator_digest": plan["canonical_evaluator_digest"],
                     "gpu_lease_binding_digest": plan["gpu_lease_binding_digest"],
-                    "prerequisites_binding_digest": plan[
-                        "prerequisites_binding_digest"
-                    ],
+                    "prerequisites_binding_digest": plan["prerequisites_binding_digest"],
                     "output_root": plan["output_root"],
                     "worker_index": plan["worker_index"],
                     "worker_count": plan["worker_count"],
@@ -1864,9 +1845,7 @@ def _load_session_ledger_projection_locked(
                 "input_binding_digest": plan["input_binding_digest"],
                 "canonical_evaluator_digest": plan["canonical_evaluator_digest"],
                 "gpu_lease_binding_digest": plan["gpu_lease_binding_digest"],
-                "prerequisites_binding_digest": plan[
-                    "prerequisites_binding_digest"
-                ],
+                "prerequisites_binding_digest": plan["prerequisites_binding_digest"],
                 "output_root": plan["output_root"],
                 "worker_index": plan["worker_index"],
                 "worker_count": plan["worker_count"],
@@ -1887,21 +1866,14 @@ def _load_session_ledger_projection_locked(
             }
         )
     authority_replays = len(authorities)
-    quality_rows = [
-        row for row in session_rows if row["session_role"] == QUALITY_SESSION_ROLE
-    ]
+    quality_rows = [row for row in session_rows if row["session_role"] == QUALITY_SESSION_ROLE]
     preflight_rows = [
-        row
-        for row in session_rows
-        if row["session_role"] == READY_ONLY_PREFLIGHT_SESSION_ROLE
+        row for row in session_rows if row["session_role"] == READY_ONLY_PREFLIGHT_SESSION_ROLE
     ]
     quality_terminal_count = sum(row["status"] != "launch_only" for row in quality_rows)
-    preflight_terminal_count = sum(
-        row["status"] != "launch_only" for row in preflight_rows
-    )
+    preflight_terminal_count = sum(row["status"] != "launch_only" for row in preflight_rows)
     preflight_success_count = sum(
-        row["status"] == "stopped"
-        and row["ready_receipt_binding"] == row["final_receipt_binding"]
+        row["status"] == "stopped" and row["ready_receipt_binding"] == row["final_receipt_binding"]
         for row in preflight_rows
     )
     additional_attempts, normal_path_applicable = _normal_path_claim_semantics(
@@ -2185,15 +2157,11 @@ def validate_session_ledger_projection(value: Mapping[str, Any]) -> dict[str, An
                 == cast(int, raw_receipt["completed_coordinates"])
                 and all(
                     contract.is_sha256(item)
-                    for item in cast(
-                        list[Any], raw_receipt["completed_work_payload_sha256"]
-                    )
+                    for item in cast(list[Any], raw_receipt["completed_work_payload_sha256"])
                 )
                 and all(
                     contract.is_sha256(item)
-                    for item in cast(
-                        list[Any], raw_receipt["completed_result_payload_sha256"]
-                    )
+                    for item in cast(list[Any], raw_receipt["completed_result_payload_sha256"])
                 )
                 and raw_receipt.get("model_load_count") == MODEL_LOADS_PER_SESSION
                 and raw_receipt.get("child_full_historical_evidence_replay_count")
@@ -2214,8 +2182,7 @@ def validate_session_ledger_projection(value: Mapping[str, Any]) -> dict[str, An
                 "Persistent projected receipt semantics drifted.",
             )
         _require(
-            (row["ready_model_load_observed"] is True)
-            is (row["ready_receipt_binding"] is not None)
+            (row["ready_model_load_observed"] is True) is (row["ready_receipt_binding"] is not None)
             and (row["status"] in {"complete", "stopped"})
             is (row["final_receipt_binding"] is not None),
             "Persistent projected receipt presence drifted.",
@@ -2251,34 +2218,24 @@ def validate_session_ledger_projection(value: Mapping[str, Any]) -> dict[str, An
         cast(int, row["published_bundle_reingestion_count"]) for row in checked_sessions
     )
     authorities = {row["launch_authority_nonce"] for row in checked_sessions}
-    quality_rows = [
-        row for row in checked_sessions if row["session_role"] == QUALITY_SESSION_ROLE
-    ]
+    quality_rows = [row for row in checked_sessions if row["session_role"] == QUALITY_SESSION_ROLE]
     preflight_rows = [
-        row
-        for row in checked_sessions
-        if row["session_role"] == READY_ONLY_PREFLIGHT_SESSION_ROLE
+        row for row in checked_sessions if row["session_role"] == READY_ONLY_PREFLIGHT_SESSION_ROLE
     ]
     quality_authorities = {row["launch_authority_nonce"] for row in quality_rows}
     cohorts = {
-        (row["worker_index"], row["scale"], row["training_seed"]) for row in checked_sessions
+        (row["worker_index"], row["scale"], row["training_seed"])
+        for row in checked_sessions
         if row["session_role"] == QUALITY_SESSION_ROLE
     }
     controlled = sum(row["max_new_cells_stop_limit"] is not None for row in quality_rows)
     graceful_terminal_count = sum(row["status"] == "complete" for row in quality_rows)
     quality_terminal_count = sum(row["status"] != "launch_only" for row in quality_rows)
-    quality_ready_count = sum(
-        row["ready_model_load_observed"] is True for row in quality_rows
-    )
-    preflight_terminal_count = sum(
-        row["status"] != "launch_only" for row in preflight_rows
-    )
-    preflight_ready_count = sum(
-        row["ready_model_load_observed"] is True for row in preflight_rows
-    )
+    quality_ready_count = sum(row["ready_model_load_observed"] is True for row in quality_rows)
+    preflight_terminal_count = sum(row["status"] != "launch_only" for row in preflight_rows)
+    preflight_ready_count = sum(row["ready_model_load_observed"] is True for row in preflight_rows)
     preflight_success_count = sum(
-        row["status"] == "stopped"
-        and row["ready_receipt_binding"] == row["final_receipt_binding"]
+        row["status"] == "stopped" and row["ready_receipt_binding"] == row["final_receipt_binding"]
         for row in preflight_rows
     )
     additional, expected_applicable = _normal_path_claim_semantics(
@@ -2313,8 +2270,7 @@ def validate_session_ledger_projection(value: Mapping[str, Any]) -> dict[str, An
         and value.get("ready_only_preflight_success_count") == preflight_success_count
         and value.get("ready_only_preflight_failed_or_interrupted_attempt_count")
         == len(preflight_rows) - preflight_success_count
-        and value.get("ready_only_preflight_ready_model_load_count")
-        == preflight_ready_count
+        and value.get("ready_only_preflight_ready_model_load_count") == preflight_ready_count
         and value.get("quality_launch_attempt_count") == len(quality_rows)
         and value.get("quality_terminal_count") == quality_terminal_count
         and value.get("quality_ready_model_load_count") == quality_ready_count,
@@ -2331,9 +2287,7 @@ def validate_session_ledger_projection(value: Mapping[str, Any]) -> dict[str, An
         )
         and value.get("single_worker_full_matrix_unique_scale_seed_cohorts")
         == NORMAL_PATH_UNIQUE_MODEL_COHORTS
-        and value.get(
-            "single_worker_normal_path_ready_only_preflight_model_load_upper_bound"
-        )
+        and value.get("single_worker_normal_path_ready_only_preflight_model_load_upper_bound")
         == READY_ONLY_PREFLIGHT_MODEL_LOAD_UPPER_BOUND
         and value.get("single_worker_normal_path_quality_model_load_upper_bound")
         == NORMAL_PATH_UNIQUE_MODEL_COHORTS
@@ -2396,8 +2350,7 @@ def ready_only_preflight_binding(
     rows = [
         cast(Mapping[str, Any], row)
         for row in cast(list[Any], projection["sessions"])
-        if cast(Mapping[str, Any], row).get("session_role")
-        == READY_ONLY_PREFLIGHT_SESSION_ROLE
+        if cast(Mapping[str, Any], row).get("session_role") == READY_ONLY_PREFLIGHT_SESSION_ROLE
     ]
     if not rows:
         return None
@@ -2477,9 +2430,7 @@ def ready_only_preflight_binding(
         in {attempt["session_nonce"] for attempt in rows}
     ]
     success_registry = [
-        dict(row)
-        for row in registry_rows
-        if row.get("session_nonce") == success["session_nonce"]
+        dict(row) for row in registry_rows if row.get("session_nonce") == success["session_nonce"]
     ]
     _require(
         [row["kind"] for row in success_registry] == ["launch", "terminal"],
@@ -2501,12 +2452,8 @@ def ready_only_preflight_binding(
         "worker_count": 1,
         "coordinate_count": 1,
         "coordinate_digest": expected_coordinate_digest,
-        "ready_receipt_binding": dict(
-            cast(Mapping[str, Any], success["ready_receipt_binding"])
-        ),
-        "final_receipt_binding": dict(
-            cast(Mapping[str, Any], success["final_receipt_binding"])
-        ),
+        "ready_receipt_binding": dict(cast(Mapping[str, Any], success["ready_receipt_binding"])),
+        "final_receipt_binding": dict(cast(Mapping[str, Any], success["final_receipt_binding"])),
         "launch_ledger_binding": success_registry[0],
         "terminal_ledger_binding": success_registry[1],
         "launch_attempt_count": len(rows),
@@ -2546,9 +2493,7 @@ def load_session_ledger_projection(
         # the root before we acquire the flock, so recheck under the lease.
         with _session_ledger_lock(root, create=False):
             if os.path.lexists(root):
-                return _load_session_ledger_projection_locked(
-                    output_root, trust_root=trust_root
-                )
+                return _load_session_ledger_projection_locked(output_root, trust_root=trust_root)
             return _load_session_ledger_projection_locked(
                 output_root,
                 trust_root=trust_root,

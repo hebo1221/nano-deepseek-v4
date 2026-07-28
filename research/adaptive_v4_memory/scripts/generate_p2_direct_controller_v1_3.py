@@ -183,11 +183,34 @@ def _upgrade_generated_contract_to_v1_3_4(text: str) -> str:
         ("Bound v1.3 manifest", "Bound v1.3.4 manifest"),
     ):
         text = text.replace(old, new)
+    return _upgrade_generated_v1_3_4_to_v1_3_5(text)
+
+
+def _upgrade_generated_v1_3_4_to_v1_3_5(text: str) -> str:
+    """Retag only the prospective runtime namespace after v1.3.4 generation."""
+
+    text = text.replace(
+        "import p2_direct_controller_contract_v1_3 as contract",
+        "import p2_direct_controller_contract_v1_3_5 as contract",
+    )
+    text = text.replace(
+        "import p2_direct_controller_reuse_admission_v1_3 as admission",
+        "import p2_direct_controller_topology_v1_3_5 as admission",
+    )
+    for old, new in (
+        ("V1_3_4", "V1_3_5"),
+        ("v1_3_4", "v1_3_5"),
+        ("V1.3.4", "V1.3.5"),
+        ("v1.3.4", "v1.3.5"),
+        ("V1-3-4", "V1-3-5"),
+        ("v1-3-4", "v1-3-5"),
+    ):
+        text = text.replace(old, new)
     return text
 
 
 def _sealed_entrypoint_preamble(*, selector: str, relative_path: str) -> str:
-    return f'''if __name__ == "__main__":
+    preamble = f"""if __name__ == "__main__":
     _launcher_sentinel = globals().get("_ADAPTIVE_V4_GIT_OBJECT_LAUNCH_SENTINEL_V1_3_4")
     if _launcher_sentinel != {{
         "schema_version": 1,
@@ -250,12 +273,11 @@ def _sealed_entrypoint_preamble(*, selector: str, relative_path: str) -> str:
     globals().pop("_ADAPTIVE_V4_GIT_OBJECT_SOURCE_PROVENANCE_V1_3_4", None)
     globals().pop("_ADAPTIVE_V4_GIT_OBJECT_LAUNCH_ROUTING_V1_3_4", None)
 
-'''
+"""
+    return _upgrade_generated_v1_3_4_to_v1_3_5(preamble)
 
 
-def _insert_sealed_entrypoint_preamble(
-    generated: str, *, selector: str, relative_path: str
-) -> str:
+def _insert_sealed_entrypoint_preamble(generated: str, *, selector: str, relative_path: str) -> str:
     marker = f"from __future__ import annotations\n\n{GENERATED_HEADER}"
     _require(marker in generated, "Generated entrypoint header marker is missing.")
     return generated.replace(
@@ -265,7 +287,7 @@ def _insert_sealed_entrypoint_preamble(
     )
 
 
-EVALUATOR_ESTABLISH_INPUTS = r'''
+EVALUATOR_ESTABLISH_INPUTS = r"""
 def establish_evaluator_inputs(
     *,
     checkpoint_path: Path,
@@ -444,10 +466,10 @@ def establish_evaluator_inputs(
         _json_clone(arm_metadata),
         raw_checkpoint,
     )
-'''
+"""
 
 
-EVALUATOR_VALIDATE_INPUTS = r'''
+EVALUATOR_VALIDATE_INPUTS = r"""
 def _validate_inputs_structure(inputs: Mapping[str, Any]) -> dict[str, Any]:
     _require(
         set(inputs)
@@ -569,10 +591,10 @@ def _validate_inputs_structure(inputs: Mapping[str, Any]) -> dict[str, Any]:
         "Quality-start activation public binding schema drifted.",
     )
     return dict(inputs)
-'''
+"""
 
 
-EVALUATOR_VALIDATE_EXTERNAL = r'''
+EVALUATOR_VALIDATE_EXTERNAL = r"""
 def _external_quality_context(
     inputs: Mapping[str, Any],
 ) -> admission.QualityContext:
@@ -730,10 +752,10 @@ def _validate_external_inputs(
     )
     admission.assert_quality_context_unchanged(quality_context)
     return calibration, arms, _json_clone(metadata)
-'''
+"""
 
 
-EVALUATOR_EXTERNAL_CACHE_ENTRY = r'''
+EVALUATOR_EXTERNAL_CACHE_ENTRY = r"""
 @dataclass(frozen=True)
 class _ExternalAuthorityCacheEntry:
     authority_key: str
@@ -755,7 +777,7 @@ class _ExternalValidationCacheEntry:
     calibration: dict[str, Any]
     arms: dict[str, BuiltCausalArm]
     arm_metadata: dict[str, Any]
-'''
+"""
 
 
 EVALUATOR_EXTERNAL_CACHE = r'''
@@ -934,14 +956,14 @@ class DirectControllerExternalValidationCache:
 '''
 
 
-EVALUATOR_ARM_ORDER = r'''
+EVALUATOR_ARM_ORDER = r"""
 def arm_execution_order(schedule_index: int) -> tuple[str, ...]:
     _strict_int(schedule_index, "schedule_index")
     return contract.arm_execution_order(schedule_index)
-'''
+"""
 
 
-EVALUATOR_IMPORT_GUARD = r'''
+EVALUATOR_IMPORT_GUARD = r"""
 def _sealed_site_packages_root_v1_3_4() -> Path:
     raw = globals().get("_ADAPTIVE_V4_SEALED_SITE_PACKAGES_V1_3_4")
     _require(
@@ -1156,10 +1178,10 @@ def _assert_repository_import_origins(
             f"Imported module provenance metadata disagrees: "
             f"{module_name} -> {resolved_claims}",
         )
-'''
+"""
 
 
-EVALUATOR_MAIN = r'''
+EVALUATOR_MAIN = r"""
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Run one paper-grade v1.3 exact-fill direct-controller shard."
@@ -1266,10 +1288,10 @@ def main() -> None:
     )
     if envelope["terminal_decision"] != TERMINAL_PASS:
         raise SystemExit(2)
-'''
+"""
 
 
-EVALUATOR_PERSISTENT_SESSION = r'''
+EVALUATOR_PERSISTENT_SESSION = r"""
 def _persistent_model_state(model: torch.nn.Module) -> tuple[tuple[Any, ...], ...]:
     rows: list[tuple[Any, ...]] = []
     for kind, values in (("parameter", model.named_parameters()), ("buffer", model.named_buffers())):
@@ -1530,10 +1552,10 @@ def _run_persistent_session(
             trust_root=trust_root,
         )
     )
-'''
+"""
 
 
-RUNNER_ACQUIRE_SELECTED_DEVICE_GUARD = r'''
+RUNNER_ACQUIRE_SELECTED_DEVICE_GUARD = r"""
 def _acquire_selected_device_guard(
     *, label: str, device_context: Mapping[str, Any], scheduler_lease: GPULockLease
 ) -> GPULockLease:
@@ -1553,10 +1575,10 @@ def _acquire_selected_device_guard(
     finally:
         if guard is not None and not returned:
             guard.close()
-'''
+"""
 
 
-RUNNER_EVALUATOR_FD_BOOTSTRAP_SOURCE = r'''
+RUNNER_EVALUATOR_FD_BOOTSTRAP_SOURCE = r"""
 import base64
 import hashlib
 import importlib.abc
@@ -1950,10 +1972,10 @@ g = {
     "_ADAPTIVE_V4_SEALED_SITE_PACKAGES_V1_3_4": site_packages,
 }
 exec(compile(data, p, "exec"), g, g)
-'''
+"""
 
 
-RUNNER_MATRIX_LAYOUT = r'''
+RUNNER_MATRIX_LAYOUT = r"""
 class MatrixLayout:
     output_root: Path
     matrix_summary: Path
@@ -1964,10 +1986,10 @@ class MatrixLayout:
     calibration_output_root: Path
     reuse_admission_path: Path
     preheldout_genesis_path: Path
-'''
+"""
 
 
-RUNNER_INPUT_BUNDLES = r'''
+RUNNER_INPUT_BUNDLES = r"""
 class BaseInputBundle:
     coordinate: tuple[str, int, str]
     checkpoint_path: Path
@@ -1992,10 +2014,10 @@ class InputBundle:
     quality_start_activation_path: Path
     calibration_payload: Mapping[str, Any]
     binding: Mapping[str, Any]
-'''
+"""
 
 
-RUNNER_PREREQUISITE_TYPES = r'''
+RUNNER_PREREQUISITE_TYPES = r"""
 class ValidatedBasePrerequisites:
     context: admission.QualityContext
     trust_root: attestation.TrustRoot
@@ -2011,10 +2033,10 @@ class FrozenPrerequisites:
     bundles: Mapping[tuple[str, int, str], InputBundle]
     base_public_binding: Mapping[str, Any]
     public_binding: Mapping[str, Any]
-'''
+"""
 
 
-RUNNER_WORKER_LEDGER_ROOT = r'''
+RUNNER_WORKER_LEDGER_ROOT = r"""
 def _worker_ledger_root(output_root: Path) -> Path:
     root = _absolute(output_root)
     canonical_output = _absolute(contract.V1_3_1_OUTPUT_ROOT)
@@ -2030,10 +2052,10 @@ def _worker_ledger_root(output_root: Path) -> Path:
     )
     _require(bool(suffix), "V1.3.1 worker-ledger suffix is empty.")
     return root.parent / f".{root.name}.{suffix}"
-'''
+"""
 
 
-RUNNER_MATRIX_LOCK_PATH = r'''
+RUNNER_MATRIX_LOCK_PATH = r"""
 def _matrix_lock_path(output_root: Path) -> Path:
     root = _absolute(output_root)
     _require(
@@ -2041,10 +2063,10 @@ def _matrix_lock_path(output_root: Path) -> Path:
         "V1.3.1 matrix lock is defined only for the canonical quality output root.",
     )
     return _absolute(contract.V1_3_1_ACTIVATION_MATRIX_LOCK_PATH)
-'''
+"""
 
 
-RUNNER_OPENED_MATRIX_LOCK_BINDING = r'''
+RUNNER_OPENED_MATRIX_LOCK_BINDING = r"""
 def _opened_matrix_lock_binding(
     path: Path, *, create: bool, retain_process_guardian: bool = False
 ) -> dict[str, Any]:
@@ -2085,10 +2107,10 @@ def _opened_matrix_lock_binding(
         }
     finally:
         os.close(descriptor)
-'''
+"""
 
 
-RUNNER_ATOMIC_WRITE_JSON = r'''
+RUNNER_ATOMIC_WRITE_JSON = r"""
 def _atomic_write_json(path: Path, payload: Mapping[str, Any]) -> None:
     parent = path.parent
     parent_created = False
@@ -2173,19 +2195,19 @@ def _atomic_write_json(path: Path, payload: Mapping[str, Any]) -> None:
     finally:
         if temporary is not None:
             temporary.unlink(missing_ok=True)
-'''
+"""
 
 
-RUNNER_INITIALIZE_MATRIX_LOCK = r'''
+RUNNER_INITIALIZE_MATRIX_LOCK = r"""
 def _initialize_matrix_lock_binding(path: Path) -> dict[str, Any]:
     del path
     raise RuntimeError(
         "V1.3.1 matrix lock creation is private to publish_quality_start_activation."
     )
-'''
+"""
 
 
-RUNNER_VALIDATE_LAYOUT = r'''
+RUNNER_VALIDATE_LAYOUT = r"""
 def _validate_matrix_layout(
     *,
     output_root: Path,
@@ -2351,10 +2373,10 @@ def _validate_matrix_layout(
         reuse_admission_path=admission_path,
         preheldout_genesis_path=genesis_path,
     )
-'''
+"""
 
 
-RUNNER_COORDINATES = r'''
+RUNNER_COORDINATES = r"""
 def coordinates() -> tuple[ShardCoordinate, ...]:
     result: list[ShardCoordinate] = []
     for payload in contract.quality_coordinates():
@@ -2378,10 +2400,10 @@ def coordinates() -> tuple[ShardCoordinate, ...]:
         "Runner coordinate representation differs from the v1.3 contract.",
     )
     return tuple(result)
-'''
+"""
 
 
-RUNNER_COORDINATE_DIGEST = r'''
+RUNNER_COORDINATE_DIGEST = r"""
 def coordinate_digest() -> str:
     digest = contract.quality_coordinate_digest()
     _require(
@@ -2389,7 +2411,7 @@ def coordinate_digest() -> str:
         "Runner coordinate digest differs from the v1.3 contract.",
     )
     return digest
-'''
+"""
 
 
 RUNNER_PREREQUISITES = r'''
@@ -2637,8 +2659,8 @@ def _build_base_prerequisites(
     worker_count: int,
 ) -> ValidatedBasePrerequisites:
     _require(
-        type(worker_count) is int and worker_count == 1,
-        "Controller v1.3.1 quality execution is frozen to one worker.",
+        type(worker_count) is int and 1 <= worker_count <= 4,
+        "Controller v1.3.1 quality execution requires one to four same-GPU workers.",
     )
     _require(
         Path(cast(str, reuse_admission.public_binding["path"])).resolve(strict=True)
@@ -3355,7 +3377,7 @@ def _complete_activation_ledger_boundary(
 '''
 
 
-RUNNER_BUILD_COMMAND = r'''
+RUNNER_BUILD_COMMAND = r"""
 def _validated_source_provenance() -> dict[str, Any]:
     value = globals().get("SEALED_SOURCE_PROVENANCE_V1_3")
     _require(
@@ -3767,7 +3789,7 @@ def build_evaluator_command(
     ]
     command.extend(("--launch-nonce", launch_nonce))
     return command
-'''
+"""
 
 
 RUNNER_PERSISTENT_SESSION = r'''
@@ -4896,7 +4918,7 @@ def _ensure_ready_only_preflight(
 '''
 
 
-RUNNER_SESSION_LEDGER_HELPERS = r'''
+RUNNER_SESSION_LEDGER_HELPERS = r"""
 def _validate_launcher_binding_snapshot(value: Mapping[str, Any]) -> dict[str, Any]:
     _require(
         set(value) == {"launcher", "python_runtime", "source_provenance"}
@@ -5343,10 +5365,10 @@ def _refresh_matrix_session_projection(
         )
     _atomic_write_json(matrix_summary, refreshed)
     return refreshed
-'''
+"""
 
 
-RUNNER_VALIDATE_DISTRIBUTED_DISK_SUMMARY = r'''
+RUNNER_VALIDATE_DISTRIBUTED_DISK_SUMMARY = r"""
 def _historical_worker_ledger_registry(
     ledgers: Mapping[int, Sequence[Mapping[str, Any]]],
     *,
@@ -6102,12 +6124,14 @@ def _reconcile_committed_sessions_with_terminal_authority(
         return reconciled
     finally:
         os.close(descriptor)
-'''
+"""
 
 
 def _generate_evaluator(source: str) -> str:
     text = source
-    text = _replace_exact(text, "import argparse\nimport gzip\n", "import argparse\nimport gc\nimport gzip\n")
+    text = _replace_exact(
+        text, "import argparse\nimport gzip\n", "import argparse\nimport gc\nimport gzip\n"
+    )
     text = _replace_exact(
         text,
         "import hashlib\nimport json\n",
@@ -6189,13 +6213,465 @@ def _generate_evaluator(source: str) -> str:
         "",
     )
     _require("top_p_match" not in text, "Evaluator retained a top-p match input.")
-    _require("validate_calibration_artifact" not in text, "Evaluator retained live v1.2 validation.")
+    _require(
+        "validate_calibration_artifact" not in text, "Evaluator retained live v1.2 validation."
+    )
     _require("establish_provenance" not in text, "Evaluator retained live v1.2 provenance.")
     return _insert_generated_header(_upgrade_generated_contract_to_v1_3_4(text))
 
 
+RUNNER_SAME_GPU_WORKER_GROUP_V1_3_5 = r'''
+def _run_same_gpu_worker_group(
+    *,
+    worker_count: int,
+    scheduler_owner: GPULockLease,
+    device_guard_owner: GPULockLease,
+    run_worker: Callable[
+        [int, GPULockLease, GPULockLease, threading.Event],
+        Mapping[str, Any],
+    ],
+) -> tuple[dict[str, Any], ...]:
+    """Run disjoint worker coordinators under one supervisor-owned physical lease."""
+
+    _require(
+        type(worker_count) is int and 2 <= worker_count <= 4,
+        "Same-GPU worker count must be one of 2, 3, or 4.",
+    )
+    scheduler_owner.assert_held()
+    device_guard_owner.assert_held()
+    drain_event = threading.Event()
+    results: list[dict[str, Any] | None] = [None] * worker_count
+    failures: list[tuple[int, BaseException]] = []
+    failure_lock = threading.Lock()
+
+    def target(worker_index: int) -> None:
+        scheduler = admission.borrow_gpu_lock_lease(scheduler_owner)
+        guard = (
+            scheduler
+            if device_guard_owner is scheduler_owner
+            else admission.borrow_gpu_lock_lease(device_guard_owner)
+        )
+        failure: BaseException | None = None
+        try:
+            results[worker_index] = dict(
+                run_worker(worker_index, scheduler, guard, drain_event)
+            )
+        except BaseException as error:
+            failure = error
+            drain_event.set()
+        finally:
+            try:
+                _close_gpu_lease_pair(scheduler, guard)
+            except BaseException as error:
+                if failure is None:
+                    failure = error
+            if failure is not None:
+                with failure_lock:
+                    failures.append((worker_index, failure))
+
+    workers = [
+        threading.Thread(
+            target=target,
+            args=(worker_index,),
+            name=f"p2-direct-same-gpu-worker-{worker_index}-of-{worker_count}",
+        )
+        for worker_index in range(worker_count)
+    ]
+    for worker in workers:
+        worker.start()
+    for worker in workers:
+        worker.join()
+
+    scheduler_owner.assert_held()
+    device_guard_owner.assert_held()
+    _require(
+        admission.active_gpu_lock_borrows(scheduler_owner) == 0
+        and (
+            device_guard_owner is scheduler_owner
+            or admission.active_gpu_lock_borrows(device_guard_owner) == 0
+        ),
+        "Same-GPU supervisor retained a worker lease after join.",
+    )
+    if failures:
+        failures.sort(key=lambda item: item[0])
+        detail = ", ".join(
+            f"worker {index}: {type(error).__name__}: {error}" for index, error in failures
+        )
+        raise RuntimeError(f"Same-GPU worker group failed after drain: {detail}") from failures[0][1]
+    _require(
+        all(result is not None for result in results),
+        "Same-GPU worker group completed without one worker result.",
+    )
+    return tuple(cast(dict[str, Any], result) for result in results)
+'''
+
+
+def _amend_runner_source_for_same_gpu_v1_3_5(text: str) -> str:
+    """Add thread-safe local coordination without changing the historical source bytes."""
+
+    text = _replace_exact(
+        text,
+        "FROZEN_MINIMUM_ONE_SHARD_HEADROOM_BYTES = 1 << 30\n",
+        "FROZEN_MINIMUM_ONE_SHARD_HEADROOM_BYTES = 4 << 30\n",
+    )
+    text = _replace_exact(
+        text,
+        "_ACTIVE_MATRIX_LOCKS: set[str] = set()\n_ACTIVE_MATRIX_LOCKS_GUARD = threading.Lock()\n",
+        "_ACTIVE_MATRIX_LOCKS: set[str] = set()\n"
+        "_ACTIVE_MATRIX_LOCKS_GUARD = threading.Lock()\n"
+        "_ACTIVE_MATRIX_LOCK_OWNERS: dict[str, int] = {}\n"
+        "_MATRIX_THREAD_MUTEXES: dict[str, Any] = {}\n",
+    )
+    text = _replace_exact(
+        text,
+        "    key = str(lock_path)\n"
+        "    with _ACTIVE_MATRIX_LOCKS_GUARD:\n"
+        "        _require(key not in _ACTIVE_MATRIX_LOCKS, "
+        '"Controller matrix lock reentry is forbidden.")\n'
+        "        _ACTIVE_MATRIX_LOCKS.add(key)\n"
+        "    descriptor: int | None = None\n",
+        "    key = str(lock_path)\n"
+        "    thread_id = threading.get_ident()\n"
+        "    with _ACTIVE_MATRIX_LOCKS_GUARD:\n"
+        "        _require(\n"
+        "            _ACTIVE_MATRIX_LOCK_OWNERS.get(key) != thread_id,\n"
+        '            "Controller matrix lock reentry is forbidden.",\n'
+        "        )\n"
+        "        thread_mutex = _MATRIX_THREAD_MUTEXES.setdefault(key, threading.Lock())\n"
+        "    thread_mutex.acquire()\n"
+        "    registered = False\n"
+        "    try:\n"
+        "        with _ACTIVE_MATRIX_LOCKS_GUARD:\n"
+        "            _require(\n"
+        "                key not in _ACTIVE_MATRIX_LOCKS "
+        "and key not in _ACTIVE_MATRIX_LOCK_OWNERS,\n"
+        '                "Controller matrix thread mutex ownership drifted.",\n'
+        "            )\n"
+        "            _ACTIVE_MATRIX_LOCK_OWNERS[key] = thread_id\n"
+        "            registered = True\n"
+        "            _ACTIVE_MATRIX_LOCKS.add(key)\n"
+        "    except BaseException:\n"
+        "        thread_mutex.release()\n"
+        "        raise\n"
+        "    descriptor: int | None = None\n",
+    )
+    text = _replace_exact(
+        text,
+        "        with _ACTIVE_MATRIX_LOCKS_GUARD:\n"
+        "            _ACTIVE_MATRIX_LOCKS.discard(key)\n"
+        "\n"
+        "\n"
+        "def _assert_cell_claim_binding",
+        "        with _ACTIVE_MATRIX_LOCKS_GUARD:\n"
+        "            _ACTIVE_MATRIX_LOCKS.discard(key)\n"
+        "            if registered:\n"
+        "                _require(\n"
+        "                    _ACTIVE_MATRIX_LOCK_OWNERS.pop(key, None) == thread_id,\n"
+        '                    "Controller matrix thread-mutex owner changed while held.",\n'
+        "                )\n"
+        "        thread_mutex.release()\n"
+        "\n"
+        "\n"
+        "def _assert_cell_claim_binding",
+    )
+    text = _replace_exact(
+        text,
+        "    coordinator_only: bool,\n    gpu_lock_path: Path,\n    _prepared: tuple[\n",
+        "    coordinator_only: bool,\n"
+        "    gpu_lock_path: Path,\n"
+        "    _stop_before_new_claim: threading.Event | None = None,\n"
+        "    _prepared: tuple[\n",
+    )
+    text = _replace_exact(
+        text,
+        "                coordinator_only=coordinator_only,\n"
+        "                gpu_lock_path=gpu_lock_path,\n"
+        "                _prepared=(\n",
+        "                coordinator_only=coordinator_only,\n"
+        "                gpu_lock_path=gpu_lock_path,\n"
+        "                _stop_before_new_claim=_stop_before_new_claim,\n"
+        "                _prepared=(\n",
+    )
+    text = _replace_exact(
+        text,
+        "    new_cells = 0\n"
+        "    while True:\n"
+        "        if max_new_cells is not None and new_cells >= max_new_cells:\n",
+        "    new_cells = 0\n"
+        "    while True:\n"
+        "        if _stop_before_new_claim is not None and _stop_before_new_claim.is_set():\n"
+        "            break\n"
+        "        if max_new_cells is not None and new_cells >= max_new_cells:\n",
+    )
+    text = _replace_exact(
+        text,
+        "        with _exclusive_matrix_lock(\n"
+        "            layout.lock_path,\n"
+        "            matrix_summary=layout.matrix_summary,\n"
+        "            expected_binding=lock_binding,\n"
+        "        ):\n"
+        "            ledgers, gpu_bindings = _load_worker_ledgers(\n",
+        "        with _exclusive_matrix_lock(\n"
+        "            layout.lock_path,\n"
+        "            matrix_summary=layout.matrix_summary,\n"
+        "            expected_binding=lock_binding,\n"
+        "        ):\n"
+        "            if _stop_before_new_claim is not None and _stop_before_new_claim.is_set():\n"
+        "                break\n"
+        "            ledgers, gpu_bindings = _load_worker_ledgers(\n",
+        count=1,
+    )
+    binding_start, _ = _top_level_span(text, "_gpu_lease_binding")
+    return (
+        f"{text[:binding_start]}"
+        f"{RUNNER_SAME_GPU_WORKER_GROUP_V1_3_5.strip()}\n\n\n"
+        f"{text[binding_start:]}"
+    )
+
+
+RUNNER_SAME_GPU_SUPERVISOR_V1_3_5 = r'''
+def _run_same_gpu_supervisor(
+    *,
+    layout: MatrixLayout,
+    manifest_path: Path,
+    evaluator_script: Path,
+    attestation_key_path: Path | None,
+    start_mode: str,
+    max_new_cells: int | None,
+    worker_count: int,
+    gpu_lock_path: Path,
+) -> dict[str, Any]:
+    """Own one physical GPU lease and coordinate disjoint local worker threads."""
+
+    _require(
+        2 <= worker_count <= 4,
+        "Same-GPU full17 supervisor requires two to four frozen workers.",
+    )
+    _require(
+        (start_mode == "fresh" and max_new_cells == 1)
+        or (start_mode == "resume" and max_new_cells is None),
+        "Same-GPU supervisor received an invalid start/stop boundary.",
+    )
+    canonical = _canonical_evaluator(evaluator_script)
+    scheduler_owner = acquire_gpu_lock(
+        f"p2-direct-controller-exact-fill-v1-3-5-supervisor-{worker_count}",
+        path=gpu_lock_path,
+    )
+    with ExitStack() as execution_stack:
+        execution_stack.callback(admission.close_gpu_lock_owner, scheduler_owner)
+        scheduler_owner.assert_held()
+        fresh_prestart_authority: tuple[
+            ValidatedBasePrerequisites,
+            admission.PrestartQualityAuthorityV1_3_5,
+        ] | None = None
+        resume_initial_prerequisites: FrozenPrerequisites | None = None
+        if start_mode == "fresh":
+            fresh_prestart_authority = load_and_validate_prestart_prerequisites(
+                manifest_path=manifest_path,
+                training_output_root=layout.training_output_root,
+                calibration_output_root=layout.calibration_output_root,
+                reuse_admission_path=layout.reuse_admission_path,
+                preheldout_genesis_path=layout.preheldout_genesis_path,
+                output_root=layout.output_root,
+                attestation_key_path=attestation_key_path,
+                worker_count=worker_count,
+            )
+        else:
+            resume_initial_prerequisites = load_and_validate_prerequisites(
+                manifest_path=manifest_path,
+                training_output_root=layout.training_output_root,
+                calibration_output_root=layout.calibration_output_root,
+                reuse_admission_path=layout.reuse_admission_path,
+                preheldout_genesis_path=layout.preheldout_genesis_path,
+                output_root=layout.output_root,
+                attestation_key_path=attestation_key_path,
+                expected_worker_count=worker_count,
+            )
+        device_context = _capture_selected_device_context(scheduler_owner)
+        device_guard_path = canonical_device_guard_path(
+            cast(
+                Mapping[str, Any],
+                device_context["selected_device_routing_identity"],
+            )
+        )
+        _validate_quality_mutating_lock_path(
+            device_guard_path,
+            layout=layout,
+            manifest_path=manifest_path,
+            attestation_key_path=attestation_key_path,
+            label="GPU physical-device guard",
+            require_canonical_scheduler=False,
+        )
+        device_guard_owner = _acquire_selected_device_guard(
+            label=f"p2-direct-controller-exact-fill-v1-3-5-supervisor-{worker_count}",
+            device_context=device_context,
+            scheduler_lease=scheduler_owner,
+        )
+        if device_guard_owner is not scheduler_owner:
+            execution_stack.callback(admission.close_gpu_lock_owner, device_guard_owner)
+        device_guard_owner.assert_held()
+        execution_stack.push(
+            lambda exc_type, error, traceback: (
+                _settle_active_persistent_evaluator_scope(
+                    scheduler_owner,
+                    exc_type,
+                    error,
+                    traceback,
+                )
+            )
+        )
+        prerequisites, activation_lease = _prepare_quality_start_authority(
+            start_mode=start_mode,
+            layout=layout,
+            manifest_path=manifest_path,
+            attestation_key_path=attestation_key_path,
+            worker_count=worker_count,
+            scheduler_lease=scheduler_owner,
+            fresh_prestart=fresh_prestart_authority,
+            resume_initial=resume_initial_prerequisites,
+        )
+        execution_stack.callback(activation_lease.close)
+        lock_binding = _activation_lock_binding(prerequisites, activation_lease)
+        admission.assert_quality_context_unchanged(prerequisites.context)
+        scheduler_owner.assert_held()
+        device_guard_owner.assert_held()
+        device_context = _validate_selected_device_context(
+            device_context,
+            prerequisites=prerequisites,
+        )
+        _require(
+            EVALUATOR_IMPLEMENTATION_PATH in contract.V1_3_5_IMPLEMENTATION_PATHS
+            and GPU_LOCK_IMPLEMENTATION_PATH in contract.V1_3_5_IMPLEMENTATION_PATHS,
+            "Canonical evaluator or GPU lease helper is absent from v1.3.5.",
+        )
+        _require(
+            contract.v1_3_5_implementation_tree_digest()
+            == prerequisites.context.manifest_binding["implementation_digest"],
+            "Canonical evaluator differs from the v1.3.5 manifest.",
+        )
+        evaluator_fd, evaluator_snapshot = _open_evaluator(canonical)
+        os.close(evaluator_fd)
+        evaluator_binding = evaluator_snapshot.public_binding
+        supervisor_gpu_binding = _gpu_lease_binding(
+            scheduler_owner,
+            device_guard_lease=device_guard_owner,
+            device_context=device_context,
+        )
+        ready_only_preflight = _ensure_ready_only_preflight(
+            start_mode=start_mode,
+            layout=layout,
+            manifest_path=prerequisites.context.manifest_path,
+            canonical=canonical,
+            evaluator_snapshot=evaluator_snapshot,
+            evaluator_binding=evaluator_binding,
+            prerequisites=prerequisites,
+            activation_lease=activation_lease,
+            launch_authority_nonce=secrets.token_hex(32),
+            gpu_lease_binding=supervisor_gpu_binding,
+            gpu_lease=scheduler_owner,
+            device_guard_lease=device_guard_owner,
+        )
+        _complete_activation_ledger_boundary(
+            start_mode=start_mode,
+            layout=layout,
+            prerequisites=prerequisites,
+            activation_lease=activation_lease,
+            evaluator_binding=evaluator_binding,
+            ready_only_preflight=ready_only_preflight,
+            worker_count=worker_count,
+            gpu_lease_binding=supervisor_gpu_binding,
+        )
+        activation_lease.close()
+        scheduler_owner.assert_held()
+        device_guard_owner.assert_held()
+
+        def run_worker(
+            worker_index: int,
+            scheduler: GPULockLease,
+            guard: GPULockLease,
+            drain_event: threading.Event,
+        ) -> Mapping[str, Any]:
+            scheduler.assert_held()
+            guard.assert_held()
+            worker_binding = _gpu_lease_binding(
+                scheduler,
+                device_guard_lease=guard,
+                device_context=device_context,
+            )
+            return _run_distributed_matrix(
+                layout=layout,
+                manifest_path=manifest_path,
+                evaluator_script=evaluator_script,
+                attestation_key_path=attestation_key_path,
+                start_mode=start_mode,
+                max_new_cells=max_new_cells,
+                worker_index=worker_index,
+                worker_count=worker_count,
+                coordinator_only=False,
+                gpu_lock_path=gpu_lock_path,
+                _stop_before_new_claim=drain_event,
+                _prepared=(
+                    canonical,
+                    lock_binding,
+                    prerequisites,
+                    evaluator_snapshot,
+                    evaluator_binding,
+                    scheduler,
+                    guard,
+                    worker_binding,
+                ),
+            )
+
+        if start_mode == "fresh":
+            scheduler = admission.borrow_gpu_lock_lease(scheduler_owner)
+            guard = (
+                scheduler
+                if device_guard_owner is scheduler_owner
+                else admission.borrow_gpu_lock_lease(device_guard_owner)
+            )
+            try:
+                result = dict(run_worker(0, scheduler, guard, threading.Event()))
+            finally:
+                _close_gpu_lease_pair(scheduler, guard)
+            scheduler_owner.assert_held()
+            device_guard_owner.assert_held()
+            return result
+
+        _run_same_gpu_worker_group(
+            worker_count=worker_count,
+            scheduler_owner=scheduler_owner,
+            device_guard_owner=device_guard_owner,
+            run_worker=run_worker,
+        )
+        scheduler_owner.assert_held()
+        device_guard_owner.assert_held()
+        return _run_distributed_matrix(
+            layout=layout,
+            manifest_path=manifest_path,
+            evaluator_script=evaluator_script,
+            attestation_key_path=attestation_key_path,
+            start_mode=start_mode,
+            max_new_cells=None,
+            worker_index=0,
+            worker_count=worker_count,
+            coordinator_only=True,
+            gpu_lock_path=gpu_lock_path,
+            _prepared=(
+                canonical,
+                lock_binding,
+                prerequisites,
+                evaluator_snapshot,
+                evaluator_binding,
+                None,
+                None,
+                None,
+            ),
+        )
+'''
+
+
 def _generate_runner(source: str) -> str:
-    text = source
+    text = _amend_runner_source_for_same_gpu_v1_3_5(source)
     text = _replace_exact(
         text,
         "def expected_decode_token_rows(coordinate: ShardCoordinate) -> int:\n"
@@ -6260,10 +6736,10 @@ def _generate_runner(source: str) -> str:
         "from adaptive_v4_gpu_lock import SAFE_LOCK_MODE as GPU_LOCK_MODE\n",
         "from adaptive_v4_gpu_lock import SAFE_LOCK_MODE as GPU_LOCK_MODE\n"
         "\n"
-        "globals().setdefault(\"SEALED_PYTHON_RUNTIME_V1_3\", None)\n"
-        "globals().setdefault(\"SEALED_LAUNCH_AUTHORITY_V1_3\", None)\n"
-        "globals().setdefault(\"SEALED_SOURCE_PROVENANCE_V1_3\", None)\n"
-        "globals().setdefault(\"SEALED_LAUNCH_ROUTING_V1_3\", None)\n",
+        'globals().setdefault("SEALED_PYTHON_RUNTIME_V1_3", None)\n'
+        'globals().setdefault("SEALED_LAUNCH_AUTHORITY_V1_3", None)\n'
+        'globals().setdefault("SEALED_SOURCE_PROVENANCE_V1_3", None)\n'
+        'globals().setdefault("SEALED_LAUNCH_ROUTING_V1_3", None)\n',
         count=1,
     )
     text = _replace_exact(text, "import run_p2_direct_top_p_physical_matrix as top_p_matrix\n", "")
@@ -6289,7 +6765,7 @@ def _generate_runner(source: str) -> str:
         "EVALUATOR_IMPLEMENTATION_PATH = (\n"
         '    "research/adaptive_v4_memory/scripts/evaluate_p2_direct_controller_shard.py"\n'
         ")\n",
-        'EVALUATOR_SCRIPT = Path(__file__).resolve().with_name(\n'
+        "EVALUATOR_SCRIPT = Path(__file__).resolve().with_name(\n"
         '    "evaluate_p2_direct_controller_shard_v1_3.py"\n'
         ")\n"
         "EVALUATOR_IMPLEMENTATION_PATH = (\n"
@@ -6338,15 +6814,12 @@ def _generate_runner(source: str) -> str:
     text = _replace_exact(
         text,
         'MATRIX_LOCK_SEMANTICS = "persistent-sibling-flock-exclusive-process-owner-v1"\n',
-        "MATRIX_LOCK_SEMANTICS = "
-        "admission.V1_3_1_ACTIVATION_MATRIX_LOCK_SEMANTICS\n",
+        "MATRIX_LOCK_SEMANTICS = admission.V1_3_1_ACTIVATION_MATRIX_LOCK_SEMANTICS\n",
     )
     text = _replace_exact(text, "MATRIX_LOCK_SUFFIX = contract.MATRIX_LOCK_SUFFIX\n", "")
     text = _replace_exact(
         text,
-        '        "storage_aggregation_scope",\n'
-        '        "storage",\n'
-        '        "records",\n',
+        '        "storage_aggregation_scope",\n        "storage",\n        "records",\n',
         '        "storage_aggregation_scope",\n'
         '        "storage",\n'
         '        "sealed_launcher",\n'
@@ -6357,8 +6830,8 @@ def _generate_runner(source: str) -> str:
     )
     text = _replace_exact(
         text,
-        '    top_p_output_root: Path\n',
-        '    reuse_admission_path: Path\n    preheldout_genesis_path: Path\n',
+        "    top_p_output_root: Path\n",
+        "    reuse_admission_path: Path\n    preheldout_genesis_path: Path\n",
     )
     text = _replace_exact(
         text,
@@ -6367,8 +6840,8 @@ def _generate_runner(source: str) -> str:
     )
     text = _replace_exact(
         text,
-        '    top_p_05_path: Path\n    top_p_08_path: Path\n',
-        '    reuse_admission_path: Path\n    preheldout_genesis_path: Path\n',
+        "    top_p_05_path: Path\n    top_p_08_path: Path\n",
+        "    reuse_admission_path: Path\n    preheldout_genesis_path: Path\n",
     )
     text = _replace_exact(
         text,
@@ -6389,19 +6862,19 @@ def _generate_runner(source: str) -> str:
     text = _replace_exact(
         text,
         "        lock_path.parent.mkdir(parents=True, exist_ok=True)\n"
-        "        no_follow = getattr(os, \"O_NOFOLLOW\", None)\n",
+        '        no_follow = getattr(os, "O_NOFOLLOW", None)\n',
         "        _require(\n"
         "            lock_path.parent.is_dir() and not lock_path.parent.is_symlink(),\n"
-        "            \"Activated matrix-lock parent is missing or unsafe.\",\n"
+        '            "Activated matrix-lock parent is missing or unsafe.",\n'
         "        )\n"
-        "        no_follow = getattr(os, \"O_NOFOLLOW\", None)\n",
+        '        no_follow = getattr(os, "O_NOFOLLOW", None)\n',
         count=1,
     )
     text = _replace_exact(
         text,
-        "            os.O_RDWR | os.O_CREAT | getattr(os, \"O_CLOEXEC\", 0) | cast(int, no_follow),\n"
+        '            os.O_RDWR | os.O_CREAT | getattr(os, "O_CLOEXEC", 0) | cast(int, no_follow),\n'
         "            0o600,\n",
-        "            os.O_RDWR | getattr(os, \"O_CLOEXEC\", 0) | cast(int, no_follow),\n",
+        '            os.O_RDWR | getattr(os, "O_CLOEXEC", 0) | cast(int, no_follow),\n',
         count=1,
     )
     text = _replace_definition(text, "_validate_matrix_layout", RUNNER_VALIDATE_LAYOUT)
@@ -6412,12 +6885,8 @@ def _generate_runner(source: str) -> str:
     )
     text = _remove_definition(text, "_top_p_artifact_path")
     text = _remove_definition(text, "_load_terminal_top_p_matrix")
-    text = _replace_definition(
-        text, "load_and_validate_prerequisites", RUNNER_PREREQUISITES_V1_3_1
-    )
-    _prerequisite_start, prerequisite_end = _top_level_span(
-        text, "load_and_validate_prerequisites"
-    )
+    text = _replace_definition(text, "load_and_validate_prerequisites", RUNNER_PREREQUISITES_V1_3_1)
+    _prerequisite_start, prerequisite_end = _top_level_span(text, "load_and_validate_prerequisites")
     text = (
         f"{text[:prerequisite_end]}\n{RUNNER_ACTIVATION_START_HELPERS.strip()}\n\n"
         f"{text[prerequisite_end:]}"
@@ -6432,8 +6901,7 @@ def _generate_runner(source: str) -> str:
     )
     text = _replace_exact(
         text,
-        "    attestation_key_path: Path | None = None,\n"
-        "    max_new_cells: int | None = None,\n",
+        "    attestation_key_path: Path | None = None,\n    max_new_cells: int | None = None,\n",
         "    attestation_key_path: Path | None = None,\n"
         "    start_mode: str,\n"
         "    max_new_cells: int | None = None,\n",
@@ -6442,7 +6910,7 @@ def _generate_runner(source: str) -> str:
     text = _replace_exact(
         text,
         "    terminal = len(records) == EXPECTED_SHARDS\n"
-        "    pass_count = sum(record.get(\"integrity_decision\") == \"INTEGRITY-PASS\" for record in records)\n",
+        '    pass_count = sum(record.get("integrity_decision") == "INTEGRITY-PASS" for record in records)\n',
         "    session_projection = persistent_session.load_session_ledger_projection(\n"
         "        _absolute(output_root), trust_root=prerequisites.trust_root\n"
         "    )\n"
@@ -6454,13 +6922,13 @@ def _generate_runner(source: str) -> str:
         '        "Single-worker matrix lacks its authenticated ready-only preflight.",\n'
         "    )\n"
         "    referenced_sessions = {\n"
-        "        cast(str, cast(Mapping[str, Any], record[\"persistent_session_execution\"])[\"plan\"][\"session_nonce\"])\n"
+        '        cast(str, cast(Mapping[str, Any], record["persistent_session_execution"])["plan"]["session_nonce"])\n'
         "        for record in records\n"
         "    }\n"
         "    launch_only_sessions = {\n"
-        "        cast(str, row[\"session_nonce\"])\n"
-        "        for row in cast(list[Mapping[str, Any]], session_projection[\"sessions\"])\n"
-        "        if row[\"status\"] == \"launch_only\"\n"
+        '        cast(str, row["session_nonce"])\n'
+        '        for row in cast(list[Mapping[str, Any]], session_projection["sessions"])\n'
+        '        if row["status"] == "launch_only"\n'
         "    }\n"
         "    full_coordinate_set = len(records) == EXPECTED_SHARDS\n"
         "    awaiting_session_terminal = (\n"
@@ -6468,7 +6936,7 @@ def _generate_runner(source: str) -> str:
         "        and bool(referenced_sessions & launch_only_sessions)\n"
         "    )\n"
         "    terminal = full_coordinate_set and not awaiting_session_terminal\n"
-        "    pass_count = sum(record.get(\"integrity_decision\") == \"INTEGRITY-PASS\" for record in records)\n",
+        '    pass_count = sum(record.get("integrity_decision") == "INTEGRITY-PASS" for record in records)\n',
         count=1,
     )
     text = _replace_exact(
@@ -6476,11 +6944,11 @@ def _generate_runner(source: str) -> str:
         '        "status": "terminal" if terminal else "in_progress",\n',
         '        "status": (\n'
         '            "terminal"\n'
-        '            if terminal\n'
+        "            if terminal\n"
         '            else "awaiting_session_terminal"\n'
-        '            if awaiting_session_terminal\n'
+        "            if awaiting_session_terminal\n"
         '            else "in_progress"\n'
-        '        ),\n',
+        "        ),\n",
         count=1,
     )
     text = _replace_exact(
@@ -6532,27 +7000,27 @@ def _generate_runner(source: str) -> str:
         "        (worker_count == 1 and tuple(observed_gpu_bindings) == (0,))\n",
         "    full_coordinate_set = len(records) == EXPECTED_SHARDS\n"
         "    awaiting_session_terminal = (\n"
-        "        payload.get(\"status\") == \"awaiting_session_terminal\"\n"
+        '        payload.get("status") == "awaiting_session_terminal"\n'
         "    )\n"
         "    terminal = full_coordinate_set and not awaiting_session_terminal\n"
-        "    raw_launcher = payload.get(\"sealed_launcher\")\n"
-        "    raw_launch_routing = payload.get(\"launch_routing\")\n"
-        "    raw_ready_only_preflight = payload.get(\"ready_only_preflight\")\n"
-        "    raw_session_ledger = payload.get(\"persistent_session_ledger\")\n"
+        '    raw_launcher = payload.get("sealed_launcher")\n'
+        '    raw_launch_routing = payload.get("launch_routing")\n'
+        '    raw_ready_only_preflight = payload.get("ready_only_preflight")\n'
+        '    raw_session_ledger = payload.get("persistent_session_ledger")\n'
         "    _require(\n"
         "        isinstance(raw_launcher, Mapping)\n"
         "        and isinstance(raw_launch_routing, Mapping)\n"
         "        and isinstance(raw_ready_only_preflight, Mapping)\n"
         "        and isinstance(raw_session_ledger, Mapping),\n"
-        "        \"Matrix sealed launcher, ready-only preflight, or persistent-session ledger binding is missing.\",\n"
+        '        "Matrix sealed launcher, ready-only preflight, or persistent-session ledger binding is missing.",\n'
         "    )\n"
         "    _validate_launcher_binding_snapshot(cast(Mapping[str, Any], raw_launcher))\n"
         "    _validate_launch_routing_snapshot(\n"
         "        cast(Mapping[str, Any], raw_launch_routing),\n"
-        "        expected_selector=\"matrix\",\n"
+        '        expected_selector="matrix",\n'
         "        source_provenance=cast(\n"
         "            Mapping[str, Any],\n"
-        "            cast(Mapping[str, Any], raw_launcher)[\"source_provenance\"],\n"
+        '            cast(Mapping[str, Any], raw_launcher)["source_provenance"],\n'
         "        ),\n"
         "    )\n"
         "    session_projection = _validate_persistent_session_ledger_snapshot(\n"
@@ -6579,13 +7047,13 @@ def _generate_runner(source: str) -> str:
         "        ),\n"
         "    )\n"
         "    referenced_session_nonces = {\n"
-        "        cast(str, cast(Mapping[str, Any], record[\"persistent_session_execution\"])[\"plan\"][\"session_nonce\"])\n"
+        '        cast(str, cast(Mapping[str, Any], record["persistent_session_execution"])["plan"]["session_nonce"])\n'
         "        for record in records\n"
         "    }\n"
         "    projected_launch_only_nonces = {\n"
-        "        cast(str, row[\"session_nonce\"])\n"
-        "        for row in cast(list[Mapping[str, Any]], session_projection[\"sessions\"])\n"
-        "        if row[\"status\"] == \"launch_only\"\n"
+        '        cast(str, row["session_nonce"])\n'
+        '        for row in cast(list[Mapping[str, Any]], session_projection["sessions"])\n'
+        '        if row["status"] == "launch_only"\n'
         "    }\n"
         "    _require(\n"
         "        awaiting_session_terminal\n"
@@ -6595,7 +7063,7 @@ def _generate_runner(source: str) -> str:
         "                referenced_session_nonces & projected_launch_only_nonces\n"
         "            )\n"
         "        ),\n"
-        "        \"Matrix awaiting-session-terminal state drifted from its durable projection.\",\n"
+        '        "Matrix awaiting-session-terminal state drifted from its durable projection.",\n'
         "    )\n"
         "    _require(\n"
         "        (worker_count == 1 and tuple(observed_gpu_bindings) == (0,))\n",
@@ -6615,7 +7083,7 @@ def _generate_runner(source: str) -> str:
         '        "sealed_launcher": _require_launcher_authority(),\n'
         '        "launch_routing": _validated_launch_routing(\n'
         '            expected_selector="matrix"\n'
-        '        ),\n'
+        "        ),\n"
         '        "ready_only_preflight": ready_only_preflight,\n'
         '        "persistent_session_ledger": session_projection,\n'
         '        "records": list(records),\n',
@@ -6625,13 +7093,13 @@ def _generate_runner(source: str) -> str:
         text,
         '            payload.get("status") == ("terminal" if terminal else "in_progress"),\n',
         '            payload.get("status")\n'
-        '            == (\n'
+        "            == (\n"
         '                "terminal"\n'
-        '                if terminal\n'
+        "                if terminal\n"
         '                else "awaiting_session_terminal"\n'
-        '                if awaiting_session_terminal\n'
+        "                if awaiting_session_terminal\n"
         '                else "in_progress"\n'
-        '            ),\n',
+        "            ),\n",
         count=1,
     )
     text = _replace_definition(
@@ -6660,12 +7128,12 @@ def _generate_runner(source: str) -> str:
         "    launch_nonce: str,\n"
         "    command: Sequence[str],\n"
         ") -> dict[str, Any]:\n"
-        "    sidecars = payload.get(\"_validated_sidecars\")\n",
+        '    sidecars = payload.get("_validated_sidecars")\n',
         "    launch_nonce: str,\n"
         "    command: Sequence[str],\n"
         "    persistent_execution: Mapping[str, Any] | None = None,\n"
         ") -> dict[str, Any]:\n"
-        "    sidecars = payload.get(\"_validated_sidecars\")\n",
+        '    sidecars = payload.get("_validated_sidecars")\n',
     )
     text = _replace_exact(
         text,
@@ -6675,8 +7143,8 @@ def _generate_runner(source: str) -> str:
         '        "logical_shard_integrity_exit_code": _expected_exit_code(decision),\n'
         '        "logical_per_shard_replay_command": list(command),\n'
         '        "persistent_session_execution": (\n'
-        '            None if persistent_execution is None else dict(persistent_execution)\n'
-        '        ),\n'
+        "            None if persistent_execution is None else dict(persistent_execution)\n"
+        "        ),\n"
         '        "inputs": dict(inputs.binding),\n',
     )
     text = _replace_exact(
@@ -6689,10 +7157,10 @@ def _generate_runner(source: str) -> str:
         "            launch_nonce=launch_nonce,\n"
         "            command=command,\n"
         "        )\n",
-        "        raw_persistent = record.get(\"persistent_session_execution\")\n"
+        '        raw_persistent = record.get("persistent_session_execution")\n'
         "        _require(\n"
         "            isinstance(raw_persistent, Mapping),\n"
-        "            \"Matrix record lacks persistent-session execution evidence.\",\n"
+        '            "Matrix record lacks persistent-session execution evidence.",\n'
         "        )\n"
         "        persistent_execution = _validate_persistent_execution_payload(\n"
         "            cast(Mapping[str, Any], raw_persistent),\n"
@@ -6701,13 +7169,13 @@ def _generate_runner(source: str) -> str:
         "            launch_nonce=launch_nonce,\n"
         "            trust_root=prerequisites.trust_root,\n"
         "        )\n"
-        "        persistent_result = persistent_execution.get(\"work_result\")\n"
+        '        persistent_result = persistent_execution.get("work_result")\n'
         "        if persistent_result is not None:\n"
         "            _require(\n"
         "                isinstance(persistent_result, Mapping)\n"
-        "                and persistent_result.get(\"envelope_binding\")\n"
+        '                and persistent_result.get("envelope_binding")\n'
         "                == _file_binding(envelope_path, payload=loaded),\n"
-        "                \"Persistent child envelope binding differs from the parent-opened envelope.\",\n"
+        '                "Persistent child envelope binding differs from the parent-opened envelope.",\n'
         "            )\n"
         "        expected = _run_record(\n"
         "            loaded,\n"
@@ -6752,7 +7220,7 @@ def _generate_runner(source: str) -> str:
         "            )\n"
         "            coordinate_index = coordinates().index(coordinate)\n",
     )
-    distributed_legacy_launch = '''            result = _run_evaluator_from_snapshot(
+    distributed_legacy_launch = """            result = _run_evaluator_from_snapshot(
                 command,
                 canonical=canonical,
                 expected=evaluator_snapshot,
@@ -6762,8 +7230,8 @@ def _generate_runner(source: str) -> str:
                 projected_shards=projected_shards,
                 projected_token_rows=projected_token_rows,
             )
-'''
-    distributed_persistent_launch = '''            if (
+"""
+    distributed_persistent_launch = """            if (
                 persistent_evaluator is None
                 or persistent_evaluator.closed
                 or persistent_evaluator.cohort
@@ -6813,7 +7281,7 @@ def _generate_runner(source: str) -> str:
                 trust_root=prerequisites.trust_root,
             )
             work_result = active_session.execute(work_order)
-'''
+"""
     text = _replace_exact(text, distributed_legacy_launch, distributed_persistent_launch)
     text = _replace_exact(
         text,
@@ -6821,7 +7289,7 @@ def _generate_runner(source: str) -> str:
         "                    if result.returncode not in {0, 2}:\n"
         "                        raise subprocess.CalledProcessError(result.returncode, command)\n"
         "                    raise ValueError(\n"
-        "                        f\"Evaluator did not publish its terminal envelope: {coordinate.key}.\"\n"
+        '                        f"Evaluator did not publish its terminal envelope: {coordinate.key}."\n'
         "                    )\n"
         "                inputs = prerequisites.bundles[\n",
         "                if not envelope_path.is_file():\n"
@@ -6831,7 +7299,7 @@ def _generate_runner(source: str) -> str:
         "                        )\n"
         "                        persistent_evaluator = None\n"
         "                    raise ValueError(\n"
-        "                        f\"Evaluator did not publish its terminal envelope: {coordinate.key}.\"\n"
+        '                        f"Evaluator did not publish its terminal envelope: {coordinate.key}."\n'
         "                    )\n"
         "                inputs = prerequisites.bundles[\n",
     )
@@ -6839,8 +7307,8 @@ def _generate_runner(source: str) -> str:
         text,
         "                _require(\n"
         "                    result.returncode\n"
-        "                    == _expected_exit_code(cast(str, payload[\"terminal_decision\"])),\n"
-        "                    \"Evaluator exit code does not match its attested integrity decision.\",\n"
+        '                    == _expected_exit_code(cast(str, payload["terminal_decision"])),\n'
+        '                    "Evaluator exit code does not match its attested integrity decision.",\n'
         "                )\n"
         "                record = _run_record(\n"
         "                    payload,\n"
@@ -6850,16 +7318,16 @@ def _generate_runner(source: str) -> str:
         "                    launch_nonce=launch_nonce,\n"
         "                    command=command,\n"
         "                )\n",
-        "                decision = cast(str, payload[\"terminal_decision\"])\n"
+        '                decision = cast(str, payload["terminal_decision"])\n'
         "                if work_result is not None:\n"
         "                    _require(\n"
-        "                        work_result.get(\"terminal_decision\") == decision,\n"
-        "                        \"Persistent child result differs from its shard envelope.\",\n"
+        '                        work_result.get("terminal_decision") == decision,\n'
+        '                        "Persistent child result differs from its shard envelope.",\n'
         "                    )\n"
         "                    _require(\n"
-        "                        work_result.get(\"envelope_binding\")\n"
+        '                        work_result.get("envelope_binding")\n'
         "                        == _file_binding(envelope_path, payload=payload),\n"
-        "                        \"Persistent child envelope binding differs from the parent-opened envelope.\",\n"
+        '                        "Persistent child envelope binding differs from the parent-opened envelope.",\n'
         "                    )\n"
         "                persistent_execution = _persistent_execution_payload(\n"
         "                    plan=active_session.plan,\n"
@@ -6879,9 +7347,9 @@ def _generate_runner(source: str) -> str:
         "                )\n"
         "                if work_result is not None:\n"
         "                    _require(\n"
-        "                        cast(Mapping[str, Any], record[\"artifact_bundle\"])[\"envelope\"]\n"
-        "                        == work_result[\"envelope_binding\"],\n"
-        "                        \"Persistent envelope changed while constructing its matrix record.\",\n"
+        '                        cast(Mapping[str, Any], record["artifact_bundle"])["envelope"]\n'
+        '                        == work_result["envelope_binding"],\n'
+        '                        "Persistent envelope changed while constructing its matrix record.",\n'
         "                    )\n",
         count=1,
     )
@@ -6907,7 +7375,7 @@ def _generate_runner(source: str) -> str:
         "                    )\n"
         "            new_cells += 1\n",
     )
-    distributed_exception_tail = '''            if blocked_after_commit:
+    distributed_exception_tail = """            if blocked_after_commit:
                 break
         except BaseException as error:
             if claim_active:
@@ -6921,8 +7389,8 @@ def _generate_runner(source: str) -> str:
             raise
 
     with _exclusive_matrix_lock(
-'''
-    distributed_persistent_tail = '''            if blocked_after_commit:
+"""
+    distributed_persistent_tail = """            if blocked_after_commit:
                 break
         except BaseException as error:
             if claim_active:
@@ -6942,7 +7410,7 @@ def _generate_runner(source: str) -> str:
             persistent_evaluator.finalize_eof(published_bundle_reingested=False)
 
     with _exclusive_matrix_lock(
-'''
+"""
     text = _replace_exact(text, distributed_exception_tail, distributed_persistent_tail)
     text = _replace_exact(
         text,
@@ -7059,25 +7527,25 @@ def _generate_runner(source: str) -> str:
         text,
         "        _require(\n"
         "            coordinate is not None and command is not None and launch_nonce is not None,\n"
-        "            \"Distributed claim preparation did not produce a launch.\",\n"
+        '            "Distributed claim preparation did not produce a launch.",\n'
         "        )\n"
         "        try:\n"
-        "            _require(claim_binding is not None, \"Distributed cell claim binding is missing.\")\n",
+        '            _require(claim_binding is not None, "Distributed cell claim binding is missing.")\n',
         "        try:\n"
         "            _clear_persistent_preparation_claim(\n"
         "                cast(GPULockLease, current_gpu_lease)\n"
         "            )\n"
         "            _require(\n"
         "                coordinate is not None and command is not None and launch_nonce is not None,\n"
-        "                \"Distributed claim preparation did not produce a launch.\",\n"
+        '                "Distributed claim preparation did not produce a launch.",\n'
         "            )\n"
-        "            _require(claim_binding is not None, \"Distributed cell claim binding is missing.\")\n",
+        '            _require(claim_binding is not None, "Distributed cell claim binding is missing.")\n',
         count=1,
     )
     text = _replace_exact(
         text,
         "        disk_terminal_or_prefix = _validate_distributed_disk_summary(\n",
-        "        if terminal_or_prefix.get(\"status\") == \"terminal\":\n"
+        '        if terminal_or_prefix.get("status") == "terminal":\n'
         "            terminal_ledgers, terminal_gpu_bindings = _load_worker_ledgers(\n"
         "                output_root=layout.output_root,\n"
         "                worker_count=worker_count,\n"
@@ -7099,9 +7567,9 @@ def _generate_runner(source: str) -> str:
         "                matrix_lock_binding=lock_binding,\n"
         "            )\n"
         "            _require(\n"
-        "                terminal_or_prefix.get(\"status\") == \"terminal\"\n"
+        '                terminal_or_prefix.get("status") == "terminal"\n'
         "                and len(merged) == EXPECTED_SHARDS,\n"
-        "                \"Distributed terminalization requires an exact full bundle replay.\",\n"
+        '                "Distributed terminalization requires an exact full bundle replay.",\n'
         "            )\n"
         "            ledgers = terminal_ledgers\n"
         "            gpu_bindings = terminal_gpu_bindings\n"
@@ -7118,7 +7586,7 @@ def _generate_runner(source: str) -> str:
         "        if not coordinator_only:\n"
         "            _require(\n"
         "                current_gpu_binding is not None,\n"
-        "                \"Persistent recovery requires the reacquired worker GPU lease.\",\n"
+        '                "Persistent recovery requires the reacquired worker GPU lease.",\n'
         "            )\n"
         "            cast(GPULockLease, current_gpu_lease).assert_held()\n"
         "            cast(GPULockLease, current_device_guard_lease).assert_held()\n"
@@ -7146,8 +7614,7 @@ def _generate_runner(source: str) -> str:
     )
     text = _replace_exact(
         text,
-        "        new_cells = 0\n"
-        "        while len(completed) < len(coordinates()):\n",
+        "        new_cells = 0\n        while len(completed) < len(coordinates()):\n",
         "        launch_authority_nonce = secrets.token_hex(32)\n"
         "        persistent_evaluator: PersistentEvaluatorProcess | None = None\n"
         "        new_cells = 0\n"
@@ -7171,7 +7638,7 @@ def _generate_runner(source: str) -> str:
         "            )\n"
         "            inputs = prerequisites.bundles[\n",
     )
-    single_legacy_launch = '''                result = _run_evaluator_from_snapshot(
+    single_legacy_launch = """                result = _run_evaluator_from_snapshot(
                     command,
                     canonical=canonical,
                     expected=evaluator_snapshot,
@@ -7183,8 +7650,8 @@ def _generate_runner(source: str) -> str:
                         coordinates()[len(completed) :]
                     ),
                 )
-'''
-    single_persistent_launch = '''                if (
+"""
+    single_persistent_launch = """                if (
                     persistent_evaluator is None
                     or persistent_evaluator.closed
                     or persistent_evaluator.cohort
@@ -7236,7 +7703,7 @@ def _generate_runner(source: str) -> str:
                     trust_root=prerequisites.trust_root,
                 )
                 work_result = active_session.execute(work_order)
-'''
+"""
     text = _replace_exact(text, single_legacy_launch, single_persistent_launch)
     text = _replace_exact(
         text,
@@ -7244,7 +7711,7 @@ def _generate_runner(source: str) -> str:
         "                        if result.returncode not in {0, 2}:\n"
         "                            raise subprocess.CalledProcessError(result.returncode, command)\n"
         "                        raise ValueError(\n"
-        "                            f\"Evaluator did not publish its terminal envelope: {coordinate.key}.\"\n"
+        '                            f"Evaluator did not publish its terminal envelope: {coordinate.key}."\n'
         "                        )\n"
         "                    payload = load_and_validate_shard_bundle(\n",
         "                    if not envelope_path.is_file():\n"
@@ -7254,7 +7721,7 @@ def _generate_runner(source: str) -> str:
         "                            )\n"
         "                            persistent_evaluator = None\n"
         "                        raise ValueError(\n"
-        "                            f\"Evaluator did not publish its terminal envelope: {coordinate.key}.\"\n"
+        '                            f"Evaluator did not publish its terminal envelope: {coordinate.key}."\n'
         "                        )\n"
         "                    payload = load_and_validate_shard_bundle(\n",
     )
@@ -7262,8 +7729,8 @@ def _generate_runner(source: str) -> str:
         text,
         "                    _require(\n"
         "                        result.returncode\n"
-        "                        == _expected_exit_code(cast(str, payload[\"terminal_decision\"])),\n"
-        "                        \"Evaluator exit code does not match its attested integrity decision.\",\n"
+        '                        == _expected_exit_code(cast(str, payload["terminal_decision"])),\n'
+        '                        "Evaluator exit code does not match its attested integrity decision.",\n'
         "                    )\n"
         "                    record = _run_record(\n"
         "                        payload,\n"
@@ -7273,16 +7740,16 @@ def _generate_runner(source: str) -> str:
         "                        launch_nonce=launch_nonce,\n"
         "                        command=command,\n"
         "                    )\n",
-        "                    decision = cast(str, payload[\"terminal_decision\"])\n"
+        '                    decision = cast(str, payload["terminal_decision"])\n'
         "                    if work_result is not None:\n"
         "                        _require(\n"
-        "                            work_result.get(\"terminal_decision\") == decision,\n"
-        "                            \"Persistent child result differs from its shard envelope.\",\n"
+        '                            work_result.get("terminal_decision") == decision,\n'
+        '                            "Persistent child result differs from its shard envelope.",\n'
         "                        )\n"
         "                        _require(\n"
-        "                            work_result.get(\"envelope_binding\")\n"
+        '                            work_result.get("envelope_binding")\n'
         "                            == _file_binding(envelope_path, payload=payload),\n"
-        "                            \"Persistent child envelope binding differs from the parent-opened envelope.\",\n"
+        '                            "Persistent child envelope binding differs from the parent-opened envelope.",\n'
         "                        )\n"
         "                    persistent_execution = _persistent_execution_payload(\n"
         "                        plan=active_session.plan,\n"
@@ -7304,9 +7771,9 @@ def _generate_runner(source: str) -> str:
         "                    )\n"
         "                    if work_result is not None:\n"
         "                        _require(\n"
-        "                            cast(Mapping[str, Any], record[\"artifact_bundle\"])[\"envelope\"]\n"
-        "                            == work_result[\"envelope_binding\"],\n"
-        "                            \"Persistent envelope changed while constructing its matrix record.\",\n"
+        '                            cast(Mapping[str, Any], record["artifact_bundle"])["envelope"]\n'
+        '                            == work_result["envelope_binding"],\n'
+        '                            "Persistent envelope changed while constructing its matrix record.",\n'
         "                        )\n",
     )
     text = _replace_exact(
@@ -7331,7 +7798,7 @@ def _generate_runner(source: str) -> str:
         "                        )\n"
         "                new_cells += 1\n",
     )
-    single_exception_tail = '''            except BaseException as error:
+    single_exception_tail = """            except BaseException as error:
                 if claim_active:
                     with _exclusive_matrix_lock(
                         layout.lock_path,
@@ -7343,8 +7810,8 @@ def _generate_runner(source: str) -> str:
                 raise
 
         with _exclusive_matrix_lock(
-'''
-    single_persistent_tail = '''            except BaseException as error:
+"""
+    single_persistent_tail = """            except BaseException as error:
                 if claim_active:
                     with _exclusive_matrix_lock(
                         layout.lock_path,
@@ -7364,7 +7831,7 @@ def _generate_runner(source: str) -> str:
                 )
 
         with _exclusive_matrix_lock(
-'''
+"""
     text = _replace_exact(text, single_exception_tail, single_persistent_tail)
     text = _replace_exact(
         text,
@@ -7373,7 +7840,7 @@ def _generate_runner(source: str) -> str:
         "                claim_active = True\n"
         "\n"
         "            try:\n"
-        "                _require(claim_binding is not None, \"Single-worker cell claim binding is missing.\")\n",
+        '                _require(claim_binding is not None, "Single-worker cell claim binding is missing.")\n',
         "                claim_binding = cast(Mapping[str, Any], claim_manager.__enter__())\n"
         "                _register_persistent_preparation_claim(gpu_lease, claim_manager)\n"
         "                _assert_cell_claim_binding(claim_binding)\n"
@@ -7381,17 +7848,17 @@ def _generate_runner(source: str) -> str:
         "\n"
         "            try:\n"
         "                _clear_persistent_preparation_claim(gpu_lease)\n"
-        "                _require(claim_binding is not None, \"Single-worker cell claim binding is missing.\")\n",
+        '                _require(claim_binding is not None, "Single-worker cell claim binding is missing.")\n',
         count=1,
     )
     text = _replace_exact(
         text,
         "            if layout.matrix_summary.exists():\n"
         "                completed = validate_matrix_summary(\n"
-        "                    _load_json_nofollow(layout.matrix_summary, label=\"controller matrix ledger\"),\n",
+        '                    _load_json_nofollow(layout.matrix_summary, label="controller matrix ledger"),\n',
         "            if layout.matrix_summary.exists():\n"
         "                initial_disk_payload = _load_json_nofollow(\n"
-        "                    layout.matrix_summary, label=\"controller matrix ledger\"\n"
+        '                    layout.matrix_summary, label="controller matrix ledger"\n'
         "                )\n"
         "                completed = validate_matrix_summary(\n"
         "                    initial_disk_payload,\n",
@@ -7474,7 +7941,7 @@ def _generate_runner(source: str) -> str:
         "                ):\n"
         "                    disk_completed = validate_matrix_summary(\n"
         "                        _load_json_nofollow(\n"
-        "                            layout.matrix_summary, label=\"controller matrix ledger\"\n"
+        '                            layout.matrix_summary, label="controller matrix ledger"\n'
         "                        ),\n"
         "                        output_root=layout.output_root,\n"
         "                        prerequisites=prerequisites,\n"
@@ -7486,7 +7953,7 @@ def _generate_runner(source: str) -> str:
         "                    )\n"
         "                    _require(\n"
         "                        disk_completed == completed,\n"
-        "                        \"Single-worker matrix advanced during cell execution.\",\n"
+        '                        "Single-worker matrix advanced during cell execution.",\n'
         "                    )\n",
         "                with _exclusive_matrix_lock(\n"
         "                    layout.lock_path,\n"
@@ -7494,7 +7961,7 @@ def _generate_runner(source: str) -> str:
         "                    expected_binding=lock_binding,\n"
         "                ):\n"
         "                    execution_disk_payload = _load_json_nofollow(\n"
-        "                        layout.matrix_summary, label=\"controller matrix ledger\"\n"
+        '                        layout.matrix_summary, label="controller matrix ledger"\n'
         "                    )\n"
         "                    disk_completed = validate_matrix_summary(\n"
         "                        execution_disk_payload,\n"
@@ -7509,7 +7976,7 @@ def _generate_runner(source: str) -> str:
         "                    )\n"
         "                    _require(\n"
         "                        disk_completed == completed,\n"
-        "                        \"Single-worker matrix advanced during cell execution.\",\n"
+        '                        "Single-worker matrix advanced during cell execution.",\n'
         "                    )\n"
         "                    execution_resume_payload = _matrix_payload(\n"
         "                        completed,\n"
@@ -7537,21 +8004,21 @@ def _generate_runner(source: str) -> str:
         "                            expected_gpu_worker_leases={0: gpu_binding},\n"
         "                        )\n"
         "                        == completed,\n"
-        "                        \"Single-worker session projection refresh changed records.\",\n"
+        '                        "Single-worker session projection refresh changed records.",\n'
         "                    )\n",
         count=1,
     )
     text = _replace_exact(
         text,
         "            disk_payload = _load_json_nofollow(\n"
-        "                layout.matrix_summary, label=\"controller matrix ledger\"\n"
+        '                layout.matrix_summary, label="controller matrix ledger"\n'
         "            )\n"
         "            _require(\n"
         "                disk_payload == terminal_or_prefix,\n"
-        "                \"Single-worker terminal ledger differs from its authenticated prefix.\",\n"
+        '                "Single-worker terminal ledger differs from its authenticated prefix.",\n'
         "            )\n",
         "            disk_payload = _load_json_nofollow(\n"
-        "                layout.matrix_summary, label=\"controller matrix ledger\"\n"
+        '                layout.matrix_summary, label="controller matrix ledger"\n'
         "            )\n"
         "            disk_completed = validate_matrix_summary(\n"
         "                disk_payload,\n"
@@ -7566,7 +8033,7 @@ def _generate_runner(source: str) -> str:
         "            )\n"
         "            _require(\n"
         "                disk_completed == completed,\n"
-        "                \"Single-worker matrix changed before session-ledger refresh.\",\n"
+        '                "Single-worker matrix changed before session-ledger refresh.",\n'
         "            )\n"
         "            disk_payload = _refresh_matrix_session_projection(\n"
         "                disk_payload=disk_payload,\n"
@@ -7576,14 +8043,13 @@ def _generate_runner(source: str) -> str:
         "            )\n"
         "            _require(\n"
         "                disk_payload == terminal_or_prefix,\n"
-        "                \"Single-worker terminal ledger differs from its authenticated prefix.\",\n"
+        '                "Single-worker terminal ledger differs from its authenticated prefix.",\n'
         "            )\n",
         count=1,
     )
     text = _replace_exact(
         text,
-        "    trust_root: attestation.TrustRoot,\n"
-        "    gpu_lease: GPULockLease,\n",
+        "    trust_root: attestation.TrustRoot,\n    gpu_lease: GPULockLease,\n",
         "    trust_root: attestation.TrustRoot,\n"
         "    quality_context: admission.QualityContext,\n"
         "    gpu_lease: GPULockLease,\n",
@@ -7650,8 +8116,7 @@ def _generate_runner(source: str) -> str:
     )
     text = _replace_exact(
         text,
-        '        "experiment_id": EXPERIMENT_ID,\n'
-        '        "artifact_type": WORKER_ARTIFACT_TYPE,\n',
+        '        "experiment_id": EXPERIMENT_ID,\n        "artifact_type": WORKER_ARTIFACT_TYPE,\n',
         '        "experiment_id": WORKER_EXPERIMENT_ID,\n'
         '        "artifact_type": WORKER_ARTIFACT_TYPE,\n',
     )
@@ -7737,9 +8202,9 @@ def _generate_runner(source: str) -> str:
     text = _replace_exact(
         text,
         '    parser.add_argument("--output-root", type=Path, default=OUTPUT_ROOT)\n',
-        '    parser.add_argument(\n'
+        "    parser.add_argument(\n"
         '        "--preheldout-genesis", type=Path, default=PREHELDOUT_GENESIS_PATH\n'
-        '    )\n'
+        "    )\n"
         '    parser.add_argument("--attestation-key-path", type=Path)\n'
         '    parser.add_argument("--start-mode", choices=QUALITY_START_MODES, required=True)\n'
         '    parser.add_argument("--output-root", type=Path, default=OUTPUT_ROOT)\n',
@@ -7755,15 +8220,14 @@ def _generate_runner(source: str) -> str:
     )
     text = _replace_exact(
         text,
-        "    args = parser.parse_args()\n"
-        "    try:\n",
+        "    args = parser.parse_args()\n    try:\n",
         "    args = parser.parse_args()\n"
         "    if args.attestation_key_path is None and not os.environ.get(\n"
         "        attestation.KEY_PATH_ENV\n"
         "    ):\n"
         "        parser.error(\n"
-        "            \"--attestation-key-path is required when the external \"\n"
-        "            f\"{attestation.KEY_PATH_ENV} transport is unavailable.\"\n"
+        '            "--attestation-key-path is required when the external "\n'
+        '            f"{attestation.KEY_PATH_ENV} transport is unavailable."\n'
         "        )\n"
         "    try:\n",
         count=1,
@@ -7778,7 +8242,7 @@ def _generate_runner(source: str) -> str:
         "            max_new_cells=args.max_new_cells,\n",
         count=1,
     )
-    distributed_probe_before_admission = '''        try:
+    distributed_probe_before_admission = """        try:
             if gpu_lease is not None:
                 gpu_lease.assert_held()
                 device_context = _capture_selected_device_context(gpu_lease)
@@ -7799,8 +8263,8 @@ def _generate_runner(source: str) -> str:
                 gpu_lease=gpu_lease,
                 device_guard_lease=device_guard_lease,
             )
-'''
-    distributed_admission_before_probe = '''        try:
+"""
+    distributed_admission_before_probe = """        try:
             prerequisites = load_and_validate_prerequisites(
                 manifest_path=manifest_path,
                 training_output_root=layout.training_output_root,
@@ -7820,13 +8284,13 @@ def _generate_runner(source: str) -> str:
                     scheduler_lease=gpu_lease,
                 )
                 device_guard_lease.assert_held()
-'''
+"""
     text = _replace_exact(
         text,
         distributed_probe_before_admission,
         distributed_admission_before_probe,
     )
-    single_probe_before_admission = '''        gpu_lease.assert_held()
+    single_probe_before_admission = """        gpu_lease.assert_held()
         device_context = _capture_selected_device_context(gpu_lease)
         device_guard_lease = _acquire_selected_device_guard(
             label="p2-direct-controller-exact-fill-v1-3-matrix-single",
@@ -7847,8 +8311,8 @@ def _generate_runner(source: str) -> str:
             gpu_lease=gpu_lease,
             device_guard_lease=device_guard_lease,
         )
-'''
-    single_admission_before_probe = '''        gpu_lease.assert_held()
+"""
+    single_admission_before_probe = """        gpu_lease.assert_held()
         fresh_prestart_authority: tuple[
             ValidatedBasePrerequisites,
             admission.PrestartQualityAuthorityV1_3_1,
@@ -7909,7 +8373,7 @@ def _generate_runner(source: str) -> str:
             attestation_key_path=attestation_key_path,
         )
         admission.assert_quality_context_unchanged(prerequisites.context)
-'''
+"""
     text = _replace_exact(text, single_probe_before_admission, single_admission_before_probe)
     text = _replace_exact(
         text,
@@ -8016,15 +8480,15 @@ def _generate_runner(source: str) -> str:
     text = _replace_exact(
         text,
         "    owner_records = ledgers.get(owner)\n"
-        "    _require(owner_records is not None, \"Infrastructure owner worker ledger disappeared.\")\n"
+        '    _require(owner_records is not None, "Infrastructure owner worker ledger disappeared.")\n'
         "    bound_owner_records = cast(Sequence[Mapping[str, Any]], owner_records)\n"
         "    assigned = _assigned_coordinates(worker_index=owner, worker_count=worker_count)\n"
         "    _require(\n"
         "        len(bound_owner_records) < len(assigned),\n"
-        "        \"Infrastructure owner no longer has a resumable coordinate.\",\n"
+        '        "Infrastructure owner no longer has a resumable coordinate.",\n'
         "    )\n",
         "    owner_records = ledgers.get(owner)\n"
-        "    _require(owner_records is not None, \"Infrastructure owner worker ledger disappeared.\")\n"
+        '    _require(owner_records is not None, "Infrastructure owner worker ledger disappeared.")\n'
         "    bound_owner_records = cast(Sequence[Mapping[str, Any]], owner_records)\n"
         "    assigned = _assigned_coordinates(worker_index=owner, worker_count=worker_count)\n"
         "    if len(bound_owner_records) == len(assigned):\n"
@@ -8040,7 +8504,7 @@ def _generate_runner(source: str) -> str:
         "        ]\n"
         "        _require(\n"
         "            bool(resumable_workers),\n"
-        "            \"Infrastructure drain has no initialized resumable worker.\",\n"
+        '            "Infrastructure drain has no initialized resumable worker.",\n'
         "        )\n"
         "        owner = resumable_workers[0]\n"
         "        bound_owner_records = ledgers[owner]\n"
@@ -8049,17 +8513,17 @@ def _generate_runner(source: str) -> str:
         "        )\n"
         "    _require(\n"
         "        len(bound_owner_records) < len(assigned),\n"
-        "        \"Infrastructure owner no longer has a resumable coordinate.\",\n"
+        '        "Infrastructure owner no longer has a resumable coordinate.",\n'
         "    )\n",
         count=1,
     )
     text = _replace_exact(
         text,
         '_require(len(ARM_NAMES) == 19, "Frozen direct-controller arm inventory drifted.")\n',
-        '_require(\n'
-        '    ARM_NAMES == tuple(contract.ALL_ARM_NAMES) and len(ARM_NAMES) == 17,\n'
+        "_require(\n"
+        "    ARM_NAMES == tuple(contract.ALL_ARM_NAMES) and len(ARM_NAMES) == 17,\n"
         '    "Frozen direct-controller exact-fill arm inventory drifted.",\n'
-        ')\n',
+        ")\n",
     )
     text = _replace_exact(
         text,
@@ -8092,12 +8556,11 @@ def _generate_runner(source: str) -> str:
     )
     text = _replace_exact(
         text,
-        "    _require_launcher_authority()\n"
-        "    if max_new_cells is not None:\n",
+        "    _require_launcher_authority()\n    if max_new_cells is not None:\n",
         "    _require_launcher_authority()\n"
         "    _require(\n"
         "        start_mode in QUALITY_START_MODES,\n"
-        "        \"Explicit quality start mode is required.\",\n"
+        '        "Explicit quality start mode is required.",\n'
         "    )\n"
         "    _require(\n"
         '        (start_mode == "fresh" and max_new_cells == 1)\n'
@@ -8115,8 +8578,8 @@ def _generate_runner(source: str) -> str:
         "    )\n"
         "    if worker_count > 1:\n",
         "    _require(\n"
-        "        worker_count == 1 and worker_index == 0 and not coordinator_only,\n"
-        '        "Controller v1.3.1 is frozen to worker-count 1, worker-index 0, and no coordinator-only mode.",\n'
+        "        1 <= worker_count <= 4 and worker_index == 0 and not coordinator_only,\n"
+        '        "Controller v1.3.1 requires one supervisor and one to four frozen same-GPU workers.",\n'
         "    )\n"
         "    _validate_quality_mutating_lock_path(\n"
         "        gpu_lock_path,\n"
@@ -8154,6 +8617,34 @@ def _generate_runner(source: str) -> str:
         '        "Fresh activation requires an executing worker 0.",\n'
         "    )\n"
         "    if worker_count > 1:\n",
+        count=1,
+    )
+    text = _replace_exact(
+        text,
+        "    if worker_count > 1:\n"
+        "        return _run_distributed_matrix(\n"
+        "            layout=layout,\n"
+        "            manifest_path=manifest_path,\n"
+        "            evaluator_script=evaluator_script,\n"
+        "            attestation_key_path=attestation_key_path,\n"
+        "            start_mode=start_mode,\n"
+        "            max_new_cells=max_new_cells,\n"
+        "            worker_index=worker_index,\n"
+        "            worker_count=worker_count,\n"
+        "            coordinator_only=coordinator_only,\n"
+        "            gpu_lock_path=gpu_lock_path,\n"
+        "        )\n",
+        "    if worker_count > 1:\n"
+        "        return _run_same_gpu_supervisor(\n"
+        "            layout=layout,\n"
+        "            manifest_path=manifest_path,\n"
+        "            evaluator_script=evaluator_script,\n"
+        "            attestation_key_path=attestation_key_path,\n"
+        "            start_mode=start_mode,\n"
+        "            max_new_cells=max_new_cells,\n"
+        "            worker_count=worker_count,\n"
+        "            gpu_lock_path=gpu_lock_path,\n"
+        "        )\n",
         count=1,
     )
     text = _replace_exact(
@@ -8235,7 +8726,7 @@ def _generate_runner(source: str) -> str:
         "            {\n"
         '                "experiment_id": result["experiment_id"],\n'
         '                "status": result["status"],\n',
-        "    if result[\"status\"] == \"prerequisites_validated\":\n"
+        '    if result["status"] == "prerequisites_validated":\n'
         "        print(\n"
         "            json.dumps(\n"
         "                {\n"
@@ -8260,28 +8751,33 @@ def _generate_runner(source: str) -> str:
     )
     text = text.replace(
         'help="Zero-based local worker index; distributed claims use /proc PID identity.",',
-        'help="Frozen v1.3.1 worker index; must remain 0.",',
+        'help="Same-GPU supervisor index; external launches must remain 0.",',
     )
     text = text.replace(
         '"Worker count on one host with a shared local filesystem; multi-host PID claims "\n'
         '            "are intentionally unsupported."',
-        '"Frozen v1.3.1 worker count; must remain 1."',
+        '"Manifest-selected same-GPU worker count from 1 through 4."',
     )
     text = text.replace(
         'help="Validate and publish a terminal merge only after every local worker ledger completes.",',
-        'help="Unsupported by the frozen v1.3.1 single-worker topology.",',
+        'help="Internal coordinator mode; external supervisor launches must leave this unset.",',
+    )
+    run_matrix_start, _run_matrix_end = _top_level_span(text, "run_matrix")
+    text = (
+        f"{text[:run_matrix_start]}"
+        f"{RUNNER_SAME_GPU_SUPERVISOR_V1_3_5.strip()}\n\n\n"
+        f"{text[run_matrix_start:]}"
     )
     _require("top_p" not in text.lower(), "Runner retained a top-p prerequisite or identifier.")
     generated = _insert_generated_header(_upgrade_generated_contract_to_v1_3_4(text))
     return _insert_sealed_entrypoint_preamble(
         generated,
         selector="matrix",
-        relative_path="research/adaptive_v4_memory/scripts/"
-        "run_p2_direct_controller_matrix_v1_3.py",
+        relative_path="research/adaptive_v4_memory/scripts/run_p2_direct_controller_matrix_v1_3.py",
     )
 
 
-AUDIT_LOAD_TERMINAL_V1_3_1 = r'''
+AUDIT_LOAD_TERMINAL_V1_3_1 = r"""
 def _load_validated_terminal_matrix(
     *,
     manifest_path: Path,
@@ -8363,10 +8859,10 @@ def _load_validated_terminal_matrix(
         completed_shards=len(records),
     )
     return payload, records, prerequisites, evaluator_binding, lock_binding
-'''
+"""
 
 
-AUDIT_MATRIX_V1_3_1 = r'''
+AUDIT_MATRIX_V1_3_1 = r"""
 def audit_matrix(
     *,
     manifest_path: Path = contract.V1_3_1_MANIFEST_PATH,
@@ -8419,7 +8915,7 @@ def audit_matrix(
     )
     _exclusive_atomic_write_json(canonical_output, result)
     return result
-'''
+"""
 
 
 AUDIT_RAW_SHARD_ITERATOR = r'''
@@ -8483,7 +8979,7 @@ def iter_validated_raw_shards(
 '''
 
 
-AUDIT_ACTIVATION_VALIDATOR = r'''
+AUDIT_ACTIVATION_VALIDATOR = r"""
 def _validate_quality_start_activation_binding(
     binding: Mapping[str, Any],
     *,
@@ -8510,7 +9006,7 @@ def _validate_quality_start_activation_binding(
         expected_public_binding=binding,
     )
     return dict(activation.public_binding)
-'''
+"""
 
 
 def _generate_audit(source: str) -> str:
@@ -8522,11 +9018,11 @@ def _generate_audit(source: str) -> str:
         "import p2_direct_controller_contract_v1_3 as contract\n"
         "import run_p2_direct_controller_matrix_v1_3 as matrix\n"
         "\n"
-        "globals().setdefault(\"SEALED_PYTHON_RUNTIME_V1_3\", None)\n"
-        "globals().setdefault(\"SEALED_LAUNCH_AUTHORITY_V1_3\", None)\n"
-        "globals().setdefault(\"SEALED_SOURCE_PROVENANCE_V1_3\", None)\n"
-        "globals().setdefault(\"SEALED_LAUNCH_ROUTING_V1_3\", None)\n"
-        "if globals().get(\"SEALED_LAUNCH_AUTHORITY_V1_3\") is not None:\n"
+        'globals().setdefault("SEALED_PYTHON_RUNTIME_V1_3", None)\n'
+        'globals().setdefault("SEALED_LAUNCH_AUTHORITY_V1_3", None)\n'
+        'globals().setdefault("SEALED_SOURCE_PROVENANCE_V1_3", None)\n'
+        'globals().setdefault("SEALED_LAUNCH_ROUTING_V1_3", None)\n'
+        'if globals().get("SEALED_LAUNCH_AUTHORITY_V1_3") is not None:\n'
         "    matrix.SEALED_LAUNCH_AUTHORITY_V1_3 = dict(\n"
         "        cast(Mapping[str, Any], SEALED_LAUNCH_AUTHORITY_V1_3)\n"
         "    )\n"
@@ -8558,7 +9054,7 @@ def _generate_audit(source: str) -> str:
     text = _replace_exact(
         text,
         "def _integrity_payload(\n",
-        '''def _active_audit_launch_routing() -> dict[str, Any]:
+        """def _active_audit_launch_routing() -> dict[str, Any]:
     raw = globals().get("SEALED_LAUNCH_ROUTING_V1_3")
     raw_authority = globals().get("SEALED_LAUNCH_AUTHORITY_V1_3")
     raw_runtime = globals().get("SEALED_PYTHON_RUNTIME_V1_3")
@@ -8606,7 +9102,7 @@ def _validate_audit_launch_routing_snapshot(
 
 
 def _integrity_payload(
-''',
+""",
         count=1,
     )
     text = _replace_exact(
@@ -8629,44 +9125,43 @@ def _integrity_payload(
         '        "audit_launch_routing": _active_audit_launch_routing(),\n'
         '        "persistent_session_ledger": matrix_payload.get(\n'
         '            "persistent_session_ledger"\n'
-        '        ),\n'
+        "        ),\n"
         '        "checks": {field: True for field in INTEGRITY_CHECK_FIELDS},\n',
     )
     text = _replace_exact(
         text,
-        '    _require(\n'
-        '        payload.get("audit_boundary") == AUDIT_BOUNDARY\n',
+        '    _require(\n        payload.get("audit_boundary") == AUDIT_BOUNDARY\n',
         '    raw_launcher = payload.get("sealed_launcher")\n'
         '    raw_matrix_routing = payload.get("matrix_launch_routing")\n'
         '    raw_audit_routing = payload.get("audit_launch_routing")\n'
         '    raw_session_ledger = payload.get("persistent_session_ledger")\n'
-        '    _require(\n'
-        '        isinstance(raw_launcher, Mapping)\n'
-        '        and isinstance(raw_matrix_routing, Mapping)\n'
-        '        and isinstance(raw_audit_routing, Mapping)\n'
-        '        and isinstance(raw_session_ledger, Mapping),\n'
+        "    _require(\n"
+        "        isinstance(raw_launcher, Mapping)\n"
+        "        and isinstance(raw_matrix_routing, Mapping)\n"
+        "        and isinstance(raw_audit_routing, Mapping)\n"
+        "        and isinstance(raw_session_ledger, Mapping),\n"
         '        "Integrity launcher or persistent-session binding is missing.",\n'
-        '    )\n'
-        '    matrix._validate_launcher_binding_snapshot(\n'
-        '        cast(Mapping[str, Any], raw_launcher)\n'
-        '    )\n'
-        '    audit_source_provenance = cast(\n'
-        '        Mapping[str, Any],\n'
+        "    )\n"
+        "    matrix._validate_launcher_binding_snapshot(\n"
+        "        cast(Mapping[str, Any], raw_launcher)\n"
+        "    )\n"
+        "    audit_source_provenance = cast(\n"
+        "        Mapping[str, Any],\n"
         '        cast(Mapping[str, Any], raw_launcher)["source_provenance"],\n'
-        '    )\n'
-        '    matrix._validate_launch_routing_snapshot(\n'
-        '        cast(Mapping[str, Any], raw_matrix_routing),\n'
+        "    )\n"
+        "    matrix._validate_launch_routing_snapshot(\n"
+        "        cast(Mapping[str, Any], raw_matrix_routing),\n"
         '        expected_selector="matrix",\n'
-        '        source_provenance=audit_source_provenance,\n'
-        '    )\n'
-        '    _validate_audit_launch_routing_snapshot(\n'
-        '        cast(Mapping[str, Any], raw_audit_routing),\n'
-        '        source_provenance=audit_source_provenance,\n'
-        '    )\n'
-        '    matrix.persistent_session.validate_session_ledger_projection(\n'
-        '        cast(Mapping[str, Any], raw_session_ledger)\n'
-        '    )\n'
-        '    _require(\n'
+        "        source_provenance=audit_source_provenance,\n"
+        "    )\n"
+        "    _validate_audit_launch_routing_snapshot(\n"
+        "        cast(Mapping[str, Any], raw_audit_routing),\n"
+        "        source_provenance=audit_source_provenance,\n"
+        "    )\n"
+        "    matrix.persistent_session.validate_session_ledger_projection(\n"
+        "        cast(Mapping[str, Any], raw_session_ledger)\n"
+        "    )\n"
+        "    _require(\n"
         '        payload.get("audit_boundary") == AUDIT_BOUNDARY\n',
         count=1,
     )
@@ -8693,8 +9188,7 @@ def _integrity_payload(
     text = text.replace("TOP_P_OUTPUT_ROOT", "REUSE_ADMISSION_PATH")
     text = _replace_exact(
         text,
-        "    reuse_admission_path: Path,\n"
-        "    output_root: Path,\n",
+        "    reuse_admission_path: Path,\n    output_root: Path,\n",
         "    reuse_admission_path: Path,\n"
         "    preheldout_genesis_path: Path,\n"
         "    output_root: Path,\n",
@@ -8739,11 +9233,11 @@ def _integrity_payload(
     text = _replace_exact(
         text,
         '    parser.add_argument("--output-root", type=Path, default=matrix.OUTPUT_ROOT)\n',
-        '    parser.add_argument(\n'
+        "    parser.add_argument(\n"
         '        "--preheldout-genesis",\n'
-        '        type=Path,\n'
-        '        default=matrix.PREHELDOUT_GENESIS_PATH,\n'
-        '    )\n'
+        "        type=Path,\n"
+        "        default=matrix.PREHELDOUT_GENESIS_PATH,\n"
+        "    )\n"
         '    parser.add_argument("--attestation-key-path", type=Path)\n'
         '    parser.add_argument("--output-root", type=Path, default=matrix.OUTPUT_ROOT)\n',
     )
@@ -8758,35 +9252,29 @@ def _integrity_payload(
     )
     text = _replace_exact(
         text,
-        "    args = parser.parse_args()\n"
-        "    result = audit_matrix(\n",
+        "    args = parser.parse_args()\n    result = audit_matrix(\n",
         "    args = parser.parse_args()\n"
         "    if args.attestation_key_path is None and not os.environ.get(\n"
         "        attestation.KEY_PATH_ENV\n"
         "    ):\n"
         "        parser.error(\n"
-        "            \"--attestation-key-path is required when the external \"\n"
-        "            f\"{attestation.KEY_PATH_ENV} transport is unavailable.\"\n"
+        '            "--attestation-key-path is required when the external "\n'
+        '            f"{attestation.KEY_PATH_ENV} transport is unavailable."\n'
         "        )\n"
         "    result = audit_matrix(\n",
         count=1,
     )
     text = _replace_exact(
         text,
-        "        evaluator_script=matrix.EVALUATOR_SCRIPT,\n"
-        "        output=args.output,\n",
+        "        evaluator_script=matrix.EVALUATOR_SCRIPT,\n        output=args.output,\n",
         "        evaluator_script=matrix.EVALUATOR_SCRIPT,\n"
         "        output=args.output,\n"
         "        attestation_key_path=args.attestation_key_path,\n",
         count=1,
     )
-    text = _replace_definition(
-        text, "_load_validated_terminal_matrix", AUDIT_LOAD_TERMINAL_V1_3_1
-    )
+    text = _replace_definition(text, "_load_validated_terminal_matrix", AUDIT_LOAD_TERMINAL_V1_3_1)
     text = _replace_definition(text, "audit_matrix", AUDIT_MATRIX_V1_3_1)
-    text = _replace_definition(
-        text, "iter_validated_raw_shards", AUDIT_RAW_SHARD_ITERATOR
-    )
+    text = _replace_definition(text, "iter_validated_raw_shards", AUDIT_RAW_SHARD_ITERATOR)
     integrity_start, _integrity_end = _top_level_span(text, "_integrity_payload")
     text = (
         f"{text[:integrity_start]}{AUDIT_ACTIVATION_VALIDATOR.strip()}\n\n\n"
@@ -8794,8 +9282,7 @@ def _integrity_payload(
     )
     text = _replace_exact(
         text,
-        '    "no_outcome_dependent_selection_or_stopping",\n'
-        ")\n",
+        '    "no_outcome_dependent_selection_or_stopping",\n)\n',
         '    "no_outcome_dependent_selection_or_stopping",\n'
         '    "quality_start_activation_hmac_and_lock_identity_verified",\n'
         ")\n",
@@ -8803,11 +9290,8 @@ def _integrity_payload(
     )
     text = _replace_exact(
         text,
-        '        "manifest",\n'
-        '        "matrix",\n',
-        '        "manifest",\n'
-        '        "quality_start_activation",\n'
-        '        "matrix",\n',
+        '        "manifest",\n        "matrix",\n',
+        '        "manifest",\n        "quality_start_activation",\n        "matrix",\n',
         count=1,
     )
     text = _replace_exact(
@@ -8816,8 +9300,8 @@ def _integrity_payload(
         '        "matrix": _file_binding(matrix_summary, payload=matrix_payload),\n',
         '        "manifest": prerequisites.context.manifest_binding,\n'
         '        "quality_start_activation": dict(\n'
-        '            prerequisites.activation.public_binding\n'
-        '        ),\n'
+        "            prerequisites.activation.public_binding\n"
+        "        ),\n"
         '        "matrix": _file_binding(matrix_summary, payload=matrix_payload),\n',
         count=1,
     )
@@ -8827,10 +9311,10 @@ def _integrity_payload(
         '    _require(isinstance(manifest, Mapping), "Integrity manifest binding is missing.")\n',
         '    manifest = payload.get("manifest")\n'
         '    activation_binding = payload.get("quality_start_activation")\n'
-        '    _require(\n'
-        '        isinstance(manifest, Mapping) and isinstance(activation_binding, Mapping),\n'
+        "    _require(\n"
+        "        isinstance(manifest, Mapping) and isinstance(activation_binding, Mapping),\n"
         '        "Integrity manifest or activation binding is missing.",\n'
-        '    )\n',
+        "    )\n",
         count=1,
     )
     text = _replace_exact(
@@ -8855,7 +9339,7 @@ def _integrity_payload(
         '            and payload.get("quality_start_activation")\n'
         '            == cast(Mapping[str, Any], matrix_payload.get("prerequisites", {})).get(\n'
         '                "quality_start_activation"\n'
-        '            )\n',
+        "            )\n",
         count=1,
     )
     _require("top_p" not in text.lower(), "Audit retained a top-p prerequisite or identifier.")
@@ -8883,11 +9367,11 @@ def _generate_summary(source: str) -> str:
         "import validate_p2_direct_top_p_physical_match as top_p_physical\n",
         "import p2_direct_controller_contract_v1_3 as contract\n"
         "\n"
-        "globals().setdefault(\"SEALED_PYTHON_RUNTIME_V1_3\", None)\n"
-        "globals().setdefault(\"SEALED_LAUNCH_AUTHORITY_V1_3\", None)\n"
-        "globals().setdefault(\"SEALED_SOURCE_PROVENANCE_V1_3\", None)\n"
-        "globals().setdefault(\"SEALED_LAUNCH_ROUTING_V1_3\", None)\n"
-        "if globals().get(\"SEALED_LAUNCH_AUTHORITY_V1_3\") is not None:\n"
+        'globals().setdefault("SEALED_PYTHON_RUNTIME_V1_3", None)\n'
+        'globals().setdefault("SEALED_LAUNCH_AUTHORITY_V1_3", None)\n'
+        'globals().setdefault("SEALED_SOURCE_PROVENANCE_V1_3", None)\n'
+        'globals().setdefault("SEALED_LAUNCH_ROUTING_V1_3", None)\n'
+        'if globals().get("SEALED_LAUNCH_AUTHORITY_V1_3") is not None:\n'
         "    for authority_target in (integrity_audit, integrity_audit.matrix):\n"
         "        typed_authority_target = cast(Any, authority_target)\n"
         "        typed_authority_target.SEALED_LAUNCH_AUTHORITY_V1_3 = dict(\n"
@@ -8903,7 +9387,7 @@ def _generate_summary(source: str) -> str:
     text = _replace_exact(
         text,
         "def _validate_summary_source(\n",
-        '''def _active_summary_launch_routing() -> dict[str, Any]:
+        """def _active_summary_launch_routing() -> dict[str, Any]:
     raw = globals().get("SEALED_LAUNCH_ROUTING_V1_3")
     raw_authority = globals().get("SEALED_LAUNCH_AUTHORITY_V1_3")
     raw_runtime = globals().get("SEALED_PYTHON_RUNTIME_V1_3")
@@ -8950,7 +9434,7 @@ def _validate_summary_launch_routing_snapshot(
 
 
 def _validate_summary_source(
-''',
+""",
         count=1,
     )
     text = _replace_exact(
@@ -8966,8 +9450,7 @@ def _validate_summary_source(
     )
     text = _replace_exact(
         text,
-        "    integrity_binding: Mapping[str, Any],\n"
-        "    implementation_tree_sha256: str,\n",
+        "    integrity_binding: Mapping[str, Any],\n    implementation_tree_sha256: str,\n",
         "    integrity_binding: Mapping[str, Any],\n"
         "    sealed_execution_provenance: Mapping[str, Any],\n"
         "    implementation_tree_sha256: str,\n",
@@ -8984,8 +9467,7 @@ def _validate_summary_source(
     )
     text = _replace_exact(
         text,
-        '            "integrity_artifact",\n'
-        '            "frozen_analysis_provenance",\n',
+        '            "integrity_artifact",\n            "frozen_analysis_provenance",\n',
         '            "integrity_artifact",\n'
         '            "sealed_execution_provenance",\n'
         '            "frozen_analysis_provenance",\n',
@@ -8993,47 +9475,46 @@ def _validate_summary_source(
     )
     text = _replace_exact(
         text,
-        '    provenance = _exact_mapping(\n'
-        '        source["frozen_analysis_provenance"],\n',
-        '    execution = _exact_mapping(\n'
+        '    provenance = _exact_mapping(\n        source["frozen_analysis_provenance"],\n',
+        "    execution = _exact_mapping(\n"
         '        source["sealed_execution_provenance"],\n'
-        '        {\n'
+        "        {\n"
         '            "sealed_launcher",\n'
         '            "persistent_session_ledger",\n'
         '            "matrix_launch_routing",\n'
         '            "audit_launch_routing",\n'
         '            "summary_launch_routing",\n'
         '            "quality_start_activation",\n'
-        '        },\n'
+        "        },\n"
         '        "Summary sealed execution provenance",\n'
-        '    )\n'
-        '    integrity_audit.matrix._validate_launcher_binding_snapshot(\n'
+        "    )\n"
+        "    integrity_audit.matrix._validate_launcher_binding_snapshot(\n"
         '        cast(Mapping[str, Any], execution["sealed_launcher"])\n'
-        '    )\n'
-        '    integrity_audit.matrix.persistent_session.validate_session_ledger_projection(\n'
+        "    )\n"
+        "    integrity_audit.matrix.persistent_session.validate_session_ledger_projection(\n"
         '        cast(Mapping[str, Any], execution["persistent_session_ledger"])\n'
-        '    )\n'
-        '    execution_source = cast(\n'
-        '        Mapping[str, Any],\n'
+        "    )\n"
+        "    execution_source = cast(\n"
+        "        Mapping[str, Any],\n"
         '        cast(Mapping[str, Any], execution["sealed_launcher"])[\n'
         '            "source_provenance"\n'
-        '        ],\n'
-        '    )\n'
-        '    integrity_audit.matrix._validate_launch_routing_snapshot(\n'
+        "        ],\n"
+        "    )\n"
+        "    integrity_audit.matrix._validate_launch_routing_snapshot(\n"
         '        cast(Mapping[str, Any], execution["matrix_launch_routing"]),\n'
         '        expected_selector="matrix",\n'
-        '        source_provenance=execution_source,\n'
-        '    )\n'
-        '    integrity_audit.matrix._validate_launch_routing_snapshot(\n'
+        "        source_provenance=execution_source,\n"
+        "    )\n"
+        "    integrity_audit.matrix._validate_launch_routing_snapshot(\n"
         '        cast(Mapping[str, Any], execution["audit_launch_routing"]),\n'
         '        expected_selector="audit",\n'
-        '        source_provenance=execution_source,\n'
-        '    )\n'
-        '    _validate_summary_launch_routing_snapshot(\n'
+        "        source_provenance=execution_source,\n"
+        "    )\n"
+        "    _validate_summary_launch_routing_snapshot(\n"
         '        cast(Mapping[str, Any], execution["summary_launch_routing"]),\n'
-        '        source_provenance=execution_source,\n'
-        '    )\n'
-        '    provenance = _exact_mapping(\n'
+        "        source_provenance=execution_source,\n"
+        "    )\n"
+        "    provenance = _exact_mapping(\n"
         '        source["frozen_analysis_provenance"],\n',
         count=1,
     )
@@ -9044,15 +9525,15 @@ def _validate_summary_source(
         '    manifest = provenance["manifest_binding"]\n'
         '    _require(isinstance(manifest, Mapping), "Summary manifest provenance is missing.")\n'
         '    activation = execution["quality_start_activation"]\n'
-        '    _require(\n'
-        '        isinstance(activation, Mapping),\n'
+        "    _require(\n"
+        "        isinstance(activation, Mapping),\n"
         '        "Summary activation provenance is missing.",\n'
-        '    )\n'
-        '    integrity_audit._validate_quality_start_activation_binding(\n'
-        '        cast(Mapping[str, Any], activation),\n'
-        '        manifest_binding=cast(Mapping[str, Any], manifest),\n'
-        '        trust_root=trust_root,\n'
-        '    )\n',
+        "    )\n"
+        "    integrity_audit._validate_quality_start_activation_binding(\n"
+        "        cast(Mapping[str, Any], activation),\n"
+        "        manifest_binding=cast(Mapping[str, Any], manifest),\n"
+        "        trust_root=trust_root,\n"
+        "    )\n",
         count=1,
     )
     text = _replace_exact(
@@ -9064,17 +9545,17 @@ def _validate_summary_source(
     )
     text = _replace_exact(
         text,
-        '        default=Path(\n'
+        "        default=Path(\n"
         '            "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-integrity.json"\n'
-        '        ),\n',
+        "        ),\n",
         "        default=integrity_audit.INTEGRITY_OUTPUT,\n",
     )
     text = _replace_exact(
         text,
-        '        default=Path(\n'
+        "        default=Path(\n"
         '            "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller/"\n'
         '            "controller-matrix.summary.json"\n'
-        '        ),\n',
+        "        ),\n",
         "        default=contract.MATRIX_SUMMARY_PATH,\n",
     )
     text = _replace_exact(
@@ -9098,7 +9579,7 @@ def _validate_summary_source(
     text = _replace_definition(
         text,
         "_register_external_bindings",
-        r'''
+        r"""
 def _register_external_bindings(
     accumulator: StudyAccumulator,
     *,
@@ -9157,9 +9638,9 @@ def _register_external_bindings(
             accumulator.quality_start_activation_binding == activation_copy,
             "Quality-start activation binding changed within the quality study.",
         )
-''',
+""",
     )
-    top_binding_check = '''    _require(
+    top_binding_check = """    _require(
         set(accumulator.top_p_match_bindings)
         == {
             (scale, seed, budget, comparator)
@@ -9170,19 +9651,19 @@ def _register_external_bindings(
         },
         "Top-p physical-match binding cohort is incomplete.",
     )
-'''
+"""
     text = _replace_exact(text, top_binding_check, "")
-    calibration_coverage = '''    _require(
+    calibration_coverage = """    _require(
         set(accumulator.calibration_bindings)
         == {(scale, seed) for scale in contract.SCALES for seed in contract.TRAINING_SEEDS},
         "Calibration-binding cohort is incomplete.",
     )
-'''
+"""
     text = _replace_exact(
         text,
         calibration_coverage,
         calibration_coverage
-        + '''    _require(
+        + """    _require(
         isinstance(accumulator.reuse_admission_binding, Mapping),
         "Reuse-admission binding is absent from the quality study.",
     )
@@ -9194,7 +9675,7 @@ def _register_external_bindings(
         isinstance(accumulator.quality_start_activation_binding, Mapping),
         "Quality-start activation binding is absent from the quality study.",
     )
-''',
+""",
     )
     text = _replace_exact(
         text,
@@ -9235,14 +9716,14 @@ def _register_external_bindings(
     text = _replace_exact(
         text,
         "    implementation_tree_sha256 = contract.implementation_tree_digest()\n",
-        "    sealed_launcher = integrity_payload.get(\"sealed_launcher\")\n"
-        "    matrix_launch_routing = integrity_payload.get(\"matrix_launch_routing\")\n"
-        "    audit_launch_routing = integrity_payload.get(\"audit_launch_routing\")\n"
+        '    sealed_launcher = integrity_payload.get("sealed_launcher")\n'
+        '    matrix_launch_routing = integrity_payload.get("matrix_launch_routing")\n'
+        '    audit_launch_routing = integrity_payload.get("audit_launch_routing")\n'
         "    quality_start_activation = integrity_payload.get(\n"
-        "        \"quality_start_activation\"\n"
+        '        "quality_start_activation"\n'
         "    )\n"
         "    persistent_session_ledger = integrity_payload.get(\n"
-        "        \"persistent_session_ledger\"\n"
+        '        "persistent_session_ledger"\n'
         "    )\n"
         "    _require(\n"
         "        isinstance(sealed_launcher, Mapping)\n"
@@ -9250,21 +9731,21 @@ def _register_external_bindings(
         "        and isinstance(audit_launch_routing, Mapping)\n"
         "        and isinstance(quality_start_activation, Mapping)\n"
         "        and isinstance(persistent_session_ledger, Mapping),\n"
-        "        \"Integrity sealed execution provenance is missing.\",\n"
+        '        "Integrity sealed execution provenance is missing.",\n'
         "    )\n"
         "    sealed_execution_provenance = {\n"
-        "        \"sealed_launcher\": dict(cast(Mapping[str, Any], sealed_launcher)),\n"
-        "        \"matrix_launch_routing\": dict(\n"
+        '        "sealed_launcher": dict(cast(Mapping[str, Any], sealed_launcher)),\n'
+        '        "matrix_launch_routing": dict(\n'
         "            cast(Mapping[str, Any], matrix_launch_routing)\n"
         "        ),\n"
-        "        \"audit_launch_routing\": dict(\n"
+        '        "audit_launch_routing": dict(\n'
         "            cast(Mapping[str, Any], audit_launch_routing)\n"
         "        ),\n"
-        "        \"summary_launch_routing\": _active_summary_launch_routing(),\n"
-        "        \"quality_start_activation\": dict(\n"
+        '        "summary_launch_routing": _active_summary_launch_routing(),\n'
+        '        "quality_start_activation": dict(\n'
         "            cast(Mapping[str, Any], quality_start_activation)\n"
         "        ),\n"
-        "        \"persistent_session_ledger\": dict(\n"
+        '        "persistent_session_ledger": dict(\n'
         "            cast(Mapping[str, Any], persistent_session_ledger)\n"
         "        ),\n"
         "    }\n"
@@ -9273,12 +9754,12 @@ def _register_external_bindings(
     )
     text = _replace_exact(
         text,
-        "    _require(not active_streams, \"One-pass summary retained an uncommitted shard stream.\")\n"
+        '    _require(not active_streams, "One-pass summary retained an uncommitted shard stream.")\n'
         "    validate_study_coverage(accumulator)\n"
         "    return accumulator\n",
-        "    _require(not active_streams, \"One-pass summary retained an uncommitted shard stream.\")\n"
+        '    _require(not active_streams, "One-pass summary retained an uncommitted shard stream.")\n'
         "    validate_study_coverage(accumulator)\n"
-        "    integrity_activation = integrity_payload.get(\"quality_start_activation\")\n"
+        '    integrity_activation = integrity_payload.get("quality_start_activation")\n'
         "    _require(\n"
         "        isinstance(integrity_activation, Mapping)\n"
         "        and accumulator.quality_start_activation_binding\n"
@@ -9306,24 +9787,24 @@ def _register_external_bindings(
         '        and provenance.get("integrity_source_state") == integrity_source\n'
         '        and provenance.get("manifest_binding") == manifest_binding\n'
         '        and source.get("sealed_execution_provenance")\n'
-        '        == {\n'
+        "        == {\n"
         '            "sealed_launcher": integrity_payload.get("sealed_launcher"),\n'
         '            "matrix_launch_routing": integrity_payload.get(\n'
         '                "matrix_launch_routing"\n'
-        '            ),\n'
+        "            ),\n"
         '            "audit_launch_routing": integrity_payload.get(\n'
         '                "audit_launch_routing"\n'
-        '            ),\n'
+        "            ),\n"
         '            "summary_launch_routing": cast(\n'
         '                Mapping[str, Any], source["sealed_execution_provenance"]\n'
         '            )["summary_launch_routing"],\n'
         '            "quality_start_activation": integrity_payload.get(\n'
         '                "quality_start_activation"\n'
-        '            ),\n'
+        "            ),\n"
         '            "persistent_session_ledger": integrity_payload.get(\n'
         '                "persistent_session_ledger"\n'
-        '            ),\n'
-        '        },\n',
+        "            ),\n"
+        "        },\n",
         count=1,
     )
     text = _replace_exact(
@@ -9342,13 +9823,13 @@ def _register_external_bindings(
         '            "preheldout_genesis_artifacts",\n'
         '            "quality_start_activation_artifacts",\n',
     )
-    coverage_fixed = '''        "top_p_physical_match_artifacts": (
+    coverage_fixed = """        "top_p_physical_match_artifacts": (
             len(contract.SCALES)
             * len(contract.TRAINING_SEEDS)
             * len(contract.BUDGETS)
             * len(contract.SENSITIVITY_COMPARATOR_ARMS)
         ),
-'''
+"""
     text = _replace_exact(text, coverage_fixed, "")
     text = _replace_exact(
         text,
@@ -9382,8 +9863,8 @@ def _register_external_bindings(
         "        attestation.KEY_PATH_ENV\n"
         "    ):\n"
         "        parser.error(\n"
-        "            \"--attestation-key-path is required when the external \"\n"
-        "            f\"{attestation.KEY_PATH_ENV} transport is unavailable.\"\n"
+        '            "--attestation-key-path is required when the external "\n'
+        '            f"{attestation.KEY_PATH_ENV} transport is unavailable."\n'
         "        )\n"
         "    return args\n",
         count=1,
@@ -9412,8 +9893,7 @@ def _register_external_bindings(
     return _insert_sealed_entrypoint_preamble(
         generated,
         selector="summary",
-        relative_path="research/adaptive_v4_memory/scripts/"
-        "summarize_p2_direct_controller_v1_3.py",
+        relative_path="research/adaptive_v4_memory/scripts/summarize_p2_direct_controller_v1_3.py",
     )
 
 

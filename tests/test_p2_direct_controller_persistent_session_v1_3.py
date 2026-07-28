@@ -14,7 +14,7 @@ SCRIPTS = REPOSITORY_ROOT / "research/adaptive_v4_memory/scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import p2_direct_attestation as attestation  # noqa: E402
-import p2_direct_controller_contract_v1_3 as contract  # noqa: E402
+import p2_direct_controller_contract_v1_3_5 as contract  # noqa: E402
 import p2_direct_controller_persistent_session_v1_3 as session  # noqa: E402
 
 
@@ -24,38 +24,40 @@ def trust_root() -> attestation.TrustRoot:
     return attestation.TrustRoot(key=key, key_id=attestation.derive_key_id(key))
 
 
-def test_persistent_session_uses_only_v1_3_4_authorities_and_paths() -> None:
-    assert session.READY_ONLY_PREFLIGHT_SESSION_ROLE == (
-        contract.V1_3_4_READY_ONLY_PREFLIGHT_SESSION_ROLE
-    ) == "ready_only_preflight"
-    assert session.QUALITY_SESSION_ROLE == contract.V1_3_4_QUALITY_SESSION_ROLE == "quality"
+def test_persistent_session_uses_only_v1_3_5_authorities_and_paths() -> None:
+    assert (
+        session.READY_ONLY_PREFLIGHT_SESSION_ROLE
+        == (contract.V1_3_5_READY_ONLY_PREFLIGHT_SESSION_ROLE)
+        == "ready_only_preflight"
+    )
+    assert session.QUALITY_SESSION_ROLE == contract.V1_3_5_QUALITY_SESSION_ROLE == "quality"
     assert session.SESSION_ROLES == frozenset({"ready_only_preflight", "quality"})
     assert session.PLAN_ATTESTATION_PURPOSE == (
-        contract.V1_3_4_PERSISTENT_SESSION_PLAN_ATTESTATION_PURPOSE
+        contract.V1_3_5_PERSISTENT_SESSION_PLAN_ATTESTATION_PURPOSE
     )
     assert session.WORK_ATTESTATION_PURPOSE == (
-        contract.V1_3_4_PERSISTENT_SESSION_WORK_ATTESTATION_PURPOSE
+        contract.V1_3_5_PERSISTENT_SESSION_WORK_ATTESTATION_PURPOSE
     )
     assert session.RESULT_ATTESTATION_PURPOSE == (
-        contract.V1_3_4_PERSISTENT_SESSION_RESULT_ATTESTATION_PURPOSE
+        contract.V1_3_5_PERSISTENT_SESSION_RESULT_ATTESTATION_PURPOSE
     )
     assert session.RECEIPT_ATTESTATION_PURPOSE == (
-        contract.V1_3_4_PERSISTENT_SESSION_RECEIPT_ATTESTATION_PURPOSE
+        contract.V1_3_5_PERSISTENT_SESSION_RECEIPT_ATTESTATION_PURPOSE
     )
     assert session.LAUNCH_LEDGER_ATTESTATION_PURPOSE == (
-        contract.V1_3_4_PERSISTENT_SESSION_LAUNCH_LEDGER_ATTESTATION_PURPOSE
+        contract.V1_3_5_PERSISTENT_SESSION_LAUNCH_LEDGER_ATTESTATION_PURPOSE
     )
     assert session.TERMINAL_LEDGER_ATTESTATION_PURPOSE == (
-        contract.V1_3_4_PERSISTENT_SESSION_TERMINAL_LEDGER_ATTESTATION_PURPOSE
+        contract.V1_3_5_PERSISTENT_SESSION_TERMINAL_LEDGER_ATTESTATION_PURPOSE
     )
-    assert session._CANONICAL_OUTPUT_ROOT == contract.V1_3_4_OUTPUT_ROOT
+    assert session._CANONICAL_OUTPUT_ROOT == contract.V1_3_5_OUTPUT_ROOT
     assert session._CANONICAL_SESSION_LEDGER_ROOT == (
-        contract.V1_3_4_PERSISTENT_SESSION_LEDGER_ROOT
+        contract.V1_3_5_PERSISTENT_SESSION_LEDGER_ROOT
     )
     assert session._CANONICAL_SESSION_LEDGER_LOCK_PATH == (
-        contract.V1_3_4_PERSISTENT_SESSION_LEDGER_LOCK_PATH
+        contract.V1_3_5_PERSISTENT_SESSION_LEDGER_LOCK_PATH
     )
-    assert "v1-3-4" in session.SESSION_LEDGER_ROOT_SUFFIX
+    assert "v1-3-5" in session.SESSION_LEDGER_ROOT_SUFFIX
     assert "v1-3-1" not in session.SESSION_LEDGER_ROOT_SUFFIX
     assert "v1-3-3" not in session.SESSION_LEDGER_ROOT_SUFFIX
     purposes = (
@@ -66,7 +68,7 @@ def test_persistent_session_uses_only_v1_3_4_authorities_and_paths() -> None:
         session.LAUNCH_LEDGER_ATTESTATION_PURPOSE,
         session.TERMINAL_LEDGER_ATTESTATION_PURPOSE,
     )
-    assert all("v1-3-4" in purpose for purpose in purposes)
+    assert all("v1-3-5" in purpose for purpose in purposes)
     assert all("v1-3-2" not in purpose for purpose in purposes)
     assert all("v1-3-3" not in purpose for purpose in purposes)
 
@@ -837,9 +839,7 @@ def test_ready_only_binding_is_exact_zero_work_and_metrics_exclude_quality(
     tmp_path: Path, trust_root: attestation.TrustRoot
 ) -> None:
     output_root = (tmp_path / "quality").resolve()
-    preflight = _publish_ready_only_success(
-        output_root, trust_root, session_digit="1"
-    )
+    preflight = _publish_ready_only_success(output_root, trust_root, session_digit="1")
     second_cohort_start = next(
         index
         for index, item in enumerate(contract.quality_coordinates())
@@ -860,9 +860,7 @@ def test_ready_only_binding_is_exact_zero_work_and_metrics_exclude_quality(
         trust_root=trust_root,
     )
 
-    projection = session.load_session_ledger_projection(
-        output_root, trust_root=trust_root
-    )
+    projection = session.load_session_ledger_projection(output_root, trust_root=trust_root)
     binding = session.ready_only_preflight_binding(projection)
     assert binding is not None
     assert binding["status"] == "stopped"
@@ -881,12 +879,7 @@ def test_ready_only_binding_is_exact_zero_work_and_metrics_exclude_quality(
     assert projection["quality_launch_attempt_count"] == 1
     assert projection["quality_ready_model_load_count"] == 0
     assert projection["normal_path_model_load_bound"] == 1
-    assert (
-        projection[
-            "single_worker_normal_path_ready_only_preflight_model_load_upper_bound"
-        ]
-        == 1
-    )
+    assert projection["single_worker_normal_path_ready_only_preflight_model_load_upper_bound"] == 1
     assert projection["single_worker_normal_path_quality_model_load_upper_bound"] == 10
     assert projection["single_worker_normal_path_total_model_load_upper_bound"] == 11
 
@@ -939,9 +932,7 @@ def test_ready_only_failed_load_then_success_exceeds_only_the_normal_path_count(
         session_digit="8",
         session_role=session.READY_ONLY_PREFLIGHT_SESSION_ROLE,
     )
-    failed_ready = session.build_session_receipt(
-        failed, (), (), trust_root=trust_root
-    )
+    failed_ready = session.build_session_receipt(failed, (), (), trust_root=trust_root)
     session.publish_session_launch(
         output_root,
         failed,
@@ -963,21 +954,14 @@ def test_ready_only_failed_load_then_success_exceeds_only_the_normal_path_count(
     )
     _publish_ready_only_success(output_root, trust_root, session_digit="9")
 
-    projection = session.load_session_ledger_projection(
-        output_root, trust_root=trust_root
-    )
+    projection = session.load_session_ledger_projection(output_root, trust_root=trust_root)
     binding = session.ready_only_preflight_binding(projection)
     assert binding is not None
     assert binding["launch_attempt_count"] == 2
     assert binding["failed_attempt_count"] == 1
     assert projection["checkpoint_model_load_attempt_upper_bound"] == 2
     assert projection["ready_only_preflight_ready_model_load_count"] == 2
-    assert (
-        projection[
-            "single_worker_normal_path_ready_only_preflight_model_load_upper_bound"
-        ]
-        == 1
-    )
+    assert projection["single_worker_normal_path_ready_only_preflight_model_load_upper_bound"] == 1
     assert projection["single_worker_normal_path_total_model_load_upper_bound"] == 11
 
 
@@ -987,17 +971,14 @@ def test_ready_only_second_success_or_tampered_terminal_fails_closed(
     duplicate_root = (tmp_path / "duplicate").resolve()
     _publish_ready_only_success(duplicate_root, trust_root, session_digit="5")
     _publish_ready_only_success(duplicate_root, trust_root, session_digit="6")
-    duplicate = session.load_session_ledger_projection(
-        duplicate_root, trust_root=trust_root
-    )
+    duplicate = session.load_session_ledger_projection(duplicate_root, trust_root=trust_root)
     with pytest.raises(ValueError, match="more than one successful"):
         session.ready_only_preflight_binding(duplicate)
 
     tampered_root = (tmp_path / "tampered").resolve()
     plan = _publish_ready_only_success(tampered_root, trust_root, session_digit="7")
     terminal_path = (
-        session.session_ledger_root(tampered_root)
-        / f"{plan['session_nonce']}.terminal.json"
+        session.session_ledger_root(tampered_root) / f"{plan['session_nonce']}.terminal.json"
     )
     raw = bytearray(terminal_path.read_bytes())
     raw[raw.index(b'"status": "stopped"')] = ord("X")
@@ -1030,3 +1011,29 @@ def test_clean_cohort_boundary_restart_disables_single_parent_normal_claim() -> 
         worker_counts=[1],
     )
     assert stopped_applicable is False
+
+
+def test_parallel_normal_path_allows_exactly_one_authority_per_worker() -> None:
+    additional, applicable = session._normal_path_claim_semantics(
+        launch_count=30,
+        terminal_count=30,
+        graceful_terminal_count=30,
+        controlled_stop_count=0,
+        cohort_count=30,
+        launch_authority_count=3,
+        worker_counts=[3] * 30,
+    )
+    assert additional == 0
+    assert applicable is True
+
+    extra, retry_applicable = session._normal_path_claim_semantics(
+        launch_count=30,
+        terminal_count=30,
+        graceful_terminal_count=30,
+        controlled_stop_count=0,
+        cohort_count=30,
+        launch_authority_count=4,
+        worker_counts=[3] * 30,
+    )
+    assert extra == 1
+    assert retry_applicable is False

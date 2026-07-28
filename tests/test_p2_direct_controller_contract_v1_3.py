@@ -15,6 +15,7 @@ sys.path.insert(0, str(SCRIPTS))
 
 import p2_direct_controller_contract as v1_2  # noqa: E402
 import p2_direct_controller_contract_v1_3 as contract  # noqa: E402
+import p2_direct_controller_contract_v1_3_5 as contract_v1_3_5  # noqa: E402
 import p2_direct_controller_persistent_session_v1_3 as persistent_session  # noqa: E402
 
 TEST_TRUST_ROOT = contract.attestation.TrustRoot(
@@ -381,23 +382,26 @@ def test_persistent_session_namespaces_and_transport_claims_are_exact() -> None:
     assert contract.PERSISTENT_SESSION_LEDGER_ROOT.name.startswith(".")
     assert not contract.PERSISTENT_SESSION_LEDGER_ROOT.name.startswith("..")
     absolute_output_root = (
-        Path(__file__).resolve().parents[1] / contract.V1_3_4_OUTPUT_ROOT
+        Path(__file__).resolve().parents[1] / contract_v1_3_5.V1_3_5_OUTPUT_ROOT
     ).resolve()
-    expected_v1_3_4_suffix = contract.V1_3_4_PERSISTENT_SESSION_LEDGER_ROOT.name.removeprefix(
-        f".{contract.V1_3_4_OUTPUT_ROOT.name}."
+    expected_v1_3_5_suffix = (
+        contract_v1_3_5.V1_3_5_PERSISTENT_SESSION_LEDGER_ROOT.name.removeprefix(
+            f".{contract_v1_3_5.V1_3_5_OUTPUT_ROOT.name}."
+        )
     )
-    assert persistent_session.SESSION_LEDGER_ROOT_SUFFIX == expected_v1_3_4_suffix
+    assert persistent_session.SESSION_LEDGER_ROOT_SUFFIX == expected_v1_3_5_suffix
     assert (
         persistent_session.session_ledger_root(absolute_output_root)
         == (
-            Path(__file__).resolve().parents[1] / contract.V1_3_4_PERSISTENT_SESSION_LEDGER_ROOT
+            Path(__file__).resolve().parents[1]
+            / contract_v1_3_5.V1_3_5_PERSISTENT_SESSION_LEDGER_ROOT
         ).resolve()
     )
     assert (
         persistent_session.session_ledger_lock_path(absolute_output_root)
         == (
             Path(__file__).resolve().parents[1]
-            / contract.V1_3_4_PERSISTENT_SESSION_LEDGER_LOCK_PATH
+            / contract_v1_3_5.V1_3_5_PERSISTENT_SESSION_LEDGER_LOCK_PATH
         ).resolve()
     )
     assert {
@@ -426,12 +430,12 @@ def test_persistent_session_namespaces_and_transport_claims_are_exact() -> None:
         "launch": persistent_session.LAUNCH_LEDGER_ATTESTATION_PURPOSE,
         "terminal": persistent_session.TERMINAL_LEDGER_ATTESTATION_PURPOSE,
     } == {
-        "plan": contract.V1_3_4_PERSISTENT_SESSION_PLAN_ATTESTATION_PURPOSE,
-        "work": contract.V1_3_4_PERSISTENT_SESSION_WORK_ATTESTATION_PURPOSE,
-        "result": contract.V1_3_4_PERSISTENT_SESSION_RESULT_ATTESTATION_PURPOSE,
-        "receipt": contract.V1_3_4_PERSISTENT_SESSION_RECEIPT_ATTESTATION_PURPOSE,
-        "launch": contract.V1_3_4_PERSISTENT_SESSION_LAUNCH_LEDGER_ATTESTATION_PURPOSE,
-        "terminal": contract.V1_3_4_PERSISTENT_SESSION_TERMINAL_LEDGER_ATTESTATION_PURPOSE,
+        "plan": contract_v1_3_5.V1_3_5_PERSISTENT_SESSION_PLAN_ATTESTATION_PURPOSE,
+        "work": contract_v1_3_5.V1_3_5_PERSISTENT_SESSION_WORK_ATTESTATION_PURPOSE,
+        "result": contract_v1_3_5.V1_3_5_PERSISTENT_SESSION_RESULT_ATTESTATION_PURPOSE,
+        "receipt": contract_v1_3_5.V1_3_5_PERSISTENT_SESSION_RECEIPT_ATTESTATION_PURPOSE,
+        "launch": (contract_v1_3_5.V1_3_5_PERSISTENT_SESSION_LAUNCH_LEDGER_ATTESTATION_PURPOSE),
+        "terminal": (contract_v1_3_5.V1_3_5_PERSISTENT_SESSION_TERMINAL_LEDGER_ATTESTATION_PURPOSE),
     }
     assert namespaces["persistent_session_ledger_root"] == str(
         contract.PERSISTENT_SESSION_LEDGER_ROOT
@@ -1137,9 +1141,7 @@ def test_v1_3_4_manifest_binds_failure_lineage_distinct_namespaces_and_loader(
         is True
     )
     assert (
-        provenance[
-            "class_proxy_object_identity_is_statically_resolved_from_owner_namespace"
-        ]
+        provenance["class_proxy_object_identity_is_statically_resolved_from_owner_namespace"]
         is True
     )
     assert provenance["none_registry_entries_are_nonexecuting_negative_import_cache"] is True
@@ -1164,9 +1166,10 @@ def test_v1_3_4_manifest_binds_failure_lineage_distinct_namespaces_and_loader(
         ]
         is True
     )
-    assert activation[
-        "historical_v1_3_2_static_lineage_revalidated_at_each_mutating_phase_entry"
-    ] is True
+    assert (
+        activation["historical_v1_3_2_static_lineage_revalidated_at_each_mutating_phase_entry"]
+        is True
+    )
     assert activation["historical_lineage_full_revalidation_boundaries"] == [
         "admission-staging-recovery-and-publication",
         "activation-staging-recovery-and-publication",

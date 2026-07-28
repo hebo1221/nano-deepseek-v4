@@ -1,0 +1,128 @@
+from __future__ import annotations
+
+import copy
+import json
+import sys
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+SCRIPTS = Path(__file__).resolve().parents[1] / "research/adaptive_v4_memory/scripts"
+if str(SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS))
+
+import p2_direct_controller_contract_v1_3_5 as contract  # noqa: E402
+
+
+def _probe_binding(*, worker_count: int = 3) -> dict[str, Any]:
+    return {
+        "path": "/tmp/adaptive-v4-topology-probe.json",
+        "sha256": "1" * 64,
+        "bytes": 4096,
+        "payload_sha256": "2" * 64,
+        "attestation_mac": "3" * 64,
+        "candidate_worker_counts": [1, 2, 3, 4],
+        "selected_worker_count": worker_count,
+        "semantic_equivalence_passed": True,
+        "quality_values_accessed": False,
+    }
+
+
+def _manifest(*, worker_count: int = 3) -> dict[str, Any]:
+    return contract.build_v1_3_5_manifest_payload(
+        attestation_key_id="a" * 64,
+        implementation_tree_digest="b" * 64,
+        implementation_source_commit="c" * 40,
+        selected_worker_count=worker_count,
+        topology_probe_binding=_probe_binding(worker_count=worker_count),
+    )
+
+
+def test_builder_preserves_every_scientific_field() -> None:
+    parent = contract._parent_manifest_payload()
+    child = _manifest()
+
+    for field in (
+        "claim_boundary",
+        "cohort",
+        "confirmatory_success_gate",
+        "descriptive_feasibility_evidence",
+        "grid",
+        "phases",
+        "primary_estimand",
+        "schema_version",
+        "statistical_analysis",
+    ):
+        assert child[field] == parent[field]
+    assert child["experiment_id"] == contract.V1_3_5_EXPERIMENT_ID
+    assert (
+        child["lineage_and_adaptation_disclosure"][
+            "scientific-grid-arm-estimand-or-success-gate_changed"
+        ]
+        is False
+    )
+
+
+def test_builder_moves_only_mutable_output_namespaces() -> None:
+    child = _manifest(worker_count=4)
+    namespaces = child["artifact_namespaces"]
+    topology = child["execution_contract"]["sealed_launch_and_persistent_session"][
+        "quality_start_activation"
+    ]["quality_execution_topology"]
+
+    assert namespaces["output_root"] == str(contract.V1_3_5_OUTPUT_ROOT)
+    assert namespaces["activation_root"] == str(contract.V1_3_5_ACTIVATION_ROOT)
+    assert namespaces["reuse_admission_path"] == str(
+        contract.base.V1_3_4_REUSE_ADMISSION_PATH
+    )
+    assert namespaces["preheldout_genesis_path"] == str(
+        contract.base.V1_3_4_PREHELDOUT_GENESIS_PATH
+    )
+    assert topology["worker_count"] == 4
+    assert topology["worker_indices"] == [0, 1, 2, 3]
+    assert topology["coordinator_only_publication"] is True
+
+
+def test_manifest_validation_rejects_topology_or_scientific_tampering() -> None:
+    payload = _manifest()
+    contract.validate_v1_3_5_manifest_payload(payload, verify_implementation=False)
+
+    topology_tamper = copy.deepcopy(payload)
+    topology_tamper["execution_contract"]["sealed_launch_and_persistent_session"][
+        "quality_start_activation"
+    ]["quality_execution_topology"]["worker_count"] = 2
+    with pytest.raises(ValueError, match="probe binding|canonical builder"):
+        contract.validate_v1_3_5_manifest_payload(
+            topology_tamper, verify_implementation=False
+        )
+
+    science_tamper = copy.deepcopy(payload)
+    science_tamper["grid"]["replicates"] = [999]
+    with pytest.raises(ValueError, match="canonical builder"):
+        contract.validate_v1_3_5_manifest_payload(science_tamper, verify_implementation=False)
+
+
+def test_probe_binding_requires_quality_blind_equivalence() -> None:
+    probe = _probe_binding()
+    probe["quality_values_accessed"] = True
+    with pytest.raises(ValueError, match="Topology probe binding"):
+        contract.build_v1_3_5_manifest_payload(
+            attestation_key_id="a" * 64,
+            implementation_tree_digest="b" * 64,
+            implementation_source_commit="c" * 40,
+            selected_worker_count=3,
+            topology_probe_binding=probe,
+        )
+
+
+def test_parent_manifest_is_bound_by_exact_bytes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    payload = contract._parent_manifest_payload()
+    path = tmp_path / "parent.json"
+    path.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
+    monkeypatch.setattr(contract.base, "V1_3_4_MANIFEST_PATH", path)
+
+    with pytest.raises(ValueError, match="predecessor manifest bytes drifted"):
+        contract._parent_manifest_payload()
