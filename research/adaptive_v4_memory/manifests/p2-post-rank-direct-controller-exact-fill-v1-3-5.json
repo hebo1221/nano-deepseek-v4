@@ -1,7 +1,7 @@
 {
   "artifact_namespaces": {
-    "activation_matrix_lock_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-parallel-retry-1-activation/matrix.lock",
-    "activation_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-parallel-retry-1-activation",
+    "activation_matrix_lock_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-parallel-retry-2-activation/matrix.lock",
+    "activation_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-parallel-retry-2-activation",
     "activation_root_exact_member_count": 2,
     "activation_root_is_immutable_sibling_outside_quality_closed_world": true,
     "admission_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-4-admission",
@@ -28,13 +28,13 @@
       "summary": "p2-post-rank-direct-controller-exact-fill-summary-v1.3.5",
       "worker_ledger": "p2-post-rank-direct-controller-exact-fill-worker-ledger-v1.3.5"
     },
-    "integrity_output_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-parallel-retry-1.integrity.json",
+    "integrity_output_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-parallel-retry-2.integrity.json",
     "matrix_binds_role_tagged_preflight_hmac_evidence": true,
     "matrix_lock_is_precreated_before_first_quality_mutation": true,
-    "matrix_summary_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-parallel-retry-1/controller-matrix.summary.json",
-    "output_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-parallel-retry-1",
-    "persistent_session_ledger_lock_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/.controller-exact-fill-v1-3-5-parallel-retry-1.p2-direct-controller-persistent-sessions-v1-3-5.lock",
-    "persistent_session_ledger_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/.controller-exact-fill-v1-3-5-parallel-retry-1.p2-direct-controller-persistent-sessions-v1-3-5",
+    "matrix_summary_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-parallel-retry-2/controller-matrix.summary.json",
+    "output_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-parallel-retry-2",
+    "persistent_session_ledger_lock_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/.controller-exact-fill-v1-3-5-parallel-retry-2.p2-direct-controller-persistent-sessions-v1-3-5.lock",
+    "persistent_session_ledger_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/.controller-exact-fill-v1-3-5-parallel-retry-2.p2-direct-controller-persistent-sessions-v1-3-5",
     "persistent_session_roles": {
       "quality_work": "quality",
       "ready_only_preflight": "ready_only_preflight"
@@ -46,15 +46,19 @@
       "terminal"
     ],
     "preheldout_genesis_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-4-admission/preheldout-genesis.json",
-    "quality_start_activation_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-parallel-retry-1-activation/quality-start-activation.json",
+    "quality_start_activation_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-parallel-retry-2-activation/quality-start-activation.json",
     "reuse_admission_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-4-admission/historical-reuse-admission.json",
-    "summary_output_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-parallel-retry-1.summary.json",
+    "summary_output_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-parallel-retry-2.summary.json",
     "superseded_v1_3_2_static_admission_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-2-admission",
     "superseded_v1_3_2_static_pair_is_read_only_lineage": true,
     "superseded_v1_3_3_activation_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-3-activation",
     "superseded_v1_3_3_admission_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-3-admission",
     "superseded_v1_3_3_persistent_session_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/.controller-exact-fill-v1-3-3.p2-direct-controller-persistent-sessions-v1-3-3",
     "superseded_v1_3_3_runtime_state_is_read_only_lineage": true,
+    "superseded_v1_3_5_binding_schema_activation_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-parallel-retry-1-activation",
+    "superseded_v1_3_5_binding_schema_output_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-parallel-retry-1",
+    "superseded_v1_3_5_binding_schema_persistent_session_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/.controller-exact-fill-v1-3-5-parallel-retry-1.p2-direct-controller-persistent-sessions-v1-3-5",
+    "superseded_v1_3_5_binding_schema_worker_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/.controller-exact-fill-v1-3-5-parallel-retry-1.p2-direct-controller-workers-v1-3-5",
     "superseded_v1_3_5_zero_quality_activation_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-activation",
     "superseded_v1_3_5_zero_quality_output_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5",
     "superseded_v1_3_5_zero_quality_persistent_session_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/.controller-exact-fill-v1-3-5.p2-direct-controller-persistent-sessions-v1-3-5",
@@ -65,7 +69,7 @@
     "v1_3_4_static_admission_namespace_reused_read_only": true,
     "v1_3_5_superseded_zero_quality_namespace_reused": false,
     "v1_3_output_or_admission_namespace_reused": false,
-    "worker_ledger_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/.controller-exact-fill-v1-3-5-parallel-retry-1.p2-direct-controller-workers-v1-3-5"
+    "worker_ledger_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/.controller-exact-fill-v1-3-5-parallel-retry-2.p2-direct-controller-workers-v1-3-5"
   },
   "attestation": {
     "key_compromise_in_scope": false,
@@ -739,8 +743,8 @@
       "research/adaptive_v4_memory/scripts/p2_direct_controller_topology_v1_3_5.py",
       "research/adaptive_v4_memory/scripts/probe_p2_direct_controller_topology_v1_3_5.py"
     ],
-    "source_commit": "58c17ac404acf671b556b911fbe149c4cae97576",
-    "tree_digest": "baff6dc3fca2b0bda6d8aa7b0cff7bf7caa47f3c6c110ced424b85a06ee7ac59"
+    "source_commit": "8e057bc1fb9909a3bb1dbf536356cf3ce79f9357",
+    "tree_digest": "7cc754ba75eb39f1af813de4881b565d072615f7e4ffbcc07baf80e7e558d10f"
   },
   "lineage_and_adaptation_disclosure": {
     "amendment_trigger": "explicit-user-request-for-three-worker-full17-after-quality-blind-probe-selected-one-worker-with-no-measured-parallel-speedup",
@@ -1484,6 +1488,93 @@
       },
       "reuse_mode": "read-only-static-predecessor-no-v1.3.4-activation-reuse"
     },
+    "v1_3_5_superseded_unpublished_binding_schema_attempt": {
+      "activation": {
+        "attestation_mac": "58ad761f77d80c0b6b2b78f728ea8377bdf2c74410fc458140823630525efa19",
+        "bytes": 314744,
+        "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-parallel-retry-1-activation/quality-start-activation.json",
+        "payload_sha256": "56bf134d0b3cec07c482116bc2e8cc7a4ea1af5dcb3568aaf3781be77e939cbf",
+        "sha256": "b9e2089ce6711e34fb72b6c6f712122782d35ab24bb147343c85aab9a2aff4d7"
+      },
+      "dead_claim": {
+        "bytes": 526,
+        "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-parallel-retry-1/s55/seed-6071406/2x/single-remote-retrieval/context-80/replicate-0/.p2-direct-controller-exact-fill-v1-3-5-cell.claim",
+        "sha256": "36949b7f062f41bdcf588a714e2ff7f0bf7affa386d995aeac9d1fa8460379cb",
+        "worker_count": 3,
+        "worker_index": 0
+      },
+      "durable_quality_state": {
+        "canonical_prefix_shards": 0,
+        "completed_shards": 0,
+        "globally_committed_shards": 0,
+        "matrix_records": [],
+        "orphan_claim_count": 1,
+        "published_bundle_count": 0,
+        "published_envelope_count": 0,
+        "published_sidecar_count": 0,
+        "worker_records": []
+      },
+      "failure": {
+        "cause": "the v1.3.5 producer emitted selected-worker and topology-probe bindings while the generated evaluator retained two v1.3.4 lineage field names",
+        "exception": "ValueError: Quality-start activation public binding schema drifted.",
+        "stage": "first-cell-bundle-validation-before-atomic-publication"
+      },
+      "implementation_source_commit": "58c17ac404acf671b556b911fbe149c4cae97576",
+      "lineage_type": "signed-superseded-unpublished-volatile-quality-binding-schema-failure",
+      "manifest": {
+        "bytes": 111119,
+        "path": "research/adaptive_v4_memory/manifests/p2-post-rank-direct-controller-exact-fill-v1-3-5.json",
+        "sha256": "2c6d51449f9f5bc63cfed959a4b9fc4cbb043b4db8c4c11f584e78cf695b7d82"
+      },
+      "manifest_commit": "73f61887d8011d485fa007f70e01de4eb0c4902f",
+      "matrix": {
+        "attestation_mac": "75765f2ab290361672cbf58f32022849e8bc6393b828182a181d2079a33e8467",
+        "bytes": 370726,
+        "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-parallel-retry-1/controller-matrix.summary.json",
+        "payload_sha256": "afc3295d312793da74776a2c29174559981db011f6b630c7b6bb09a27d460600",
+        "sha256": "9e08f863b846ad7a68bf55a57e67070b5e03e99e79c3b25bbfbf2661f965da51"
+      },
+      "quality_session": {
+        "launch": {
+          "attestation_mac": "eb00b1e50f91d9f6da208d4693bd5a76f4dd0e84132b329aea064d7b5c91a5a0",
+          "bytes": 22058,
+          "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/.controller-exact-fill-v1-3-5-parallel-retry-1.p2-direct-controller-persistent-sessions-v1-3-5/2ecd492752e5d04338ea0102dd5e8e162965e0ac8610f7f127faf36e1ba6491c.launch.json",
+          "payload_sha256": "e912e113311d4031037fbcc2a7f4f9dafca70c74acb8e97fb5f884456a2ce810",
+          "sha256": "5b8310769bd69b7b7305b9bd276c344c2326bb6066721b3d2df5a9144c29cfb6"
+        },
+        "terminal": {
+          "attestation_mac": "25af6516cebf55661a63bccc6077f60ea52d31ce78855e49df7120343da406f7",
+          "bytes": 21195,
+          "child_process_returncode": 1,
+          "completed_result_count": 0,
+          "completed_work_count": 0,
+          "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/.controller-exact-fill-v1-3-5-parallel-retry-1.p2-direct-controller-persistent-sessions-v1-3-5/2ecd492752e5d04338ea0102dd5e8e162965e0ac8610f7f127faf36e1ba6491c.terminal.json",
+          "payload_sha256": "45ae69dff823e5325b1200e4d5422d86ec3a267df4eb4dc21bc619167ee225f9",
+          "sha256": "af936d5235e091b324c7e636a86830ede925483f0bff49396748f8f770ad022a",
+          "status": "child_eof"
+        }
+      },
+      "retry": {
+        "activation_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-parallel-retry-2-activation",
+        "output_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-parallel-retry-2",
+        "quality_values_used_to_configure_retry": false,
+        "scientific_grid_arm_estimand_or_success_gate_changed": false
+      },
+      "volatile_execution_disclosure": {
+        "quality_computation_may_have_completed_in_memory": true,
+        "quality_evaluator_started": true,
+        "quality_values_read_by_supervisor_or_retry_decision": false
+      },
+      "worker_zero_ledger": {
+        "attestation_mac": "a69642a381c165e84a731b1174b4ced8820235d982b616c8a70a3b7dac5ca7ba",
+        "bytes": 161066,
+        "completed_shards": 0,
+        "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/.controller-exact-fill-v1-3-5-parallel-retry-1.p2-direct-controller-workers-v1-3-5/worker-00000-of-00003.summary.json",
+        "payload_sha256": "29019dba1d66537b7883319f6c7befd05669d83a8d8edef367d19401549f0d03",
+        "records": [],
+        "sha256": "007dd54db28255f4193e1cbae1afe909ad430ba1479e8aef4f48170790d1e615"
+      }
+    },
     "v1_3_5_superseded_zero_quality_parallel_attempt": {
       "activation": {
         "attestation_mac": "6b96286126129f390c78ebdd135245dc978ed35659837d5b7bdddab6b88e1e75",
@@ -2209,5 +2300,5 @@
     "worst_family_context_slice_reported": true,
     "worst_joint_training_seed_family_context_slice_reported": true
   },
-  "status": "frozen_v1_3_5_three_worker_parallel_retry_after_exact_zero_quality_validator_failure"
+  "status": "frozen_v1_3_5_three_worker_parallel_retry_2_after_unpublished_binding_schema_failure"
 }
