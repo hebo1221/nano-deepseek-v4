@@ -608,6 +608,7 @@ def _manifest_topology(context: QualityContext) -> tuple[int, dict[str, Any]]:
     return contract.selected_worker_count(payload), {
         "quality_execution_topology": topology,
         "topology_probe": dict(cast(Mapping[str, Any], activation["topology_probe"])),
+        "topology_selection": dict(cast(Mapping[str, Any], activation["topology_selection"])),
     }
 
 
@@ -778,6 +779,7 @@ def _validate_activation(
         and payload.get("selected_worker_count") == worker_count
         and payload.get("quality_execution_topology") == topology["quality_execution_topology"]
         and payload.get("topology_probe") == topology["topology_probe"]
+        and payload.get("topology_selection") == topology["topology_selection"]
         and payload.get("expected_shards") == expected_shards
         and payload.get("coordinate_digest") == coordinate_digest
         and tuple(payload.get("exact_fill_arm_names", ())) == tuple(exact_fill_arm_names)

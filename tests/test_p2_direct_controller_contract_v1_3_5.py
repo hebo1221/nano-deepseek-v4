@@ -30,13 +30,14 @@ def _probe_binding(*, worker_count: int = 3) -> dict[str, Any]:
     }
 
 
-def _manifest(*, worker_count: int = 3) -> dict[str, Any]:
+def _manifest(*, worker_count: int = 3, probe_worker_count: int | None = None) -> dict[str, Any]:
+    selected_by_probe = worker_count if probe_worker_count is None else probe_worker_count
     return contract.build_v1_3_5_manifest_payload(
         attestation_key_id="a" * 64,
         implementation_tree_digest="b" * 64,
         implementation_source_commit="c" * 40,
         selected_worker_count=worker_count,
-        topology_probe_binding=_probe_binding(worker_count=worker_count),
+        topology_probe_binding=_probe_binding(worker_count=selected_by_probe),
     )
 
 
@@ -83,6 +84,28 @@ def test_builder_moves_only_mutable_output_namespaces() -> None:
     assert topology["coordinator_only_publication"] is True
 
 
+def test_builder_records_explicit_three_worker_override_without_rewriting_probe() -> None:
+    child = _manifest(worker_count=3, probe_worker_count=1)
+    activation = child["execution_contract"]["sealed_launch_and_persistent_session"][
+        "quality_start_activation"
+    ]
+
+    assert activation["topology_probe"]["selected_worker_count"] == 1
+    assert (
+        activation["topology_selection"]
+        == contract.V1_3_5_USER_DIRECTED_PARALLEL_OVERRIDE
+    )
+    assert activation["quality_execution_topology"]["worker_count"] == 3
+    assert "no-measured-parallel-speedup" in child["lineage_and_adaptation_disclosure"][
+        "amendment_trigger"
+    ]
+
+
+def test_builder_rejects_unregistered_probe_override() -> None:
+    with pytest.raises(ValueError, match="explicit one-to-three-worker"):
+        _manifest(worker_count=2, probe_worker_count=1)
+
+
 def test_manifest_validation_rejects_topology_or_scientific_tampering() -> None:
     payload = _manifest()
     contract.validate_v1_3_5_manifest_payload(payload, verify_implementation=False)
@@ -91,7 +114,10 @@ def test_manifest_validation_rejects_topology_or_scientific_tampering() -> None:
     topology_tamper["execution_contract"]["sealed_launch_and_persistent_session"][
         "quality_start_activation"
     ]["quality_execution_topology"]["worker_count"] = 2
-    with pytest.raises(ValueError, match="probe binding|canonical builder"):
+    with pytest.raises(
+        ValueError,
+        match="probe binding|canonical builder|explicit one-to-three-worker",
+    ):
         contract.validate_v1_3_5_manifest_payload(topology_tamper, verify_implementation=False)
 
     science_tamper = copy.deepcopy(payload)

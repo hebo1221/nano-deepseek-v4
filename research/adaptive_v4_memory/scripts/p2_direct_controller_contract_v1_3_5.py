@@ -115,6 +115,15 @@ TOPOLOGY_PROBE_BINDING_FIELDS = frozenset(
     }
 )
 
+V1_3_5_USER_DIRECTED_PARALLEL_OVERRIDE = {
+    "probe_selected_worker_count": 1,
+    "execution_worker_count": 3,
+    "selection_authority": "explicit-user-directive-after-quality-blind-probe",
+    "probe_recommendation_overridden": True,
+    "measured_speedup_over_single_worker_claimed": False,
+    "directive": "run-full17-with-actual-three-worker-same-gpu-parallelism",
+}
+
 
 def _require(condition: bool, message: str) -> None:
     if not condition:
@@ -134,9 +143,7 @@ def _parent_manifest_payload() -> dict[str, Any]:
     return cast(dict[str, Any], payload)
 
 
-def _validate_probe_binding(
-    binding: Mapping[str, Any], *, selected_worker_count: int
-) -> dict[str, Any]:
+def _validate_probe_binding(binding: Mapping[str, Any]) -> dict[str, Any]:
     checked = dict(binding)
     _require(
         set(checked) == TOPOLOGY_PROBE_BINDING_FIELDS
@@ -147,12 +154,34 @@ def _validate_probe_binding(
         and base.is_sha256(checked.get("payload_sha256"))
         and base.is_sha256(checked.get("attestation_mac"))
         and checked.get("candidate_worker_counts") == [1, 2, 3, 4]
-        and checked.get("selected_worker_count") == selected_worker_count
+        and type(checked.get("selected_worker_count")) is int
+        and 1 <= cast(int, checked["selected_worker_count"]) <= 4
         and checked.get("semantic_equivalence_passed") is True
         and checked.get("quality_values_accessed") is False,
         "Topology probe binding is invalid.",
     )
     return checked
+
+
+def _topology_selection(
+    *, selected_worker_count: int, probe_selected_worker_count: int
+) -> dict[str, Any]:
+    if selected_worker_count == probe_selected_worker_count:
+        return {
+            "probe_selected_worker_count": probe_selected_worker_count,
+            "execution_worker_count": selected_worker_count,
+            "selection_authority": "quality-blind-topology-probe",
+            "probe_recommendation_overridden": False,
+            "measured_speedup_over_single_worker_claimed": selected_worker_count > 1,
+            "directive": None,
+        }
+    expected = V1_3_5_USER_DIRECTED_PARALLEL_OVERRIDE
+    _require(
+        probe_selected_worker_count == expected["probe_selected_worker_count"]
+        and selected_worker_count == expected["execution_worker_count"],
+        "Only the explicit one-to-three-worker user-directed override is admitted.",
+    )
+    return dict(expected)
 
 
 def build_v1_3_5_manifest_payload(
@@ -173,9 +202,10 @@ def build_v1_3_5_manifest_payload(
         base.is_git_oid(implementation_source_commit),
         "Implementation source commit is invalid.",
     )
-    probe = _validate_probe_binding(
-        topology_probe_binding,
+    probe = _validate_probe_binding(topology_probe_binding)
+    topology_selection = _topology_selection(
         selected_worker_count=selected_worker_count,
+        probe_selected_worker_count=cast(int, probe["selected_worker_count"]),
     )
     payload = copy.deepcopy(_parent_manifest_payload())
     payload["experiment_id"] = V1_3_5_EXPERIMENT_ID
@@ -239,7 +269,11 @@ def build_v1_3_5_manifest_payload(
         "zero-quality-lineage;scientific-grid-arms-estimands-and-success-gates-unchanged"
     )
     disclosure["amendment_trigger"] = (
-        "single-worker-gb10-underutilization-with-preregistered-quality-blind-topology-probe"
+        "explicit-user-request-for-three-worker-full17-after-quality-blind-probe-selected-"
+        "one-worker-with-no-measured-parallel-speedup"
+        if topology_selection["probe_recommendation_overridden"]
+        else "single-worker-gb10-underutilization-with-preregistered-quality-blind-"
+        "topology-probe"
     )
     disclosure["scientific-grid-arm-estimand-or-success-gate_changed"] = False
     disclosure["quality_outcome_used_to_create_fork"] = False
@@ -282,12 +316,13 @@ def build_v1_3_5_manifest_payload(
         "coordinator_only_publication": True,
     }
     activation["topology_probe"] = probe
+    activation["topology_selection"] = topology_selection
     activation["matrix_lock_semantics"] = (
         "activation-root-precreated-inode-flock-plus-process-thread-mutex-v2"
     )
     activation["fresh_execution_sequence"] = [
         "validate-byte-exact-v1.3.4-static-predecessor",
-        "validate-preregistered-quality-blind-topology-probe-and-selected-worker-count",
+        "validate-preregistered-quality-blind-topology-probe-and-record-selection-authority",
         "publish-fresh-v1.3.5-quality-start-activation",
         "run-zero-work-persistent-ready-only-preflight-on-worker-zero",
         "publish-initial-zero-record-distributed-matrix",
