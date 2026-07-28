@@ -1,7 +1,7 @@
 {
   "artifact_namespaces": {
-    "activation_matrix_lock_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-parallel-final-3-activation/matrix.lock",
-    "activation_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-parallel-final-3-activation",
+    "activation_matrix_lock_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-mixed-rtx4090-activation/matrix.lock",
+    "activation_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-mixed-rtx4090-activation",
     "activation_root_exact_member_count": 2,
     "activation_root_is_immutable_sibling_outside_quality_closed_world": true,
     "admission_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-4-admission",
@@ -28,13 +28,15 @@
       "summary": "p2-post-rank-direct-controller-exact-fill-summary-v1.3.5",
       "worker_ledger": "p2-post-rank-direct-controller-exact-fill-worker-ledger-v1.3.5"
     },
-    "integrity_output_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-parallel-final-3.integrity.json",
+    "final_3_bridge_output_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-parallel-final-3",
+    "integrity_output_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-mixed-rtx4090.integrity.json",
     "matrix_binds_role_tagged_preflight_hmac_evidence": true,
     "matrix_lock_is_precreated_before_first_quality_mutation": true,
-    "matrix_summary_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-parallel-final-3/controller-matrix.summary.json",
-    "output_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-parallel-final-3",
-    "persistent_session_ledger_lock_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/.controller-exact-fill-v1-3-5-parallel-final-3.p2-direct-controller-persistent-sessions-v1-3-5.lock",
-    "persistent_session_ledger_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/.controller-exact-fill-v1-3-5-parallel-final-3.p2-direct-controller-persistent-sessions-v1-3-5",
+    "matrix_summary_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-mixed-rtx4090/controller-matrix.summary.json",
+    "mixed_device_site": "rtx4090",
+    "output_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-mixed-rtx4090",
+    "persistent_session_ledger_lock_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/.controller-exact-fill-v1-3-5-mixed-rtx4090.p2-direct-controller-persistent-sessions-v1-3-5.lock",
+    "persistent_session_ledger_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/.controller-exact-fill-v1-3-5-mixed-rtx4090.p2-direct-controller-persistent-sessions-v1-3-5",
     "persistent_session_roles": {
       "quality_work": "quality",
       "ready_only_preflight": "ready_only_preflight"
@@ -46,9 +48,9 @@
       "terminal"
     ],
     "preheldout_genesis_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-4-admission/preheldout-genesis.json",
-    "quality_start_activation_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-parallel-final-3-activation/quality-start-activation.json",
+    "quality_start_activation_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-mixed-rtx4090-activation/quality-start-activation.json",
     "reuse_admission_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-4-admission/historical-reuse-admission.json",
-    "summary_output_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-parallel-final-3.summary.json",
+    "summary_output_path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-mixed-rtx4090.summary.json",
     "superseded_v1_3_2_static_admission_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-2-admission",
     "superseded_v1_3_2_static_pair_is_read_only_lineage": true,
     "superseded_v1_3_3_activation_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-3-activation",
@@ -78,7 +80,7 @@
     "v1_3_4_static_admission_namespace_reused_read_only": true,
     "v1_3_5_superseded_zero_quality_namespace_reused": false,
     "v1_3_output_or_admission_namespace_reused": false,
-    "worker_ledger_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/.controller-exact-fill-v1-3-5-parallel-final-3.p2-direct-controller-workers-v1-3-5"
+    "worker_ledger_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/.controller-exact-fill-v1-3-5-mixed-rtx4090.p2-direct-controller-workers-v1-3-5"
   },
   "attestation": {
     "key_compromise_in_scope": false,
@@ -395,11 +397,46 @@
           "closed-world-storage"
         ],
         "quality_execution_topology": {
-          "assignment_rule": "canonical-coordinate-index-modulo-worker-count-v1",
+          "assignment_rule": "latin-rotated-four-gb10-six-rtx4090-per-full-stratum-then-site-index-modulo-worker-count-v1",
           "coordinator_only_publication": true,
-          "device_topology": "one-physical-gpu-one-supervisor-owned-scheduler-and-device-guard",
+          "device_block_site": "rtx4090",
+          "device_block_sites": [
+            "gb10",
+            "rtx4090"
+          ],
+          "device_topology": "one-physical-gpu-per-device-block-site",
           "distributed_execution_supported": true,
+          "execution_environment_projection": {
+            "cuda_driver_version": "555.42.06",
+            "cuda_runtime_version": "12.8",
+            "platform_machine": "x86_64",
+            "platform_release": "5.15.0-139-generic",
+            "platform_string": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+            "platform_system": "Linux",
+            "python_executable": "/home/dilab/miniconda3/bin/python3.13",
+            "python_implementation": "CPython",
+            "python_version": "3.13.9",
+            "schema_version": 1,
+            "selected_device_class": {
+              "compute_capability": [
+                8,
+                9
+              ],
+              "name": "NVIDIA GeForce RTX 4090",
+              "total_memory_bytes": 25280184320
+            },
+            "torch_version": "2.9.1+cu128"
+          },
+          "replicates_per_full_stratum": {
+            "gb10": 4,
+            "rtx4090": 6
+          },
           "same_gpu_borrowed_lease_views": true,
+          "site_coordinate_count": 5400,
+          "site_coordinate_counts": {
+            "gb10": 3600,
+            "rtx4090": 5400
+          },
           "worker_count": 3,
           "worker_indices": [
             0,
@@ -452,8 +489,8 @@
         },
         "signed-lineage-bindings-and-retained-activation-lease-carry-authority-within-one-authenticated-session": true,
         "topology_probe": {
-          "attestation_mac": "248847ecb0fb561440937907115d53f4fab666772fc82b5d05bd89509044bec8",
-          "bytes": 11698,
+          "attestation_mac": "d31045d5972c6daa53fd6ccac3c83ec0350ad5bb25b8342aa609d1a91a8a708d",
+          "bytes": 11726,
           "candidate_worker_counts": [
             1,
             2,
@@ -461,19 +498,19 @@
             4
           ],
           "path": "/home/hebo1221/nano-deepseek-v4/artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/topology-probe-v3/topology-probe.summary.json",
-          "payload_sha256": "b39a5f446e78d869b7023df6783841e4d96292039abd3c46a216f249ae6a9727",
+          "payload_sha256": "c55471c78d879ee81db908ac9780443fa35684135c0c2c5aa5d30020e60dac68",
           "quality_values_accessed": false,
           "selected_worker_count": 1,
           "semantic_equivalence_passed": true,
-          "sha256": "e41ac6cd8faf86e13f64b8a042fddfd8c24de2de41952dd646f42c6f9fa2862f"
+          "sha256": "9e62140a66c1fe6b423227bddddba318806750f551dd6ec83571b9b9e23de49f"
         },
         "topology_selection": {
-          "directive": "run-full17-with-actual-three-worker-same-gpu-parallelism",
+          "directive": "run-full17-as-balanced-gb10-and-rtx4090-device-blocks-with-three-workers-per-site",
           "execution_worker_count": 3,
           "measured_speedup_over_single_worker_claimed": false,
           "probe_recommendation_overridden": true,
           "probe_selected_worker_count": 1,
-          "selection_authority": "explicit-user-directive-after-quality-blind-probe"
+          "selection_authority": "explicit-user-directive-for-mixed-device-block-execution"
         },
         "zero_prefix_resume_behavior": "execute-exactly-one-operational-cell-and-stop-before-full-resume"
       },
@@ -757,15 +794,17 @@
       "research/adaptive_v4_memory/reports/2026-07-20-p2-direct-controller-v1-3-2-import-boundary-amendment.md",
       "research/adaptive_v4_memory/reports/2026-07-20-p2-direct-controller-v1-3-3-reuse-admission-view-amendment.md",
       "research/adaptive_v4_memory/reports/2026-07-20-p2-direct-controller-v1-3-4-runtime-module-provenance-amendment.md",
+      "research/adaptive_v4_memory/reports/2026-07-28-p2-mixed-device-block-amendment.md",
+      "research/adaptive_v4_memory/scripts/freeze_p2_mixed_device_manifest_v1_3_5.py",
       "research/adaptive_v4_memory/scripts/p2_direct_controller_contract_v1_3_5.py",
       "research/adaptive_v4_memory/scripts/p2_direct_controller_topology_v1_3_5.py",
       "research/adaptive_v4_memory/scripts/probe_p2_direct_controller_topology_v1_3_5.py"
     ],
-    "source_commit": "715740d087a7b6417ee7ae319bfd87f4138008ca",
-    "tree_digest": "a180da8fecbf1ceaacc166c7083ed20c0ed79751ac93f786bd760cc8747ad2ee"
+    "source_commit": "bfd58633fd370867345e732b32b625372443f794",
+    "tree_digest": "ba2636177199608e7b6af7bade295ce1c6db8e320dfa33589a724980ef5eebb6"
   },
   "lineage_and_adaptation_disclosure": {
-    "amendment_trigger": "explicit-user-request-for-three-worker-full17-after-quality-blind-probe-selected-one-worker-with-no-measured-parallel-speedup",
+    "amendment_trigger": "explicit-user-request-to-shorten-full17-with-a-gb10-plus-rtx4090-quality-blind-balanced-device-block-design",
     "arm_change": "delete-exactly-two-variable-fill-top-p-arms-and-preserve-all-17-exact-fill-arms-relative-order-semantics-estimands-and-analysis",
     "evaluation_seed_policy": {
       "freshness_definition": "never-used-for-quality-not-newly-selected-in-v1.3",
@@ -784,7 +823,7 @@
     "prior_p2_quality_results_observed": true,
     "prospective_scope": "previously-unobserved-held-out-controller-quality-only",
     "protocol_relation_to_v1_2": "new-follow-on-protocol-fork-not-a-repair-relabel-or-unchanged-continuation",
-    "protocol_relation_to_v1_3": "topology-and-storage-only-same-gpu-parallel-amendment-after-byte-exact-v1.3.4-zero-quality-lineage;scientific-grid-arms-estimands-and-success-gates-unchanged",
+    "protocol_relation_to_v1_3": "device-blocked-mixed-gpu-execution-amendment-after-v1.3.5-final-3-bridge;scientific-grid-arms-estimands-and-success-gates-unchanged;device-by-arm-interactions-preregistered",
     "quality_nonobservation_scope": "reserved evaluation-seed identifiers and their deterministic future RNG-seed schedule were registered as protocol metadata, but no quality RNG was initialized and no held-out input target prediction or outcome was created or inspected by the trusted canonical v1.2 quality pipeline",
     "quality_nonobservation_threat_boundary": "owner-controlled deletion filesystem rollback and out-of-band execution are not cryptographically disproved and remain outside the trusted-pipeline claim",
     "quality_outcome_used_to_create_fork": false,
@@ -2527,5 +2566,5 @@
     "worst_family_context_slice_reported": true,
     "worst_joint_training_seed_family_context_slice_reported": true
   },
-  "status": "frozen_v1_3_5_three_worker_parallel_final_after_live_claim_preflight_failure"
+  "status": "frozen_v1_3_5_mixed_device_block_site"
 }
