@@ -5725,6 +5725,7 @@ def _validate_distributed_disk_summary(
     evaluator_binding: Mapping[str, Any],
     matrix_lock_binding: Mapping[str, Any],
     expected_gpu_worker_leases: Mapping[int, Mapping[str, Any]],
+    ready_only_preflight_gpu_lease_binding: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     _require(layout.matrix_summary.exists(), "Distributed matrix summary disappeared.")
     disk_payload = _load_json_nofollow(
@@ -5790,6 +5791,9 @@ def _validate_distributed_disk_summary(
             verify_bundles=False,
             expected_worker_count=worker_count,
             expected_gpu_worker_leases=expected_gpu_worker_leases,
+            ready_only_preflight_gpu_lease_binding=(
+                ready_only_preflight_gpu_lease_binding
+            ),
         )
         return dict(recovered_payload)
     disk_records = validate_matrix_summary(
@@ -5802,6 +5806,9 @@ def _validate_distributed_disk_summary(
         verify_bundles=False,
         expected_worker_count=worker_count,
         expected_gpu_worker_leases=expected_gpu_worker_leases,
+        ready_only_preflight_gpu_lease_binding=(
+            ready_only_preflight_gpu_lease_binding
+        ),
         allow_stale_session_ledger_watermark=True,
     )
     _require(
@@ -5824,6 +5831,9 @@ def _validate_distributed_disk_summary(
         verify_bundles=False,
         expected_worker_count=worker_count,
         expected_gpu_worker_leases=expected_gpu_worker_leases,
+        ready_only_preflight_gpu_lease_binding=(
+            ready_only_preflight_gpu_lease_binding
+        ),
     )
     return refreshed
 
@@ -6010,6 +6020,7 @@ def _refresh_distributed_scope_session_projection(
             evaluator_binding=evaluator_binding,
             matrix_lock_binding=matrix_lock_binding,
             expected_gpu_worker_leases=gpu_bindings,
+            ready_only_preflight_gpu_lease_binding=gpu_binding,
         )
         if active is not None:
             _reconcile_active_persistent_session_records(
@@ -6956,6 +6967,7 @@ def _generate_runner(source: str) -> str:
         "    expected_gpu_worker_leases: Mapping[int, Mapping[str, Any]] | None = None,\n"
         ") -> list[dict[str, Any]]:\n",
         "    expected_gpu_worker_leases: Mapping[int, Mapping[str, Any]] | None = None,\n"
+        "    ready_only_preflight_gpu_lease_binding: Mapping[str, Any] | None = None,\n"
         "    allow_stale_session_ledger_watermark: bool = False,\n"
         ") -> list[dict[str, Any]]:\n",
         count=1,
@@ -7031,13 +7043,28 @@ def _generate_runner(source: str) -> str:
         "            terminal and not allow_stale_session_ledger_watermark\n"
         "        ),\n"
         "    )\n"
+        "    ready_only_preflight_gpu_binding = observed_gpu_bindings.get(0)\n"
+        "    if ready_only_preflight_gpu_binding is None:\n"
+        "        _require(\n"
+        "            ready_only_preflight_gpu_lease_binding is not None,\n"
+        '            "Matrix lacks both worker-0 and live supervisor GPU authority for preflight.",\n'
+        "        )\n"
+        "        ready_only_preflight_gpu_binding = _validate_gpu_lease_binding(\n"
+        "            cast(Mapping[str, Any], ready_only_preflight_gpu_lease_binding)\n"
+        "        )\n"
+        "    elif ready_only_preflight_gpu_lease_binding is not None:\n"
+        "        _require(\n"
+        "            ready_only_preflight_gpu_binding\n"
+        "            == _validate_gpu_lease_binding(ready_only_preflight_gpu_lease_binding),\n"
+        '            "Worker-0 and live supervisor GPU authority disagree for preflight.",\n'
+        "        )\n"
         "    _validate_ready_only_preflight_snapshot(\n"
         "        cast(Mapping[str, Any], raw_ready_only_preflight),\n"
         "        session_projection=session_projection,\n"
         "        output_root=output_root,\n"
         "        prerequisites=prerequisites,\n"
         "        evaluator_binding=evaluator_binding,\n"
-        "        gpu_lease_binding=observed_gpu_bindings[0],\n"
+        "        gpu_lease_binding=ready_only_preflight_gpu_binding,\n"
         "    )\n"
         "    _crosscheck_matrix_records_with_session_ledger(\n"
         "        records,\n"
@@ -8768,6 +8795,27 @@ def _generate_runner(source: str) -> str:
         f"{RUNNER_SAME_GPU_SUPERVISOR_V1_3_5.strip()}\n\n\n"
         f"{text[run_matrix_start:]}"
     )
+    lines = text.splitlines(keepends=True)
+    patched_lines: list[str] = []
+    fallback_call_count = 0
+    for index, line in enumerate(lines):
+        patched_lines.append(line)
+        if line.strip() != "expected_gpu_worker_leases=gpu_bindings,":
+            continue
+        next_line = lines[index + 1] if index + 1 < len(lines) else ""
+        if "ready_only_preflight_gpu_lease_binding=" in next_line:
+            continue
+        indentation = line[: len(line) - len(line.lstrip())]
+        patched_lines.append(
+            f"{indentation}ready_only_preflight_gpu_lease_binding=current_gpu_binding,\n"
+        )
+        fallback_call_count += 1
+    _require(
+        fallback_call_count == 6,
+        "Expected six distributed worker validation calls needing live GPU fallback; "
+        f"found {fallback_call_count}.",
+    )
+    text = "".join(patched_lines)
     _require("top_p" not in text.lower(), "Runner retained a top-p prerequisite or identifier.")
     generated = _insert_generated_header(_upgrade_generated_contract_to_v1_3_4(text))
     return _insert_sealed_entrypoint_preamble(

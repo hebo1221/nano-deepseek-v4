@@ -35,7 +35,7 @@ ENTRYPOINT_RELATIVE_PATHS = {
 PYTHON_RELATIVE_PATH = ".venv/bin/python"
 EXPECTED_EXPERIMENT_ID = "p2-post-rank-direct-controller-exact-fill-v1.3.5"
 EXPECTED_MANIFEST_STATUS = (
-    "frozen_v1_3_5_same_gpu_topology_storage_amendment_after_v1_3_4_zero_quality_lineage"
+    "frozen_v1_3_5_three_worker_parallel_retry_after_exact_zero_quality_validator_failure"
 )
 RUNNER_FD_ENV = "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_5_GIT_RUNNER_FD"
 SOURCE_BUNDLE_FD_ENV = "ADAPTIVE_V4_DIRECT_EXACT_FILL_V1_3_5_GIT_SOURCE_BUNDLE_FD"

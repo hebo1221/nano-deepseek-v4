@@ -101,6 +101,24 @@ def test_builder_records_explicit_three_worker_override_without_rewriting_probe(
     ]
 
 
+def test_builder_preserves_failed_zero_quality_attempt_in_disjoint_retry_namespace() -> None:
+    child = _manifest(worker_count=3, probe_worker_count=1)
+    lineage = child["lineage_and_adaptation_disclosure"][
+        "v1_3_5_superseded_zero_quality_parallel_attempt"
+    ]
+
+    assert lineage == contract.superseded_zero_quality_parallel_attempt()
+    assert lineage["quality_state"]["records"] == []
+    assert lineage["quality_state"]["completed_shards"] == 0
+    assert lineage["quality_state"]["quality_outcomes_materialized"] == 0
+    assert lineage["retry"]["quality_outcome_used_to_configure_retry"] is False
+    assert lineage["retry"]["output_root"] == str(contract.V1_3_5_OUTPUT_ROOT)
+    assert contract.V1_3_5_OUTPUT_ROOT != (
+        contract.V1_3_5_SUPERSEDED_ZERO_QUALITY_OUTPUT_ROOT
+    )
+    assert "parallel-retry-1" in str(contract.V1_3_5_OUTPUT_ROOT)
+
+
 def test_builder_rejects_unregistered_probe_override() -> None:
     with pytest.raises(ValueError, match="explicit one-to-three-worker"):
         _manifest(worker_count=2, probe_worker_count=1)

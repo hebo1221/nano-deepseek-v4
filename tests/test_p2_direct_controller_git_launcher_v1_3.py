@@ -26,7 +26,7 @@ def test_launcher_uses_only_the_v1_3_5_operational_namespace() -> None:
     assert launcher.EXPECTED_EXPERIMENT_ID.endswith("v1.3.5")
     assert launcher.MANIFEST_RELATIVE_PATH.endswith("v1-3-5.json")
     assert launcher.EXPECTED_MANIFEST_STATUS == (
-        "frozen_v1_3_5_same_gpu_topology_storage_amendment_after_v1_3_4_zero_quality_lineage"
+        "frozen_v1_3_5_three_worker_parallel_retry_after_exact_zero_quality_validator_failure"
     )
     assert "V1_3_5" in launcher.RUNNER_FD_ENV
     assert "V1_3_5" in launcher.SOURCE_BUNDLE_FD_ENV

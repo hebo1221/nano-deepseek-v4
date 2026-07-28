@@ -13,25 +13,44 @@ from p2_direct_controller_contract_v1_3 import *  # noqa: F403
 
 V1_3_5_EXPERIMENT_ID = "p2-post-rank-direct-controller-exact-fill-v1.3.5"
 V1_3_5_MANIFEST_STATUS = (
-    "frozen_v1_3_5_same_gpu_topology_storage_amendment_after_v1_3_4_zero_quality_lineage"
+    "frozen_v1_3_5_three_worker_parallel_retry_after_exact_zero_quality_validator_failure"
 )
 V1_3_5_MANIFEST_PATH = Path(
     "research/adaptive_v4_memory/manifests/p2-post-rank-direct-controller-exact-fill-v1-3-5.json"
 )
-V1_3_5_OUTPUT_ROOT = Path(
+V1_3_5_SUPERSEDED_ZERO_QUALITY_OUTPUT_ROOT = Path(
     "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5"
+)
+V1_3_5_SUPERSEDED_ZERO_QUALITY_ACTIVATION_ROOT = (
+    V1_3_5_SUPERSEDED_ZERO_QUALITY_OUTPUT_ROOT.parent
+    / "controller-exact-fill-v1-3-5-activation"
+)
+V1_3_5_SUPERSEDED_ZERO_QUALITY_PERSISTENT_SESSION_ROOT = (
+    V1_3_5_SUPERSEDED_ZERO_QUALITY_OUTPUT_ROOT.parent
+    / ".controller-exact-fill-v1-3-5.p2-direct-controller-persistent-sessions-v1-3-5"
+)
+V1_3_5_OUTPUT_ROOT = Path(
+    "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/"
+    "controller-exact-fill-v1-3-5-parallel-retry-1"
 )
 V1_3_5_MATRIX_SUMMARY_PATH = V1_3_5_OUTPUT_ROOT / base.MATRIX_SUMMARY_NAME
 V1_3_5_INTEGRITY_OUTPUT_PATH = (
-    V1_3_5_OUTPUT_ROOT.parent / "controller-exact-fill-v1-3-5.integrity.json"
+    V1_3_5_OUTPUT_ROOT.parent
+    / "controller-exact-fill-v1-3-5-parallel-retry-1.integrity.json"
 )
-V1_3_5_SUMMARY_OUTPUT_PATH = V1_3_5_OUTPUT_ROOT.parent / "controller-exact-fill-v1-3-5.summary.json"
+V1_3_5_SUMMARY_OUTPUT_PATH = (
+    V1_3_5_OUTPUT_ROOT.parent
+    / "controller-exact-fill-v1-3-5-parallel-retry-1.summary.json"
+)
 # The authenticated calibration/checkpoint inventory remains the exact,
 # read-only v1.3.4 predecessor pair.  No v1.3.5 copy or re-attestation exists.
 V1_3_5_ADMISSION_ROOT = base.V1_3_4_ADMISSION_ROOT
 V1_3_5_REUSE_ADMISSION_PATH = base.V1_3_4_REUSE_ADMISSION_PATH
 V1_3_5_PREHELDOUT_GENESIS_PATH = base.V1_3_4_PREHELDOUT_GENESIS_PATH
-V1_3_5_ACTIVATION_ROOT = V1_3_5_OUTPUT_ROOT.parent / "controller-exact-fill-v1-3-5-activation"
+V1_3_5_ACTIVATION_ROOT = (
+    V1_3_5_OUTPUT_ROOT.parent
+    / "controller-exact-fill-v1-3-5-parallel-retry-1-activation"
+)
 V1_3_5_ACTIVATION_MATRIX_LOCK_PATH = V1_3_5_ACTIVATION_ROOT / "matrix.lock"
 V1_3_5_QUALITY_START_ACTIVATION_PATH = V1_3_5_ACTIVATION_ROOT / "quality-start-activation.json"
 V1_3_5_WORKER_LEDGER_ROOT = V1_3_5_OUTPUT_ROOT.parent / (
@@ -123,6 +142,104 @@ V1_3_5_USER_DIRECTED_PARALLEL_OVERRIDE = {
     "measured_speedup_over_single_worker_claimed": False,
     "directive": "run-full17-with-actual-three-worker-same-gpu-parallelism",
 }
+
+
+def superseded_zero_quality_parallel_attempt() -> dict[str, Any]:
+    session_root = V1_3_5_SUPERSEDED_ZERO_QUALITY_PERSISTENT_SESSION_ROOT
+    session_nonce = "08aaf2ba81f195194b1f5bbb0ced3b0f9254f4e67508de1dc5297b7ceda07f01"
+    return {
+        "lineage_type": "signed-superseded-zero-quality-parallel-launch-failure",
+        "manifest_commit": "69bd328d08a1df2bcdb0a01f6db93923a503e551",
+        "implementation_source_commit": "01b82111a0c6e3d6fc70062f3815c841ffd7e1fb",
+        "manifest": {
+            "path": str(V1_3_5_MANIFEST_PATH),
+            "sha256": "87e4f5ecc197cc9aff1e6575323d9128cb281dfc98efd09b842aaa63247e9a3a",
+            "bytes": 106_426,
+        },
+        "activation": {
+            "path": str(
+                V1_3_5_SUPERSEDED_ZERO_QUALITY_ACTIVATION_ROOT
+                / "quality-start-activation.json"
+            ),
+            "sha256": "ff924b355215cc433c4080b926ebf362c4c9778d53036a7ba72e7fd026c96c4f",
+            "bytes": 302_045,
+            "payload_sha256": (
+                "d1d9a4b67f6136f1c60f7f9b06a850d2873b3acac436597e77b93b1f49b48325"
+            ),
+            "attestation_mac": (
+                "6b96286126129f390c78ebdd135245dc978ed35659837d5b7bdddab6b88e1e75"
+            ),
+        },
+        "matrix": {
+            "path": str(
+                V1_3_5_SUPERSEDED_ZERO_QUALITY_OUTPUT_ROOT / base.MATRIX_SUMMARY_NAME
+            ),
+            "sha256": "b33b1b94537dc1cf1a997ecc32609fc5c38047fb2df52bdd67b1824ec0932b4c",
+            "bytes": 332_444,
+            "payload_sha256": (
+                "09e43ec7ca42e7539cfb19eec402512b5e4badf0fcebbb116d8acbabe9d622dc"
+            ),
+            "attestation_mac": (
+                "ec9be6a03e843485938f67379efa925cc0615584a1d275f55f32a0e1925f2b15"
+            ),
+        },
+        "persistent_ready_only_session": {
+            "launch": {
+                "path": str(session_root / f"{session_nonce}.launch.json"),
+                "sha256": (
+                    "c08eec37a689c989e7a95e6dcaaf9af73f41c3df8a8d77bd49e75a932edff50a"
+                ),
+                "bytes": 22_020,
+                "payload_sha256": (
+                    "09d127004e4ae32e6920249e0ebff9cb7626339e153967924ae4f64500d6666e"
+                ),
+                "attestation_mac": (
+                    "4bf99ca9bbe7c6d0a72e7d115626901098b698e21910d9402b0dbf2c106d7dbf"
+                ),
+            },
+            "terminal": {
+                "path": str(session_root / f"{session_nonce}.terminal.json"),
+                "sha256": (
+                    "98593477741ebd05227398345ad41ecc04c92d9b2638c759fdc537dbca58572d"
+                ),
+                "bytes": 22_581,
+                "payload_sha256": (
+                    "d4ab37c892e8731f5a1428c6b7153ad676c3eb957b662384289005de35c89d59"
+                ),
+                "attestation_mac": (
+                    "8978f15f18fd13a1b37b44bb601dfe23a32efe7c2fc597db151746367ab0fafd"
+                ),
+            },
+        },
+        "quality_state": {
+            "completed_shards": 0,
+            "canonical_prefix_shards": 0,
+            "globally_committed_shards": 0,
+            "records": [],
+            "worker_ledger_count": 0,
+            "gpu_worker_lease_count": 0,
+            "quality_evaluation_started": False,
+            "evaluation_inputs_materialized": 0,
+            "quality_predictions_materialized": 0,
+            "quality_outcomes_materialized": 0,
+            "quality_aggregates_materialized": 0,
+            "outcome_selection_performed": False,
+        },
+        "failure": {
+            "stage": "distributed-zero-ledger-validation-before-first-worker-ledger-or-cell-claim",
+            "exception": "KeyError: 0",
+            "cause": (
+                "ready-only preflight validation indexed an intentionally empty distributed "
+                "GPU worker registry before the live supervisor fallback was wired"
+            ),
+        },
+        "retry": {
+            "output_root": str(V1_3_5_OUTPUT_ROOT),
+            "activation_root": str(V1_3_5_ACTIVATION_ROOT),
+            "scientific_grid_arm_estimand_or_success_gate_changed": False,
+            "quality_outcome_used_to_configure_retry": False,
+        },
+    }
 
 
 def _require(condition: bool, message: str) -> None:
@@ -232,8 +349,18 @@ def build_v1_3_5_manifest_payload(
             "reuse_admission_path": str(V1_3_5_REUSE_ADMISSION_PATH),
             "summary_output_path": str(V1_3_5_SUMMARY_OUTPUT_PATH),
             "worker_ledger_root": str(V1_3_5_WORKER_LEDGER_ROOT),
+            "superseded_v1_3_5_zero_quality_activation_root": str(
+                V1_3_5_SUPERSEDED_ZERO_QUALITY_ACTIVATION_ROOT
+            ),
+            "superseded_v1_3_5_zero_quality_output_root": str(
+                V1_3_5_SUPERSEDED_ZERO_QUALITY_OUTPUT_ROOT
+            ),
+            "superseded_v1_3_5_zero_quality_persistent_session_root": str(
+                V1_3_5_SUPERSEDED_ZERO_QUALITY_PERSISTENT_SESSION_ROOT
+            ),
             "v1_3_4_quality_output_namespace_reused": False,
             "v1_3_4_static_admission_namespace_reused_read_only": True,
+            "v1_3_5_superseded_zero_quality_namespace_reused": False,
         }
     )
     namespaces["attestation_purposes"] = {
@@ -295,6 +422,9 @@ def build_v1_3_5_manifest_payload(
         },
         "reuse_mode": "read-only-static-predecessor-no-v1.3.4-activation-reuse",
     }
+    disclosure["v1_3_5_superseded_zero_quality_parallel_attempt"] = (
+        superseded_zero_quality_parallel_attempt()
+    )
     execution = cast(dict[str, Any], payload["execution_contract"])
     execution["v1_3_5_quality_manifest_context_required"] = True
     execution["v1_3_4_quality_manifest_context_required"] = False

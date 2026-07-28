@@ -5303,6 +5303,7 @@ def validate_matrix_summary(
     verify_bundles: bool = True,
     expected_worker_count: int | None = None,
     expected_gpu_worker_leases: Mapping[int, Mapping[str, Any]] | None = None,
+    ready_only_preflight_gpu_lease_binding: Mapping[str, Any] | None = None,
     allow_stale_session_ledger_watermark: bool = False,
 ) -> list[dict[str, Any]]:
     _verify_attested_payload(payload, trust_root=prerequisites.trust_root)
@@ -5540,13 +5541,28 @@ def validate_matrix_summary(
             terminal and not allow_stale_session_ledger_watermark
         ),
     )
+    ready_only_preflight_gpu_binding = observed_gpu_bindings.get(0)
+    if ready_only_preflight_gpu_binding is None:
+        _require(
+            ready_only_preflight_gpu_lease_binding is not None,
+            "Matrix lacks both worker-0 and live supervisor GPU authority for preflight.",
+        )
+        ready_only_preflight_gpu_binding = _validate_gpu_lease_binding(
+            cast(Mapping[str, Any], ready_only_preflight_gpu_lease_binding)
+        )
+    elif ready_only_preflight_gpu_lease_binding is not None:
+        _require(
+            ready_only_preflight_gpu_binding
+            == _validate_gpu_lease_binding(ready_only_preflight_gpu_lease_binding),
+            "Worker-0 and live supervisor GPU authority disagree for preflight.",
+        )
     _validate_ready_only_preflight_snapshot(
         cast(Mapping[str, Any], raw_ready_only_preflight),
         session_projection=session_projection,
         output_root=output_root,
         prerequisites=prerequisites,
         evaluator_binding=evaluator_binding,
-        gpu_lease_binding=observed_gpu_bindings[0],
+        gpu_lease_binding=ready_only_preflight_gpu_binding,
     )
     _crosscheck_matrix_records_with_session_ledger(
         records,
@@ -7086,6 +7102,7 @@ def _validate_distributed_disk_summary(
     evaluator_binding: Mapping[str, Any],
     matrix_lock_binding: Mapping[str, Any],
     expected_gpu_worker_leases: Mapping[int, Mapping[str, Any]],
+    ready_only_preflight_gpu_lease_binding: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     _require(layout.matrix_summary.exists(), "Distributed matrix summary disappeared.")
     disk_payload = _load_json_nofollow(
@@ -7151,6 +7168,9 @@ def _validate_distributed_disk_summary(
             verify_bundles=False,
             expected_worker_count=worker_count,
             expected_gpu_worker_leases=expected_gpu_worker_leases,
+            ready_only_preflight_gpu_lease_binding=(
+                ready_only_preflight_gpu_lease_binding
+            ),
         )
         return dict(recovered_payload)
     disk_records = validate_matrix_summary(
@@ -7163,6 +7183,9 @@ def _validate_distributed_disk_summary(
         verify_bundles=False,
         expected_worker_count=worker_count,
         expected_gpu_worker_leases=expected_gpu_worker_leases,
+        ready_only_preflight_gpu_lease_binding=(
+            ready_only_preflight_gpu_lease_binding
+        ),
         allow_stale_session_ledger_watermark=True,
     )
     _require(
@@ -7185,6 +7208,9 @@ def _validate_distributed_disk_summary(
         verify_bundles=False,
         expected_worker_count=worker_count,
         expected_gpu_worker_leases=expected_gpu_worker_leases,
+        ready_only_preflight_gpu_lease_binding=(
+            ready_only_preflight_gpu_lease_binding
+        ),
     )
     return refreshed
 
@@ -7371,6 +7397,7 @@ def _refresh_distributed_scope_session_projection(
             evaluator_binding=evaluator_binding,
             matrix_lock_binding=matrix_lock_binding,
             expected_gpu_worker_leases=gpu_bindings,
+            ready_only_preflight_gpu_lease_binding=gpu_binding,
         )
         if active is not None:
             _reconcile_active_persistent_session_records(
@@ -7747,6 +7774,7 @@ def _run_distributed_matrix(
                 evaluator_binding=evaluator_binding,
                 matrix_lock_binding=lock_binding,
                 expected_gpu_worker_leases=gpu_bindings,
+                ready_only_preflight_gpu_lease_binding=current_gpu_binding,
             )
             if disk_summary_payload.get("status") in {
                 "paused_infrastructure",
@@ -7788,6 +7816,7 @@ def _run_distributed_matrix(
                 verify_bundles=False,
                 expected_worker_count=worker_count,
                 expected_gpu_worker_leases=gpu_bindings,
+                ready_only_preflight_gpu_lease_binding=current_gpu_binding,
             )
             return summary_payload
         _require(
@@ -7898,6 +7927,7 @@ def _run_distributed_matrix(
                 evaluator_binding=evaluator_binding,
                 matrix_lock_binding=lock_binding,
                 expected_gpu_worker_leases=gpu_bindings,
+                ready_only_preflight_gpu_lease_binding=current_gpu_binding,
             )
             active_claims = _preflight_distributed_output_tree(
                 output_root=layout.output_root,
@@ -8074,6 +8104,7 @@ def _run_distributed_matrix(
                     evaluator_binding=evaluator_binding,
                     matrix_lock_binding=lock_binding,
                     expected_gpu_worker_leases=gpu_bindings,
+                    ready_only_preflight_gpu_lease_binding=current_gpu_binding,
                 )
                 active_claims = _preflight_distributed_output_tree(
                     output_root=layout.output_root,
@@ -8369,6 +8400,7 @@ def _run_distributed_matrix(
             evaluator_binding=evaluator_binding,
             matrix_lock_binding=lock_binding,
             expected_gpu_worker_leases=gpu_bindings,
+            ready_only_preflight_gpu_lease_binding=current_gpu_binding,
         )
         final_active_claims = _preflight_distributed_output_tree(
             output_root=layout.output_root,
@@ -8399,6 +8431,7 @@ def _run_distributed_matrix(
             verify_bundles=False,
             expected_worker_count=worker_count,
             expected_gpu_worker_leases=gpu_bindings,
+            ready_only_preflight_gpu_lease_binding=current_gpu_binding,
         )
         return disk_terminal_or_prefix
 

@@ -2326,6 +2326,20 @@ def test_ready_only_preflight_is_ordered_before_zero_matrix_activation_release_a
     assert '"session_role": plan["session_role"]' in projection
 
 
+def test_distributed_zero_ledger_uses_live_supervisor_gpu_authority_for_preflight() -> None:
+    validator = inspect.getsource(matrix.validate_matrix_summary)
+    disk_validator = inspect.getsource(matrix._validate_distributed_disk_summary)
+    distributed_runner = inspect.getsource(matrix._run_distributed_matrix)
+
+    assert "ready_only_preflight_gpu_binding = observed_gpu_bindings.get(0)" in validator
+    assert "ready_only_preflight_gpu_lease_binding is not None" in validator
+    assert "gpu_lease_binding=ready_only_preflight_gpu_binding" in validator
+    assert "ready_only_preflight_gpu_lease_binding=(" in disk_validator
+    assert distributed_runner.count(
+        "ready_only_preflight_gpu_lease_binding=current_gpu_binding"
+    ) >= 4
+
+
 class _HeldPreflightLease:
     def __init__(self) -> None:
         self.assertions = 0

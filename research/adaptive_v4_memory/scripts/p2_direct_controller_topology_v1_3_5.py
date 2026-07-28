@@ -30,7 +30,7 @@ V1_3_5_ACTIVATION_MATRIX_LOCK_SEMANTICS = (
 V1_3_5_ACTIVATION_BOOTSTRAP_LOCK_PATH = Path(
     "/tmp/adaptive-v4-p2-direct-controller-v1-3-5-activation-bootstrap.lock"
 )
-V1_3_5_ACTIVATION_STAGING_PREFIX = ".controller-exact-fill-v1-3-5-activation.staging-"
+V1_3_5_ACTIVATION_STAGING_PREFIX = f".{contract.V1_3_5_ACTIVATION_ROOT.name}.staging-"
 
 _GPU_BORROW_GUARD = threading.Lock()
 _GPU_BORROW_COUNTS: dict[tuple[int, int, int, int], int] = {}
