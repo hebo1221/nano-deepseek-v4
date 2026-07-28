@@ -13,7 +13,7 @@ from p2_direct_controller_contract_v1_3 import *  # noqa: F403
 
 V1_3_5_EXPERIMENT_ID = "p2-post-rank-direct-controller-exact-fill-v1.3.5"
 V1_3_5_MANIFEST_STATUS = (
-    "frozen_v1_3_5_three_worker_parallel_retry_after_exact_zero_quality_validator_failure"
+    "frozen_v1_3_5_three_worker_parallel_retry_2_after_unpublished_binding_schema_failure"
 )
 V1_3_5_MANIFEST_PATH = Path(
     "research/adaptive_v4_memory/manifests/p2-post-rank-direct-controller-exact-fill-v1-3-5.json"
@@ -29,18 +29,36 @@ V1_3_5_SUPERSEDED_ZERO_QUALITY_PERSISTENT_SESSION_ROOT = (
     V1_3_5_SUPERSEDED_ZERO_QUALITY_OUTPUT_ROOT.parent
     / ".controller-exact-fill-v1-3-5.p2-direct-controller-persistent-sessions-v1-3-5"
 )
-V1_3_5_OUTPUT_ROOT = Path(
+V1_3_5_SUPERSEDED_BINDING_SCHEMA_OUTPUT_ROOT = Path(
     "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/"
     "controller-exact-fill-v1-3-5-parallel-retry-1"
+)
+V1_3_5_SUPERSEDED_BINDING_SCHEMA_ACTIVATION_ROOT = (
+    V1_3_5_SUPERSEDED_BINDING_SCHEMA_OUTPUT_ROOT.parent
+    / "controller-exact-fill-v1-3-5-parallel-retry-1-activation"
+)
+V1_3_5_SUPERSEDED_BINDING_SCHEMA_WORKER_ROOT = (
+    V1_3_5_SUPERSEDED_BINDING_SCHEMA_OUTPUT_ROOT.parent
+    / ".controller-exact-fill-v1-3-5-parallel-retry-1."
+    "p2-direct-controller-workers-v1-3-5"
+)
+V1_3_5_SUPERSEDED_BINDING_SCHEMA_PERSISTENT_SESSION_ROOT = (
+    V1_3_5_SUPERSEDED_BINDING_SCHEMA_OUTPUT_ROOT.parent
+    / ".controller-exact-fill-v1-3-5-parallel-retry-1."
+    "p2-direct-controller-persistent-sessions-v1-3-5"
+)
+V1_3_5_OUTPUT_ROOT = Path(
+    "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/"
+    "controller-exact-fill-v1-3-5-parallel-retry-2"
 )
 V1_3_5_MATRIX_SUMMARY_PATH = V1_3_5_OUTPUT_ROOT / base.MATRIX_SUMMARY_NAME
 V1_3_5_INTEGRITY_OUTPUT_PATH = (
     V1_3_5_OUTPUT_ROOT.parent
-    / "controller-exact-fill-v1-3-5-parallel-retry-1.integrity.json"
+    / "controller-exact-fill-v1-3-5-parallel-retry-2.integrity.json"
 )
 V1_3_5_SUMMARY_OUTPUT_PATH = (
     V1_3_5_OUTPUT_ROOT.parent
-    / "controller-exact-fill-v1-3-5-parallel-retry-1.summary.json"
+    / "controller-exact-fill-v1-3-5-parallel-retry-2.summary.json"
 )
 # The authenticated calibration/checkpoint inventory remains the exact,
 # read-only v1.3.4 predecessor pair.  No v1.3.5 copy or re-attestation exists.
@@ -49,7 +67,7 @@ V1_3_5_REUSE_ADMISSION_PATH = base.V1_3_4_REUSE_ADMISSION_PATH
 V1_3_5_PREHELDOUT_GENESIS_PATH = base.V1_3_4_PREHELDOUT_GENESIS_PATH
 V1_3_5_ACTIVATION_ROOT = (
     V1_3_5_OUTPUT_ROOT.parent
-    / "controller-exact-fill-v1-3-5-parallel-retry-1-activation"
+    / "controller-exact-fill-v1-3-5-parallel-retry-2-activation"
 )
 V1_3_5_ACTIVATION_MATRIX_LOCK_PATH = V1_3_5_ACTIVATION_ROOT / "matrix.lock"
 V1_3_5_QUALITY_START_ACTIVATION_PATH = V1_3_5_ACTIVATION_ROOT / "quality-start-activation.json"
@@ -234,10 +252,142 @@ def superseded_zero_quality_parallel_attempt() -> dict[str, Any]:
             ),
         },
         "retry": {
+            "output_root": str(V1_3_5_SUPERSEDED_BINDING_SCHEMA_OUTPUT_ROOT),
+            "activation_root": str(V1_3_5_SUPERSEDED_BINDING_SCHEMA_ACTIVATION_ROOT),
+            "scientific_grid_arm_estimand_or_success_gate_changed": False,
+            "quality_outcome_used_to_configure_retry": False,
+        },
+    }
+
+
+def superseded_unpublished_binding_schema_attempt() -> dict[str, Any]:
+    session_root = V1_3_5_SUPERSEDED_BINDING_SCHEMA_PERSISTENT_SESSION_ROOT
+    session_nonce = "2ecd492752e5d04338ea0102dd5e8e162965e0ac8610f7f127faf36e1ba6491c"
+    claim_path = (
+        V1_3_5_SUPERSEDED_BINDING_SCHEMA_OUTPUT_ROOT
+        / "s55/seed-6071406/2x/single-remote-retrieval/context-80/replicate-0"
+        / ".p2-direct-controller-exact-fill-v1-3-5-cell.claim"
+    )
+    return {
+        "lineage_type": "signed-superseded-unpublished-volatile-quality-binding-schema-failure",
+        "manifest_commit": "73f61887d8011d485fa007f70e01de4eb0c4902f",
+        "implementation_source_commit": "58c17ac404acf671b556b911fbe149c4cae97576",
+        "manifest": {
+            "path": str(V1_3_5_MANIFEST_PATH),
+            "sha256": "2c6d51449f9f5bc63cfed959a4b9fc4cbb043b4db8c4c11f584e78cf695b7d82",
+            "bytes": 111_119,
+        },
+        "activation": {
+            "path": str(
+                V1_3_5_SUPERSEDED_BINDING_SCHEMA_ACTIVATION_ROOT
+                / "quality-start-activation.json"
+            ),
+            "sha256": "b9e2089ce6711e34fb72b6c6f712122782d35ab24bb147343c85aab9a2aff4d7",
+            "bytes": 314_744,
+            "payload_sha256": (
+                "56bf134d0b3cec07c482116bc2e8cc7a4ea1af5dcb3568aaf3781be77e939cbf"
+            ),
+            "attestation_mac": (
+                "58ad761f77d80c0b6b2b78f728ea8377bdf2c74410fc458140823630525efa19"
+            ),
+        },
+        "matrix": {
+            "path": str(
+                V1_3_5_SUPERSEDED_BINDING_SCHEMA_OUTPUT_ROOT / base.MATRIX_SUMMARY_NAME
+            ),
+            "sha256": "9e08f863b846ad7a68bf55a57e67070b5e03e99e79c3b25bbfbf2661f965da51",
+            "bytes": 370_726,
+            "payload_sha256": (
+                "afc3295d312793da74776a2c29174559981db011f6b630c7b6bb09a27d460600"
+            ),
+            "attestation_mac": (
+                "75765f2ab290361672cbf58f32022849e8bc6393b828182a181d2079a33e8467"
+            ),
+        },
+        "worker_zero_ledger": {
+            "path": str(
+                V1_3_5_SUPERSEDED_BINDING_SCHEMA_WORKER_ROOT
+                / "worker-00000-of-00003.summary.json"
+            ),
+            "sha256": "007dd54db28255f4193e1cbae1afe909ad430ba1479e8aef4f48170790d1e615",
+            "bytes": 161_066,
+            "payload_sha256": (
+                "29019dba1d66537b7883319f6c7befd05669d83a8d8edef367d19401549f0d03"
+            ),
+            "attestation_mac": (
+                "a69642a381c165e84a731b1174b4ced8820235d982b616c8a70a3b7dac5ca7ba"
+            ),
+            "completed_shards": 0,
+            "records": [],
+        },
+        "quality_session": {
+            "launch": {
+                "path": str(session_root / f"{session_nonce}.launch.json"),
+                "sha256": (
+                    "5b8310769bd69b7b7305b9bd276c344c2326bb6066721b3d2df5a9144c29cfb6"
+                ),
+                "bytes": 22_058,
+                "payload_sha256": (
+                    "e912e113311d4031037fbcc2a7f4f9dafca70c74acb8e97fb5f884456a2ce810"
+                ),
+                "attestation_mac": (
+                    "eb00b1e50f91d9f6da208d4693bd5a76f4dd0e84132b329aea064d7b5c91a5a0"
+                ),
+            },
+            "terminal": {
+                "path": str(session_root / f"{session_nonce}.terminal.json"),
+                "sha256": (
+                    "af936d5235e091b324c7e636a86830ede925483f0bff49396748f8f770ad022a"
+                ),
+                "bytes": 21_195,
+                "payload_sha256": (
+                    "45ae69dff823e5325b1200e4d5422d86ec3a267df4eb4dc21bc619167ee225f9"
+                ),
+                "attestation_mac": (
+                    "25af6516cebf55661a63bccc6077f60ea52d31ce78855e49df7120343da406f7"
+                ),
+                "status": "child_eof",
+                "child_process_returncode": 1,
+                "completed_work_count": 0,
+                "completed_result_count": 0,
+            },
+        },
+        "dead_claim": {
+            "path": str(claim_path),
+            "sha256": "36949b7f062f41bdcf588a714e2ff7f0bf7affa386d995aeac9d1fa8460379cb",
+            "bytes": 526,
+            "worker_index": 0,
+            "worker_count": 3,
+        },
+        "durable_quality_state": {
+            "completed_shards": 0,
+            "canonical_prefix_shards": 0,
+            "globally_committed_shards": 0,
+            "matrix_records": [],
+            "worker_records": [],
+            "published_bundle_count": 0,
+            "published_envelope_count": 0,
+            "published_sidecar_count": 0,
+            "orphan_claim_count": 1,
+        },
+        "volatile_execution_disclosure": {
+            "quality_evaluator_started": True,
+            "quality_computation_may_have_completed_in_memory": True,
+            "quality_values_read_by_supervisor_or_retry_decision": False,
+        },
+        "failure": {
+            "stage": "first-cell-bundle-validation-before-atomic-publication",
+            "exception": "ValueError: Quality-start activation public binding schema drifted.",
+            "cause": (
+                "the v1.3.5 producer emitted selected-worker and topology-probe bindings "
+                "while the generated evaluator retained two v1.3.4 lineage field names"
+            ),
+        },
+        "retry": {
             "output_root": str(V1_3_5_OUTPUT_ROOT),
             "activation_root": str(V1_3_5_ACTIVATION_ROOT),
             "scientific_grid_arm_estimand_or_success_gate_changed": False,
-            "quality_outcome_used_to_configure_retry": False,
+            "quality_values_used_to_configure_retry": False,
         },
     }
 
@@ -358,6 +508,18 @@ def build_v1_3_5_manifest_payload(
             "superseded_v1_3_5_zero_quality_persistent_session_root": str(
                 V1_3_5_SUPERSEDED_ZERO_QUALITY_PERSISTENT_SESSION_ROOT
             ),
+            "superseded_v1_3_5_binding_schema_activation_root": str(
+                V1_3_5_SUPERSEDED_BINDING_SCHEMA_ACTIVATION_ROOT
+            ),
+            "superseded_v1_3_5_binding_schema_output_root": str(
+                V1_3_5_SUPERSEDED_BINDING_SCHEMA_OUTPUT_ROOT
+            ),
+            "superseded_v1_3_5_binding_schema_persistent_session_root": str(
+                V1_3_5_SUPERSEDED_BINDING_SCHEMA_PERSISTENT_SESSION_ROOT
+            ),
+            "superseded_v1_3_5_binding_schema_worker_root": str(
+                V1_3_5_SUPERSEDED_BINDING_SCHEMA_WORKER_ROOT
+            ),
             "v1_3_4_quality_output_namespace_reused": False,
             "v1_3_4_static_admission_namespace_reused_read_only": True,
             "v1_3_5_superseded_zero_quality_namespace_reused": False,
@@ -424,6 +586,9 @@ def build_v1_3_5_manifest_payload(
     }
     disclosure["v1_3_5_superseded_zero_quality_parallel_attempt"] = (
         superseded_zero_quality_parallel_attempt()
+    )
+    disclosure["v1_3_5_superseded_unpublished_binding_schema_attempt"] = (
+        superseded_unpublished_binding_schema_attempt()
     )
     execution = cast(dict[str, Any], payload["execution_contract"])
     execution["v1_3_5_quality_manifest_context_required"] = True

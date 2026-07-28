@@ -565,8 +565,8 @@ def _validate_inputs_structure(inputs: Mapping[str, Any]) -> dict[str, Any]:
             "base_prerequisites_sha256",
             "sealed_source_bundle_sha256",
             "sealed_launch_routing_sha256",
-            "superseded_failure_lineage_sha256",
-            "superseded_failure_lineage_projection_sha256",
+            "selected_worker_count",
+            "topology_probe_payload_sha256",
         }
         and isinstance(activation_map.get("path"), str)
         and isinstance(activation_map.get("activation_root"), str)
@@ -575,6 +575,8 @@ def _validate_inputs_structure(inputs: Mapping[str, Any]) -> dict[str, Any]:
         and cast(int, activation_map["bytes"]) > 0
         and type(activation_map.get("matrix_lock_device")) is int
         and type(activation_map.get("matrix_lock_inode")) is int
+        and type(activation_map.get("selected_worker_count")) is int
+        and 1 <= cast(int, activation_map["selected_worker_count"]) <= 4
         and all(
             contract.is_sha256(activation_map.get(field))
             for field in (
@@ -584,8 +586,7 @@ def _validate_inputs_structure(inputs: Mapping[str, Any]) -> dict[str, Any]:
                 "base_prerequisites_sha256",
                 "sealed_source_bundle_sha256",
                 "sealed_launch_routing_sha256",
-                "superseded_failure_lineage_sha256",
-                "superseded_failure_lineage_projection_sha256",
+                "topology_probe_payload_sha256",
             )
         ),
         "Quality-start activation public binding schema drifted.",

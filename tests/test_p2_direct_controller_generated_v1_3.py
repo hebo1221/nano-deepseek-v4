@@ -317,9 +317,30 @@ def test_evaluator_input_schema_requires_admission_and_genesis_without_top_p() -
         "base_prerequisites_sha256": "9" * 64,
         "sealed_source_bundle_sha256": "a" * 64,
         "sealed_launch_routing_sha256": "b" * 64,
-        "superseded_failure_lineage_sha256": "c" * 64,
-        "superseded_failure_lineage_projection_sha256": "d" * 64,
+        "selected_worker_count": 3,
+        "topology_probe_payload_sha256": "c" * 64,
     }
+    producer_binding = evaluator.admission._activation_public_binding(
+        Path("/tmp/activation.json"),
+        {
+            "attestation": {"mac": "8" * 64},
+            "matrix_lock_binding": {
+                "path": "/tmp/activation/matrix.lock",
+                "device": 1,
+                "inode": 2,
+            },
+            "experiment_id": "activation",
+            "payload_sha256": "7" * 64,
+            "canonical_root": "/tmp/activation",
+            "base_prerequisites_sha256": "9" * 64,
+            "sealed_source_provenance": {"bundle_sha256": "a" * 64},
+            "sealed_launch_routing": {"route": "binding"},
+            "selected_worker_count": 3,
+            "topology_probe": {"payload_sha256": "c" * 64},
+        },
+        b"activation",
+    )
+    assert set(activation_binding) == set(producer_binding)
     source = {
         "source": {},
         "manifest": {},

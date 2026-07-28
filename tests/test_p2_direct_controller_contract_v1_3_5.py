@@ -112,11 +112,33 @@ def test_builder_preserves_failed_zero_quality_attempt_in_disjoint_retry_namespa
     assert lineage["quality_state"]["completed_shards"] == 0
     assert lineage["quality_state"]["quality_outcomes_materialized"] == 0
     assert lineage["retry"]["quality_outcome_used_to_configure_retry"] is False
-    assert lineage["retry"]["output_root"] == str(contract.V1_3_5_OUTPUT_ROOT)
+    assert lineage["retry"]["output_root"] == str(
+        contract.V1_3_5_SUPERSEDED_BINDING_SCHEMA_OUTPUT_ROOT
+    )
     assert contract.V1_3_5_OUTPUT_ROOT != (
         contract.V1_3_5_SUPERSEDED_ZERO_QUALITY_OUTPUT_ROOT
     )
-    assert "parallel-retry-1" in str(contract.V1_3_5_OUTPUT_ROOT)
+    assert "parallel-retry-1" in lineage["retry"]["output_root"]
+
+
+def test_builder_preserves_unpublished_schema_failure_without_quality_selection() -> None:
+    child = _manifest(worker_count=3, probe_worker_count=1)
+    lineage = child["lineage_and_adaptation_disclosure"][
+        "v1_3_5_superseded_unpublished_binding_schema_attempt"
+    ]
+
+    assert lineage == contract.superseded_unpublished_binding_schema_attempt()
+    assert lineage["durable_quality_state"]["matrix_records"] == []
+    assert lineage["durable_quality_state"]["published_bundle_count"] == 0
+    assert lineage["durable_quality_state"]["orphan_claim_count"] == 1
+    assert lineage["volatile_execution_disclosure"][
+        "quality_computation_may_have_completed_in_memory"
+    ]
+    assert not lineage["volatile_execution_disclosure"][
+        "quality_values_read_by_supervisor_or_retry_decision"
+    ]
+    assert lineage["retry"]["output_root"] == str(contract.V1_3_5_OUTPUT_ROOT)
+    assert "parallel-retry-2" in str(contract.V1_3_5_OUTPUT_ROOT)
 
 
 def test_builder_rejects_unregistered_probe_override() -> None:

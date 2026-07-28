@@ -5550,8 +5550,8 @@ def test_v1_3_4_static_admission_and_genesis_bind_the_immediate_superseded_linea
         "base_prerequisites_sha256": "9" * 64,
         "sealed_source_bundle_sha256": "a" * 64,
         "sealed_launch_routing_sha256": "b" * 64,
-        "superseded_failure_lineage_sha256": "c" * 64,
-        "superseded_failure_lineage_projection_sha256": "d" * 64,
+        "selected_worker_count": 3,
+        "topology_probe_payload_sha256": "c" * 64,
     }
     source_inputs = {
         "source": {},
