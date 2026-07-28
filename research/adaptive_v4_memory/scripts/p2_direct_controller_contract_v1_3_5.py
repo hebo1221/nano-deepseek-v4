@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import functools
 import hashlib
 import json
 import os
@@ -122,7 +123,7 @@ V1_3_5_FINAL_3_BRIDGE_OUTPUT_ROOT = Path(
 )
 V1_3_5_OUTPUT_ROOT = Path(
     "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/"
-    f"controller-exact-fill-v1-3-5-mixed-{V1_3_5_MIXED_DEVICE_SITE}"
+    f"controller-exact-fill-v1-3-5-mixed-{V1_3_5_MIXED_DEVICE_SITE}-retry-1"
 )
 V1_3_5_MATRIX_SUMMARY_PATH = V1_3_5_OUTPUT_ROOT / base.MATRIX_SUMMARY_NAME
 V1_3_5_INTEGRITY_OUTPUT_PATH = (
@@ -264,6 +265,38 @@ def v1_3_5_execution_environment_projection(
         "Mixed-device execution-environment projection is invalid.",
     )
     return checked
+
+
+@functools.cache
+def v1_3_5_mixed_site_coordinates(site: str) -> tuple[dict[str, int | str], ...]:
+    """Return the quality-blind device block in canonical site-local order."""
+
+    _require(site in V1_3_5_MIXED_DEVICE_SITES, "Mixed-device site is not registered.")
+    scale_index = {value: index for index, value in enumerate(base.SCALES)}
+    seed_index = {value: index for index, value in enumerate(base.TRAINING_SEEDS)}
+    budget_index = {value: index for index, value in enumerate(base.BUDGETS)}
+    family_index = {value: index for index, value in enumerate(base.FAMILIES)}
+    context_index = {value: index for index, value in enumerate(base.CONTEXTS)}
+    replicate_index = {value: index for index, value in enumerate(base.REPLICATES)}
+    selected: list[dict[str, int | str]] = []
+    for raw in base.quality_coordinates():
+        offset = (
+            scale_index[cast(str, raw["scale"])]
+            + seed_index[cast(int, raw["training_seed"])]
+            + 5 * budget_index[cast(str, raw["budget"])]
+            + family_index[cast(str, raw["family"])]
+            + 2 * context_index[cast(int, raw["context"])]
+        ) % len(base.REPLICATES)
+        is_gb10 = (
+            replicate_index[cast(int, raw["replicate"])] - offset
+        ) % len(base.REPLICATES) < 4
+        if (site == "gb10") == is_gb10:
+            selected.append(dict(raw))
+    _require(
+        len(selected) == V1_3_5_MIXED_SITE_COORDINATE_COUNTS[site],
+        "Mixed-device site cardinality drifted.",
+    )
+    return tuple(selected)
 
 
 def superseded_zero_quality_parallel_attempt() -> dict[str, Any]:

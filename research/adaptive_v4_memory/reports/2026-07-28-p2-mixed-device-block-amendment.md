@@ -35,3 +35,10 @@ its implementation and activation. Site output, activation, worker-ledger, and
 persistent-session namespaces are disjoint. Final-3 is stopped only after both new
 site prerequisites are ready; its last committed ledgers are snapshotted as bridge
 lineage, and any in-flight uncommitted files are excluded.
+
+The first RTX 4090 fresh gate in the unsuffixed mixed-site namespace committed zero
+shards and materialized no prediction. It stopped before quality-evaluator launch
+because the persistent-session planner still used the superseded global modulo
+assignment. That namespace remains immutable. Retry-1 changes only the planner's
+assignment source to the preregistered device block followed by site-local modulo;
+the grid, arms, seeds, within-cell order, estimands, and success gates remain unchanged.

@@ -73,6 +73,10 @@ def test_persistent_session_uses_only_v1_3_5_authorities_and_paths() -> None:
     assert all("v1-3-3" not in purpose for purpose in purposes)
 
 
+def _single_worker_coordinates() -> list[dict[str, int | str]]:
+    return list(session.assigned_coordinates(worker_index=0, worker_count=1))
+
+
 def _plan(
     tmp_path: Path,
     trust_root: attestation.TrustRoot,
@@ -83,8 +87,8 @@ def _plan(
     controlled_stop: bool = True,
     session_role: str = session.QUALITY_SESSION_ROLE,
 ) -> dict[str, object]:
-    selected = coordinates or [dict(item) for item in contract.quality_coordinates()[:3]]
-    frozen = [dict(item) for item in contract.quality_coordinates()]
+    frozen = _single_worker_coordinates()
+    selected = coordinates or frozen[:3]
     start = frozen.index(selected[0])
     return session.build_session_plan(
         selected,
@@ -204,18 +208,19 @@ def test_plan_is_one_exact_ordered_worker_scale_seed_cohort(
     assert plan["model_load_limit"] == 1
     assert plan["child_full_historical_evidence_replay_count"] == 0
 
-    crossed = [dict(contract.quality_coordinates()[0])]
+    assigned = _single_worker_coordinates()
+    crossed = [assigned[0]]
     crossed.append(
         next(
             dict(item)
-            for item in contract.quality_coordinates()
+            for item in assigned
             if item["training_seed"] != crossed[0]["training_seed"]
         )
     )
     with pytest.raises(ValueError, match="maximal remaining cohort prefix"):
         _plan(tmp_path, trust_root, coordinates=crossed)
 
-    reversed_coordinates = [dict(item) for item in reversed(contract.quality_coordinates()[:2])]
+    reversed_coordinates = list(reversed(assigned[:2]))
     with pytest.raises(ValueError, match="maximal remaining cohort prefix"):
         _plan(tmp_path, trust_root, coordinates=reversed_coordinates)
 
@@ -267,7 +272,7 @@ def test_work_result_and_receipt_are_hmac_bound_and_monotone(
 def test_published_target_remains_validatable_but_cannot_be_reissued(
     tmp_path: Path, trust_root: attestation.TrustRoot
 ) -> None:
-    plan = _plan(tmp_path, trust_root, coordinates=[dict(contract.quality_coordinates()[0])])
+    plan = _plan(tmp_path, trust_root, coordinates=[_single_worker_coordinates()[0]])
     envelope = tmp_path / "published.json"
     work = session.build_work_order(
         plan,
@@ -348,7 +353,7 @@ def test_sealed_plan_transport_rejects_mutable_descriptor(
 
 
 def test_normal_model_load_bound_is_unique_worker_scale_seed_assignments() -> None:
-    coordinates = [dict(item) for item in contract.quality_coordinates()]
+    coordinates = list(session.assigned_coordinates(worker_index=0, worker_count=1))
     assert (
         session.normal_model_load_upper_bound(coordinates, worker_index=0, worker_count=1)
         == len(contract.SCALES) * len(contract.TRAINING_SEEDS)
@@ -362,15 +367,14 @@ def test_normal_model_load_bound_is_unique_worker_scale_seed_assignments() -> No
 def test_efficiency_counter_counts_sessions_not_shards(
     tmp_path: Path, trust_root: attestation.TrustRoot
 ) -> None:
-    first_coordinates = [dict(item) for item in contract.quality_coordinates()[:3]]
+    assigned = list(session.assigned_coordinates(worker_index=0, worker_count=1))
+    first_coordinates = assigned[:3]
     second_start = next(
         index
-        for index, item in enumerate(contract.quality_coordinates())
+        for index, item in enumerate(assigned)
         if item["training_seed"] != first_coordinates[0]["training_seed"]
     )
-    second_coordinates = [
-        dict(item) for item in contract.quality_coordinates()[second_start : second_start + 3]
-    ]
+    second_coordinates = assigned[second_start : second_start + 3]
     first = _plan(tmp_path, trust_root, coordinates=first_coordinates, session_digit="1")
     second = _plan(tmp_path, trust_root, coordinates=second_coordinates, session_digit="2")
     first_work, first_results = _result_sequence(tmp_path, trust_root, first, count=3)
@@ -789,7 +793,7 @@ def _publish_ready_only_success(
     plan = _plan(
         output_root,
         trust_root,
-        coordinates=[dict(contract.quality_coordinates()[0])],
+        coordinates=[_single_worker_coordinates()[0]],
         session_digit=session_digit,
         authority_digit=authority_digit,
         session_role=session.READY_ONLY_PREFLIGHT_SESSION_ROLE,
@@ -823,7 +827,7 @@ def test_ready_only_role_is_plan_authenticated_and_cannot_substitute_quality(
     plan = _plan(
         tmp_path.resolve(),
         trust_root,
-        coordinates=[dict(contract.quality_coordinates()[0])],
+        coordinates=[_single_worker_coordinates()[0]],
         session_role=session.READY_ONLY_PREFLIGHT_SESSION_ROLE,
     )
     assert plan["session_role"] == session.READY_ONLY_PREFLIGHT_SESSION_ROLE
@@ -840,16 +844,17 @@ def test_ready_only_binding_is_exact_zero_work_and_metrics_exclude_quality(
 ) -> None:
     output_root = (tmp_path / "quality").resolve()
     preflight = _publish_ready_only_success(output_root, trust_root, session_digit="1")
+    assigned = session.assigned_coordinates(worker_index=0, worker_count=1)
     second_cohort_start = next(
         index
-        for index, item in enumerate(contract.quality_coordinates())
+        for index, item in enumerate(assigned)
         if (item["scale"], item["training_seed"])
         != (preflight["scale"], preflight["training_seed"])
     )
     quality = _plan(
         output_root,
         trust_root,
-        coordinates=[dict(contract.quality_coordinates()[second_cohort_start])],
+        coordinates=[dict(assigned[second_cohort_start])],
         session_digit="2",
         authority_digit="b",
     )
@@ -891,7 +896,7 @@ def test_ready_only_launch_only_is_recovered_then_one_success_is_adoptable(
     interrupted = _plan(
         output_root,
         trust_root,
-        coordinates=[dict(contract.quality_coordinates()[0])],
+        coordinates=[_single_worker_coordinates()[0]],
         session_digit="3",
         session_role=session.READY_ONLY_PREFLIGHT_SESSION_ROLE,
     )
@@ -928,7 +933,7 @@ def test_ready_only_failed_load_then_success_exceeds_only_the_normal_path_count(
     failed = _plan(
         output_root,
         trust_root,
-        coordinates=[dict(contract.quality_coordinates()[0])],
+        coordinates=[_single_worker_coordinates()[0]],
         session_digit="8",
         session_role=session.READY_ONLY_PREFLIGHT_SESSION_ROLE,
     )
