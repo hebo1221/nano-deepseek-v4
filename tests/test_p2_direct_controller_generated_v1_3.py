@@ -13,6 +13,7 @@ import subprocess
 import sys
 import typing
 from collections import Counter
+from contextlib import nullcontext
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 
@@ -72,6 +73,38 @@ def test_persistent_reset_allows_only_initial_allocation_stabilization(
             expected_state=(),
             expected_allocated_bytes=stabilized,
             allow_initial_allocation_stabilization=False,
+        )
+
+
+@pytest.mark.parametrize("unknown_temporary", (False, True))
+def test_distributed_preflight_closes_live_claim_scan_race(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, unknown_temporary: bool
+) -> None:
+    coordinate = matrix.coordinates()[0]
+    monkeypatch.setattr(matrix, "coordinates", lambda: (coordinate,))
+    output_root = (tmp_path / "output").resolve()
+    summary = output_root / matrix.MATRIX_SUMMARY_NAME
+    output_dir = matrix.shard_output_dir(output_root, coordinate)
+    output_dir.mkdir(parents=True)
+    summary.write_text("{}\n", encoding="utf-8")
+    outcomes_name = matrix.canonical_bundle_paths(output_root, coordinate)["outcomes"].name
+    late_path = output_dir / (
+        "unknown-race.tmp" if unknown_temporary else f".{outcomes_name}.race.tmp"
+    )
+    original_rglob = Path.rglob
+
+    def racing_rglob(path: Path, pattern: str) -> typing.Any:
+        if path == output_root:
+            late_path.write_bytes(b"concurrent")
+        return original_rglob(path, pattern)
+
+    monkeypatch.setattr(Path, "rglob", racing_rglob)
+    expectation = pytest.raises(ValueError, match="unregistered orphan") if unknown_temporary else nullcontext()
+    with matrix._exclusive_cell_claim(
+        output_dir, coordinate=coordinate, launch_nonce="a" * 64, worker_index=0, worker_count=1
+    ), expectation:
+        matrix._preflight_distributed_output_tree(
+            output_root=output_root, matrix_summary=summary, merged_records={}, worker_count=1
         )
 
 

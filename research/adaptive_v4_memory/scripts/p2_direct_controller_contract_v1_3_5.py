@@ -15,7 +15,7 @@ from p2_direct_controller_contract_v1_3 import *  # noqa: F403
 
 V1_3_5_EXPERIMENT_ID = "p2-post-rank-direct-controller-exact-fill-v1.3.5"
 V1_3_5_MANIFEST_STATUS = (
-    "frozen_v1_3_5_three_worker_parallel_final_after_persistent_reset_failure"
+    "frozen_v1_3_5_three_worker_parallel_final_after_live_claim_preflight_failure"
 )
 V1_3_5_MANIFEST_PATH = Path(
     "research/adaptive_v4_memory/manifests/p2-post-rank-direct-controller-exact-fill-v1-3-5.json"
@@ -89,18 +89,20 @@ V1_3_5_SUPERSEDED_PERSISTENT_RESET_SESSION_LOCK = (
     V1_3_5_SUPERSEDED_PERSISTENT_RESET_SESSION_ROOT.parent
     / f"{V1_3_5_SUPERSEDED_PERSISTENT_RESET_SESSION_ROOT.name}.lock"
 )
-V1_3_5_OUTPUT_ROOT = Path(
+V1_3_5_SUPERSEDED_TOCTOU_OUTPUT_ROOT = Path(
     "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/"
     "controller-exact-fill-v1-3-5-parallel-final-2"
 )
+V1_3_5_OUTPUT_ROOT = Path(
+    "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/"
+    "controller-exact-fill-v1-3-5-parallel-final-3"
+)
 V1_3_5_MATRIX_SUMMARY_PATH = V1_3_5_OUTPUT_ROOT / base.MATRIX_SUMMARY_NAME
 V1_3_5_INTEGRITY_OUTPUT_PATH = (
-    V1_3_5_OUTPUT_ROOT.parent
-    / "controller-exact-fill-v1-3-5-parallel-final-2.integrity.json"
+    V1_3_5_OUTPUT_ROOT.parent / f"{V1_3_5_OUTPUT_ROOT.name}.integrity.json"
 )
 V1_3_5_SUMMARY_OUTPUT_PATH = (
-    V1_3_5_OUTPUT_ROOT.parent
-    / "controller-exact-fill-v1-3-5-parallel-final-2.summary.json"
+    V1_3_5_OUTPUT_ROOT.parent / f"{V1_3_5_OUTPUT_ROOT.name}.summary.json"
 )
 # The authenticated calibration/checkpoint inventory remains the exact,
 # read-only v1.3.4 predecessor pair.  No v1.3.5 copy or re-attestation exists.
@@ -108,8 +110,7 @@ V1_3_5_ADMISSION_ROOT = base.V1_3_4_ADMISSION_ROOT
 V1_3_5_REUSE_ADMISSION_PATH = base.V1_3_4_REUSE_ADMISSION_PATH
 V1_3_5_PREHELDOUT_GENESIS_PATH = base.V1_3_4_PREHELDOUT_GENESIS_PATH
 V1_3_5_ACTIVATION_ROOT = (
-    V1_3_5_OUTPUT_ROOT.parent
-    / "controller-exact-fill-v1-3-5-parallel-final-2-activation"
+    V1_3_5_OUTPUT_ROOT.parent / f"{V1_3_5_OUTPUT_ROOT.name}-activation"
 )
 V1_3_5_ACTIVATION_MATRIX_LOCK_PATH = V1_3_5_ACTIVATION_ROOT / "matrix.lock"
 V1_3_5_QUALITY_START_ACTIVATION_PATH = V1_3_5_ACTIVATION_ROOT / "quality-start-activation.json"
@@ -788,6 +789,20 @@ def superseded_persistent_reset_attempt() -> dict[str, Any]:
     }
 
 
+def superseded_live_claim_preflight_attempt() -> dict[str, Any]:
+    return {
+        "lineage_type": "signed-superseded-live-claim-preflight-toctou-failure",
+        "manifest_commit": "8714f45cbb296563974cb93297a1444b8e962411",
+        "implementation_source_commit": "0c0f96ba36eee5db75902ba4cb7805a2b98638ad",
+        "output_root": str(V1_3_5_SUPERSEDED_TOCTOU_OUTPUT_ROOT),
+        "durable_state_counts": "committed=7;integrity_pass=7;integrity_fail=0;uncommitted=3;stale_claims=2",
+        "failure": "coordinator closed-world scan raced live-claim bundle publication",
+        "retry_output_root": str(V1_3_5_OUTPUT_ROOT),
+        "scientific_grid_arm_estimand_or_success_gate_changed": False,
+        "quality_values_read_by_supervisor_or_retry_decision": False,
+    }
+
+
 def _parent_manifest_payload() -> dict[str, Any]:
     path = base.V1_3_4_MANIFEST_PATH
     raw = path.read_bytes()
@@ -890,6 +905,7 @@ def build_v1_3_5_manifest_payload(
             "reuse_admission_path": str(V1_3_5_REUSE_ADMISSION_PATH),
             "summary_output_path": str(V1_3_5_SUMMARY_OUTPUT_PATH),
             "worker_ledger_root": str(V1_3_5_WORKER_LEDGER_ROOT),
+            "superseded_v1_3_5_toctou_output_root": str(V1_3_5_SUPERSEDED_TOCTOU_OUTPUT_ROOT),
             "superseded_v1_3_5_zero_quality_activation_root": str(
                 V1_3_5_SUPERSEDED_ZERO_QUALITY_ACTIVATION_ROOT
             ),
@@ -1011,6 +1027,7 @@ def build_v1_3_5_manifest_payload(
     disclosure["v1_3_5_superseded_persistent_reset_attempt"] = (
         superseded_persistent_reset_attempt()
     )
+    disclosure["v1_3_5_superseded_live_claim_preflight_attempt"] = superseded_live_claim_preflight_attempt()
     execution = cast(dict[str, Any], payload["execution_contract"])
     execution["v1_3_5_quality_manifest_context_required"] = True
     execution["v1_3_4_quality_manifest_context_required"] = False

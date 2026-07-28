@@ -164,7 +164,7 @@ def test_builder_preserves_unpublished_arm_semantics_failure_before_final_namesp
     assert "parallel-final" in lineage["retry"]["output_root"]
 
 
-def test_builder_preserves_persistent_reset_failure_before_final_retry() -> None:
+def test_builder_preserves_failures_before_final_retry() -> None:
     child = _manifest(worker_count=3, probe_worker_count=1)
     lineage = child["lineage_and_adaptation_disclosure"][
         "v1_3_5_superseded_persistent_reset_attempt"
@@ -181,7 +181,13 @@ def test_builder_preserves_persistent_reset_failure_before_final_retry() -> None
     )
     assert lineage["quality_values_read_by_supervisor_or_retry_decision"] is False
     assert lineage["retry"]["output_root"] == str(contract.V1_3_5_OUTPUT_ROOT)
-    assert "parallel-final-2" in lineage["retry"]["output_root"]
+    assert "parallel-final-3" in lineage["retry"]["output_root"]
+    toctou = child["lineage_and_adaptation_disclosure"][
+        "v1_3_5_superseded_live_claim_preflight_attempt"
+    ]
+    assert toctou == contract.superseded_live_claim_preflight_attempt()
+    assert "committed=7;integrity_pass=7;integrity_fail=0" in toctou["durable_state_counts"]
+    assert "parallel-final-2" in toctou["output_root"]
 
 
 def test_builder_rejects_unregistered_probe_override() -> None:
