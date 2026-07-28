@@ -13,6 +13,7 @@ import subprocess
 import sys
 import typing
 from collections import Counter
+from contextlib import nullcontext
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 
@@ -73,6 +74,68 @@ def test_persistent_reset_allows_only_initial_allocation_stabilization(
             expected_allocated_bytes=stabilized,
             allow_initial_allocation_stabilization=False,
         )
+
+
+@pytest.mark.parametrize("claim_bound_temporary", (True, False))
+def test_distributed_preflight_closes_live_claim_scan_race(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    claim_bound_temporary: bool,
+) -> None:
+    coordinate = matrix.coordinates()[0]
+    monkeypatch.setattr(matrix, "coordinates", lambda: (coordinate,))
+    output_root = (tmp_path / "output").resolve()
+    summary = output_root / matrix.MATRIX_SUMMARY_NAME
+    output_dir = matrix.shard_output_dir(output_root, coordinate)
+    output_dir.mkdir(parents=True)
+    summary.write_text("{}\n", encoding="utf-8")
+    claim = output_dir / matrix.CELL_CLAIM_NAME
+    claim.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "semantics": matrix.CELL_CLAIM_SEMANTICS,
+                "coordinate": coordinate.payload,
+                "launch_nonce": "a" * 64,
+                "pid": os.getpid(),
+                "process_start_ticks": matrix._process_start_ticks(os.getpid()),
+                "worker_index": 0,
+                "worker_count": 1,
+                "created_time_ns": 1,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    claim.chmod(0o600)
+    outcomes = matrix.canonical_bundle_paths(output_root, coordinate)["outcomes"]
+    late_path = (
+        output_dir / f".{outcomes.name}.race.tmp"
+        if claim_bound_temporary
+        else output_dir / "unknown-race.tmp"
+    )
+    original_rglob = Path.rglob
+
+    def racing_rglob(path: Path, pattern: str) -> typing.Any:
+        if path == output_root:
+            late_path.write_bytes(b"concurrent")
+        return original_rglob(path, pattern)
+
+    monkeypatch.setattr(Path, "rglob", racing_rglob)
+    expectation = (
+        nullcontext()
+        if claim_bound_temporary
+        else pytest.raises(ValueError, match="unregistered orphan")
+    )
+    with expectation:
+        active = matrix._preflight_distributed_output_tree(
+            output_root=output_root,
+            matrix_summary=summary,
+            merged_records={},
+            worker_count=1,
+        )
+    if claim_bound_temporary:
+        assert active[0]["coordinate"] == coordinate.payload
 
 
 def _imports(source: str) -> set[str]:
