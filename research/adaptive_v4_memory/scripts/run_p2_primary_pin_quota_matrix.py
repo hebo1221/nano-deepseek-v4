@@ -16,6 +16,7 @@ import calibrate_p2_direct_soft_lag as calibrator
 import evaluate_p2_direct_controller_shard_v1_3 as evaluator
 import p2_direct_attestation as attestation
 import p2_direct_controller_contract_v1_3 as contract
+import p2_direct_controller_reuse_admission_v1_3 as reuse_admission
 import torch
 from adaptive_v4_gpu_lock import acquire_device_guard, acquire_gpu_lock
 
@@ -435,9 +436,9 @@ def main() -> None:
         expected_key_id=cast(str, manifest["attestation"]["key_id"]),
     )
     activation = json.loads(contract.V1_3_4_QUALITY_START_ACTIVATION_PATH.read_text())
-    evaluator.admission._verify_attested_payload(
+    reuse_admission._verify_attested_payload(
         activation, trust_root=trust_root,
-        purpose=evaluator.admission.V1_3_4_QUALITY_START_ACTIVATION_PURPOSE,
+        purpose=reuse_admission.V1_3_4_QUALITY_START_ACTIVATION_PURPOSE,
         label="Research input v1.3.4 activation")
     captured = execution_environment.capture_execution_environment()
     expected_environment = activation["base_prerequisites_binding"][
