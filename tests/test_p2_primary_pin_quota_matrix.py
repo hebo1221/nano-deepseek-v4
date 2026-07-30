@@ -41,6 +41,15 @@ def test_implementation_inventory_is_repository_relative() -> None:
     assert all(len(digest) == 64 for _path, digest in inventory)
 
 
+def test_frozen_cohort_paths_rebase_only_within_repository() -> None:
+    relative = Path("artifacts/example.json")
+    frozen = matrix.LEGACY_REPOSITORY_ROOT / relative
+    assert matrix._materialized_frozen_path(frozen) == Path.cwd().resolve() / relative
+    assert matrix._materialized_frozen_path(relative) == Path.cwd().resolve() / relative
+    with pytest.raises(ValueError):
+        matrix._materialized_frozen_path(Path("/tmp/outside-repository.json"))
+
+
 def _sealed_cell() -> tuple[dict[str, object], dict[str, object]]:
     coordinate = matrix.coordinates()[0]
     scale = coordinate["scale"]

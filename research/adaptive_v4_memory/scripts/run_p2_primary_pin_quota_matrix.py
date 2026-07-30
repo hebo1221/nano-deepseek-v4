@@ -43,6 +43,7 @@ LEGACY_SOURCE_COMMIT = "8db072b2c3db35d9566238d5a0181e0a0da01730"
 LEGACY_IMPLEMENTATION_DIGEST = "082a0de79e7607322e62b64546f887ba0e47663ed2cedd4fdc7bbb6f65eb5e4e"
 LEGACY_PREFIX_INVENTORY_SHA256 = "374e40ba2065cda868f1b573da59660ecad24182e18d5b704cd367b07c94816d"
 LEGACY_PREFIX_SITE_COUNTS = {"gb10": 796, "rtx4090": 1_190}
+LEGACY_REPOSITORY_ROOT = Path("/home/hebo1221/nano-deepseek-v4")
 
 
 def output_root(site: str) -> Path:
@@ -188,16 +189,29 @@ class TokenAggregate:
         }
 
 
+def _frozen_repository_relative(path: Path) -> Path:
+    relative = path.relative_to(LEGACY_REPOSITORY_ROOT) if path.is_absolute() else path
+    if relative.is_absolute() or ".." in relative.parts:
+        raise ValueError(f"Frozen cohort path escapes the repository: {path}")
+    return relative
+
+
+def _materialized_frozen_path(path: Path) -> Path:
+    return Path.cwd().resolve() / _frozen_repository_relative(path)
+
+
 def _cohort_paths(scale: str, seed: int) -> dict[str, Path]:
     calibration = CALIBRATION_ROOT / scale / f"seed-{seed}" / f"{scale}-calibration.json"
     payload = json.loads(calibration.read_text())
     training = cast(dict[str, Any], payload["training_summary"])
     return {
         "calibration": calibration,
-        "checkpoint": Path(cast(str, cast(dict[str, Any], payload["checkpoint"])["path"])),
-        "training_summary": Path(cast(str, training["path"])),
-        "training_matrix": Path(
-            cast(str, cast(dict[str, Any], training["terminal_matrix_ledger"])["path"])
+        "checkpoint": _materialized_frozen_path(
+            Path(cast(str, cast(dict[str, Any], payload["checkpoint"])["path"]))
+        ),
+        "training_summary": _materialized_frozen_path(Path(cast(str, training["path"]))),
+        "training_matrix": _materialized_frozen_path(
+            Path(cast(str, cast(dict[str, Any], training["terminal_matrix_ledger"])["path"]))
         ),
     }
 
@@ -206,13 +220,20 @@ def _bound_file(path: Path, binding: dict[str, Any]) -> dict[str, Any]:
     if path.is_symlink():
         raise ValueError(f"Frozen research input is a symlink: {path}")
     digest = _file_digest(path)
+    repository_root = Path.cwd().resolve()
+    relative = path.resolve(strict=True).relative_to(repository_root)
+    frozen_relative = _frozen_repository_relative(Path(cast(str, binding["path"])))
     if (
-        path.resolve(strict=True) != Path(binding["path"]).resolve(strict=True)
+        relative != frozen_relative
         or path.stat().st_size != binding["bytes"]
         or digest != binding["sha256"]
     ):
         raise ValueError(f"Frozen research input binding drifted: {path}")
-    return {"path": str(path), "sha256": digest, "bytes": path.stat().st_size}
+    return {
+        "path": cast(str, binding["path"]),
+        "sha256": digest,
+        "bytes": path.stat().st_size,
+    }
 
 
 def _cohort_binding(paths: dict[str, Path], calibration: dict[str, Any]) -> dict[str, Any]:
