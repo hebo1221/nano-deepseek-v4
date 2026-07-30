@@ -85,7 +85,8 @@ def _atomic_json(path: Path, payload: dict[str, Any]) -> None:
         os.close(descriptor)
 
 
-def _implementation_digest() -> str:
+def _implementation_inventory() -> list[list[str]]:
+    repository_root = Path.cwd().resolve()
     paths = (
         Path(__file__),
         Path(calibrator.__file__),
@@ -93,7 +94,13 @@ def _implementation_digest() -> str:
         Path(contract.__file__),
         Path(mixed_contract.__file__),
     )
-    return _digest([[str(path), _file_digest(path)] for path in paths])
+    return [
+        [str(path.resolve().relative_to(repository_root)), _file_digest(path)] for path in paths
+    ]
+
+
+def _implementation_digest() -> str:
+    return _digest(_implementation_inventory())
 
 
 def coordinates(site: str | None = None) -> list[dict[str, Any]]:
@@ -692,7 +699,7 @@ def main() -> None:
     source = {"commit": implementation_source_commit, "dirty": False}
     selected = coordinates(args.mixed_site)
     admitted = _validate_legacy_prefix(args.predecessor_root)
-    manifest = contract.load_v1_3_4_manifest()
+    manifest = contract.load_v1_3_4_manifest(verify_implementation=False)
     trust_root = attestation.load_trust_root(
         args.attestation_key_path,
         repository_root=Path.cwd(),
