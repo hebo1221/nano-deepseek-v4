@@ -15,6 +15,23 @@ matrix = importlib.import_module("run_p2_primary_pin_quota_matrix")
 def test_primary_runner_frozen_grid() -> None:
     assert matrix.ARMS == ("fixed", "fixed+pins", "calibrated-no-pins", "calibrated+pins")
     assert len(matrix.coordinates()) == matrix.EXPECTED_CELLS == 9000
+    gb10 = matrix.coordinates("gb10")
+    rtx4090 = matrix.coordinates("rtx4090")
+    assert len(gb10) == 3600
+    assert len(rtx4090) == 5400
+    assert {matrix._coordinate_key(coordinate) for coordinate in gb10}.isdisjoint(
+        {matrix._coordinate_key(coordinate) for coordinate in rtx4090}
+    )
+    assert (
+        len({matrix._coordinate_key(coordinate) for coordinate in (*gb10, *rtx4090)})
+        == matrix.EXPECTED_CELLS
+    )
+    prefix = {
+        matrix._coordinate_key(coordinate)
+        for coordinate in matrix.coordinates()[: matrix.LEGACY_PREFIX_CELLS]
+    }
+    assert sum(matrix._coordinate_key(coordinate) in prefix for coordinate in gb10) == 796
+    assert sum(matrix._coordinate_key(coordinate) in prefix for coordinate in rtx4090) == 1190
 
 
 def _sealed_cell() -> tuple[dict[str, object], dict[str, object]]:
@@ -46,9 +63,7 @@ def _sealed_cell() -> tuple[dict[str, object], dict[str, object]]:
             example_index=example_index,
         )
         order = tuple(
-            name
-            for name in matrix.evaluator.arm_execution_order(schedule)
-            if name in matrix.ARMS
+            name for name in matrix.evaluator.arm_execution_order(schedule) if name in matrix.ARMS
         )
         examples.append({"example_index": example_index, "execution_order": list(order)})
         outcomes.extend(
@@ -64,6 +79,12 @@ def _sealed_cell() -> tuple[dict[str, object], dict[str, object]]:
         "schema_version": 1,
         "experiment_id": matrix.EXPERIMENT_ID,
         "status": "terminal",
+        "protocol_manifest": {
+            "path": str(matrix.PROTOCOL_MANIFEST_PATH),
+            "sha256": "a" * 64,
+            "bytes": 1,
+            "experiment_id": matrix.EXPERIMENT_ID,
+        },
         "coordinate": {
             **coordinate,
             "calibration_seed": calibration_seed,
