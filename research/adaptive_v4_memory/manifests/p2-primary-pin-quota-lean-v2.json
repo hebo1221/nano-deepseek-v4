@@ -1,0 +1,131 @@
+{
+  "analysis_plan": {
+    "primary_contrast": {
+      "candidate": "calibrated+pins",
+      "comparator": "fixed+pins",
+      "gate": "paired improvement must reproduce across five training seeds and both scales"
+    },
+    "quality_analysis_before_matrix_completion": false,
+    "secondary_causal_contrasts": [
+      {
+        "candidate": "fixed+pins",
+        "comparator": "fixed",
+        "estimand": "protected-pin effect under fixed quota"
+      },
+      {
+        "candidate": "calibrated+pins",
+        "comparator": "calibrated-no-pins",
+        "estimand": "protected-pin effect under calibrated quota"
+      },
+      {
+        "candidate": "calibrated-no-pins",
+        "comparator": "fixed",
+        "estimand": "calibrated-quota effect without protected pins"
+      }
+    ]
+  },
+  "arms": [
+    "fixed",
+    "fixed+pins",
+    "calibrated-no-pins",
+    "calibrated+pins"
+  ],
+  "claim_boundary": "Synthetic causal-laboratory evidence for pin and calibrated-quota effects under identical actual hot-memory trajectories. This matrix alone is not natural-language transfer, production-HBM, large-model, or official DeepSeek-V4 evidence.",
+  "decision_basis": {
+    "full17_confirmatory_arm_wall_fraction": 0.2344,
+    "full17_diagnostic_arm_wall_fraction": 0.7656,
+    "full17_quality_values_accessed": false,
+    "reason": "The stopped 17-arm matrix projected five to seven additional weeks; thirteen diagnostic arms consumed about three quarters of measured arm wall time.",
+    "selection_used_only_runtime_and_schema_metadata": true
+  },
+  "expected_cells": 9000,
+  "experiment_id": "p2-primary-pin-quota-lean-matrix-v2",
+  "frozen_at": "2026-07-30T14:28:25+09:00",
+  "grid": {
+    "budgets": [
+      "2x",
+      "4x"
+    ],
+    "contexts": [
+      80,
+      128,
+      256,
+      512,
+      1024
+    ],
+    "examples_per_cell": 20,
+    "families": 9,
+    "replicates": 10,
+    "scales": [
+      "s55",
+      "s96"
+    ],
+    "training_seeds": 5
+  },
+  "implementations": {
+    "gb10": {
+      "branch": "agent/hca-csa-conditional-sufficiency",
+      "implementation_digest": "b3c37df4d7ac2ef6bca9236e2a774ddc0d40a2a5683985eedacc51580c39821e",
+      "source_commit": "5963281944601e86bc5278dda436271db7fea040"
+    },
+    "rtx4090": {
+      "branch": "agent/mixed-device-rtx4090",
+      "implementation_digest": "59498e170f2b69049104acf6cd79476b1755e9aaa3b79eb6a2f5a938cd831e12",
+      "source_commit": "26bd84b1b33e997ce5a8bd8fff4006b1a2090b7b"
+    }
+  },
+  "legacy_prefix_cells": 1986,
+  "legacy_prefix_inventory_sha256": "374e40ba2065cda868f1b573da59660ecad24182e18d5b704cd367b07c94816d",
+  "legacy_prefix_policy": {
+    "implementation_digest": "082a0de79e7607322e62b64546f887ba0e47663ed2cedd4fdc7bbb6f65eb5e4e",
+    "nonprefix_cells": 0,
+    "quality_values_accessed_during_admission": false,
+    "reuse_rule": "admit the exact structurally validated canonical prefix, then split it by the frozen mixed-site assignment",
+    "source_commit": "8db072b2c3db35d9566238d5a0181e0a0da01730"
+  },
+  "quality_values_accessed_before_freeze": false,
+  "runtime_plan": {
+    "estimated_remaining_days_after_gates": {
+      "central": 8.5,
+      "range": [
+        7,
+        11
+      ]
+    },
+    "new_cells": 7014,
+    "parallel_across_sites": true,
+    "same_gpu_workers_per_site": 1,
+    "same_gpu_worker_reason": "The frozen quality-blind topology probe measured one worker as fastest on the available device path.",
+    "supervision": "one restart-on-failure user service per site with atomic cell publication"
+  },
+  "schema_version": 1,
+  "sites": {
+    "gb10": {
+      "assignment": "v1.3.5 quality-blind Latin-rotated 4-of-10 replicate block",
+      "coordinate_count": 3600,
+      "legacy_prefix_cells": 796,
+      "new_cells": 2804,
+      "output_root": "artifacts/adaptive_v4_memory/paper_grade/p2_primary_pin_quota_lean_v2_mixed_gb10"
+    },
+    "rtx4090": {
+      "assignment": "v1.3.5 quality-blind Latin-rotated 6-of-10 replicate block",
+      "coordinate_count": 5400,
+      "legacy_prefix_cells": 1190,
+      "new_cells": 4210,
+      "output_root": "artifacts/adaptive_v4_memory/paper_grade/p2_primary_pin_quota_lean_v2_mixed_rtx4090"
+    }
+  },
+  "status": "frozen_runtime_only_lean_amendment",
+  "stopped_full17_namespaces": {
+    "gb10": {
+      "committed_cells": 354,
+      "matrix_summary_sha256": "1eb202908fe0c045138b2cdcc59e8e3fd998be6b5817f0d4868e21da84d5df88",
+      "output_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-mixed-gb10-retry-2"
+    },
+    "rtx4090": {
+      "committed_cells": 525,
+      "matrix_summary_sha256": "8f91cf881e59aad6d6a6bcdef5a89ff8ada1743ae075e97031f0e7ce66acccd9",
+      "output_root": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/controller-exact-fill-v1-3-5-mixed-rtx4090-retry-2"
+    }
+  }
+}
