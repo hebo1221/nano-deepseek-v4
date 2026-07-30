@@ -34,6 +34,13 @@ def test_primary_runner_frozen_grid() -> None:
     assert sum(matrix._coordinate_key(coordinate) in prefix for coordinate in rtx4090) == 1190
 
 
+def test_implementation_inventory_is_repository_relative() -> None:
+    inventory = matrix._implementation_inventory()
+    assert inventory
+    assert all(not Path(path).is_absolute() for path, _digest in inventory)
+    assert all(len(digest) == 64 for _path, digest in inventory)
+
+
 def _sealed_cell() -> tuple[dict[str, object], dict[str, object]]:
     coordinate = matrix.coordinates()[0]
     scale = coordinate["scale"]
