@@ -29,6 +29,8 @@ def _as_1d_long(tokens: torch.Tensor, name: str) -> torch.Tensor:
 def _pad_rows(rows: list[torch.Tensor], pad_token_id: int, max_length: int) -> tuple[torch.Tensor, torch.Tensor]:
     if not rows:
         raise ValueError("at least one row is required.")
+    if any(row.device != rows[0].device for row in rows[1:]):
+        raise ValueError("all token sequences in a batch must be on the same device.")
     input_ids = torch.full((len(rows), max_length), pad_token_id, dtype=torch.long, device=rows[0].device)
     attention_mask = torch.zeros_like(input_ids, dtype=torch.bool)
     for index, row in enumerate(rows):
@@ -89,14 +91,19 @@ def build_sft_batch(
         response = _as_1d_long(example.response, "response")
         if response.numel() == 0:
             raise ValueError("response must contain at least one token.")
-        parts = [prompt, response]
-        label_parts = [torch.full_like(prompt, -100), response]
+        if prompt.device != response.device:
+            raise ValueError("prompt and response must be on the same device.")
+
+        # Preserve supervised targets when the prompt is too long. Silently
+        # truncating the entire response would create an all-ignore training row.
+        target = response[:max_length]
         if eos_token_id is not None:
             eos = response.new_tensor([eos_token_id])
-            parts.append(eos)
-            label_parts.append(eos)
-        row = torch.cat(parts, dim=0)[:max_length]
-        label = torch.cat(label_parts, dim=0)[:max_length]
+            target = torch.cat([response[: max_length - 1], eos])
+        prompt_budget = max_length - target.numel()
+        truncated_prompt = prompt[-prompt_budget:] if prompt_budget else prompt[:0]
+        row = torch.cat([truncated_prompt, target], dim=0)
+        label = torch.cat([torch.full_like(truncated_prompt, -100), target], dim=0)
         rows.append(row)
         labels.append(label)
     input_ids, attention_mask = _pad_rows(rows, pad_token_id, max_length)

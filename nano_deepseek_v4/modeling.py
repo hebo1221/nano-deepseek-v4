@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+
 import torch
 import torch.nn.functional as F
 from torch import nn
@@ -15,7 +16,7 @@ class CausalLMOutput:
     mtp_loss: torch.Tensor | None = None
     mtp_logits: list[torch.Tensor] | None = None
     router_logits: list[torch.Tensor] | None = None
-    past_key_values: "DeepSeekV4Cache | None" = None
+    past_key_values: DeepSeekV4Cache | None = None
 
 
 class RMSNorm(nn.Module):
@@ -266,7 +267,7 @@ class DeepSeekV4LayerCache:
     def _clone_dict(values: dict[str, torch.Tensor | None]) -> dict[str, torch.Tensor | None]:
         return {name: DeepSeekV4LayerCache._clone_tensor(tensor) for name, tensor in values.items()}
 
-    def clone(self) -> "DeepSeekV4LayerCache":
+    def clone(self) -> DeepSeekV4LayerCache:
         other = DeepSeekV4LayerCache()
         other.local_kv = self._clone_tensor(self.local_kv)
         other.local_positions = self._clone_tensor(self.local_positions)
@@ -291,7 +292,7 @@ class DeepSeekV4LayerCache:
     def _select_dict(values: dict[str, torch.Tensor | None], index: int) -> dict[str, torch.Tensor | None]:
         return {name: DeepSeekV4LayerCache._select_tensor(tensor, index) for name, tensor in values.items()}
 
-    def select_batch(self, index: int) -> "DeepSeekV4LayerCache":
+    def select_batch(self, index: int) -> DeepSeekV4LayerCache:
         other = DeepSeekV4LayerCache()
         other.local_kv = self._select_tensor(self.local_kv, index)
         other.local_positions = self._select_tensor(self.local_positions, index)
@@ -325,7 +326,7 @@ class DeepSeekV4LayerCache:
         return torch.cat(present, dim=0)
 
     @staticmethod
-    def _stack_dict(attr: str, layers: list["DeepSeekV4LayerCache"]) -> dict[str, torch.Tensor | None]:
+    def _stack_dict(attr: str, layers: list[DeepSeekV4LayerCache]) -> dict[str, torch.Tensor | None]:
         keys: set[str] = set()
         for layer in layers:
             keys.update(getattr(layer, attr).keys())
@@ -337,7 +338,7 @@ class DeepSeekV4LayerCache:
         }
 
     @classmethod
-    def stack(cls, layers: list["DeepSeekV4LayerCache"]) -> "DeepSeekV4LayerCache":
+    def stack(cls, layers: list[DeepSeekV4LayerCache]) -> DeepSeekV4LayerCache:
         if not layers:
             raise ValueError("Cannot stack an empty cache layer list.")
         other = cls()
@@ -455,6 +456,7 @@ class DeepSeekV4Cache:
     """Minimal dynamic cache for DeepSeek-V4 full prefill/decode equivalence tests."""
 
     def __init__(self, config: DeepSeekV4Config) -> None:
+        self.config = config
         self.layers = [DeepSeekV4LayerCache() for _ in range(config.num_hidden_layers)]
         self.seen_tokens = 0
 
@@ -464,25 +466,30 @@ class DeepSeekV4Cache:
     def advance(self, tokens: int) -> None:
         self.seen_tokens += tokens
 
-    def clone(self) -> "DeepSeekV4Cache":
+    def clone(self) -> DeepSeekV4Cache:
         other = object.__new__(DeepSeekV4Cache)
+        other.config = self.config
         other.layers = [layer.clone() for layer in self.layers]
         other.seen_tokens = self.seen_tokens
         return other
 
-    def select_batch(self, index: int) -> "DeepSeekV4Cache":
+    def select_batch(self, index: int) -> DeepSeekV4Cache:
         other = object.__new__(DeepSeekV4Cache)
+        other.config = self.config
         other.layers = [layer.select_batch(index) for layer in self.layers]
         other.seen_tokens = self.seen_tokens
         return other
 
     @classmethod
-    def stack(cls, caches: list["DeepSeekV4Cache"]) -> "DeepSeekV4Cache":
+    def stack(cls, caches: list[DeepSeekV4Cache]) -> DeepSeekV4Cache:
         if not caches:
             raise ValueError("Cannot stack an empty cache list.")
         seen_tokens = caches[0].seen_tokens
         if any(cache.seen_tokens != seen_tokens for cache in caches):
             raise ValueError("Cannot stack caches with different sequence lengths.")
+        config = caches[0].config
+        if any(cache.config != config for cache in caches):
+            raise ValueError("Cannot stack caches created from different model configurations.")
         num_layers = len(caches[0].layers)
         if any(len(cache.layers) != num_layers for cache in caches):
             raise ValueError("Cannot stack caches with different layer counts.")
@@ -491,13 +498,17 @@ class DeepSeekV4Cache:
             DeepSeekV4LayerCache.stack([cache.layers[layer_idx] for cache in caches])
             for layer_idx in range(num_layers)
         ]
+        other.config = config
         other.seen_tokens = seen_tokens
         return other
 
     def crop(self, max_length: int, config: DeepSeekV4Config) -> None:
         if max_length < 0 or max_length > self.seen_tokens:
             raise ValueError(f"Cannot crop cache from {self.seen_tokens} tokens to {max_length}.")
-        for layer, layer_type in zip(self.layers, config.layer_types):
+        layer_types = config.layer_types
+        if layer_types is None:
+            raise RuntimeError("config.layer_types was not initialized.")
+        for layer, layer_type in zip(self.layers, layer_types, strict=True):
             layer.crop(max_length, config.sliding_window, layer_type, config.compress_rates)
         self.seen_tokens = max_length
 
@@ -612,6 +623,8 @@ class CSAIndexer(nn.Module):
         if cache is not None:
             prior_kv, prior_gate = cache.update_overlap("indexer", kv, gate, chunk_positions, self.head_dim)
             if prior_kv is not None:
+                if prior_gate is None:
+                    raise RuntimeError("cache overlap gate is missing.")
                 slots[:, 0, : self.rate] = prior_kv.to(slots.dtype)
                 slot_gate[:, 0, : self.rate] = prior_gate.to(slot_gate.dtype)
 
@@ -711,6 +724,8 @@ class CSACompressor(nn.Module):
         if cache is not None:
             prior_kv, prior_gate = cache.update_overlap("compressor", kv, gate, chunk_positions, self.head_dim)
             if prior_kv is not None:
+                if prior_gate is None:
+                    raise RuntimeError("cache overlap gate is missing.")
                 slots[:, 0, : self.rate] = prior_kv.to(slots.dtype)
                 slot_gate[:, 0, : self.rate] = prior_gate.to(slot_gate.dtype)
 
@@ -930,6 +945,8 @@ class DeepSeekV4MoE(nn.Module):
 class DeepSeekV4DecoderLayer(nn.Module):
     def __init__(self, config: DeepSeekV4Config, layer_idx: int) -> None:
         super().__init__()
+        if config.layer_types is None or config.mlp_layer_types is None:
+            raise RuntimeError("config layer schedules were not initialized.")
         self.self_attn = DeepSeekV4Attention(config, config.layer_types[layer_idx])
         self.moe = DeepSeekV4MoE(config, config.mlp_layer_types[layer_idx])
         self.attn_norm = RMSNorm(config.hidden_size, config.rms_norm_eps)
@@ -1019,11 +1036,30 @@ class DeepSeekV4Model(nn.Module):
         past_key_values: DeepSeekV4Cache | None = None,
         use_cache: bool = False,
     ) -> tuple[torch.Tensor, list[torch.Tensor] | None, DeepSeekV4Cache | None]:
+        if input_ids.ndim != 2 or input_ids.shape[0] == 0 or input_ids.shape[1] == 0:
+            raise ValueError("input_ids must be a non-empty [batch, seq] tensor.")
+        if position_ids is not None and position_ids.shape != input_ids.shape:
+            raise ValueError("position_ids must have the same [batch, seq] shape as input_ids.")
+        if attention_mask is not None and attention_mask.ndim != 2:
+            raise ValueError("attention_mask must be a [batch, seq] tensor.")
+        if attention_mask is not None and attention_mask.shape[0] != input_ids.shape[0]:
+            raise ValueError("attention_mask batch size must match input_ids.")
+        if past_key_values is not None and len(past_key_values.layers) != len(self.layers):
+            raise ValueError("past_key_values layer count does not match the model configuration.")
+        if past_key_values is not None and past_key_values.config != self.config:
+            raise ValueError("past_key_values was created for a different model configuration.")
         active_cache = past_key_values
         if use_cache and active_cache is None:
             active_cache = DeepSeekV4Cache(self.config)
+        past_seen = active_cache.get_seq_length() if active_cache is not None else 0
+        if attention_mask is not None:
+            expected_mask_length = past_seen + input_ids.shape[1]
+            if attention_mask.shape[1] != expected_mask_length:
+                raise ValueError(
+                    "attention_mask sequence length must equal past cache length plus "
+                    f"input length ({expected_mask_length}), got {attention_mask.shape[1]}."
+                )
         if position_ids is None:
-            past_seen = active_cache.get_seq_length() if active_cache is not None else 0
             position_ids = torch.arange(input_ids.shape[1], device=input_ids.device).unsqueeze(0) + past_seen
             position_ids = position_ids.expand(input_ids.shape[0], -1)
         hidden_states = self.embed_tokens(input_ids)
@@ -1131,6 +1167,10 @@ class DeepSeekV4ForCausalLM(nn.Module):
         mtp_loss = None
         mtp_logits = None
         if labels is not None:
+            if labels.shape != input_ids.shape:
+                raise ValueError("labels must have the same shape as input_ids.")
+            if input_ids.shape[1] < 2:
+                raise ValueError("at least two tokens are required to compute causal LM loss.")
             shift_logits = logits[:, :-1].contiguous()
             shift_labels = labels[:, 1:].contiguous()
             loss = F.cross_entropy(
@@ -1151,6 +1191,14 @@ class DeepSeekV4ForCausalLM(nn.Module):
             past_key_values=next_cache,
         )
 
+    def _resolve_eos_token_id(self, eos_token_id: int | None) -> int:
+        eos = self.config.eos_token_id if eos_token_id is None else eos_token_id
+        if isinstance(eos, bool) or not isinstance(eos, int):
+            raise ValueError("eos_token_id must be an integer.")
+        if not 0 <= eos < self.config.vocab_size:
+            raise ValueError("eos_token_id must be in [0, vocab_size).")
+        return eos
+
     @torch.no_grad()
     def generate(
         self,
@@ -1162,7 +1210,7 @@ class DeepSeekV4ForCausalLM(nn.Module):
             raise ValueError("max_new_tokens must be non-negative.")
         if max_new_tokens == 0:
             return input_ids
-        eos = self.config.eos_token_id if eos_token_id is None else eos_token_id
+        eos = self._resolve_eos_token_id(eos_token_id)
         output = self(input_ids, use_cache=True)
         cache = output.past_key_values
         next_token = output.logits[:, -1].argmax(dim=-1, keepdim=True)
@@ -1198,7 +1246,7 @@ class DeepSeekV4ForCausalLM(nn.Module):
         if max_new_tokens == 0:
             return input_ids
 
-        eos = self.config.eos_token_id if eos_token_id is None else eos_token_id
+        eos = self._resolve_eos_token_id(eos_token_id)
         output = self(input_ids, use_cache=True)
         if output.past_key_values is None:
             raise RuntimeError("model did not return a cache.")
@@ -1206,7 +1254,7 @@ class DeepSeekV4ForCausalLM(nn.Module):
         beams: list[tuple[torch.Tensor, DeepSeekV4Cache, torch.Tensor, torch.Tensor, bool]] = []
         first_log_probs = output.logits[:, -1].log_softmax(dim=-1)
         top_scores, top_tokens = first_log_probs.topk(min(num_beams, first_log_probs.shape[-1]), dim=-1)
-        for score, token in zip(top_scores[0], top_tokens[0]):
+        for score, token in zip(top_scores[0], top_tokens[0], strict=True):
             token = token.view(1, 1)
             step = self(token, past_key_values=output.past_key_values.clone(), use_cache=True)
             if step.past_key_values is None:
@@ -1229,7 +1277,7 @@ class DeepSeekV4ForCausalLM(nn.Module):
                     continue
                 log_probs = logits[:, -1].log_softmax(dim=-1)
                 next_scores, next_tokens = log_probs.topk(min(num_beams, log_probs.shape[-1]), dim=-1)
-                for next_score, next_token in zip(next_scores[0], next_tokens[0]):
+                for next_score, next_token in zip(next_scores[0], next_tokens[0], strict=True):
                     next_token = next_token.view(1, 1)
                     step = self(next_token, past_key_values=cache.clone(), use_cache=True)
                     if step.past_key_values is None:

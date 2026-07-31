@@ -1,0 +1,110 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install quality tools
+        run: python -m pip install --upgrade pip ruff mypy yamllint
+      - name: Lint
+        run: |
+          ruff check .
+          yamllint .github .yamllint.yml
+      - name: Type check
+        run: mypy nano_deepseek_v4
+
+  test:
+    name: Test (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.12", "3.14"]
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install package
+        run: python -m pip install --upgrade pip && python -m pip install -e ".[dev]"
+      - name: Test
+        run: pytest --cov=nano_deepseek_v4 --cov-report=term-missing:skip-covered --cov-fail-under=75
+
+  package:
+    name: Package
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Build distribution
+        run: python -m pip install --upgrade pip build twine && python -m build
+      - name: Check distribution metadata
+        run: python -m twine check --strict dist/*
+      - name: Verify typed package marker
+        run: python -m zipfile --list dist/*.whl | grep nano_deepseek_v4/py.typed
+      - name: Smoke-test the built wheel in an isolated environment
+        run: |
+          python -m venv /tmp/nano-deepseek-v4-wheel
+          /tmp/nano-deepseek-v4-wheel/bin/python -m pip install --upgrade pip
+          /tmp/nano-deepseek-v4-wheel/bin/python -m pip install \
+            --index-url https://download.pytorch.org/whl/cpu \
+            "torch>=2.4"
+          /tmp/nano-deepseek-v4-wheel/bin/python -m pip install dist/*.whl
+          cd /tmp
+          /tmp/nano-deepseek-v4-wheel/bin/nano-deepseek-v4-demo
+
+  required:
+    name: Required
+    if: always()
+    needs: [quality, test, package]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require every CI job
+        env:
+          QUALITY_RESULT: ${{ needs.quality.result }}
+          TEST_RESULT: ${{ needs.test.result }}
+          PACKAGE_RESULT: ${{ needs.package.result }}
+        run: |
+          for result in "$QUALITY_RESULT" "$TEST_RESULT" "$PACKAGE_RESULT"; do
+            if [[ "$result" != "success" ]]; then
+              echo "Required CI dependency finished with status: $result" >&2
+              exit 1
+            fi
+          done
