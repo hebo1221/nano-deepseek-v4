@@ -6,9 +6,12 @@ Quickstart:
     >>> config = DeepSeekV4Config()        # tiny CPU-runnable default
     >>> model = DeepSeekV4ForCausalLM(config)
 
-    >>> # Or load an official Flash checkpoint into an initialized model:
+    >>> # Or construct a matching model before loading an official snapshot:
     >>> from nano_deepseek_v4 import load_deepseek_official_checkpoint
-    >>> report = load_deepseek_official_checkpoint(model, "path/to/flash-snapshot")
+    >>> snapshot = "path/to/flash-snapshot"
+    >>> official_config = DeepSeekV4Config.from_official_json(f"{snapshot}/config.json")
+    >>> official_model = DeepSeekV4ForCausalLM(official_config)
+    >>> report = load_deepseek_official_checkpoint(official_model, snapshot)
 """
 
 from .checkpoint import (
@@ -65,7 +68,7 @@ from .training import (
     train_step,
 )
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
     # config

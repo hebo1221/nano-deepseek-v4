@@ -42,6 +42,18 @@ def test_public_version_matches_distribution_metadata():
     assert nano_deepseek_v4.__version__ == version("nano-deepseek-v4")
 
 
+def test_demo_reports_cache_equivalence(capsys):
+    from nano_deepseek_v4.demo import main
+
+    main()
+    output = capsys.readouterr().out
+    assert "nano-deepseek-v4 0.2.0" in output
+    assert "parameters: 1,023,364" in output
+    assert "logits: (1, 8, 512)" in output
+    assert "cache tokens: 5 -> 8" in output
+    assert "cached/full match: True" in output
+
+
 def test_default_config_round_trips():
     cfg = DeepSeekV4Config()
     assert cfg.num_key_value_heads == 1  # shared K=V MQA
@@ -83,6 +95,52 @@ def test_unknown_compress_ratio_is_rejected():
         DeepSeekV4Config(num_hidden_layers=2, compress_ratios=[0, 16])
 
 
+@pytest.mark.parametrize("ratio", [4.5, True])
+def test_non_integer_compress_ratio_is_rejected(ratio):
+    with pytest.raises(ValueError, match="only integers"):
+        DeepSeekV4Config(num_hidden_layers=2, compress_ratios=[0, ratio])
+
+
+def test_explicit_layer_types_must_agree_with_compress_ratios():
+    with pytest.raises(ValueError, match="conflicts with compress_ratios"):
+        DeepSeekV4Config(
+            num_hidden_layers=2,
+            compress_ratios=[0, 4],
+            layer_types=["sliding_attention", "heavily_compressed_attention"],
+        )
+
+
+def test_explicit_layer_types_disambiguate_equal_compression_rates():
+    cfg = DeepSeekV4Config(
+        num_hidden_layers=2,
+        compress_rates={
+            "compressed_sparse_attention": 4,
+            "heavily_compressed_attention": 4,
+        },
+        compress_ratios=[4, 4],
+        layer_types=[
+            "compressed_sparse_attention",
+            "heavily_compressed_attention",
+        ],
+    )
+    assert cfg.layer_types == [
+        "compressed_sparse_attention",
+        "heavily_compressed_attention",
+    ]
+
+
+def test_equal_compression_rates_are_ambiguous_without_layer_types():
+    with pytest.raises(ValueError, match="must be distinct"):
+        DeepSeekV4Config(
+            num_hidden_layers=2,
+            compress_rates={
+                "compressed_sparse_attention": 4,
+                "heavily_compressed_attention": 4,
+            },
+            compress_ratios=[4, 4],
+        )
+
+
 def test_invalid_config_rejects_multi_kv_heads():
     with pytest.raises(ValueError, match="shared K=V"):
         DeepSeekV4Config(num_key_value_heads=2)
@@ -97,6 +155,8 @@ def test_invalid_config_rejects_multi_kv_heads():
         ({"attention_dropout": float("nan")}, "attention_dropout must be a finite"),
         ({"rope_theta": float("inf")}, "rope_theta must be a finite"),
         ({"eos_token_id": 512}, "eos_token_id must be in"),
+        ({"eos_token_id": 1.5}, "eos_token_id must be an integer"),
+        ({"eos_token_id": True}, "eos_token_id must be an integer"),
         (
             {"compress_rates": {"compressed_sparse_attention": 4}},
             "compress_rates is missing required keys",
@@ -263,6 +323,15 @@ def test_greedy_generate_returns_extended_sequence():
     out = model.generate(ids, max_new_tokens=4)
     assert out.shape == (1, 10)
     assert torch.equal(out[:, :6], ids)
+
+
+@pytest.mark.parametrize("eos_token_id", [1.5, True, 512])
+def test_generate_rejects_invalid_eos_override(eos_token_id):
+    model = _tiny_model()
+    ids = torch.tensor([[1, 2, 3]])
+
+    with pytest.raises(ValueError, match="eos_token_id"):
+        model.generate(ids, max_new_tokens=1, eos_token_id=eos_token_id)
 
 
 def test_beam_search_returns_extended_sequence():

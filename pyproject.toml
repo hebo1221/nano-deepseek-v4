@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nano-deepseek-v4"
-version = "0.1.0"
+version = "0.2.0"
 description = "A compact, readable PyTorch reference implementation of the DeepSeek-V4 architecture (Flash and Pro)."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -27,9 +27,12 @@ dependencies = [
     "safetensors>=0.4",
 ]
 
+[project.scripts]
+nano-deepseek-v4-demo = "nano_deepseek_v4.demo:main"
+
 [project.optional-dependencies]
 official = [
-    "huggingface_hub>=0.20",
+    "huggingface_hub>=0.34.0",
     "tokenizers>=0.20",
 ]
 dev = [
@@ -37,6 +40,7 @@ dev = [
     "pytest-cov>=5.0",
     "ruff>=0.8",
     "mypy>=1.11",
+    "yamllint>=1.35",
     "build>=1.2",
     "twine>=5.0",
 ]

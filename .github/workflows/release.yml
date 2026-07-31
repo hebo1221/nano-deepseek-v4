@@ -1,43 +1,52 @@
-name: Build release artifacts
+name: Publish release
 
 on:
   push:
     tags: ["v*"]
-  workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release
   cancel-in-progress: false
 
 jobs:
   build:
+    name: Build and smoke-test distributions
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    permissions:
-      attestations: write
-      contents: read
-      id-token: write
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
+          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.14"
-      - name: Verify tag matches package version
-        if: github.event_name == 'push'
+      - name: Verify release source and version
         env:
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main || {
+            echo "release tag must point to a commit contained in origin/main" >&2
+            exit 1
+          }
           python - <<'PY'
           import os
+          import re
           import tomllib
           from pathlib import Path
 
           version = tomllib.loads(Path("pyproject.toml").read_text())["project"]["version"]
+          init_text = Path("nano_deepseek_v4/__init__.py").read_text()
+          match = re.search(r'^__version__ = "([^"]+)"$', init_text, re.MULTILINE)
+          if match is None or match.group(1) != version:
+              raise SystemExit("__version__ must match pyproject.toml")
+          citation = Path("CITATION.cff").read_text()
+          if f"version: {version}\n" not in citation:
+              raise SystemExit("CITATION.cff version must match pyproject.toml")
           expected = f"v{version}"
           actual = os.environ["RELEASE_TAG"]
           if actual != expected:
@@ -46,12 +55,47 @@ jobs:
       - name: Build and validate distributions
         run: |
           python -m pip install --upgrade pip build twine
-          python -m build
-          python -m twine check dist/*
-      - name: Attest build provenance
-        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4.1.1
-        with:
-          subject-path: dist/*
+          python -m build --outdir dist/packages
+          python -m twine check --strict dist/packages/*
+          (cd dist/packages && sha256sum -- * > ../SHA256SUMS)
+      - name: Smoke-test the release wheel
+        run: |
+          python -m venv /tmp/nano-deepseek-v4-release
+          /tmp/nano-deepseek-v4-release/bin/python -m pip install --upgrade pip
+          /tmp/nano-deepseek-v4-release/bin/python -m pip install \
+            --index-url https://download.pytorch.org/whl/cpu \
+            "torch>=2.4"
+          /tmp/nano-deepseek-v4-release/bin/python -m pip install dist/packages/*.whl
+          cd /tmp
+          /tmp/nano-deepseek-v4-release/bin/nano-deepseek-v4-demo
+      - name: Record release identity
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import tomllib
+          from pathlib import Path
+
+          package_dir = Path("dist/packages")
+          artifacts = {}
+          for path in sorted(package_dir.iterdir()):
+              artifacts[path.name] = hashlib.sha256(path.read_bytes()).hexdigest()
+          version = tomllib.loads(Path("pyproject.toml").read_text())["project"]["version"]
+          manifest = {
+              "schema_version": 1,
+              "repository": os.environ["GITHUB_REPOSITORY"],
+              "tag": os.environ["RELEASE_TAG"],
+              "commit": os.environ["GITHUB_SHA"],
+              "version": version,
+              "artifacts": artifacts,
+          }
+          Path("dist/release-manifest.json").write_text(
+              json.dumps(manifest, indent=2, sort_keys=True) + "\n"
+          )
+          PY
       - name: Upload distributions
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
@@ -59,3 +103,171 @@ jobs:
           path: dist/
           if-no-files-found: error
           retention-days: 30
+
+  attest:
+    name: Attest distributions
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      attestations: write  # required to store GitHub artifact attestations
+      contents: read
+      id-token: write  # required to sign attestations through GitHub OIDC
+    steps:
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
+        with:
+          name: python-package-distributions
+          path: dist
+      - name: Verify downloaded distributions
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          (cd dist/packages && sha256sum -c ../SHA256SUMS)
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          manifest = json.loads(Path("dist/release-manifest.json").read_text())
+          expected = {
+              "schema_version": 1,
+              "repository": os.environ["GITHUB_REPOSITORY"],
+              "tag": os.environ["RELEASE_TAG"],
+              "commit": os.environ["GITHUB_SHA"],
+              "version": os.environ["RELEASE_TAG"].removeprefix("v"),
+          }
+          for field, value in expected.items():
+              if manifest.get(field) != value:
+                  raise SystemExit(f"release manifest {field} does not match this run")
+          actual_artifacts = {
+              path.name: hashlib.sha256(path.read_bytes()).hexdigest()
+              for path in sorted(Path("dist/packages").iterdir())
+          }
+          if manifest.get("artifacts") != actual_artifacts:
+              raise SystemExit("release manifest artifact hashes do not match")
+          PY
+      - name: Attest build provenance
+        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4.1.1
+        with:
+          subject-path: dist/packages/*
+
+  publish-pypi:
+    name: Publish to PyPI
+    needs: [build, attest]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: pypi
+      url: https://pypi.org/p/nano-deepseek-v4
+    permissions:
+      contents: read
+      id-token: write  # required for PyPI Trusted Publishing
+    steps:
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
+        with:
+          name: python-package-distributions
+          path: dist
+      - name: Revalidate release identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          (cd dist/packages && sha256sum -c ../SHA256SUMS)
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          manifest = json.loads(Path("dist/release-manifest.json").read_text())
+          expected = {
+              "schema_version": 1,
+              "repository": os.environ["GITHUB_REPOSITORY"],
+              "tag": os.environ["RELEASE_TAG"],
+              "commit": os.environ["GITHUB_SHA"],
+              "version": os.environ["RELEASE_TAG"].removeprefix("v"),
+          }
+          for field, value in expected.items():
+              if manifest.get(field) != value:
+                  raise SystemExit(f"release manifest {field} does not match this run")
+          actual_artifacts = {
+              path.name: hashlib.sha256(path.read_bytes()).hexdigest()
+              for path in sorted(Path("dist/packages").iterdir())
+          }
+          if manifest.get("artifacts") != actual_artifacts:
+              raise SystemExit("release manifest artifact hashes do not match")
+          PY
+          actual_sha="$(gh api \
+            "repos/$GITHUB_REPOSITORY/commits/$RELEASE_TAG" \
+            --jq .sha)"
+          if [[ "$actual_sha" != "$GITHUB_SHA" ]]; then
+            echo "release tag moved after the build job" >&2
+            exit 1
+          fi
+      - name: Publish distributions with PyPI Trusted Publishing
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # release/v1
+        with:
+          packages-dir: dist/packages/
+          attestations: true
+
+  publish-github:
+    name: Publish immutable GitHub release
+    needs: publish-pypi
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write  # required to create the GitHub release
+    steps:
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
+        with:
+          name: python-package-distributions
+          path: dist
+      - name: Revalidate release identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          (cd dist/packages && sha256sum -c ../SHA256SUMS)
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          manifest = json.loads(Path("dist/release-manifest.json").read_text())
+          expected = {
+              "schema_version": 1,
+              "repository": os.environ["GITHUB_REPOSITORY"],
+              "tag": os.environ["RELEASE_TAG"],
+              "commit": os.environ["GITHUB_SHA"],
+              "version": os.environ["RELEASE_TAG"].removeprefix("v"),
+          }
+          for field, value in expected.items():
+              if manifest.get(field) != value:
+                  raise SystemExit(f"release manifest {field} does not match this run")
+          actual_artifacts = {
+              path.name: hashlib.sha256(path.read_bytes()).hexdigest()
+              for path in sorted(Path("dist/packages").iterdir())
+          }
+          if manifest.get("artifacts") != actual_artifacts:
+              raise SystemExit("release manifest artifact hashes do not match")
+          PY
+          actual_sha="$(gh api \
+            "repos/$GITHUB_REPOSITORY/commits/$RELEASE_TAG" \
+            --jq .sha)"
+          if [[ "$actual_sha" != "$GITHUB_SHA" ]]; then
+            echo "release tag moved after the build job" >&2
+            exit 1
+          fi
+      - name: Create an immutable GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$RELEASE_TAG" \
+            dist/packages/* dist/SHA256SUMS dist/release-manifest.json \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --generate-notes \
+            --title "$RELEASE_TAG"

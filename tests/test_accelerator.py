@@ -88,8 +88,18 @@ def test_cuda_cache_can_round_trip_through_cpu_storage(tmp_path: Path):
     assert prefill.past_key_values is not None
 
     cache_dir = tmp_path / "gpu-cache"
-    save_deepseek_v4_cache(prefill.past_key_values, cache_dir)
-    restored = load_deepseek_v4_cache(config, cache_dir, device="cuda")
+    revision = "sha256:" + "0" * 64
+    save_deepseek_v4_cache(
+        prefill.past_key_values,
+        cache_dir,
+        model_revision=revision,
+    )
+    restored = load_deepseek_v4_cache(
+        config,
+        cache_dir,
+        model_revision=revision,
+        device="cuda",
+    )
     next_ids = torch.randint(0, config.vocab_size, (1, 1), device="cuda")
 
     expected = model(

@@ -18,10 +18,11 @@ Run the same quality gates used in CI before opening a pull request:
 
 ```bash
 ruff check .
+yamllint .github .yamllint.yml
 mypy nano_deepseek_v4
 pytest --cov=nano_deepseek_v4 --cov-report=term-missing --cov-fail-under=75
 python -m build
-python -m twine check dist/*
+python -m twine check --strict dist/*
 ```
 
 CUDA tests are marked separately and skip automatically on CPU-only systems:

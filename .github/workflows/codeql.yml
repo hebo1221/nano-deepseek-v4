@@ -18,12 +18,13 @@ concurrency:
 
 jobs:
   analyze:
+    name: Analyze Python
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
-      actions: read
+      actions: read  # required by private-repository CodeQL status queries
       contents: read
-      security-events: write
+      security-events: write  # required to upload CodeQL results
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:

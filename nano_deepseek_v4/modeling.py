@@ -1191,6 +1191,14 @@ class DeepSeekV4ForCausalLM(nn.Module):
             past_key_values=next_cache,
         )
 
+    def _resolve_eos_token_id(self, eos_token_id: int | None) -> int:
+        eos = self.config.eos_token_id if eos_token_id is None else eos_token_id
+        if isinstance(eos, bool) or not isinstance(eos, int):
+            raise ValueError("eos_token_id must be an integer.")
+        if not 0 <= eos < self.config.vocab_size:
+            raise ValueError("eos_token_id must be in [0, vocab_size).")
+        return eos
+
     @torch.no_grad()
     def generate(
         self,
@@ -1202,7 +1210,7 @@ class DeepSeekV4ForCausalLM(nn.Module):
             raise ValueError("max_new_tokens must be non-negative.")
         if max_new_tokens == 0:
             return input_ids
-        eos = self.config.eos_token_id if eos_token_id is None else eos_token_id
+        eos = self._resolve_eos_token_id(eos_token_id)
         output = self(input_ids, use_cache=True)
         cache = output.past_key_values
         next_token = output.logits[:, -1].argmax(dim=-1, keepdim=True)
@@ -1238,7 +1246,7 @@ class DeepSeekV4ForCausalLM(nn.Module):
         if max_new_tokens == 0:
             return input_ids
 
-        eos = self.config.eos_token_id if eos_token_id is None else eos_token_id
+        eos = self._resolve_eos_token_id(eos_token_id)
         output = self(input_ids, use_cache=True)
         if output.past_key_values is None:
             raise RuntimeError("model did not return a cache.")

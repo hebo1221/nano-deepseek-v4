@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
 
 permissions:
@@ -15,6 +16,7 @@ concurrency:
 
 jobs:
   quality:
+    name: Quality
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -27,13 +29,16 @@ jobs:
           cache: pip
           cache-dependency-path: pyproject.toml
       - name: Install quality tools
-        run: python -m pip install --upgrade pip ruff mypy
+        run: python -m pip install --upgrade pip ruff mypy yamllint
       - name: Lint
-        run: ruff check .
+        run: |
+          ruff check .
+          yamllint .github .yamllint.yml
       - name: Type check
         run: mypy nano_deepseek_v4
 
   test:
+    name: Test (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
@@ -55,8 +60,9 @@ jobs:
         run: pytest --cov=nano_deepseek_v4 --cov-report=term-missing:skip-covered --cov-fail-under=75
 
   package:
+    name: Package
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
@@ -69,6 +75,36 @@ jobs:
       - name: Build distribution
         run: python -m pip install --upgrade pip build twine && python -m build
       - name: Check distribution metadata
-        run: python -m twine check dist/*
+        run: python -m twine check --strict dist/*
       - name: Verify typed package marker
         run: python -m zipfile --list dist/*.whl | grep nano_deepseek_v4/py.typed
+      - name: Smoke-test the built wheel in an isolated environment
+        run: |
+          python -m venv /tmp/nano-deepseek-v4-wheel
+          /tmp/nano-deepseek-v4-wheel/bin/python -m pip install --upgrade pip
+          /tmp/nano-deepseek-v4-wheel/bin/python -m pip install \
+            --index-url https://download.pytorch.org/whl/cpu \
+            "torch>=2.4"
+          /tmp/nano-deepseek-v4-wheel/bin/python -m pip install dist/*.whl
+          cd /tmp
+          /tmp/nano-deepseek-v4-wheel/bin/nano-deepseek-v4-demo
+
+  required:
+    name: Required
+    if: always()
+    needs: [quality, test, package]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require every CI job
+        env:
+          QUALITY_RESULT: ${{ needs.quality.result }}
+          TEST_RESULT: ${{ needs.test.result }}
+          PACKAGE_RESULT: ${{ needs.package.result }}
+        run: |
+          for result in "$QUALITY_RESULT" "$TEST_RESULT" "$PACKAGE_RESULT"; do
+            if [[ "$result" != "success" ]]; then
+              echo "Required CI dependency finished with status: $result" >&2
+              exit 1
+            fi
+          done

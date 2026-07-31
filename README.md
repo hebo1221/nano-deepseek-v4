@@ -3,13 +3,13 @@
 [![CI](https://github.com/hebo1221/nano-deepseek-v4/actions/workflows/ci.yml/badge.svg)](https://github.com/hebo1221/nano-deepseek-v4/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/hebo1221/nano-deepseek-v4/actions/workflows/codeql.yml/badge.svg)](https://github.com/hebo1221/nano-deepseek-v4/actions/workflows/codeql.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
-[![License](https://img.shields.io/badge/license-Apache--2.0-green.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-Apache--2.0-green.svg)](https://github.com/hebo1221/nano-deepseek-v4/blob/main/LICENSE)
 
 A compact, readable PyTorch reference implementation of the **DeepSeek-V4**
 architecture, in the spirit of [nanoGPT](https://github.com/karpathy/nanoGPT).
 The model code in `nano_deepseek_v4/modeling.py` is a single ~1,300-line file
-that implements every architectural idea from the
-[DeepSeek-V4 technical report](https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/blob/main/DeepSeek_V4.pdf):
+that covers the major architectural components described in the
+[DeepSeek-V4 technical report](https://arxiv.org/abs/2606.19348):
 
 - hybrid attention with **sliding attention**, **Compressed Sparse Attention (CSA)**,
   and **Heavily Compressed Attention (HCA)**
@@ -24,13 +24,60 @@ that implements every architectural idea from the
 - **FP4 E2M1** and **FP8 E4M3FN** scale-sidecar dequantization
 - **Muon-style** momentum optimizer with Newton-Schulz matrix orthogonalization
 
-The defaults are deliberately tiny so the model runs on CPU. Loading the
-official 284B/1.6T checkpoint is supported via `load_deepseek_official_checkpoint`.
+The defaults are deliberately tiny so the model runs on CPU. The library can
+inspect official Flash/Pro snapshots and convert them into this implementation's
+layout; materializing the full 284B/1.6T models still requires correspondingly
+large memory and is not the quickstart path.
 
 This is meant to be **executable, readable, and hackable** — not a production
 training framework.
 
-## Install
+Unlike the Hugging Face Transformers implementation, which optimizes for broad
+ecosystem integration, this repository keeps the architecture compact enough to
+read end-to-end and modify in small experiments.
+
+## Sixty-second CPU demo
+
+Install a checkout (this also works before the first PyPI publication):
+
+```bash
+git clone https://github.com/hebo1221/nano-deepseek-v4.git
+cd nano-deepseek-v4
+python -m pip install -e .
+```
+
+After the v0.2.0 publish workflow completes, the equivalent pinned install is:
+
+```bash
+python -m pip install "nano-deepseek-v4==0.2.0"
+```
+
+Then run the no-download demo:
+
+```bash
+nano-deepseek-v4-demo
+# The module form is equivalent:
+# python -m nano_deepseek_v4.demo
+```
+
+Expected structure:
+
+```text
+nano-deepseek-v4 0.2.0
+parameters: 1,023,364
+attention: sliding -> sliding -> compressed_sparse -> heavily_compressed
+mlp: hash_moe -> hash_moe -> hash_moe -> moe
+logits: (1, 8, 512)
+cache tokens: 5 -> 8
+cached/full match: True
+router layers: 4
+```
+
+It constructs the complete tiny architecture and checks that chunked cached
+inference matches a full CPU forward pass. The weights and token IDs are random:
+this is an architecture/cache smoke test, not a text-generation quality demo.
+
+For checkpoint-download helpers or development tools:
 
 ```bash
 pip install -e ".[official]"   # editable + huggingface_hub for checkpoint download
@@ -49,10 +96,10 @@ config = DeepSeekV4Config()                    # 1M-param toy default
 model = DeepSeekV4ForCausalLM(config)
 ids = torch.randint(0, config.vocab_size, (1, 16))
 out = model(ids, labels=ids)
-print(out.loss.item())                         # works on CPU in < 1s
+print(out.logits.shape, out.loss.item())       # tiny CPU-runnable smoke path
 ```
 
-## Quickstart — official Flash checkpoint
+## Inspecting an official Flash checkpoint
 
 ```python
 from nano_deepseek_v4 import (
@@ -72,38 +119,65 @@ snapshot = "./checkpoints/flash"
 report = verify_deepseek_checkpoint_snapshot(snapshot)
 assert report.is_complete
 
-# 2) Build the model from the official config:
+# 2) Read the official-format fields supported by this implementation:
 config = DeepSeekV4Config.from_official_json(f"{snapshot}/config.json")
-model = DeepSeekV4ForCausalLM(config)
 
-# 3) Convert and load the official safetensors shards into `model`:
+# 3) Full loading is intentionally explicit and memory-heavy:
+model = DeepSeekV4ForCausalLM(config)
 report = load_deepseek_official_checkpoint(model, snapshot)
 print(len(report.conversion.converted_keys), "tensors loaded")
 ```
 
-For snapshots too large to materialize with a model, use
+`load_deepseek_official_checkpoint` materializes the official tensors and the
+converted state dictionary; it is not a sharded serving loader. For snapshots
+too large to materialize, use
 `build_deepseek_official_checkpoint_streaming_load_report` to scan every tensor
-payload and emit conversion evidence without constructing the full model.
+payload and emit conversion evidence without constructing a runnable model.
 
 The checked-in
-[`DeepSeek-V4-Flash-validation.summary.json`](references/DeepSeek-V4-Flash-validation.summary.json)
+[`DeepSeek-V4-Flash-validation.summary.json`](https://github.com/hebo1221/nano-deepseek-v4/blob/main/references/DeepSeek-V4-Flash-validation.summary.json)
 records a complete 46-shard official Flash preflight and streaming payload scan,
 including content digests, dtype/shape coverage, and logical parameter counts.
 
 ## Persisting an inference cache
 
 ```python
-from nano_deepseek_v4 import load_deepseek_v4_cache, save_deepseek_v4_cache
+import torch
+from nano_deepseek_v4 import (
+    DeepSeekV4Config,
+    DeepSeekV4ForCausalLM,
+    load_deepseek_v4_cache,
+    save_deepseek_v4_cache,
+)
 
-prefill = model(ids, use_cache=True)
+cache_config = DeepSeekV4Config()
+cache_model = DeepSeekV4ForCausalLM(cache_config).eval()
+cache_ids = torch.tensor([[1, 2, 3, 4]])
+prefill = cache_model(cache_ids, use_cache=True)
 assert prefill.past_key_values is not None
-save_deepseek_v4_cache(prefill.past_key_values, "./cache/session-1")
-cache = load_deepseek_v4_cache(config, "./cache/session-1")
+revision = "sha256:<trusted-checkpoint-digest>"
+save_deepseek_v4_cache(
+    prefill.past_key_values,
+    "./cache/session-1",
+    model_revision=revision,
+)
+cache = load_deepseek_v4_cache(
+    cache_config,
+    "./cache/session-1",
+    model_revision=revision,
+)
 ```
 
-Cache files are written atomically and bound to the exact model configuration.
-The loader verifies the manifest version, payload SHA-256, tensor schema, layer
-count, shapes, and position ranges before returning a cache.
+Cache files are written atomically and bound to the exact model configuration
+plus a caller-supplied model revision or digest label. The loader checks that
+label for exact equality and verifies the manifest version, payload SHA-256,
+tensor inventory, dtypes, shapes, layer count, and position relationships before
+returning a cache.
+
+The label and checksum guard against accidental mismatch and storage corruption
+when their expected values come from a trusted channel. They are not signatures:
+an attacker who can replace both cache files can rewrite the label and checksum.
+The loader does not derive a model digest or authenticate cache provenance.
 
 ## What's inside
 
@@ -117,10 +191,11 @@ nano_deepseek_v4/
 ├── data.py           # CLM packing, SFT batch builder with label masking
 ├── training.py       # single-step training loop, GRPO loss, distillation loss
 ├── evaluation.py     # next-token perplexity, multiple-choice scoring
-└── demo.py           # 20-line forward demo
+└── demo.py           # self-checking CPU architecture/cache demo
 ```
 
-Total: ~5,000 lines of code. Read it.
+The stable package intentionally remains small enough to read. Large experimental
+harnesses and unpublished research results are kept off the default branch.
 
 ## Architecture tour
 
@@ -136,33 +211,43 @@ Total: ~5,000 lines of code. Read it.
 | Multi-Token Prediction modules | §2.1 | `DeepSeekV4MTPModule` |
 | Muon optimizer | §2.4 | `Muon`, `zeropower_via_newton_schulz` (in `optim.py`) |
 
-The Flash and Pro layer schedules (CSA ↔ HCA interleave with sliding bootstraps)
-are encoded in `DeepSeekV4Config.flash()` and `DeepSeekV4Config.pro()`.
+Flash's sliding bootstrap layers and the Flash/Pro CSA/HCA schedules are encoded
+in `DeepSeekV4Config.flash()` and `DeepSeekV4Config.pro()`.
 
 ## What it does not do
 
 - It does not load the official Pro 1.6T checkpoint and serve it at production
   latency. That requires GPU paged-attention kernels, EP all-to-all, multi-node
   NCCL, FP4 hardware paths — out of scope for nano-style readability.
+- It does not provide a memory-efficient sharded loader for the full official
+  checkpoints; the streaming report is a verifier, not an inference runtime.
 - It does not implement training infrastructure (DualPipe, fine-grained EP,
   activation checkpointing) at frontier scale.
 - It does not reproduce the published benchmark numbers.
 
-It does implement every architectural idea cleanly enough that you can read,
-modify, and experiment.
+It does provide a compact executable interpretation of the major components so
+you can read, modify, and experiment with them.
 
 ## Citing
 
 If you found this useful in research, please cite the DeepSeek-V4 report itself
-and use the metadata in [`CITATION.cff`](CITATION.cff) for this implementation.
+and use the metadata in
+[`CITATION.cff`](https://github.com/hebo1221/nano-deepseek-v4/blob/main/CITATION.cff)
+for this implementation.
 
 ## Project policies
 
-See [`PRODUCTION_READINESS.md`](PRODUCTION_READINESS.md),
-[`CONTRIBUTING.md`](CONTRIBUTING.md), [`SECURITY.md`](SECURITY.md), and
-[`CHANGELOG.md`](CHANGELOG.md). The readiness document defines the supported
-production boundary and the required release gates.
+See
+[`PRODUCTION_READINESS.md`](https://github.com/hebo1221/nano-deepseek-v4/blob/main/PRODUCTION_READINESS.md),
+[`CONTRIBUTING.md`](https://github.com/hebo1221/nano-deepseek-v4/blob/main/CONTRIBUTING.md),
+[`SECURITY.md`](https://github.com/hebo1221/nano-deepseek-v4/blob/main/SECURITY.md),
+and [`CHANGELOG.md`](https://github.com/hebo1221/nano-deepseek-v4/blob/main/CHANGELOG.md).
+Maintainers can follow
+[`RELEASING.md`](https://github.com/hebo1221/nano-deepseek-v4/blob/main/RELEASING.md)
+for the tokenless, provenance-attested PyPI release path. The readiness document
+defines the supported production boundary and the required release gates.
 
 ## License
 
-Apache-2.0. See [`LICENSE`](LICENSE).
+Apache-2.0. See
+[`LICENSE`](https://github.com/hebo1221/nano-deepseek-v4/blob/main/LICENSE).

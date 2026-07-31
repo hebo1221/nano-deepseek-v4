@@ -13,8 +13,8 @@ checkpoint inspection/conversion evidence, and inference-cache persistence.
 | CUDA mixed precision | Supported when CUDA is available | BF16/FP16 cache equivalence, native BF16 training, and cache round-trip tests |
 | Official Flash snapshot inspection | Supported | All indexed shards, keys, dtypes, shapes, and payloads scanned |
 | Official checkpoint conversion | Supported | Streaming conversion report; materialized loading requires sufficient host/device memory |
-| Inference-cache persistence | Supported | Atomic write, versioned manifest, config binding, checksum, schema and shape validation |
-| Python package distribution | Supported | Python 3.10–3.14 CI, wheel/sdist inspection, isolated-install smoke test |
+| Inference-cache persistence | Supported | Atomic write, versioned manifest, config and caller-supplied model-revision binding, checksum, schema and shape validation |
+| Python package distribution | Supported | Python 3.10, 3.12, and 3.14 CI, wheel/sdist inspection, isolated-install smoke test |
 | Multi-node training or low-latency frontier serving | Not supported | Requires distributed runtime and optimized kernels outside this nano reference's scope |
 
 The checked-in
@@ -42,8 +42,9 @@ CUDA runner before publication.
   manifest, checksum, tensor metadata, and configuration checks pass.
 - Prefer the streaming checkpoint report for official snapshots when full model
   materialization would exceed available memory.
-- Pin the exact model configuration alongside persisted caches. Cache loading
-  intentionally rejects even subtle configuration drift.
+- Pin the exact model configuration and a trusted immutable checkpoint revision
+  or digest alongside persisted caches. Cache loading checks the supplied
+  identity for exact equality but does not hash model weights itself.
 - Do not interpret the reference architecture's correctness checks as latency,
   throughput, benchmark-reproduction, or distributed-fault-tolerance claims.
 - Report security issues through the private process in `SECURITY.md`.

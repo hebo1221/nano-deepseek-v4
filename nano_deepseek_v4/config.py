@@ -27,7 +27,9 @@ def _normalize_compress_ratios(
 ) -> list[int] | None:
     if compress_ratios is None:
         return None
-    ratios = [int(ratio) for ratio in compress_ratios]
+    if any(isinstance(ratio, bool) or not isinstance(ratio, int) for ratio in compress_ratios):
+        raise ValueError("compress_ratios must contain only integers.")
+    ratios = list(compress_ratios)
     if len(ratios) == num_hidden_layers:
         return ratios
     if len(ratios) == num_hidden_layers + 1 and ratios[-1] == 0:
@@ -186,8 +188,11 @@ class DeepSeekV4Config:
 
         for name in ("pad_token_id", "bos_token_id", "eos_token_id"):
             token_id = getattr(self, name)
-            if token_id is not None and not 0 <= token_id < self.vocab_size:
-                raise ValueError(f"{name} must be in [0, vocab_size).")
+            if token_id is not None:
+                if isinstance(token_id, bool) or not isinstance(token_id, int):
+                    raise ValueError(f"{name} must be an integer or None.")
+                if not 0 <= token_id < self.vocab_size:
+                    raise ValueError(f"{name} must be in [0, vocab_size).")
         if self.quantization_weight_block_size is not None:
             if (
                 len(self.quantization_weight_block_size) != 2
@@ -218,18 +223,28 @@ class DeepSeekV4Config:
         if self.scoring_func != "sqrtsoftplus":
             raise ValueError("This reference implementation supports only sqrtsoftplus routing.")
 
-        if self.layer_types is None and self.compress_ratios is not None:
-            ratio_to_type = {
-                0: "sliding_attention",
-                self.compress_rates["compressed_sparse_attention"]: "compressed_sparse_attention",
-                self.compress_rates["heavily_compressed_attention"]: "heavily_compressed_attention",
-            }
-            try:
-                self.layer_types = [ratio_to_type[ratio] for ratio in self.compress_ratios]
-            except KeyError as exc:
-                raise ValueError(f"Unsupported compress ratio: {exc.args[0]!r}") from exc
         if self.layer_types is not None:
             self.layer_types = list(self.layer_types)
+        ratio_layer_types: list[str] | None = None
+        if self.compress_ratios is not None:
+            csa_rate = self.compress_rates["compressed_sparse_attention"]
+            hca_rate = self.compress_rates["heavily_compressed_attention"]
+            if self.layer_types is None and csa_rate == hca_rate:
+                raise ValueError(
+                    "compression rates must be distinct when layer_types is inferred "
+                    "from compress_ratios."
+                )
+            if self.layer_types is None:
+                ratio_to_type = {
+                    0: "sliding_attention",
+                    csa_rate: "compressed_sparse_attention",
+                    hca_rate: "heavily_compressed_attention",
+                }
+                try:
+                    ratio_layer_types = [ratio_to_type[ratio] for ratio in self.compress_ratios]
+                except KeyError as exc:
+                    raise ValueError(f"Unsupported compress ratio: {exc.args[0]!r}") from exc
+                self.layer_types = ratio_layer_types
         if self.layer_types is None:
             # DeepSeek-V4-Flash checkpoint schedule: first two bootstrap layers use
             # sliding attention, then CSA/HCA interleave for long-context layers.
@@ -243,6 +258,21 @@ class DeepSeekV4Config:
         unknown = set(self.layer_types) - ATTENTION_TYPES
         if unknown:
             raise ValueError(f"Unsupported attention layer types: {sorted(unknown)}")
+        if self.compress_ratios is not None and ratio_layer_types is None:
+            expected_ratios = {
+                "sliding_attention": 0,
+                "compressed_sparse_attention": csa_rate,
+                "heavily_compressed_attention": hca_rate,
+            }
+            if any(
+                ratio != expected_ratios[layer_type]
+                for ratio, layer_type in zip(
+                    self.compress_ratios,
+                    self.layer_types,
+                    strict=True,
+                )
+            ):
+                raise ValueError("layer_types conflicts with compress_ratios.")
 
         if self.mlp_layer_types is None:
             self.mlp_layer_types = [
