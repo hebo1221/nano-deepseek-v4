@@ -22,7 +22,7 @@ import p2_direct_controller_reuse_admission_v1_3 as reuse_admission
 import torch
 from adaptive_v4_gpu_lock import acquire_device_guard, acquire_gpu_lock
 
-from nano_deepseek_v4 import generate_adaptive_memory_workload
+from nano_deepseek_v4 import generate_adaptive_memory_workload, hierarchical_memory_controller
 
 EXPERIMENT_ID = "p2-primary-pin-quota-lean-matrix-v2"
 LEGACY_EXPERIMENT_ID = "p2-primary-pin-quota-research-matrix-v1"
@@ -44,6 +44,11 @@ LEGACY_IMPLEMENTATION_DIGEST = "082a0de79e7607322e62b64546f887ba0e47663ed2cedd4f
 LEGACY_PREFIX_INVENTORY_SHA256 = "374e40ba2065cda868f1b573da59660ecad24182e18d5b704cd367b07c94816d"
 LEGACY_PREFIX_SITE_COUNTS = {"gb10": 796, "rtx4090": 1_190}
 LEGACY_REPOSITORY_ROOT = Path("/home/hebo1221/nano-deepseek-v4")
+STATIC_QUOTA_FEASIBILITY_RULE = (
+    "complete exact-static quota targets are capped by per-layer candidate availability; "
+    "unavailable target blocks are deterministically redistributed by the existing "
+    "signal-blind capped water-fill while pins remain hard and the feasible global B_t is fixed"
+)
 
 
 def output_root(site: str) -> Path:
@@ -94,6 +99,7 @@ def _implementation_inventory() -> list[list[str]]:
         Path(evaluator.__file__),
         Path(contract.__file__),
         Path(mixed_contract.__file__),
+        Path(hierarchical_memory_controller.__file__),
     )
     return [
         [str(path.resolve().relative_to(repository_root)), _file_digest(path)] for path in paths
@@ -187,6 +193,15 @@ class TokenAggregate:
             "peak_reserved_bytes": self.peak_reserved_bytes,
             "cuda_hbm_evidence": True,
         }
+
+
+@dataclass(frozen=True)
+class ResumePrefixBinding:
+    completed_cells: int
+    inventory_sha256: str
+    source: dict[str, Any]
+    implementation_digest: str
+    protocol_manifest: dict[str, Any]
 
 
 def _frozen_repository_relative(path: Path) -> Path:
@@ -546,7 +561,7 @@ def _load_protocol_binding(
     site: str,
     runtime_head: str,
     implementation_digest: str,
-) -> tuple[dict[str, Any], str]:
+) -> tuple[dict[str, Any], str, ResumePrefixBinding]:
     raw = path.read_bytes()
     payload = json.loads(raw)
     site_contract = cast(dict[str, Any], cast(dict[str, Any], payload.get("sites", {})).get(site))
@@ -554,6 +569,17 @@ def _load_protocol_binding(
         dict[str, Any],
         cast(dict[str, Any], payload.get("implementations", {})).get(site),
     )
+    raw_amendment = payload.get("structural_feasibility_amendment")
+    amendment = raw_amendment if isinstance(raw_amendment, dict) else {}
+    raw_prefixes = amendment.get("resume_prefixes")
+    resume_prefixes = raw_prefixes if isinstance(raw_prefixes, dict) else {}
+    raw_resume = resume_prefixes.get(site)
+    resume = raw_resume if isinstance(raw_resume, dict) else {}
+    predecessor_protocol = cast(dict[str, Any], resume.get("protocol_manifest"))
+    predecessor_source_commit = resume.get("source_commit")
+    predecessor_implementation_digest = resume.get("implementation_digest")
+    predecessor_completed_cells = resume.get("completed_cells")
+    predecessor_inventory_sha256 = resume.get("inventory_sha256")
     if (
         payload.get("schema_version") != 1
         or payload.get("experiment_id") != EXPERIMENT_ID
@@ -570,6 +596,30 @@ def _load_protocol_binding(
         or not isinstance(implementation, dict)
         or implementation.get("implementation_digest") != implementation_digest
         or not isinstance(implementation.get("source_commit"), str)
+        or not isinstance(amendment, dict)
+        or amendment.get("status") != "frozen_quality_blind_runtime_correction"
+        or amendment.get("quality_values_accessed_before_freeze") is not False
+        or amendment.get("affected_cells") != 10
+        or amendment.get("projection_rule") != STATIC_QUOTA_FEASIBILITY_RULE
+        or not isinstance(resume, dict)
+        or type(predecessor_completed_cells) is not int
+        or predecessor_completed_cells < LEGACY_PREFIX_SITE_COUNTS[site]
+        or predecessor_completed_cells >= mixed_contract.V1_3_5_MIXED_SITE_COORDINATE_COUNTS[site]
+        or not isinstance(predecessor_inventory_sha256, str)
+        or len(predecessor_inventory_sha256) != 64
+        or not isinstance(predecessor_source_commit, str)
+        or not isinstance(predecessor_implementation_digest, str)
+        or len(predecessor_implementation_digest) != 64
+        or not isinstance(predecessor_protocol, dict)
+        or set(predecessor_protocol) != {"bytes", "experiment_id", "path", "sha256"}
+        or predecessor_protocol.get("experiment_id") != EXPERIMENT_ID
+        or predecessor_protocol.get("path") != str(path)
+        or type(predecessor_protocol.get("bytes")) is not int
+        or cast(int, predecessor_protocol["bytes"]) <= 0
+        or not isinstance(predecessor_protocol.get("sha256"), str)
+        or len(cast(str, predecessor_protocol["sha256"])) != 64
+        or resume.get("first_missing_coordinate")
+        != coordinates(site)[predecessor_completed_cells]
     ):
         raise ValueError("Lean protocol manifest does not bind this execution.")
     implementation_source_commit = cast(str, implementation["source_commit"])
@@ -585,7 +635,33 @@ def _load_protocol_binding(
         "bytes": len(raw),
         "experiment_id": EXPERIMENT_ID,
     }
-    return binding, implementation_source_commit
+    return (
+        binding,
+        implementation_source_commit,
+        ResumePrefixBinding(
+            completed_cells=predecessor_completed_cells,
+            inventory_sha256=predecessor_inventory_sha256,
+            source={"commit": predecessor_source_commit, "dirty": False},
+            implementation_digest=predecessor_implementation_digest,
+            protocol_manifest=predecessor_protocol,
+        ),
+    )
+
+
+def _runtime_binding_matches(
+    payload: dict[str, Any],
+    *,
+    source: dict[str, Any],
+    implementation_digest: str,
+    protocol_binding: dict[str, Any],
+    cohort_binding: dict[str, Any],
+) -> bool:
+    return (
+        payload.get("source") == source
+        and payload.get("implementation_digest") == implementation_digest
+        and payload.get("cohort_binding") == cohort_binding
+        and payload.get("protocol_manifest") == protocol_binding
+    )
 
 
 def _validate_legacy_prefix(root: Path) -> list[tuple[dict[str, Any], Path]]:
@@ -711,7 +787,7 @@ def main() -> None:
     ).stdout.strip():
         raise RuntimeError("Primary pin/quota matrix requires a clean source tree.")
     implementation_digest = _implementation_digest()
-    protocol_binding, implementation_source_commit = _load_protocol_binding(
+    protocol_binding, implementation_source_commit, resume_prefix = _load_protocol_binding(
         args.protocol_manifest,
         site=args.mixed_site,
         runtime_head=runtime_head,
@@ -779,8 +855,12 @@ def main() -> None:
     admitted_keys = {_coordinate_key(coordinate) for coordinate, _path in admitted}
     completed: list[tuple[dict[str, Any], Path]] = []
     dependency_bindings: dict[tuple[str, int], dict[str, Any]] = {}
-    for coordinate in selected:
+    resume_inventory = hashlib.sha256()
+    resume_cells = 0
+    for selected_index, coordinate in enumerate(selected):
         path = cell_path(root, coordinate)
+        if selected_index < resume_prefix.completed_cells and not path.is_file():
+            raise FileNotFoundError(f"Missing frozen lean resume-prefix cell: {coordinate}")
         if path.is_file():
             payload = json.loads(path.read_text())
             cohort = (cast(str, coordinate["scale"]), cast(int, coordinate["training_seed"]))
@@ -796,6 +876,8 @@ def main() -> None:
                     expected_experiment_id=LEGACY_EXPERIMENT_ID,
                 )
                 binding_matches = (
+                    selected_index < resume_prefix.completed_cells
+                    and
                     _coordinate_key(coordinate) in admitted_keys
                     and payload.get("source") == {"commit": LEGACY_SOURCE_COMMIT, "dirty": False}
                     and payload.get("implementation_digest") == LEGACY_IMPLEMENTATION_DIGEST
@@ -803,15 +885,37 @@ def main() -> None:
                 )
             else:
                 validate_cell(payload, coordinate)
-                binding_matches = (
-                    payload.get("source") == source
-                    and payload.get("implementation_digest") == implementation_digest
-                    and payload.get("cohort_binding") == dependency_bindings[cohort]
-                    and payload.get("protocol_manifest") == protocol_binding
+                expected_runtime = (
+                    resume_prefix
+                    if selected_index < resume_prefix.completed_cells
+                    else None
+                )
+                binding_matches = _runtime_binding_matches(
+                    payload,
+                    source=expected_runtime.source if expected_runtime is not None else source,
+                    implementation_digest=(
+                        expected_runtime.implementation_digest
+                        if expected_runtime is not None
+                        else implementation_digest
+                    ),
+                    protocol_binding=(
+                        expected_runtime.protocol_manifest
+                        if expected_runtime is not None
+                        else protocol_binding
+                    ),
+                    cohort_binding=dependency_bindings[cohort],
                 )
             if not binding_matches:
                 raise RuntimeError("Primary pin/quota resume binding drifted.")
+            if selected_index < resume_prefix.completed_cells:
+                resume_inventory.update(f"{selected_index}\t{payload['payload_sha256']}\n".encode())
+                resume_cells += 1
             completed.append((coordinate, path))
+    if (
+        resume_cells != resume_prefix.completed_cells
+        or resume_inventory.hexdigest() != resume_prefix.inventory_sha256
+    ):
+        raise RuntimeError("Frozen lean resume-prefix inventory drifted.")
     unexpected = {
         path for path in root.rglob("*") if path.is_file() and path != root / "matrix.summary.json"
     } - {path for _, path in completed}
