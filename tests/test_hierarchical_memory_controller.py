@@ -133,6 +133,39 @@ def test_policy_pin_floors_caps_and_feasible_budget_are_all_enforced() -> None:
     assert plan.quotas == ((1, 2), (2, 3), (3, 2))
 
 
+def test_exact_static_targets_project_to_candidate_caps_and_redistribute() -> None:
+    signals = tuple(_signal(layer, 0.0, candidates=14) for layer in (2, 4, 6))
+    policy = _policy(
+        global_budget=24,
+        per_layer_floor=1,
+        max_reallocation_fraction=0.0,
+        layer_floors=((2, 16), (4, 3), (6, 5)),
+    )
+
+    plan = _allocate(
+        signals,
+        policy=policy,
+        caps={2: 14, 4: 14, 6: 14},
+    )
+
+    assert plan.effective_budget == 24
+    assert plan.floors == ((2, 14), (4, 3), (6, 5))
+    assert plan.quotas == plan.baseline_quotas == ((2, 14), (4, 5), (6, 5))
+
+
+def test_nonstatic_floor_above_candidate_cap_remains_invalid() -> None:
+    signals = tuple(_signal(layer, 0.0, candidates=14) for layer in (2, 4, 6))
+    policy = _policy(
+        global_budget=24,
+        per_layer_floor=1,
+        max_reallocation_fraction=0.1,
+        layer_floors=((2, 16), (4, 3), (6, 5)),
+    )
+
+    with pytest.raises(ValueError, match="floor or pin count exceeds"):
+        _allocate(signals, policy=policy, caps={2: 14, 4: 14, 6: 14})
+
+
 def test_layer_calibration_is_target_free_and_reliability_shrinks_to_balance() -> None:
     signals = (_signal(2, 0.9), _signal(4, 0.1))
     policy = _policy(

@@ -39,6 +39,9 @@ def test_implementation_inventory_is_repository_relative() -> None:
     assert inventory
     assert all(not Path(path).is_absolute() for path, _digest in inventory)
     assert all(len(digest) == 64 for _path, digest in inventory)
+    assert "nano_deepseek_v4/hierarchical_memory_controller.py" in {
+        path for path, _digest in inventory
+    }
 
 
 def test_frozen_cohort_paths_rebase_only_within_repository() -> None:
@@ -133,3 +136,23 @@ def test_primary_runner_rejects_resealed_inventory_corruption(corruption: str) -
 
     with pytest.raises(ValueError):
         matrix.validate_cell(corrupted, coordinate)
+
+
+def test_runtime_binding_match_is_exact() -> None:
+    payload = {
+        "source": {"commit": "a" * 40, "dirty": False},
+        "implementation_digest": "b" * 64,
+        "protocol_manifest": {"sha256": "c" * 64},
+        "cohort_binding": {"input_binding_digest": "d" * 64},
+    }
+    arguments = {
+        "source": payload["source"],
+        "implementation_digest": payload["implementation_digest"],
+        "protocol_binding": payload["protocol_manifest"],
+        "cohort_binding": payload["cohort_binding"],
+    }
+
+    assert matrix._runtime_binding_matches(payload, **arguments)
+    assert not matrix._runtime_binding_matches(
+        payload, **{**arguments, "implementation_digest": "e" * 64}
+    )

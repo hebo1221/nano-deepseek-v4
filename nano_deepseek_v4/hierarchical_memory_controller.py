@@ -60,10 +60,14 @@ class SoftLagQuotaPolicy:
     """Immutable policy for bounded soft allocation of a global block budget.
 
     ``per_layer_floor`` is the default floor.  Entries in ``layer_floors``
-    override it for registered layers.  ``max_reallocation_fraction`` bounds
-    the number of blocks moved away from the balanced exact-sum baseline; the
-    movement metric is half of the L1 distance because every moved block
-    contributes once at its source and once at its destination.
+    override it for registered layers.  A complete override vector that sums
+    to ``global_budget`` with no calibration or reallocation is an exact-static
+    target: unavailable target blocks are capped and deterministically
+    redistributed across feasible layers.  Other floor configurations remain
+    hard constraints.  ``max_reallocation_fraction`` bounds the number of
+    blocks moved away from the balanced exact-sum baseline; the movement metric
+    is half of the L1 distance because every moved block contributes once at
+    its source and once at its destination.
     """
 
     global_budget: int
@@ -377,11 +381,14 @@ def allocate_soft_lag_quotas(
     """Allocate a bounded integer quota plan from prior-token signals only.
 
     The effective budget is ``min(policy.global_budget, sum(candidate_caps))``.
-    A policy whose global budget cannot preserve every policy/pin floor is
-    rejected.  Signal uncertainty is normalized by optional target-free layer
-    calibration, reliability-shrunk, clipped, temperature-scaled, and passed to
-    capped weighted water-filling.  Hamilton rounding and movement clipping are
-    keyed solely by ``rounding_namespace`` and ``control_key``.
+    A policy whose global budget cannot preserve every hard policy/pin floor is
+    rejected.  Complete exact-static target vectors are first capped to the
+    available candidates; capped weighted water-filling redistributes any
+    unavailable target blocks without changing the global feasible budget.
+    Signal uncertainty is normalized by optional target-free layer calibration,
+    reliability-shrunk, clipped, temperature-scaled, and passed to capped
+    weighted water-filling.  Hamilton rounding and movement clipping are keyed
+    solely by ``rounding_namespace`` and ``control_key``.
     """
 
     if not isinstance(policy, SoftLagQuotaPolicy):
@@ -412,6 +419,12 @@ def allocate_soft_lag_quotas(
             "Policy contains floors or calibrations for absent layers: "
             f"{sorted(unknown_policy_layers)}."
         )
+    exact_static_targets = (
+        not calibration_by_layer
+        and policy.max_reallocation_fraction == 0.0
+        and set(floor_overrides) == set(layers)
+        and sum(floor_overrides.values()) == policy.global_budget
+    )
     floors: dict[int, int] = {}
     for layer in layers:
         signal = by_layer[layer]
@@ -422,7 +435,9 @@ def allocate_soft_lag_quotas(
         policy_floor = floor_overrides.get(layer, policy.per_layer_floor)
         floors[layer] = max(policy_floor, pins[layer])
         if floors[layer] > caps[layer]:
-            raise ValueError(f"Layer {layer} floor or pin count exceeds its candidate cap.")
+            if not exact_static_targets or pins[layer] > caps[layer]:
+                raise ValueError(f"Layer {layer} floor or pin count exceeds its candidate cap.")
+            floors[layer] = caps[layer]
 
     floor_total = sum(floors.values())
     if policy.global_budget < floor_total:
