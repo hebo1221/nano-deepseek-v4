@@ -58,20 +58,20 @@
     "replicates": 10,
     "scales": [
       "s55",
-      "s96"
+      "s151"
     ],
     "training_seeds": 5
   },
   "implementations": {
     "gb10": {
       "branch": "agent/hca-csa-conditional-sufficiency",
-      "implementation_digest": "e76225c7b2eead7cc50f7e31c7f4478f24314d2c2738ff9609e7681f979696fb",
-      "source_commit": "d124a56f60d66e8b391f42a3b8405d19ac833a2f"
+      "implementation_digest": "0dd24272e87b10db11f7ad79762a6c3b8f905d150812f5ebcd9668f4c840f2d8",
+      "source_commit": "a0c39679eef6fbba3c80073de327f02f363ef873"
     },
     "rtx4090": {
       "branch": "agent/mixed-device-rtx4090",
-      "implementation_digest": "c3c0f75c7cef980119013cf5fd7ad2cc1afab55db64d3303b74201719d1b9f01",
-      "source_commit": "c4be4f5a534527959b6e468b83c4190c748570b0"
+      "implementation_digest": "e0d6cad2d80af9b358d4371869ae650875e0503fb0c17b225da1251e4ec502bb",
+      "source_commit": "04a4033117a5044f5a7ea35631bb258da3e015cc"
     }
   },
   "legacy_prefix_cells": 1986,
@@ -116,6 +116,122 @@
     }
   },
   "status": "frozen_runtime_only_lean_amendment",
+  "structural_feasibility_amendment": {
+    "affected_cells": 10,
+    "affected_slice": {
+      "budget": "4x",
+      "candidate_caps": [
+        [
+          2,
+          14
+        ],
+        [
+          4,
+          14
+        ],
+        [
+          6,
+          14
+        ]
+      ],
+      "context": 80,
+      "family": "dense-global-aggregation",
+      "initial_projected_quotas": [
+        [
+          2,
+          14
+        ],
+        [
+          4,
+          5
+        ],
+        [
+          6,
+          5
+        ]
+      ],
+      "protected_pin_count": 0,
+      "replicates": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "requested_static_quotas": [
+        [
+          2,
+          16
+        ],
+        [
+          4,
+          3
+        ],
+        [
+          6,
+          5
+        ]
+      ],
+      "scale": "s55",
+      "training_seed": 6071410
+    },
+    "frozen_at": "2026-08-03T12:10:27+09:00",
+    "projection_rule": "complete exact-static quota targets are capped by per-layer candidate availability; unavailable target blocks are deterministically redistributed by the existing signal-blind capped water-fill while pins remain hard and the feasible global B_t is fixed",
+    "quality_values_accessed_before_freeze": false,
+    "reason": "A deterministic pre-publication invariant failure exposed one structurally infeasible exact-static target slice; all 9000 coordinates were then checked using only workload positions, candidate counts, calibration quotas, schema metadata, and device/runtime logs.",
+    "resume_prefixes": {
+      "gb10": {
+        "completed_cells": 1700,
+        "first_missing_coordinate": {
+          "budget": "4x",
+          "context": 80,
+          "family": "dense-global-aggregation",
+          "replicate": 3,
+          "scale": "s55",
+          "training_seed": 6071410
+        },
+        "implementation_digest": "e76225c7b2eead7cc50f7e31c7f4478f24314d2c2738ff9609e7681f979696fb",
+        "inventory_sha256": "72a18ee049029506ba5f8d8174fc323ae30cb9d870b759dfe8ed872d97c20167",
+        "lean_cells": 904,
+        "legacy_cells": 796,
+        "protocol_manifest": {
+          "bytes": 4830,
+          "experiment_id": "p2-primary-pin-quota-lean-matrix-v2",
+          "path": "research/adaptive_v4_memory/manifests/p2-primary-pin-quota-lean-v2.json",
+          "sha256": "fe3cc38f5fc1c94a772e167677a56ed2f43e3d0b66f715098453cbaf93bf14e2"
+        },
+        "source_commit": "d124a56f60d66e8b391f42a3b8405d19ac833a2f"
+      },
+      "rtx4090": {
+        "completed_cells": 2550,
+        "first_missing_coordinate": {
+          "budget": "4x",
+          "context": 80,
+          "family": "dense-global-aggregation",
+          "replicate": 0,
+          "scale": "s55",
+          "training_seed": 6071410
+        },
+        "implementation_digest": "c3c0f75c7cef980119013cf5fd7ad2cc1afab55db64d3303b74201719d1b9f01",
+        "inventory_sha256": "67cf9645b6b78abd4cd18514a1aabc71f04312c25b3ccbdaa2d879081224cda6",
+        "lean_cells": 1360,
+        "legacy_cells": 1190,
+        "protocol_manifest": {
+          "bytes": 4830,
+          "experiment_id": "p2-primary-pin-quota-lean-matrix-v2",
+          "path": "research/adaptive_v4_memory/manifests/p2-primary-pin-quota-lean-v2.json",
+          "sha256": "fe3cc38f5fc1c94a772e167677a56ed2f43e3d0b66f715098453cbaf93bf14e2"
+        },
+        "source_commit": "c4be4f5a534527959b6e468b83c4190c748570b0"
+      }
+    },
+    "status": "frozen_quality_blind_runtime_correction"
+  },
   "stopped_full17_namespaces": {
     "gb10": {
       "committed_cells": 354,
