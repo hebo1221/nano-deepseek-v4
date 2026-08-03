@@ -65,13 +65,13 @@
   "implementations": {
     "gb10": {
       "branch": "agent/hca-csa-conditional-sufficiency",
-      "implementation_digest": "0dd24272e87b10db11f7ad79762a6c3b8f905d150812f5ebcd9668f4c840f2d8",
-      "source_commit": "a0c39679eef6fbba3c80073de327f02f363ef873"
+      "implementation_digest": "069d2ff513fc60ee876264c53efe8b9865f9b3dc8f33bc2deb9eda588a8dbb1c",
+      "source_commit": "34ed736b58f9ef32673553733468aac05c5631b4"
     },
     "rtx4090": {
       "branch": "agent/mixed-device-rtx4090",
-      "implementation_digest": "e0d6cad2d80af9b358d4371869ae650875e0503fb0c17b225da1251e4ec502bb",
-      "source_commit": "04a4033117a5044f5a7ea35631bb258da3e015cc"
+      "implementation_digest": "6db8dd1f59752919a0a58270a813456d9adf2990b3ab92a7564fbdcc823f8498",
+      "source_commit": "cd01afde788c93a890aac772e363d7566c874a2b"
     }
   },
   "legacy_prefix_cells": 1986,
