@@ -7,7 +7,7 @@ import json
 import os
 import shutil
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from itertools import product
 from pathlib import Path
 from typing import Any, cast
@@ -22,7 +22,12 @@ import p2_direct_controller_reuse_admission_v1_3 as reuse_admission
 import torch
 from adaptive_v4_gpu_lock import acquire_device_guard, acquire_gpu_lock
 
-from nano_deepseek_v4 import generate_adaptive_memory_workload, hierarchical_memory_controller
+from nano_deepseek_v4 import (
+    ControllerLayerSignal,
+    SoftLagQuotaPolicy,
+    allocate_soft_lag_quotas,
+    generate_adaptive_memory_workload,
+)
 
 EXPERIMENT_ID = "p2-primary-pin-quota-lean-matrix-v2"
 LEGACY_EXPERIMENT_ID = "p2-primary-pin-quota-research-matrix-v1"
@@ -99,7 +104,6 @@ def _implementation_inventory() -> list[list[str]]:
         Path(evaluator.__file__),
         Path(contract.__file__),
         Path(mixed_contract.__file__),
-        Path(hierarchical_memory_controller.__file__),
     )
     return [
         [str(path.resolve().relative_to(repository_root)), _file_digest(path)] for path in paths
@@ -202,6 +206,98 @@ class ResumePrefixBinding:
     source: dict[str, Any]
     implementation_digest: str
     protocol_manifest: dict[str, Any]
+
+
+def _project_static_quota_targets(
+    targets: tuple[tuple[int, int], ...],
+    *,
+    candidate_caps: dict[int, int],
+    pin_floors: dict[int, int],
+    control_key: str,
+) -> tuple[tuple[int, int], ...]:
+    layers = tuple(layer for layer, _value in targets)
+    requested = dict(targets)
+    if (
+        layers != tuple(sorted(set(layers)))
+        or set(candidate_caps) != set(layers)
+        or set(pin_floors) != set(layers)
+    ):
+        raise ValueError("Static quota projection bounds must cover sorted layers exactly.")
+    if all(requested[layer] <= candidate_caps[layer] for layer in layers):
+        return targets
+    clipped = tuple(
+        (layer, min(requested[layer], candidate_caps[layer])) for layer in layers
+    )
+    policy = SoftLagQuotaPolicy(
+        global_budget=sum(requested.values()),
+        per_layer_floor=1,
+        temperature=1.0,
+        max_reallocation_fraction=0.0,
+        permutation_offset=0,
+        rounding_namespace=f"{EXPERIMENT_ID}/static-cap-projection-v1",
+        layer_floors=clipped,
+    )
+    signals = tuple(
+        ControllerLayerSignal(
+            layer_index=layer,
+            candidate_blocks=candidate_caps[layer],
+            normalized_entropy=0.0,
+            top_p_cardinality=0,
+            boundary_margin_confidence=1.0,
+            temporal_jaccard=1.0,
+            cross_layer_jaccard=1.0,
+            uncertainty=0.0,
+            requested_blocks=0,
+            refresh_interval=1,
+        )
+        for layer in layers
+    )
+    plan = allocate_soft_lag_quotas(
+        policy,
+        signals,
+        pin_floors=pin_floors,
+        candidate_caps=candidate_caps,
+        control_key=control_key,
+    )
+    return plan.quotas
+
+
+def _project_arm_to_workload_prefix(
+    model: Any,
+    workload: Any,
+    *,
+    arm_name: str,
+    built_arm: Any,
+    control_key: str,
+) -> Any:
+    semantics = contract.EXPECTED_ARM_SEMANTICS[arm_name]
+    if semantics.quota_runtime not in {
+        "calibrated-static",
+        "calibration-shuffled-static",
+        "local-static-quota",
+    }:
+        return built_arm
+    prefix_length = min(evaluator._query_columns(workload)) - 1
+    rate = int(model.config.compress_rates["compressed_sparse_attention"])
+    eligible_ends = set(range(rate - 1, prefix_length, rate))
+    pin_count = len(set(workload.protected_end_positions).intersection(eligible_ends))
+    projected_configs = []
+    changed = False
+    for config in built_arm.configs:
+        layers = tuple(layer for layer, _value in config.layer_budgets)
+        caps = {layer: prefix_length // rate for layer in layers}
+        pins = {layer: pin_count if config.enable_protected_pins else 0 for layer in layers}
+        projected = _project_static_quota_targets(
+            config.layer_budgets,
+            candidate_caps=caps,
+            pin_floors=pins,
+            control_key=control_key,
+        )
+        changed = changed or projected != config.layer_budgets
+        projected_configs.append(
+            replace(config, layer_budgets=projected, dense_layer_budgets=projected)
+        )
+    return replace(built_arm, configs=tuple(projected_configs)) if changed else built_arm
 
 
 def _frozen_repository_relative(path: Path) -> Path:
@@ -396,11 +492,21 @@ def _run_cell(
         )
         for execution_index, arm_name in enumerate(order):
             aggregate = TokenAggregate()
-            outcome = evaluator.run_arm_example(
+            runtime_arm = _project_arm_to_workload_prefix(
                 model,
                 workload,
                 arm_name=arm_name,
                 built_arm=arms[arm_name],
+                control_key=(
+                    f"{scale}/seed-{seed}/{budget}/{family}/context-{context}/"
+                    f"replicate-{replicate}/example-{example_index}"
+                ),
+            )
+            outcome = evaluator.run_arm_example(
+                model,
+                workload,
+                arm_name=arm_name,
+                built_arm=runtime_arm,
                 calibration=calibration,
                 budget=budget,
                 schedule_index=schedule,
@@ -410,7 +516,7 @@ def _run_cell(
             )
             evaluator._validate_sealed_row(outcome, evaluator.OUTCOME_SUCCESS_SCHEMA_ID)
             expected_config = evaluator.runtime_config_for_arm(
-                arm_name, arms[arm_name], calibration, budget, schedule
+                arm_name, runtime_arm, calibration, budget, schedule
             )
             if (
                 outcome["semantics"] != features[arm_name]
