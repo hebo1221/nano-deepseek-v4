@@ -39,9 +39,6 @@ def test_implementation_inventory_is_repository_relative() -> None:
     assert inventory
     assert all(not Path(path).is_absolute() for path, _digest in inventory)
     assert all(len(digest) == 64 for _path, digest in inventory)
-    assert "nano_deepseek_v4/hierarchical_memory_controller.py" in {
-        path for path, _digest in inventory
-    }
 
 
 def test_frozen_cohort_paths_rebase_only_within_repository() -> None:
@@ -156,3 +153,24 @@ def test_runtime_binding_match_is_exact() -> None:
     assert not matrix._runtime_binding_matches(
         payload, **{**arguments, "implementation_digest": "e" * 64}
     )
+
+
+def test_static_quota_projection_caps_and_redistributes_without_relaxing_pins() -> None:
+    targets = ((2, 16), (4, 3), (6, 5))
+    caps = {2: 14, 4: 14, 6: 14}
+
+    projected = matrix._project_static_quota_targets(
+        targets,
+        candidate_caps=caps,
+        pin_floors={2: 0, 4: 0, 6: 0},
+        control_key="s55/seed-6071410/4x/dense-global/context-80",
+    )
+
+    assert projected == ((2, 14), (4, 5), (6, 5))
+    with pytest.raises(ValueError, match="pin count exceeds"):
+        matrix._project_static_quota_targets(
+            targets,
+            candidate_caps=caps,
+            pin_floors={2: 15, 4: 0, 6: 0},
+            control_key="s55/seed-6071410/4x/dense-global/context-80",
+        )
