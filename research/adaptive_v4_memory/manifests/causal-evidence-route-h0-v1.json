@@ -1,0 +1,139 @@
+{
+  "analysis_plan": {
+    "claim": "diagnostic causal-route oracle gap only; this pilot does not establish a deployable selector, natural-language transfer, production systems value, or official DeepSeek-V4 behavior",
+    "decision_rule_1x": {
+      "accuracy": "force-evidence minus matched-control is non-negative on both scales",
+      "poison_margin": "force-evidence reduces wrong-minus-gold log-probability margin on both scales",
+      "strata": "force-evidence minus matched-control target log-probability is positive in at least five of six scale-by-training-seed strata",
+      "target_log_probability": "positive on both scales and pooled coordinate-bootstrap 95 percent lower bound above zero"
+    },
+    "decision_rule_2x": "negative target-log-probability sign reversal rejects the mechanism; saturation near zero is diagnostic but does not justify router training",
+    "fallback_if_gate_fails": "do not train a router or expand the matrix; investigate residual restoration or reconstruction",
+    "independent_unit": "training checkpoint seed",
+    "primary_contrast": "force-evidence minus matched-control"
+  },
+  "arms": [
+    "native",
+    "identity-replay",
+    "force-evidence",
+    "matched-control"
+  ],
+  "checkpoints": [
+    {
+      "bytes": 626727758,
+      "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/training/s55/seed-6071406/s55-step-1000.pt",
+      "scale": "s55",
+      "sha256": "dfaa5da812e4a4301d8744ccacb5871dffcc19491a9fd2af4815cc24d0ca2f7f",
+      "training_seed": 6071406
+    },
+    {
+      "bytes": 626727758,
+      "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/training/s55/seed-6071407/s55-step-1000.pt",
+      "scale": "s55",
+      "sha256": "25f21a7ff6fe49c2a2eeeee83d35638145f5848e780a3a97fefd819c81544e3a",
+      "training_seed": 6071407
+    },
+    {
+      "bytes": 626727758,
+      "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/training/s55/seed-6071408/s55-step-1000.pt",
+      "scale": "s55",
+      "sha256": "887b9b75b6bc395a752e5f482cd8a92b0885ae26a61ff78e278e83519f752b76",
+      "training_seed": 6071408
+    },
+    {
+      "bytes": 1735323966,
+      "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/training/s151/seed-6071406/s151-step-1000.pt",
+      "scale": "s151",
+      "sha256": "1e28a7b9dac6ce4a7aab91ddb72e633be2c5c77153f9b01ecf1c8149f701289d",
+      "training_seed": 6071406
+    },
+    {
+      "bytes": 1735323966,
+      "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/training/s151/seed-6071407/s151-step-1000.pt",
+      "scale": "s151",
+      "sha256": "00eca24bcee6a6dcb12dcc1a03779f9e618b3d60f325c3d18415af39508b1655",
+      "training_seed": 6071407
+    },
+    {
+      "bytes": 1735323966,
+      "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/training/s151/seed-6071408/s151-step-1000.pt",
+      "scale": "s151",
+      "sha256": "dd1409fba4076c5f3684b71ba9d7d7ff1bad107072b0e6f7c1ca467c8aa98a45",
+      "training_seed": 6071408
+    }
+  ],
+  "evaluation_seed_namespace": "causal-evidence-route-eval-v1",
+  "expected_cells": 180,
+  "experiment_id": "causal-evidence-route-h0-pilot-v1",
+  "fixed_topk": {
+    "s151": 1,
+    "s55": 2
+  },
+  "frozen_at": "2026-08-05T04:16:41+09:00",
+  "grid": {
+    "budget_multipliers": [
+      1,
+      2
+    ],
+    "contexts": [
+      640
+    ],
+    "families": [
+      "single-remote-retrieval",
+      "adversarial-lexical-distractors",
+      "long-generation-changing-evidence"
+    ],
+    "replicates": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "scales": [
+      "s55",
+      "s151"
+    ],
+    "training_seeds": [
+      6071406,
+      6071407,
+      6071408
+    ]
+  },
+  "implementation": {
+    "branch": "agent/hca-csa-conditional-sufficiency",
+    "script_path": "research/adaptive_v4_memory/scripts/run_causal_evidence_route_pilot.py",
+    "script_sha256": "8e57e6ee710dd3135443edec78dc1f4493a46189a227c4b256d40b52536619ab",
+    "source_commit": "e5b493982075597b0d38f242af5ae3243459db6d"
+  },
+  "integrity_gates": {
+    "closed_world_output_namespace": true,
+    "equal_route_cardinality": true,
+    "identity_replay_logits": "bitwise equal",
+    "route_difference": "exactly one evidence versus control block per CSA layer and query"
+  },
+  "output_root": "artifacts/adaptive_v4_memory/causal_evidence_route_h0/pilot-v1",
+  "parent_result": {
+    "closed_cells": 4950,
+    "closed_prefix_summary_bytes": 131723,
+    "closed_prefix_summary_sha256": "18885bc011153c07b4dd99f27d42d5d0c6638a3a932d53aa53e2e5c075eb6a93",
+    "decision": "retire score-demand calibrated quotas as the primary claim and retain protected evidence as a useful mechanism",
+    "report_commit": "11b7b7ebcae67f68def156a6ff1f366a879cbd3b"
+  },
+  "quality_values_accessed_before_freeze": false,
+  "research_basis": [
+    "CriticalKV: output-perturbation-aware KV selection",
+    "Learning What Matters: causal evidence sets",
+    "Understanding Sparse Attention Selectivity via Counterfactual Evaluation",
+    "Error Certificates for KV-Cache Eviction",
+    "IndexMem, RestoreKV, and ResKV restoration alternatives"
+  ],
+  "runtime_plan": {
+    "atomic_cell_publication": true,
+    "device": "RTX4090",
+    "restart_on_failure": true,
+    "same_gpu_workers": 1
+  },
+  "schema_version": 1,
+  "status": "frozen_post_prefix_diagnostic_pilot"
+}
