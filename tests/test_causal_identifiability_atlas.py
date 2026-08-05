@@ -137,6 +137,19 @@ def test_batch_plan_preserves_empty_and_variable_routes() -> None:
     assert [row.batch_index for row in plan.selections] == [0, 1, 2]
 
 
+def test_final_candidate_chunk_is_padded_to_the_frozen_batch_shape() -> None:
+    assert atlas._pad_candidate_chunk((3, 7, 11), 8) == (
+        3,
+        7,
+        11,
+        11,
+        11,
+        11,
+        11,
+        11,
+    )
+
+
 def test_spearman_uses_average_tie_ranks() -> None:
     assert summary.spearman([1.0, 2.0, 3.0], [4.0, 5.0, 6.0]) == 1.0
     assert summary.spearman([1.0, 1.0, 1.0], [4.0, 5.0, 6.0]) == 0.0

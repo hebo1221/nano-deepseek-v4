@@ -24,7 +24,7 @@ from nano_deepseek_v4 import (
 from nano_deepseek_v4.memory_controller import PlannedCSASelection
 from nano_deepseek_v4.modeling import apply_partial_rope, rope_cos_sin
 
-EXPERIMENT_ID = "causal-identifiability-atlas-e1-v1"
+EXPERIMENT_ID = "causal-identifiability-atlas-e1-v2"
 OBSERVABLE_POLICIES = (
     "full-read",
     "perturbation-proxy",
@@ -159,6 +159,7 @@ def _load_manifest(path: Path) -> dict[str, Any]:
         ("runner_sha256", Path(__file__)),
         ("analyzer_sha256", Path(implementation["analyzer_path"])),
         ("preregistration_sha256", Path(implementation["preregistration_path"])),
+        ("runtime_amendment_sha256", Path(implementation["runtime_amendment_path"])),
     )
     for key, implementation_path in bindings:
         if implementation.get(key) != _file_digest(implementation_path):
@@ -548,6 +549,13 @@ def _batch_plan(
     )
 
 
+def _pad_candidate_chunk(chunk: Sequence[int], batch_size: int) -> tuple[int, ...]:
+    if not chunk or len(chunk) > batch_size:
+        raise ValueError("Candidate chunk must contain between one and batch-size items.")
+    values = tuple(int(value) for value in chunk)
+    return (*values, *((values[-1],) * (batch_size - len(values))))
+
+
 def _selected_query_logits(output: Any, query_position: int) -> torch.Tensor:
     return output.logits[:, query_position].float()
 
@@ -584,9 +592,10 @@ def _exhaustive_atlas(
         candidate_results: list[dict[str, Any]] = []
         teacher_token: int | None = None
         for start in range(0, len(all_ends), batch_size):
-            chunk = all_ends[start : start + batch_size]
-            count = len(chunk)
-            repeated = workload.input_ids.repeat(count, 1)
+            real_chunk = all_ends[start : start + batch_size]
+            chunk = _pad_candidate_chunk(real_chunk, batch_size)
+            count = len(real_chunk)
+            repeated = workload.input_ids.repeat(batch_size, 1)
             candidate_plan = _batch_plan(
                 trace_id=trace_id,
                 request_id=f"candidate:{layer_index}:{start}",
@@ -636,9 +645,11 @@ def _exhaustive_atlas(
                 teacher_token = chunk_teacher
             elif teacher_token != chunk_teacher:
                 raise RuntimeError("Full-memory teacher token changed across candidate chunks.")
-            gold = torch.full((count,), gold_token, dtype=torch.long, device=full_logits.device)
+            gold = torch.full(
+                (batch_size,), gold_token, dtype=torch.long, device=full_logits.device
+            )
             teacher = torch.full(
-                (count,), teacher_token, dtype=torch.long, device=full_logits.device
+                (batch_size,), teacher_token, dtype=torch.long, device=full_logits.device
             )
             candidate_gold = _token_log_probabilities(candidate_logits, gold)
             core_gold = _token_log_probabilities(core_logits, gold)
@@ -648,7 +659,7 @@ def _exhaustive_atlas(
             core_teacher = _token_log_probabilities(core_logits, teacher)
             full_teacher = _token_log_probabilities(full_logits, teacher)
             deletion_teacher = _token_log_probabilities(deletion_logits, teacher)
-            for offset, block_end in enumerate(chunk):
+            for offset, block_end in enumerate(real_chunk):
                 source = candidates[start + offset]
                 candidate_results.append(
                     {
@@ -694,6 +705,7 @@ def _exhaustive_atlas(
     return {
         "schema_version": 1,
         "counterfactual_batch_size": batch_size,
+        "fixed_batch_shape_with_discarded_repeat_last_padding": True,
         "layers": layer_results,
         "layers_sha256": _digest(layer_results),
     }

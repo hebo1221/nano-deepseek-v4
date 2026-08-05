@@ -137,7 +137,11 @@ def _validate_cell(
             raise ValueError("Evidence-oracle route cardinality drifted.")
     atlas = cell["exhaustive_atlas"]
     if runner.is_exhaustive_coordinate(coordinate):
-        if atlas is None or len(atlas["layers"]) != 5:
+        if (
+            atlas is None
+            or atlas.get("fixed_batch_shape_with_discarded_repeat_last_padding") is not True
+            or len(atlas["layers"]) != 5
+        ):
             raise ValueError("Exhaustive s151 cell lacks five CSA layer atlases.")
         if runner._digest(atlas["layers"]) != atlas["layers_sha256"]:
             raise ValueError("Exhaustive layer digest drifted.")
