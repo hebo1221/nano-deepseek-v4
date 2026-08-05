@@ -1,0 +1,195 @@
+{
+  "analysis_plan": {
+    "bootstrap_draws": 200000,
+    "bootstrap_seed": 20260805,
+    "claim": "no-training synthetic causal-identifiability diagnostic only; no learned-router, natural-language, production, or official DeepSeek-V4 claim",
+    "decision_tree": {
+      "all_gates_pass": "skip synthetic-router training and request a small natural-language transfer pilot",
+      "observable_proxy_fails_after_stable_topology": "only then consider a separately approved nested-checkpoint-CV reranker pilot",
+      "task_evidence_sufficient_but_weakly_necessary": "prioritize integration or residual restoration",
+      "topology_unstable": "do not train a shared selector",
+      "unobservable_utility": "pivot to restoration or reconstruction"
+    },
+    "independent_unit": "training checkpoint seed",
+    "primary_gates": {
+      "causal_topology": "mean pairwise singleton-set Jaccard of the maximum gold equal-budget-utility block is at least 0.60",
+      "observable_alignment": "mean within-workload-layer Spearman between perturbation score and gold equal-budget utility is at least 0.30 in all five checkpoint seeds",
+      "s151_1024_length_shift": "perturbation-proxy minus native target log probability is positive in at least four of five seeds and at least three of four families",
+      "s151_640_recovery": "perturbation-proxy minus native target log probability is positive in all five seeds, recovers at least 25 percent of evidence-oracle headroom, and has checkpoint-bootstrap 95 percent lower bound at least 10 percent",
+      "s55_2x_safety": "checkpoint-bootstrap 95 percent lower bounds exceed -0.10 target log probability and -2.0 accuracy percentage points"
+    },
+    "primary_proxy": "CSA-adapted CriticalKV-style output perturbation",
+    "weighting": "average queries within coordinate, equally weight families within checkpoint, equally weight checkpoint seeds"
+  },
+  "arms": [
+    "native",
+    "identity-replay",
+    "force-evidence",
+    "full-read",
+    "perturbation-proxy",
+    "recency",
+    "value-norm",
+    "random"
+  ],
+  "checkpoints": [
+    {
+      "bytes": 626727758,
+      "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/training/s55/seed-6071406/s55-step-1000.pt",
+      "scale": "s55",
+      "sha256": "dfaa5da812e4a4301d8744ccacb5871dffcc19491a9fd2af4815cc24d0ca2f7f",
+      "training_seed": 6071406
+    },
+    {
+      "bytes": 626727758,
+      "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/training/s55/seed-6071407/s55-step-1000.pt",
+      "scale": "s55",
+      "sha256": "25f21a7ff6fe49c2a2eeeee83d35638145f5848e780a3a97fefd819c81544e3a",
+      "training_seed": 6071407
+    },
+    {
+      "bytes": 626727758,
+      "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/training/s55/seed-6071408/s55-step-1000.pt",
+      "scale": "s55",
+      "sha256": "887b9b75b6bc395a752e5f482cd8a92b0885ae26a61ff78e278e83519f752b76",
+      "training_seed": 6071408
+    },
+    {
+      "bytes": 626727758,
+      "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/training/s55/seed-6071409/s55-step-1000.pt",
+      "scale": "s55",
+      "sha256": "d338cc19517770ba1a21816213000547fb017da974299c439f6b720008e5370f",
+      "training_seed": 6071409
+    },
+    {
+      "bytes": 626727758,
+      "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/training/s55/seed-6071410/s55-step-1000.pt",
+      "scale": "s55",
+      "sha256": "10c3806d83d4292dad30e1844483c68312f4efc6e01b3c94b4e156e3f1d72c1d",
+      "training_seed": 6071410
+    },
+    {
+      "bytes": 1735323966,
+      "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/training/s151/seed-6071406/s151-step-1000.pt",
+      "scale": "s151",
+      "sha256": "1e28a7b9dac6ce4a7aab91ddb72e633be2c5c77153f9b01ecf1c8149f701289d",
+      "training_seed": 6071406
+    },
+    {
+      "bytes": 1735323966,
+      "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/training/s151/seed-6071407/s151-step-1000.pt",
+      "scale": "s151",
+      "sha256": "00eca24bcee6a6dcb12dcc1a03779f9e618b3d60f325c3d18415af39508b1655",
+      "training_seed": 6071407
+    },
+    {
+      "bytes": 1735323966,
+      "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/training/s151/seed-6071408/s151-step-1000.pt",
+      "scale": "s151",
+      "sha256": "dd1409fba4076c5f3684b71ba9d7d7ff1bad107072b0e6f7c1ca467c8aa98a45",
+      "training_seed": 6071408
+    },
+    {
+      "bytes": 1735323966,
+      "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/training/s151/seed-6071409/s151-step-1000.pt",
+      "scale": "s151",
+      "sha256": "4b6ec2e5f5ce349e48947fe02e2a55b591dbd396f19fe66a9913ea76ba238899",
+      "training_seed": 6071409
+    },
+    {
+      "bytes": 1735323966,
+      "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/training/s151/seed-6071410/s151-step-1000.pt",
+      "scale": "s151",
+      "sha256": "7dc4e94259c7e350c53e1cdf8292bbd8d74ef88c4cb7f04a6ff1991bba66ca5e",
+      "training_seed": 6071410
+    }
+  ],
+  "counterfactual_batch_size": 8,
+  "design": [
+    {
+      "budget_multiplier": 1,
+      "contexts": [640, 1024],
+      "families": [
+        "single-remote-retrieval",
+        "adversarial-lexical-distractors",
+        "long-generation-changing-evidence",
+        "multiple-independent-needles"
+      ],
+      "replicates": [0, 1, 2],
+      "scale": "s151",
+      "training_seeds": [6071406, 6071407, 6071408, 6071409, 6071410]
+    },
+    {
+      "budget_multiplier": 2,
+      "contexts": [640],
+      "families": [
+        "single-remote-retrieval",
+        "adversarial-lexical-distractors",
+        "long-generation-changing-evidence",
+        "multiple-independent-needles"
+      ],
+      "replicates": [0, 1],
+      "scale": "s55",
+      "training_seeds": [6071406, 6071407, 6071408, 6071409, 6071410]
+    }
+  ],
+  "evaluation_seed_namespace": "causal-identifiability-atlas-eval-v1",
+  "expected_cells": 160,
+  "expected_exhaustive_cells": 60,
+  "experiment_id": "causal-identifiability-atlas-e1-v2",
+  "families": [
+    "single-remote-retrieval",
+    "adversarial-lexical-distractors",
+    "long-generation-changing-evidence",
+    "multiple-independent-needles"
+  ],
+  "fixed_topk": {
+    "s151": 1,
+    "s55": 2
+  },
+  "frozen_at": "2026-08-05T12:40:16+09:00",
+  "implementation": {
+    "analyzer_path": "research/adaptive_v4_memory/scripts/summarize_causal_identifiability_atlas.py",
+    "analyzer_sha256": "8a6cd4dfde600aec816c97f81c2d814fbf4921ffc6ff5c1602ee13ddaa22fbdf",
+    "branch": "agent/hca-csa-conditional-sufficiency",
+    "preregistration_path": "research/adaptive_v4_memory/reports/2026-08-05-causal-identifiability-atlas-e1-preregistration.md",
+    "preregistration_sha256": "458f7fc1983f1f568b38293e0d75644d917e3c1d3119969604a33725275edb60",
+    "runner_path": "research/adaptive_v4_memory/scripts/run_causal_identifiability_atlas.py",
+    "runner_sha256": "1ca9ab36b1c377cf66b862f2f5ebb1ff8bd006ad2e605ba1bf0798bfc9432c18",
+    "runtime_amendment_path": "research/adaptive_v4_memory/reports/2026-08-05-causal-identifiability-atlas-e1-v2-runtime-amendment.md",
+    "runtime_amendment_sha256": "27323424e7ae4949732be5172ae8b86a345ebc313cad89e10f72e854da346072",
+    "source_commit": "80c481fc7c37b7358e584108f8a630abf2ed031a"
+  },
+  "integrity_gates": {
+    "closed_world_output_namespace": true,
+    "counterfactual_batch_shape": "exactly 8 with discarded repeat-last padding",
+    "evidence_opened_after_observable_route_digest": true,
+    "identity_replay_logits": "bitwise equal",
+    "policy_route_cardinality": "exact fixed K per CSA layer and workload query",
+    "shared_workload_input_digest_across_checkpoint_seeds": true
+  },
+  "output_root": "artifacts/adaptive_v4_memory/causal_identifiability_atlas_e1/v2",
+  "parent_aborted_run": {
+    "completed_cells_quarantined": 65,
+    "failure": "full-memory secondary teacher argmax changed between batch-8 and final batch-7 chunks",
+    "manifest_sha256": "4a7c82c1d30e704035a02397f3095227233ae5c1b62d6ff3af49812967449dd1",
+    "outcomes_accessed": false,
+    "reuse_admitted": false
+  },
+  "parent_result": {
+    "h0_cells": 180,
+    "h0_manifest_sha256": "affc128d5764da9ef070a29ae90149f3a6fd5224adb5ae1b4d3621ee1bea5870",
+    "h0_result_commit": "72706f2f146930bf5526a33d78fed6f5e0bddd77",
+    "h0_result_inventory_sha256": "26935b0832ecf13a80d770491afd645a7bc9bb420bcbcc88073af11334c771be"
+  },
+  "quality_values_accessed_before_freeze": false,
+  "runtime_plan": {
+    "atomic_cell_publication": true,
+    "device": "RTX4090",
+    "preflight_coordinate_index": 0,
+    "restart_on_failure": true,
+    "same_gpu_workers": 1
+  },
+  "schema_version": 1,
+  "status": "frozen_pre_outcome_identifiability_pilot_v2",
+  "training_seeds": [6071406, 6071407, 6071408, 6071409, 6071410]
+}
