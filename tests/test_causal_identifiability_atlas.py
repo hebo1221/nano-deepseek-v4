@@ -150,6 +150,25 @@ def test_final_candidate_chunk_is_padded_to_the_frozen_batch_shape() -> None:
     )
 
 
+def test_all_counterfactual_routes_share_the_frozen_batch_shape() -> None:
+    routes = atlas._counterfactual_chunk_selections(
+        tuple(range(3, 1024, 4)),
+        (991, 995, 999, 1003, 1007, 1011, 1015),
+        8,
+    )
+
+    assert {name: len(rows) for name, rows in routes.items()} == {
+        "candidate": 8,
+        "core": 8,
+        "full": 8,
+        "deletion": 8,
+    }
+    assert {len(row) for row in routes["candidate"]} == {1}
+    assert {len(row) for row in routes["core"]} == {0}
+    assert {len(row) for row in routes["full"]} == {256}
+    assert {len(row) for row in routes["deletion"]} == {255}
+
+
 def test_spearman_uses_average_tie_ranks() -> None:
     assert summary.spearman([1.0, 2.0, 3.0], [4.0, 5.0, 6.0]) == 1.0
     assert summary.spearman([1.0, 1.0, 1.0], [4.0, 5.0, 6.0]) == 0.0

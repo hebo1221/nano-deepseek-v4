@@ -24,7 +24,7 @@ from nano_deepseek_v4 import (
 from nano_deepseek_v4.memory_controller import PlannedCSASelection
 from nano_deepseek_v4.modeling import apply_partial_rope, rope_cos_sin
 
-EXPERIMENT_ID = "causal-identifiability-atlas-e1-v2"
+EXPERIMENT_ID = "causal-identifiability-atlas-e1-v2-1"
 OBSERVABLE_POLICIES = (
     "full-read",
     "perturbation-proxy",
@@ -160,6 +160,7 @@ def _load_manifest(path: Path) -> dict[str, Any]:
         ("analyzer_sha256", Path(implementation["analyzer_path"])),
         ("preregistration_sha256", Path(implementation["preregistration_path"])),
         ("runtime_amendment_sha256", Path(implementation["runtime_amendment_path"])),
+        ("preflight_amendment_sha256", Path(implementation["preflight_amendment_path"])),
     )
     for key, implementation_path in bindings:
         if implementation.get(key) != _file_digest(implementation_path):
@@ -556,6 +557,19 @@ def _pad_candidate_chunk(chunk: Sequence[int], batch_size: int) -> tuple[int, ..
     return (*values, *((values[-1],) * (batch_size - len(values))))
 
 
+def _counterfactual_chunk_selections(
+    all_ends: Sequence[int], real_chunk: Sequence[int], batch_size: int
+) -> dict[str, tuple[tuple[int, ...], ...]]:
+    full = tuple(int(value) for value in all_ends)
+    padded = _pad_candidate_chunk(real_chunk, batch_size)
+    return {
+        "candidate": tuple((end,) for end in padded),
+        "core": ((),) * batch_size,
+        "full": (full,) * batch_size,
+        "deletion": tuple(tuple(value for value in full if value != end) for end in padded),
+    }
+
+
 def _selected_query_logits(output: Any, query_position: int) -> torch.Tensor:
     return output.logits[:, query_position].float()
 
@@ -593,36 +607,37 @@ def _exhaustive_atlas(
         teacher_token: int | None = None
         for start in range(0, len(all_ends), batch_size):
             real_chunk = all_ends[start : start + batch_size]
-            chunk = _pad_candidate_chunk(real_chunk, batch_size)
-            count = len(real_chunk)
+            route_selections = _counterfactual_chunk_selections(
+                all_ends, real_chunk, batch_size
+            )
             repeated = workload.input_ids.repeat(batch_size, 1)
             candidate_plan = _batch_plan(
                 trace_id=trace_id,
                 request_id=f"candidate:{layer_index}:{start}",
                 layer_index=layer_index,
                 query_position=query_position,
-                selections=[(end,) for end in chunk],
+                selections=route_selections["candidate"],
             )
             core_plan = _batch_plan(
                 trace_id=trace_id,
                 request_id=f"core:{layer_index}:{start}",
                 layer_index=layer_index,
                 query_position=query_position,
-                selections=[()] * count,
+                selections=route_selections["core"],
             )
             full_plan = _batch_plan(
                 trace_id=trace_id,
                 request_id=f"full:{layer_index}:{start}",
                 layer_index=layer_index,
                 query_position=query_position,
-                selections=[all_ends] * count,
+                selections=route_selections["full"],
             )
             deletion_plan = _batch_plan(
                 trace_id=trace_id,
                 request_id=f"deletion:{layer_index}:{start}",
                 layer_index=layer_index,
                 query_position=query_position,
-                selections=[tuple(value for value in all_ends if value != end) for end in chunk],
+                selections=route_selections["deletion"],
             )
             candidate_logits = _selected_query_logits(
                 model(repeated, use_cache=False, selection_plan=candidate_plan), query_position
