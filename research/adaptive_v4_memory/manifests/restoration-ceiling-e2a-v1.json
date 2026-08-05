@@ -1,0 +1,187 @@
+{
+  "schema_version": 1,
+  "experiment_id": "restoration-ceiling-e2a-v1",
+  "status": "frozen_pre_outcome_restoration_ceiling",
+  "frozen_at": "2026-08-05T16:01:53+09:00",
+  "quality_values_accessed_before_freeze": false,
+  "expected_cells": 160,
+  "families": [
+    "single-remote-retrieval",
+    "adversarial-lexical-distractors",
+    "long-generation-changing-evidence",
+    "multiple-independent-needles"
+  ],
+  "arms": [
+    "native",
+    "identity-replay",
+    "index-k1",
+    "index-k2",
+    "index-k4",
+    "index-k8",
+    "full-compressed",
+    "force-evidence"
+  ],
+  "absolute_index_cardinalities": [1, 2, 4, 8],
+  "training_seeds": [6071406, 6071407, 6071408, 6071409, 6071410],
+  "fixed_topk": {
+    "s151": 1,
+    "s55": 2
+  },
+  "evaluation_seed_namespace": "restoration-ceiling-e2a-eval-v1",
+  "design": [
+    {
+      "scale": "s151",
+      "training_seeds": [6071406, 6071407, 6071408, 6071409, 6071410],
+      "contexts": [640, 1024],
+      "families": [
+        "single-remote-retrieval",
+        "adversarial-lexical-distractors",
+        "long-generation-changing-evidence",
+        "multiple-independent-needles"
+      ],
+      "replicates": [0, 1, 2],
+      "budget_multiplier": 1
+    },
+    {
+      "scale": "s55",
+      "training_seeds": [6071406, 6071407, 6071408, 6071409, 6071410],
+      "contexts": [640],
+      "families": [
+        "single-remote-retrieval",
+        "adversarial-lexical-distractors",
+        "long-generation-changing-evidence",
+        "multiple-independent-needles"
+      ],
+      "replicates": [0, 1],
+      "budget_multiplier": 2
+    }
+  ],
+  "checkpoints": [
+    {
+      "scale": "s55",
+      "training_seed": 6071406,
+      "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/training/s55/seed-6071406/s55-step-1000.pt",
+      "bytes": 626727758,
+      "sha256": "dfaa5da812e4a4301d8744ccacb5871dffcc19491a9fd2af4815cc24d0ca2f7f"
+    },
+    {
+      "scale": "s55",
+      "training_seed": 6071407,
+      "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/training/s55/seed-6071407/s55-step-1000.pt",
+      "bytes": 626727758,
+      "sha256": "25f21a7ff6fe49c2a2eeeee83d35638145f5848e780a3a97fefd819c81544e3a"
+    },
+    {
+      "scale": "s55",
+      "training_seed": 6071408,
+      "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/training/s55/seed-6071408/s55-step-1000.pt",
+      "bytes": 626727758,
+      "sha256": "887b9b75b6bc395a752e5f482cd8a92b0885ae26a61ff78e278e83519f752b76"
+    },
+    {
+      "scale": "s55",
+      "training_seed": 6071409,
+      "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/training/s55/seed-6071409/s55-step-1000.pt",
+      "bytes": 626727758,
+      "sha256": "d338cc19517770ba1a21816213000547fb017da974299c439f6b720008e5370f"
+    },
+    {
+      "scale": "s55",
+      "training_seed": 6071410,
+      "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/training/s55/seed-6071410/s55-step-1000.pt",
+      "bytes": 626727758,
+      "sha256": "10c3806d83d4292dad30e1844483c68312f4efc6e01b3c94b4e156e3f1d72c1d"
+    },
+    {
+      "scale": "s151",
+      "training_seed": 6071406,
+      "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/training/s151/seed-6071406/s151-step-1000.pt",
+      "bytes": 1735323966,
+      "sha256": "1e28a7b9dac6ce4a7aab91ddb72e633be2c5c77153f9b01ecf1c8149f701289d"
+    },
+    {
+      "scale": "s151",
+      "training_seed": 6071407,
+      "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/training/s151/seed-6071407/s151-step-1000.pt",
+      "bytes": 1735323966,
+      "sha256": "00eca24bcee6a6dcb12dcc1a03779f9e618b3d60f325c3d18415af39508b1655"
+    },
+    {
+      "scale": "s151",
+      "training_seed": 6071408,
+      "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/training/s151/seed-6071408/s151-step-1000.pt",
+      "bytes": 1735323966,
+      "sha256": "dd1409fba4076c5f3684b71ba9d7d7ff1bad107072b0e6f7c1ca467c8aa98a45"
+    },
+    {
+      "scale": "s151",
+      "training_seed": 6071409,
+      "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/training/s151/seed-6071409/s151-step-1000.pt",
+      "bytes": 1735323966,
+      "sha256": "4b6ec2e5f5ce349e48947fe02e2a55b591dbd396f19fe66a9913ea76ba238899"
+    },
+    {
+      "scale": "s151",
+      "training_seed": 6071410,
+      "path": "artifacts/adaptive_v4_memory/paper_grade/p2_post_rank_direct/training/s151/seed-6071410/s151-step-1000.pt",
+      "bytes": 1735323966,
+      "sha256": "7dc4e94259c7e350c53e1cdf8292bbd8d74ef88c4cb7f04a6ff1991bba66ca5e"
+    }
+  ],
+  "analysis_plan": {
+    "claim": "no-training synthetic restoration-teacher diagnostic only; no learned-restoration, natural-language, physical-memory, latency, production, or official DeepSeek-V4 claim",
+    "independent_unit": "training checkpoint seed",
+    "weighting": "average queries inside coordinates, equally weight families inside checkpoint seeds, equally weight checkpoint seeds",
+    "bootstrap_draws": 200000,
+    "bootstrap_seed": 2026080516,
+    "primary_gates": {
+      "s151_640_full_teacher": "full-compressed minus native target log probability is positive in all five seeds and checkpoint-bootstrap 95 percent lower bound is above zero",
+      "s151_1024_length_shift": "full-compressed minus native target log probability is positive in at least four of five seeds and three of four families and checkpoint-bootstrap 95 percent lower bound is above zero",
+      "distributed_beyond_k8": "full-compressed minus index-k8 target log probability across equally weighted s151 contexts is positive in at least four of five seeds and checkpoint-bootstrap 95 percent lower bound is above zero",
+      "evidence_headroom_recovery": "s151 640 full-compressed gain recovers at least 50 percent of force-evidence headroom and paired checkpoint-bootstrap 95 percent lower bound is at least 25 percent",
+      "s55_2x_safety": "full-compressed minus native checkpoint-bootstrap 95 percent lower bounds exceed -0.10 target log probability and -2.0 accuracy percentage points"
+    },
+    "decision_tree": {
+      "all_gates_pass": "request a separately frozen budget-matched compact restoration experiment",
+      "teacher_positive_but_not_beyond_k8": "prefer a small fixed-K capacity study over restoration",
+      "teacher_positive_but_conditional": "require a query-conditioned fallback gate that first passes the failed regime",
+      "teacher_value_fails": "do not train full-cache restoration on this synthetic model; pivot to external retrieval or early natural-language indexing"
+    }
+  },
+  "integrity_gates": {
+    "closed_world_output_namespace": true,
+    "identity_replay_logits": "bitwise equal",
+    "native_equivalent_absolute_k_logits": "bitwise equal",
+    "absolute_index_route_cardinalities": [1, 2, 4, 8],
+    "full_compressed_route": "every and only finite causal compressed block",
+    "evidence_opened_after_observable_route_digest": true,
+    "shared_workload_input_digest_across_checkpoint_seeds_and_scales": true
+  },
+  "runtime_plan": {
+    "device": "RTX4090",
+    "same_gpu_workers": 1,
+    "preflight_coordinate_indices": [0, 18, 120],
+    "atomic_cell_publication": true,
+    "restart_on_failure": true
+  },
+  "output_root": "artifacts/adaptive_v4_memory/restoration_ceiling_e2a/v1",
+  "implementation": {
+    "branch": "agent/hca-csa-conditional-sufficiency",
+    "source_commit": "7311dc5b044ef3ccf4028af054d88c253cf9111b",
+    "runner_path": "research/adaptive_v4_memory/scripts/run_restoration_ceiling_e2a.py",
+    "runner_sha256": "c69ee2d5e6044ac1f8150a307d6243660347b44c6af3d0d9f23868acac48923e",
+    "analyzer_path": "research/adaptive_v4_memory/scripts/summarize_restoration_ceiling_e2a.py",
+    "analyzer_sha256": "b5bebd02540204e5e6f664a8708e77ae809a0913cb31bdf5f84fd06a5354ed3c",
+    "preregistration_path": "research/adaptive_v4_memory/reports/2026-08-05-restoration-ceiling-e2a-preregistration.md",
+    "preregistration_sha256": "9c6566e21d9481ceaea75ea13d8ab3df110bb2a17a3fc8af610ecc0f737c5c52",
+    "atlas_dependency_path": "research/adaptive_v4_memory/scripts/run_causal_identifiability_atlas.py",
+    "atlas_dependency_sha256": "9db7693cbbf6d8a2264563fa4c73bf36a975ee74147d141a575d21dbf05475c6"
+  },
+  "parent_result": {
+    "experiment_id": "causal-identifiability-atlas-e1-v2-1",
+    "cells": 160,
+    "decision": "UNSTABLE_CAUSAL_TOPOLOGY_DO_NOT_TRAIN_SHARED_SELECTOR",
+    "result_commit": "0ccb21c1796f447a734508f2a8f4f8a4f6ca10f2",
+    "summary_sha256": "1fcd90296526b28f76cfd69cebd33a8ecf7346c4a0fd77670b4596862df645de"
+  }
+}
