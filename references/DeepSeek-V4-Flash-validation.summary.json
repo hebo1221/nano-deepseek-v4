@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "source": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash",
   "validated_at": "2026-07-14",
   "checkpoint": {
@@ -38,6 +38,54 @@
     "metadata_errors": 0,
     "dtype_metadata_errors": 0
   },
+  "mtp_preflight": {
+    "validated_at": "2026-08-11",
+    "source_revision": "fd53f944496234770ba80e15004f9b6d269a71f5",
+    "snapshot_preflight_complete": true,
+    "attention_layer_types": [
+      "sliding_attention"
+    ],
+    "shard_files": [
+      "model-00046-of-00046.safetensors"
+    ],
+    "indexed_tensor_count": 1575,
+    "non_scale_tensor_count": 797,
+    "scale_tensor_count": 778,
+    "scaled_tensor_count": 778,
+    "quantized_tensor_count": 768,
+    "dtype_counts": {
+      "BF16": 8,
+      "F32": 11,
+      "F8_E4M3": 10,
+      "F8_E8M0": 778,
+      "I8": 768
+    },
+    "stored_tensor_bytes": 3593787756,
+    "logical_model_parameter_count": 6610048635,
+    "non_parameter_routing_state_count": 256,
+    "activated_parameter_count": 318592891,
+    "inventory_sha256": "331296a906dd0fdf85384f0f6237602bc49e2e19c285ca19b1946b62cb330561",
+    "inventory_sha256_scope": "canonical sorted JSON mapping MTP keys to safetensors dtype and shape",
+    "hub_metadata_probe": {
+      "validated_at": "2026-08-11",
+      "huggingface_hub_version": "0.34.0",
+      "requested_revision": "fd53f944496234770ba80e15004f9b6d269a71f5",
+      "resolved_revision": "fd53f944496234770ba80e15004f9b6d269a71f5",
+      "metadata_only": true,
+      "metadata_document_bytes": 5373130,
+      "inspected_shard_count": 1,
+      "cached_safetensors_file_count": 0,
+      "snapshot_preflight_complete": false,
+      "inventory_matches_local_preflight": true
+    },
+    "missing_expected_key_count": 0,
+    "missing_key_count": 0,
+    "unexpected_key_count": 0,
+    "unrecognized_key_count": 0,
+    "shape_mismatch_count": 0,
+    "unchecked_shape_key_count": 0,
+    "error_count": 0
+  },
   "streaming_payload_scan": {
     "is_complete": true,
     "loaded_tensor_count": 69187,
@@ -51,6 +99,8 @@
     "error_count": 0
   },
   "accelerator_validation": {
+    "validated_at": "2026-07-14",
+    "scope": "historical_smoke_test",
     "device": "NVIDIA GB10",
     "torch_version": "2.13.0+cu130",
     "cuda_available": true,
