@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Usage questions
+    url: https://github.com/hebo1221/nano-deepseek-v4/discussions/categories/q-a
+    about: Ask how to install, inspect, train, generate, or interpret a result.
+  - name: Feature ideas
+    url: https://github.com/hebo1221/nano-deepseek-v4/discussions/categories/ideas
+    about: Propose a scoped capability or research direction before implementation.
+  - name: Security vulnerability
+    url: https://github.com/hebo1221/nano-deepseek-v4/security/advisories/new
+    about: Report suspected vulnerabilities privately instead of opening a public issue.

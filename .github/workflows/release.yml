@@ -5,6 +5,7 @@ on:
     tags: ["v*"]
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
@@ -14,7 +15,7 @@ concurrency:
 jobs:
   build:
     name: Build and smoke-test distributions
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
@@ -24,6 +25,8 @@ jobs:
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.14"
+      - name: Install release source verifier dependencies
+        run: python -m pip install --disable-pip-version-check "PyYAML>=6.0"
       - name: Verify release source and version
         env:
           RELEASE_TAG: ${{ github.ref_name }}
@@ -33,31 +36,256 @@ jobs:
             echo "release tag must point to a commit contained in origin/main" >&2
             exit 1
           }
-          python - <<'PY'
-          import os
-          import re
-          import tomllib
+          python scripts/verify_release_source.py --tag "$RELEASE_TAG"
+      - name: Require successful CI for the release commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ci_conclusion="$(
+            gh api \
+              --method GET \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "/repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs" \
+              -f head_sha="$GITHUB_SHA" \
+              -f status=completed \
+              -f per_page=100 \
+              --jq '
+                .workflow_runs
+                | map(select(.event == "push" and .head_branch == "main"))
+                | sort_by(.run_number)
+                | last
+                | .conclusion // ""
+              '
+          )"
+          if [[ "$ci_conclusion" != "success" ]]; then
+            echo "release commit has no successful completed CI push run on main" >&2
+            exit 1
+          fi
+      - name: Verify and stage the CUDA release receipt
+        run: |
+          python scripts/cuda_release_gate.py verify \
+            --receipt references/cuda-release-gate.json
+          tested_commit="$(
+            python - <<'PY'
+          import json
           from pathlib import Path
 
-          version = tomllib.loads(Path("pyproject.toml").read_text())["project"]["version"]
-          init_text = Path("nano_deepseek_v4/__init__.py").read_text()
-          match = re.search(r'^__version__ = "([^"]+)"$', init_text, re.MULTILINE)
-          if match is None or match.group(1) != version:
-              raise SystemExit("__version__ must match pyproject.toml")
-          citation = Path("CITATION.cff").read_text()
-          if f"version: {version}\n" not in citation:
-              raise SystemExit("CITATION.cff version must match pyproject.toml")
-          expected = f"v{version}"
-          actual = os.environ["RELEASE_TAG"]
-          if actual != expected:
-              raise SystemExit(f"release tag {actual!r} must equal {expected!r}")
+          receipt = json.loads(
+              Path("references/cuda-release-gate.json").read_text()
+          )
+          print(receipt["source"]["git_commit"])
           PY
+          )"
+          git merge-base --is-ancestor "$tested_commit" "$GITHUB_SHA" || {
+            echo "CUDA receipt commit is not an ancestor of the release tag" >&2
+            exit 1
+          }
+          mkdir -p dist/cuda
+          cp -- references/cuda-release-gate.json \
+            dist/cuda/cuda-release-gate.json
       - name: Build and validate distributions
         run: |
-          python -m pip install --upgrade pip build twine
+          python -m pip install --upgrade pip build twine "packaging>=24"
           python -m build --outdir dist/packages
           python -m twine check --strict dist/packages/*
           (cd dist/packages && sha256sum -- * > ../SHA256SUMS)
+      - name: Verify and smoke-test the source distribution
+        run: |
+          shopt -s nullglob
+          wheels=(dist/packages/*.whl)
+          sdists=(dist/packages/*.tar.gz)
+          if [[ ${#wheels[@]} -ne 1 || ! -f "${wheels[0]}" ]]; then
+            echo "expected exactly one built wheel" >&2
+            exit 1
+          fi
+          if [[ ${#sdists[@]} -ne 1 || ! -f "${sdists[0]}" ]]; then
+            echo "expected exactly one built source distribution" >&2
+            exit 1
+          fi
+          NANO_WHEEL_PATH="$(realpath -- "${wheels[0]}")"
+          NANO_SDIST_PATH="$(realpath -- "${sdists[0]}")"
+          NANO_SDIST_ROOT="$(mktemp -d /tmp/nano-deepseek-v4-sdist.XXXXXX)"
+          NANO_REBUILT_DIR="${NANO_SDIST_ROOT}/rebuilt"
+          mkdir -p "${NANO_REBUILT_DIR}"
+          python -m pip wheel \
+            --no-deps \
+            --no-cache-dir \
+            --wheel-dir "${NANO_REBUILT_DIR}" \
+            "${NANO_SDIST_PATH}"
+          rebuilt=("${NANO_REBUILT_DIR}"/*.whl)
+          if [[ ${#rebuilt[@]} -ne 1 || ! -f "${rebuilt[0]}" ]]; then
+            echo "expected exactly one wheel rebuilt from the sdist" >&2
+            exit 1
+          fi
+          NANO_REBUILT_WHEEL="$(realpath -- "${rebuilt[0]}")"
+          python scripts/verify_distribution_artifacts.py \
+            --wheel "${NANO_WHEEL_PATH}" \
+            --sdist "${NANO_SDIST_PATH}" \
+            --rebuilt-wheel "${NANO_REBUILT_WHEEL}"
+          python -m venv "${NANO_SDIST_ROOT}/venv"
+          NANO_SDIST_PYTHON="${NANO_SDIST_ROOT}/venv/bin/python"
+          "${NANO_SDIST_PYTHON}" -m pip install --upgrade pip
+          "${NANO_SDIST_PYTHON}" -m pip install \
+            --index-url https://download.pytorch.org/whl/cpu \
+            "torch>=2.4"
+          "${NANO_SDIST_PYTHON}" -m pip install \
+            --no-cache-dir \
+            "${NANO_SDIST_PATH}"
+          "${NANO_SDIST_PYTHON}" -m pip check
+          cd "${NANO_SDIST_ROOT}"
+          "${NANO_SDIST_PYTHON}" - "${NANO_SDIST_PATH}" <<'PY'
+          import hashlib
+          import json
+          import os
+          import sys
+          from importlib.metadata import distribution, distributions
+          from importlib.resources import files
+          from pathlib import Path
+
+          sdist = Path(sys.argv[1]).resolve()
+          installed = distribution("nano-deepseek-v4")
+          direct_url_text = installed.read_text("direct_url.json")
+          if direct_url_text is None:
+              raise SystemExit("sdist install has no direct_url.json receipt")
+          direct_url = json.loads(direct_url_text)
+          expected_sha = hashlib.sha256(sdist.read_bytes()).hexdigest()
+          actual_sha = direct_url.get("archive_info", {}).get("hashes", {}).get("sha256")
+          if actual_sha != expected_sha:
+              raise SystemExit("installed distribution is not the selected sdist")
+
+          import nano_deepseek_v4
+
+          package = Path(nano_deepseek_v4.__file__).resolve()
+          workspace = Path(os.environ["GITHUB_WORKSPACE"]).resolve()
+          if package == workspace or workspace in package.parents:
+              raise SystemExit(f"sdist smoke imported source checkout: {package}")
+          names = {
+              item.metadata["Name"].lower()
+              for item in distributions()
+              if item.metadata["Name"]
+          }
+          accelerators = sorted(
+              name
+              for name in names
+              if name == "triton" or name.startswith(("cuda-", "nvidia-"))
+          )
+          if accelerators:
+              raise SystemExit(
+                  f"CPU sdist smoke resolved accelerator packages: {accelerators}"
+              )
+          package_files = files("nano_deepseek_v4")
+          for relative in (
+              "py.typed",
+              "_receipts/DeepSeek-V4-Flash-0731-config.json",
+              "_receipts/DeepSeek-V4-Flash-0731-metadata.json",
+              "_receipts/dspark-scheduler-v1.json",
+              "_receipts/dspark-semantic-v1.json",
+              "_receipts/tiny-text-training-baseline.json",
+          ):
+              if not package_files.joinpath(relative).is_file():
+                  raise SystemExit(f"installed sdist payload is missing {relative}")
+          packaged_baseline = package_files.joinpath(
+              "_receipts/tiny-text-training-baseline.json"
+          ).read_bytes()
+          source_baseline = (
+              workspace / "references" / "tiny-text-training-baseline.json"
+          ).read_bytes()
+          if packaged_baseline != source_baseline:
+              raise SystemExit("installed sdist reproduction contract differs from source")
+          PY
+          "${NANO_SDIST_ROOT}/venv/bin/nano-deepseek-v4" --version
+          "${NANO_SDIST_ROOT}/venv/bin/nano-deepseek-v4" --help
+          "${NANO_SDIST_PYTHON}" -m nano_deepseek_v4 --help
+          "${NANO_SDIST_ROOT}/venv/bin/nano-deepseek-v4" demo
+          (
+            cd /tmp
+            "${NANO_SDIST_PYTHON}" "$GITHUB_WORKSPACE/scripts/run_no_network.py" \
+              "${NANO_SDIST_ROOT}/venv/bin/nano-deepseek-v4" reproduce \
+              --save-directory "${NANO_SDIST_ROOT}/bundle" \
+              --json \
+              --output "${NANO_SDIST_ROOT}/reproduction.json"
+            "${NANO_SDIST_PYTHON}" "$GITHUB_WORKSPACE/scripts/run_no_network.py" \
+              "${NANO_SDIST_ROOT}/venv/bin/nano-deepseek-v4" generate \
+              --bundle "${NANO_SDIST_ROOT}/bundle" \
+              --prompt DeepSeek \
+              --max-new-tokens 1 \
+              --device cpu \
+              --json > "${NANO_SDIST_ROOT}/generation.json"
+            "${NANO_SDIST_ROOT}/venv/bin/nano-deepseek-v4" dspark \
+              --json \
+              --output "${NANO_SDIST_ROOT}/dspark.json"
+            "${NANO_SDIST_ROOT}/venv/bin/nano-deepseek-v4" dspark-scheduler \
+              --json \
+              --output "${NANO_SDIST_ROOT}/dspark-scheduler.json"
+            "${NANO_SDIST_ROOT}/venv/bin/nano-deepseek-v4" conformance \
+              --profile dspark \
+              --json \
+              --output "${NANO_SDIST_ROOT}/conformance-dspark.json"
+          )
+          "${NANO_SDIST_PYTHON}" - "${NANO_SDIST_ROOT}" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          root = Path(sys.argv[1]).resolve()
+          reproduction = json.loads((root / "reproduction.json").read_text())
+          generation = json.loads((root / "generation.json").read_text())
+          if (
+              reproduction.get("status") != "pass"
+              or reproduction.get("passed") is not True
+              or reproduction.get("complete") is not True
+          ):
+              raise SystemExit(
+                  f"installed-sdist reproduction did not pass: {reproduction}"
+              )
+          acceptance = reproduction.get("acceptance", {})
+          if (
+              acceptance.get("passed") is not True
+              or acceptance.get("reason_codes") != []
+              or acceptance.get("summary", {}).get("failed") != 0
+          ):
+              raise SystemExit(
+                  f"installed-sdist hard acceptance failed: {acceptance}"
+              )
+          artifact = reproduction.get("artifact", {})
+          verification = reproduction.get("bundle_verification", {})
+          training = reproduction.get("training_result", {})
+          bundle = (root / "bundle").resolve()
+          if (
+              artifact.get("published") is not True
+              or Path(str(artifact.get("bundle_path"))).resolve() != bundle
+          ):
+              raise SystemExit(
+                  f"installed-sdist bundle was not retained: {artifact}"
+              )
+          expected_generation = {
+              "bundle_manifest_sha256": artifact.get("manifest_sha256"),
+              "config_sha256": verification.get("config_sha256"),
+              "tokenizer_sha256": verification.get("tokenizer_sha256"),
+              "parameter_count": training.get("parameter_count"),
+          }
+          observed_generation = {
+              key: generation.get(key) for key in expected_generation
+          }
+          if (
+              generation.get("schema_version") != 1
+              or generation.get("source", {}).get("kind") != "local"
+              or generation.get("prompt_text") != "DeepSeek"
+              or generation.get("max_new_tokens") != 1
+              or generation.get("generated_new_tokens") != 1
+              or len(generation.get("continuation_token_ids", [])) != 1
+              or observed_generation != expected_generation
+          ):
+              raise SystemExit(
+                  f"installed-sdist generation receipt is invalid: {generation}"
+              )
+          PY
+          "${NANO_SDIST_PYTHON}" "$GITHUB_WORKSPACE/scripts/run_no_network.py" \
+            "${NANO_SDIST_ROOT}/venv/bin/nano-deepseek-v4" conformance \
+            --profile core \
+            --require-os-network-isolation \
+            --json \
+            --output "${NANO_SDIST_ROOT}/conformance-core.json"
       - name: Smoke-test the release wheel
         run: |
           python -m venv /tmp/nano-deepseek-v4-release
@@ -65,9 +293,352 @@ jobs:
           /tmp/nano-deepseek-v4-release/bin/python -m pip install \
             --index-url https://download.pytorch.org/whl/cpu \
             "torch>=2.4"
-          /tmp/nano-deepseek-v4-release/bin/python -m pip install dist/packages/*.whl
+          wheels=(dist/packages/*.whl)
+          if [[ ${#wheels[@]} -ne 1 || ! -f "${wheels[0]}" ]]; then
+            echo "expected exactly one built wheel" >&2
+            exit 1
+          fi
+          NANO_WHEEL_PATH="${wheels[0]}"
+          python - "${NANO_WHEEL_PATH}" <<'PY'
+          import hashlib
+          import json
+          import os
+          import sys
+          from pathlib import Path
+          from zipfile import ZipFile
+
+          wheel = sys.argv[1]
+          expected = {
+              "DeepSeek-V4-Flash-0731-config.json": (
+                  "nano_deepseek_v4/_receipts/DeepSeek-V4-Flash-0731-config.json"
+              ),
+              "DeepSeek-V4-Flash-0731-metadata.json": (
+                  "nano_deepseek_v4/_receipts/DeepSeek-V4-Flash-0731-metadata.json"
+              ),
+              "dspark-scheduler-v1.json": (
+                  "nano_deepseek_v4/_receipts/dspark-scheduler-v1.json"
+              ),
+              "dspark-semantic-v1.json": (
+                  "nano_deepseek_v4/_receipts/dspark-semantic-v1.json"
+              ),
+              "tiny-text-training-baseline.json": (
+                  "nano_deepseek_v4/_receipts/tiny-text-training-baseline.json"
+              ),
+          }
+          with ZipFile(wheel) as archive:
+              names = archive.namelist()
+              for basename, path in expected.items():
+                  matches = [name for name in names if name.endswith(f"/{basename}")]
+                  if matches != [path]:
+                      raise SystemExit(f"wheel receipt inventory drift for {basename}: {matches}")
+              receipt = json.loads(archive.read(expected["DeepSeek-V4-Flash-0731-metadata.json"]))
+              config_digest = hashlib.sha256(
+                  archive.read(expected["DeepSeek-V4-Flash-0731-config.json"])
+              ).hexdigest()
+              if config_digest != receipt["official_source_sha256"]["config.json"]:
+                  raise SystemExit("wheel Flash-0731 config digest does not match its receipt")
+              source_baseline = (
+                  Path(os.environ["GITHUB_WORKSPACE"])
+                  / "references"
+                  / "tiny-text-training-baseline.json"
+              ).read_bytes()
+              if archive.read(expected["tiny-text-training-baseline.json"]) != source_baseline:
+                  raise SystemExit("wheel reproduction contract differs from source")
+              entry_files = [name for name in names if name.endswith(".dist-info/entry_points.txt")]
+              if len(entry_files) != 1:
+                  raise SystemExit(f"wheel entry-point inventory drift: {entry_files}")
+              entries = archive.read(entry_files[0]).decode("utf-8").splitlines()
+              expected_entries = {
+                  "nano-deepseek-v4 = nano_deepseek_v4.cli:main",
+                  (
+                      "nano-deepseek-v4-verify-flash-0731 = "
+                      "nano_deepseek_v4.verify_flash_0731_receipt:main"
+                  ),
+              }
+              missing_entries = sorted(expected_entries - set(entries))
+              if missing_entries:
+                  raise SystemExit(f"wheel entry points are missing: {missing_entries}")
+          PY
+          /tmp/nano-deepseek-v4-release/bin/python -m pip install \
+            --no-cache-dir \
+            "${NANO_WHEEL_PATH}"
+          (
+            cd /tmp
+            /tmp/nano-deepseek-v4-release/bin/python \
+              "$GITHUB_WORKSPACE/scripts/run_no_network.py" \
+              /tmp/nano-deepseek-v4-release/bin/nano-deepseek-v4 conformance \
+              --profile core \
+              --require-os-network-isolation \
+              --json \
+              --output /tmp/nano-deepseek-v4-release-core.json
+          )
+          (
+            cd /tmp
+            /tmp/nano-deepseek-v4-release/bin/python \
+              "$GITHUB_WORKSPACE/scripts/run_no_network.py" \
+              /tmp/nano-deepseek-v4-release/bin/nano-deepseek-v4 reproduce \
+              --save-directory /tmp/nano-deepseek-v4-release-bundle \
+              --json \
+              --output /tmp/nano-deepseek-v4-release-reproduction.json
+          )
+          (
+            cd /tmp
+            /tmp/nano-deepseek-v4-release/bin/python \
+              "$GITHUB_WORKSPACE/scripts/run_no_network.py" \
+              /tmp/nano-deepseek-v4-release/bin/nano-deepseek-v4 generate \
+              --bundle /tmp/nano-deepseek-v4-release-bundle \
+              --prompt DeepSeek \
+              --max-new-tokens 1 \
+              --device cpu \
+              --json > /tmp/nano-deepseek-v4-release-generation.json
+            /tmp/nano-deepseek-v4-release/bin/nano-deepseek-v4 dspark \
+              --json \
+              --output /tmp/nano-deepseek-v4-release-dspark.json
+            /tmp/nano-deepseek-v4-release/bin/nano-deepseek-v4 dspark-scheduler \
+              --json \
+              --output /tmp/nano-deepseek-v4-release-dspark-scheduler.json
+            /tmp/nano-deepseek-v4-release/bin/nano-deepseek-v4 conformance \
+              --profile dspark \
+              --json \
+              --output /tmp/nano-deepseek-v4-release-conformance-dspark.json
+          )
+          /tmp/nano-deepseek-v4-release/bin/python - <<'PY'
+          import json
+          from pathlib import Path
+
+          receipt = json.loads(
+              Path("/tmp/nano-deepseek-v4-release-reproduction.json").read_text()
+          )
+          if (
+              receipt.get("status") != "pass"
+              or receipt.get("passed") is not True
+              or receipt.get("complete") is not True
+          ):
+              raise SystemExit(f"installed-wheel reproduction did not pass: {receipt}")
+          acceptance = receipt.get("acceptance", {})
+          if (
+              acceptance.get("passed") is not True
+              or acceptance.get("reason_codes") != []
+              or acceptance.get("summary", {}).get("failed") != 0
+          ):
+              raise SystemExit(f"installed-wheel hard acceptance failed: {acceptance}")
+          historical = receipt.get("historical_observations", {})
+          historical_status = historical.get("status")
+          historical_differences = historical.get("different_check_ids")
+          if (
+              historical.get("informational_only") is not True
+              or not historical.get("reference_id")
+              or historical_status not in {"exact_match", "different"}
+              or not isinstance(historical_differences, list)
+              or (historical_status == "exact_match") != (historical_differences == [])
+          ):
+              raise SystemExit(
+                  f"installed-wheel historical comparison is invalid: {historical}"
+              )
+          artifact = receipt.get("artifact", {})
+          bundle = Path("/tmp/nano-deepseek-v4-release-bundle").resolve()
+          if (
+              artifact.get("published") is not True
+              or Path(str(artifact.get("bundle_path"))).resolve() != bundle
+          ):
+              raise SystemExit(f"installed-wheel bundle was not retained: {artifact}")
+          generation = json.loads(
+              Path("/tmp/nano-deepseek-v4-release-generation.json").read_text()
+          )
+          verification = receipt.get("bundle_verification", {})
+          training = receipt.get("training_result", {})
+          expected_generation = {
+              "bundle_manifest_sha256": artifact.get("manifest_sha256"),
+              "config_sha256": verification.get("config_sha256"),
+              "tokenizer_sha256": verification.get("tokenizer_sha256"),
+              "parameter_count": training.get("parameter_count"),
+          }
+          observed_generation = {
+              key: generation.get(key) for key in expected_generation
+          }
+          if (
+              generation.get("schema_version") != 1
+              or generation.get("source", {}).get("kind") != "local"
+              or generation.get("prompt_text") != "DeepSeek"
+              or generation.get("max_new_tokens") != 1
+              or generation.get("generated_new_tokens") != 1
+              or len(generation.get("continuation_token_ids", [])) != 1
+              or observed_generation != expected_generation
+          ):
+              raise SystemExit(
+                  f"installed-wheel generation receipt is invalid: {generation}"
+              )
+          PY
+          /tmp/nano-deepseek-v4-release/bin/python -m pip install \
+            "${NANO_WHEEL_PATH}[official]" \
+            pytest
+          /tmp/nano-deepseek-v4-release/bin/python -c "import huggingface_hub"
+          /tmp/nano-deepseek-v4-release/bin/python -m pip install \
+            "${NANO_WHEEL_PATH}[parity]"
+          /tmp/nano-deepseek-v4-release/bin/python -c "import transformers"
+          /tmp/nano-deepseek-v4-release/bin/python -m pip install \
+            "${NANO_WHEEL_PATH}[notebook]"
+          /tmp/nano-deepseek-v4-release/bin/jupyter nbconvert --version
+          /tmp/nano-deepseek-v4-release/bin/python - <<'PY'
+          from importlib.metadata import distributions
+
+          names = {
+              distribution.metadata["Name"].lower()
+              for distribution in distributions()
+              if distribution.metadata["Name"]
+          }
+          accelerator_packages = sorted(
+              name
+              for name in names
+              if name == "triton" or name.startswith(("cuda-", "nvidia-"))
+          )
+          if accelerator_packages:
+              raise SystemExit(
+                  f"CPU release smoke resolved accelerator packages: {accelerator_packages}"
+              )
+          PY
           cd /tmp
+          /tmp/nano-deepseek-v4-release/bin/python - <<'PY'
+          import os
+          from pathlib import Path
+
+          import nano_deepseek_v4
+
+          package = Path(nano_deepseek_v4.__file__).resolve()
+          workspace = Path(os.environ["GITHUB_WORKSPACE"]).resolve()
+          if package == workspace or workspace in package.parents:
+              raise SystemExit(f"wheel smoke imported source checkout: {package}")
+          print(f"installed package: {package}")
+          PY
+          /tmp/nano-deepseek-v4-release/bin/python -m pytest \
+            --override-ini=pythonpath= \
+            --import-mode=importlib \
+            --rootdir=/tmp \
+            -q \
+            "$GITHUB_WORKSPACE/tests/test_hub_checkpoint.py" \
+            "$GITHUB_WORKSPACE/tests/test_dspark_hub_checkpoint.py" \
+            "$GITHUB_WORKSPACE/tests/test_dspark_conformance.py" \
+            "$GITHUB_WORKSPACE/tests/test_dspark_scheduler.py" \
+            "$GITHUB_WORKSPACE/tests/test_verify_flash_0731_receipt.py" \
+            "$GITHUB_WORKSPACE/tests/test_conformance.py" \
+            "$GITHUB_WORKSPACE/tests/test_reproduce.py" \
+            "$GITHUB_WORKSPACE/tests/test_core.py::test_public_version_matches_distribution_metadata"
+          /tmp/nano-deepseek-v4-release/bin/python \
+            "$GITHUB_WORKSPACE/scripts/run_no_network.py" \
+            /tmp/nano-deepseek-v4-release/bin/python -m pytest \
+            --override-ini=pythonpath= \
+            --import-mode=importlib \
+            --rootdir=/tmp \
+            -q \
+            "$GITHUB_WORKSPACE/tests/test_notebook.py"
+          /tmp/nano-deepseek-v4-release/bin/python \
+            "$GITHUB_WORKSPACE/scripts/run_no_network.py" \
+            /tmp/nano-deepseek-v4-release/bin/jupyter nbconvert \
+            --to notebook \
+            --execute \
+            --ExecutePreprocessor.timeout=180 \
+            --output executed-notebook.ipynb \
+            --output-dir /tmp \
+            "$GITHUB_WORKSPACE/notebooks/01_flash_inference.ipynb"
+          test -f /tmp/executed-notebook.ipynb
+          /tmp/nano-deepseek-v4-release/bin/nano-deepseek-v4 --version
+          /tmp/nano-deepseek-v4-release/bin/nano-deepseek-v4 --help
+          /tmp/nano-deepseek-v4-release/bin/python -m nano_deepseek_v4 --help
+          /tmp/nano-deepseek-v4-release/bin/nano-deepseek-v4 demo
+          /tmp/nano-deepseek-v4-release/bin/nano-deepseek-v4-verify-flash-0731 --help
           /tmp/nano-deepseek-v4-release/bin/nano-deepseek-v4-demo
+          /tmp/nano-deepseek-v4-release/bin/nano-deepseek-v4-attention-reach \
+            --probe-count 1 \
+            --device cpu \
+            --json
+          /tmp/nano-deepseek-v4-release/bin/nano-deepseek-v4-inspect \
+            --preset flash \
+            --json
+          /tmp/nano-deepseek-v4-release/bin/nano-deepseek-v4-inspect \
+            --preset flash-0731 \
+            --json
+          /tmp/nano-deepseek-v4-release/bin/nano-deepseek-v4-train --help
+          /tmp/nano-deepseek-v4-release/bin/nano-deepseek-v4-inspect \
+            --bundle /tmp/nano-deepseek-v4-release-bundle \
+            --json
+          /tmp/nano-deepseek-v4-release/bin/nano-deepseek-v4-generate --help
+          /tmp/nano-deepseek-v4-release/bin/nano-deepseek-v4-compare \
+            --text-file "$GITHUB_WORKSPACE/README.md" \
+            --left-bundle /tmp/nano-deepseek-v4-release-bundle \
+            --right-bundle /tmp/nano-deepseek-v4-release-bundle \
+            --left-label first \
+            --right-label second \
+            --batches 2 \
+            --batch-size 1 \
+            --context-length 8 \
+            --device cpu \
+            --json
+          /tmp/nano-deepseek-v4-release/bin/nano-deepseek-v4-aggregate --help
+          /tmp/nano-deepseek-v4-release/bin/nano-deepseek-v4-parity --json
+          /tmp/nano-deepseek-v4-release/bin/python \
+            "$GITHUB_WORKSPACE/scripts/run_no_network.py" \
+            /tmp/nano-deepseek-v4-release/bin/nano-deepseek-v4 conformance \
+            --profile offline \
+            --require-os-network-isolation \
+            --json \
+            --output /tmp/nano-deepseek-v4-release-offline.json
+      - name: Run the live pinned conformance profile
+        env:
+          HF_HUB_DISABLE_TELEMETRY: "1"
+        run: |
+          cd /tmp
+          timeout 300s \
+            /tmp/nano-deepseek-v4-release/bin/nano-deepseek-v4 conformance \
+            --profile live \
+            --json | tee /tmp/nano-deepseek-v4-conformance-live.json
+          /tmp/nano-deepseek-v4-release/bin/python - <<'PY'
+          import json
+          from pathlib import Path
+
+          payload = json.loads(
+              Path("/tmp/nano-deepseek-v4-conformance-live.json").read_text()
+          )
+          if payload["status"] != "pass" or payload["schema_version"] != 1:
+              raise SystemExit(f"unexpected live conformance result: {payload}")
+          network = payload["network"]
+          if (
+              network.get("attempted") is not True
+              or network.get("policy") != "pinned_hub_metadata_only"
+              or network.get("blocked_attempt_count") != 0
+              or network.get("enforcement")
+              != "python_stdlib_socket_guard+verifier_callback"
+              or network.get("enforcement_scope")
+              != "best_effort_python_stdlib_calls"
+              or network.get("os_isolation") != "none"
+          ):
+              raise SystemExit("live conformance did not record its network access")
+          checks = {check["id"]: check for check in payload["checks"]}
+          live = checks["flash_0731_receipt"]
+          if live["status"] != "pass" or live["receipt"] is None:
+              raise SystemExit(f"Flash-0731 live check did not pass: {live}")
+          receipt = live["receipt"]
+          if receipt["inspected_shard_count"] != 3:
+              raise SystemExit("Flash-0731 verifier did not inspect three shard headers")
+          if receipt["cached_safetensors_file_count"] != 0:
+              raise SystemExit("Flash-0731 verifier cached a safetensors payload")
+          PY
+          mkdir -p "${GITHUB_WORKSPACE}/dist/conformance"
+          cp -- \
+            /tmp/nano-deepseek-v4-release-core.json \
+            "${GITHUB_WORKSPACE}/dist/conformance/core.json"
+          cp -- \
+            /tmp/nano-deepseek-v4-release-conformance-dspark.json \
+            "${GITHUB_WORKSPACE}/dist/conformance/dspark.json"
+          cp -- \
+            /tmp/nano-deepseek-v4-release-offline.json \
+            "${GITHUB_WORKSPACE}/dist/conformance/offline.json"
+          cp -- \
+            /tmp/nano-deepseek-v4-conformance-live.json \
+            "${GITHUB_WORKSPACE}/dist/conformance/live.json"
+      - name: Reverify the CUDA receipt against the release source
+        run: |
+          python scripts/cuda_release_gate.py verify \
+            --receipt dist/cuda/cuda-release-gate.json
       - name: Record release identity
         env:
           RELEASE_TAG: ${{ github.ref_name }}
@@ -83,6 +654,16 @@ jobs:
           artifacts = {}
           for path in sorted(package_dir.iterdir()):
               artifacts[path.name] = hashlib.sha256(path.read_bytes()).hexdigest()
+          receipt_dir = Path("dist/conformance")
+          conformance_receipts = {
+              path.name: hashlib.sha256(path.read_bytes()).hexdigest()
+              for path in sorted(receipt_dir.iterdir())
+          }
+          cuda_dir = Path("dist/cuda")
+          cuda_receipts = {
+              path.name: hashlib.sha256(path.read_bytes()).hexdigest()
+              for path in sorted(cuda_dir.iterdir())
+          }
           version = tomllib.loads(Path("pyproject.toml").read_text())["project"]["version"]
           manifest = {
               "schema_version": 1,
@@ -91,6 +672,8 @@ jobs:
               "commit": os.environ["GITHUB_SHA"],
               "version": version,
               "artifacts": artifacts,
+              "conformance_receipts": conformance_receipts,
+              "cuda_receipts": cuda_receipts,
           }
           Path("dist/release-manifest.json").write_text(
               json.dumps(manifest, indent=2, sort_keys=True) + "\n"
@@ -146,11 +729,28 @@ jobs:
           }
           if manifest.get("artifacts") != actual_artifacts:
               raise SystemExit("release manifest artifact hashes do not match")
+          actual_receipts = {
+              path.name: hashlib.sha256(path.read_bytes()).hexdigest()
+              for path in sorted(Path("dist/conformance").iterdir())
+          }
+          if manifest.get("conformance_receipts") != actual_receipts:
+              raise SystemExit("release manifest conformance receipt hashes do not match")
+          actual_cuda_receipts = {
+              path.name: hashlib.sha256(path.read_bytes()).hexdigest()
+              for path in sorted(Path("dist/cuda").iterdir())
+          }
+          if manifest.get("cuda_receipts") != actual_cuda_receipts:
+              raise SystemExit("release manifest CUDA receipt hashes do not match")
           PY
-      - name: Attest build provenance
+      - name: Attest release evidence
         uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4.1.1
         with:
-          subject-path: dist/packages/*
+          subject-path: |
+            dist/packages/*
+            dist/conformance/*
+            dist/cuda/*
+            dist/SHA256SUMS
+            dist/release-manifest.json
 
   publish-pypi:
     name: Publish to PyPI
@@ -197,6 +797,18 @@ jobs:
           }
           if manifest.get("artifacts") != actual_artifacts:
               raise SystemExit("release manifest artifact hashes do not match")
+          actual_receipts = {
+              path.name: hashlib.sha256(path.read_bytes()).hexdigest()
+              for path in sorted(Path("dist/conformance").iterdir())
+          }
+          if manifest.get("conformance_receipts") != actual_receipts:
+              raise SystemExit("release manifest conformance receipt hashes do not match")
+          actual_cuda_receipts = {
+              path.name: hashlib.sha256(path.read_bytes()).hexdigest()
+              for path in sorted(Path("dist/cuda").iterdir())
+          }
+          if manifest.get("cuda_receipts") != actual_cuda_receipts:
+              raise SystemExit("release manifest CUDA receipt hashes do not match")
           PY
           actual_sha="$(gh api \
             "repos/$GITHUB_REPOSITORY/commits/$RELEASE_TAG" \
@@ -210,15 +822,42 @@ jobs:
         with:
           packages-dir: dist/packages/
           attestations: true
+          skip-existing: true
+
+  verify-pypi:
+    name: Verify PyPI publication
+    needs: publish-pypi
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
+        with:
+          name: python-package-distributions
+          path: dist
+      - name: Match the public PyPI file inventory to the release manifest
+        run: |
+          python3 scripts/verify_pypi_release.py \
+            --project nano-deepseek-v4 \
+            --manifest dist/release-manifest.json \
+            --attempts 12 \
+            --delay-seconds 5
 
   publish-github:
     name: Publish immutable GitHub release
-    needs: publish-pypi
+    needs: verify-pypi
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: write  # required to create the GitHub release
     steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          persist-credentials: false
       - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
         with:
           name: python-package-distributions
@@ -252,6 +891,18 @@ jobs:
           }
           if manifest.get("artifacts") != actual_artifacts:
               raise SystemExit("release manifest artifact hashes do not match")
+          actual_receipts = {
+              path.name: hashlib.sha256(path.read_bytes()).hexdigest()
+              for path in sorted(Path("dist/conformance").iterdir())
+          }
+          if manifest.get("conformance_receipts") != actual_receipts:
+              raise SystemExit("release manifest conformance receipt hashes do not match")
+          actual_cuda_receipts = {
+              path.name: hashlib.sha256(path.read_bytes()).hexdigest()
+              for path in sorted(Path("dist/cuda").iterdir())
+          }
+          if manifest.get("cuda_receipts") != actual_cuda_receipts:
+              raise SystemExit("release manifest CUDA receipt hashes do not match")
           PY
           actual_sha="$(gh api \
             "repos/$GITHUB_REPOSITORY/commits/$RELEASE_TAG" \
@@ -260,14 +911,81 @@ jobs:
             echo "release tag moved after the build job" >&2
             exit 1
           fi
-      - name: Create an immutable GitHub release
+      - name: Create, populate, and publish the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          gh release create "$RELEASE_TAG" \
-            dist/packages/* dist/SHA256SUMS dist/release-manifest.json \
+          notes_response="$(mktemp)"
+          notes_file="$(mktemp)"
+          release_json="$(mktemp)"
+          gh api --method POST \
+            "repos/$GITHUB_REPOSITORY/releases/generate-notes" \
+            -f tag_name="$RELEASE_TAG" \
+            -f target_commitish="$GITHUB_SHA" > "$notes_response"
+          python - "$notes_response" "$notes_file" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          payload = json.loads(Path(sys.argv[1]).read_text())
+          body = payload.get("body")
+          if not isinstance(body, str) or not body.strip():
+              raise SystemExit("GitHub did not generate non-empty release notes")
+          Path(sys.argv[2]).write_text(body)
+          PY
+          asset_args=(
+            --asset-directory dist/packages
+            --asset-directory dist/conformance
+            --asset-directory dist/cuda
+            --asset dist/SHA256SUMS
+            --asset dist/release-manifest.json
+          )
+          if gh release view "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            :
+          else
+            gh release create "$RELEASE_TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --draft \
+              --verify-tag \
+              --notes-file "$notes_file" \
+              --title "$RELEASE_TAG"
+          fi
+          gh release view "$RELEASE_TAG" \
             --repo "$GITHUB_REPOSITORY" \
-            --verify-tag \
-            --generate-notes \
-            --title "$RELEASE_TAG"
+            --json assets,body,isDraft,isPrerelease,name,tagName \
+            > "$release_json"
+          python scripts/verify_github_release.py \
+            --release-json "$release_json" \
+            --tag "$RELEASE_TAG" \
+            --notes-file "$notes_file" \
+            --allow-partial-assets \
+            "${asset_args[@]}"
+          gh release upload "$RELEASE_TAG" \
+            dist/packages/* dist/conformance/* dist/cuda/* \
+            dist/SHA256SUMS dist/release-manifest.json \
+            --clobber \
+            --repo "$GITHUB_REPOSITORY"
+          gh release view "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json assets,body,isDraft,isPrerelease,name,tagName \
+            > "$release_json"
+          python scripts/verify_github_release.py \
+            --release-json "$release_json" \
+            --tag "$RELEASE_TAG" \
+            --notes-file "$notes_file" \
+            "${asset_args[@]}"
+          gh release edit "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --draft=false
+          gh release view "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json assets,body,isDraft,isPrerelease,name,tagName \
+            > "$release_json"
+          python scripts/verify_github_release.py \
+            --release-json "$release_json" \
+            --tag "$RELEASE_TAG" \
+            --notes-file "$notes_file" \
+            --published \
+            "${asset_args[@]}"
