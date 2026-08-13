@@ -1,0 +1,105 @@
+{
+  "acceptance": {
+    "checkpoint_round_trip_match": true,
+    "maximum_final_eval_loss": 2.5,
+    "minimum_validation_loss_reduction": 4.0
+  },
+  "command": [
+    "nano-deepseek-v4-train",
+    "--text-file",
+    "data/tiny-shakespeare/input.txt",
+    "--model-preset",
+    "mini",
+    "--steps",
+    "5000",
+    "--context-length",
+    "128",
+    "--batch-size",
+    "4",
+    "--eval-batches",
+    "8",
+    "--learning-rate",
+    "3e-4",
+    "--seed",
+    "1337",
+    "--device",
+    "cuda",
+    "--max-new-tokens",
+    "300",
+    "--prompt",
+    "\nROMEO:",
+    "--temperature",
+    "0.8",
+    "--top-p",
+    "0.9",
+    "--save-directory",
+    "checkpoints/tiny-shakespeare-5000",
+    "--json"
+  ],
+  "corpus": {
+    "bytes": 1115394,
+    "lines": 40000,
+    "path_at_revision": "data/tinyshakespeare/input.txt",
+    "repository": "https://github.com/karpathy/char-rnn",
+    "revision": "6f9487a6fe5b420b7ca9afb0d7c078e37c1d1b4e",
+    "sha256": "86c4e6aa9db7c042ec79f339dcb96d42b0075e16b8fc2e86bf0ca57e2dc565ed"
+  },
+  "environment": {
+    "device": "cuda",
+    "gpu_name": "NVIDIA GB10",
+    "machine": "aarch64",
+    "python_version": "3.11.15",
+    "torch_version": "2.13.0+cu130"
+  },
+  "experiment": {
+    "batch_size": 4,
+    "config_sha256": "f32f6a5001932fb53856964228062cc893d9ec91c08da225e1ddf7a435c7b5a3",
+    "config_source": "mini_text_config",
+    "context_length": 128,
+    "eval_batches": 8,
+    "generation_temperature": 0.8,
+    "generation_top_p": 0.9,
+    "implementation_sha256": "ee41cd36f812dcf683986de6e7fb45bd200c65cbad7268acd5a88e58da156584",
+    "learning_rate": 0.0003,
+    "loss_definition": "causal LM cross-entropy + 0.3 * MTP cross-entropy",
+    "max_new_tokens": 300,
+    "optimizer_names": [
+      "Muon",
+      "AdamW"
+    ],
+    "parameter_count": 8502150,
+    "prompt_text": "\nROMEO:",
+    "seed": 1337,
+    "steps": 5000,
+    "trained_tokens": 2560000
+  },
+  "generation_probes": [
+    {
+      "prompt": "\nJULIET:",
+      "seed": 20260811,
+      "text": "\nJULIET:\nO heart he may seeks to thy wealth and respect them\nmy father shall be dear the daughter.\n\nLADY ANNE:\nI know not to him; to prove me that he shall\nBe all our sovereign, and all warmined\nThat is not to see in the which of his life\nWith that"
+    },
+    {
+      "prompt": "\nKING RICHARD III:",
+      "seed": 20260812,
+      "text": "\nKING RICHARD III:\nI am a prisoner with a peace of God dad sing Edward's hard.\n\nCLARENCE:\nThere's a moronary of the stranger with her head,\nFor that are back.\n\nAll hold, my lord.\n\nANGELO:\nWhy, boy, I say, it as I can dear\nThey do see, but when you look to th"
+    },
+    {
+      "prompt": "\nFirst Citizen:",
+      "seed": 20260813,
+      "text": "\nFirst Citizen:\nWhich is the looks and see holy person:\nAnd we see their darkers. When they were strange her well\nA bond of life hath the woman, let the sorrows crown\nAnd there men complaint that does to lead.\n\nESCALUS:\nHe shall not, sir, he doth the way."
+    }
+  ],
+  "observed": {
+    "bundle_manifest_sha256": "2caf6c357f2c75622b70fbbac44a6ea914a6227d264ccd1de7ec0ad29a3f500e",
+    "checkpoint_round_trip_match": true,
+    "elapsed_seconds": 480.8567738899728,
+    "final_eval_loss": 1.9756584614515305,
+    "final_train_loss": 1.7517584562301636,
+    "initial_eval_loss": 7.249098360538483,
+    "sample_text": "\nROMEO:\nWhat are you not my mother be to kill and hear to\nconscience did say 'tis a gave the noble before.\n\nSICINIUS:\nA gentleman buckious that?\n\nAll:\nLet's do I meet a wife,\nWe in purine of grief service, one man, I\ncannot stop to the white with seems.\n\nGLOUCESTER:\nMy soft what call in a while the way.\n\nQ",
+    "tokens_per_second": 5323.830585333017
+  },
+  "result_schema_version": 2,
+  "schema_version": 2
+}

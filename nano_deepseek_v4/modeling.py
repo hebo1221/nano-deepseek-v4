@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
 
 import torch
 import torch.nn.functional as F
 from torch import nn
 
 from .config import DeepSeekV4Config
+from .tokenizer import ByteTokenizer
 
 
 @dataclass
@@ -17,6 +21,55 @@ class CausalLMOutput:
     mtp_logits: list[torch.Tensor] | None = None
     router_logits: list[torch.Tensor] | None = None
     past_key_values: DeepSeekV4Cache | None = None
+
+
+def _sample_next_token(
+    logits: torch.Tensor,
+    temperature: float = 1.0,
+    top_p: float = 1.0,
+    generator: torch.Generator | None = None,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Sample one token while retaining the nucleus threshold-crossing item."""
+
+    temperature, top_p = _validate_sampling_parameters(temperature, top_p)
+    scaled = logits.float() / temperature
+    if top_p < 1.0:
+        sorted_logits, sorted_indices = scaled.sort(dim=-1, descending=True)
+        sorted_probs = sorted_logits.softmax(dim=-1)
+        cumulative = sorted_probs.cumsum(dim=-1)
+        keep = cumulative - sorted_probs < top_p
+        filtered = torch.full_like(scaled, float("-inf"))
+        filtered.scatter_(
+            -1,
+            sorted_indices,
+            sorted_logits.masked_fill(~keep, float("-inf")),
+        )
+        scaled = filtered
+    probs = scaled.softmax(dim=-1)
+    if generator is None:
+        token = torch.multinomial(probs, num_samples=1)
+    else:
+        token = torch.multinomial(probs, num_samples=1, generator=generator)
+    logprob = probs.gather(-1, token).clamp_min(1e-45).log()
+    return token, logprob
+
+
+def _validate_sampling_parameters(temperature: float, top_p: float) -> tuple[float, float]:
+    if (
+        isinstance(temperature, bool)
+        or not isinstance(temperature, (int, float))
+        or not math.isfinite(float(temperature))
+        or temperature <= 0
+    ):
+        raise ValueError("temperature must be a positive finite number.")
+    if (
+        isinstance(top_p, bool)
+        or not isinstance(top_p, (int, float))
+        or not math.isfinite(float(top_p))
+        or not 0 < top_p <= 1
+    ):
+        raise ValueError("top_p must be in (0, 1].")
+    return float(temperature), float(top_p)
 
 
 class RMSNorm(nn.Module):
@@ -50,13 +103,53 @@ def rotate_half(x: torch.Tensor) -> torch.Tensor:
     return torch.stack((-odd, even), dim=-1).flatten(-2)
 
 
-def rope_cos_sin(position_ids: torch.Tensor, dim: int, theta: float) -> tuple[torch.Tensor, torch.Tensor]:
-    inv_freq = 1.0 / (
-        theta
-        ** (
-            torch.arange(0, dim, 2, device=position_ids.device, dtype=torch.float32)
-            / dim
+def _rope_inverse_frequencies(
+    dim: int,
+    theta: float,
+    device: torch.device,
+    rope_scaling: dict[str, Any] | None = None,
+) -> torch.Tensor:
+    frequency_indices = torch.arange(0, dim, 2, device=device, dtype=torch.float32)
+    position_frequencies = theta ** (frequency_indices / dim)
+    inv_freq = 1.0 / position_frequencies
+    if rope_scaling is None:
+        return inv_freq
+
+    # DeepSeek-V4 applies YaRN only to the compressed branches. This mirrors
+    # Transformers' pinned V4 implementation, including its interleaved rotary
+    # dimension and fixed attention scaling of 1.0.
+    factor = float(rope_scaling["factor"])
+    original_max = int(rope_scaling["original_max_position_embeddings"])
+    beta_fast = float(rope_scaling["beta_fast"])
+    beta_slow = float(rope_scaling["beta_slow"])
+
+    def correction_dim(rotations: float) -> float:
+        return (
+            dim
+            * math.log(original_max / (rotations * 2 * math.pi))
+            / (2 * math.log(theta))
         )
+
+    low = float(max(math.floor(correction_dim(beta_fast)), 0))
+    high = float(min(math.ceil(correction_dim(beta_slow)), dim - 1))
+    if low == high:
+        high += 0.001
+    ramp = ((torch.arange(dim // 2, device=device, dtype=torch.float32) - low) / (high - low)).clamp(0, 1)
+    interpolated = inv_freq / factor
+    return interpolated * ramp + inv_freq * (1 - ramp)
+
+
+def rope_cos_sin(
+    position_ids: torch.Tensor,
+    dim: int,
+    theta: float,
+    rope_scaling: dict[str, Any] | None = None,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    inv_freq = _rope_inverse_frequencies(
+        dim,
+        theta,
+        position_ids.device,
+        rope_scaling,
     )
     freqs = position_ids.float().unsqueeze(-1) * inv_freq
     return freqs.cos(), freqs.sin()
@@ -120,20 +213,24 @@ class HyperConnection(nn.Module):
         mix = F.linear(flat, self.fn.float())
         pre_scale, post_scale, comb_scale = self.scale.float().unbind(0)
         hc = self.hc_mult
-        pre = torch.sigmoid(mix[..., :hc] * pre_scale + self.base[:hc].float()) + self.eps
-        post = torch.sigmoid(mix[..., hc : 2 * hc] * post_scale + self.base[hc : 2 * hc].float()) + self.eps
-        comb = (
-            torch.sigmoid(
-                mix[..., 2 * hc :].view(*mix.shape[:-1], hc, hc) * comb_scale
-                + self.base[2 * hc :].float().view(hc, hc)
-            )
-            + self.eps
+        pre_mix, post_mix, comb_mix = mix.split((hc, hc, hc * hc), dim=-1)
+        pre_base, post_base, comb_base = self.base.float().split((hc, hc, hc * hc))
+
+        pre = torch.sigmoid(pre_mix * pre_scale + pre_base) + self.eps
+        post = 2 * torch.sigmoid(post_mix * post_scale + post_base)
+        comb_logits = (
+            comb_mix.view(*comb_mix.shape[:-1], hc, hc) * comb_scale
+            + comb_base.view(hc, hc)
         )
-        for _ in range(self.sinkhorn_iters):
+        # Paper equation (8): exp/row-normalize first, then alternate column
+        # and row normalization until the configured Sinkhorn iteration count.
+        comb = torch.softmax(comb_logits, dim=-1) + self.eps
+        comb = comb / (comb.sum(dim=-2, keepdim=True) + self.eps)
+        for _ in range(self.sinkhorn_iters - 1):
             comb = comb / (comb.sum(dim=-1, keepdim=True) + self.eps)
             comb = comb / (comb.sum(dim=-2, keepdim=True) + self.eps)
         collapsed = (pre.unsqueeze(-1) * streams).sum(dim=2).to(streams.dtype)
-        return post.to(streams.dtype), comb.to(streams.dtype), collapsed
+        return post, comb, collapsed
 
 
 class HyperHead(nn.Module):
@@ -520,6 +617,7 @@ class HCACompressor(nn.Module):
         self.head_dim = config.head_dim
         self.rope_dim = config.qk_rope_head_dim
         self.compress_rope_theta = config.compress_rope_theta
+        self.rope_scaling = config.rope_scaling
         self.kv_proj = nn.Linear(config.hidden_size, config.head_dim, bias=False)
         self.gate_proj = nn.Linear(config.hidden_size, config.head_dim, bias=False)
         self.position_bias = nn.Parameter(torch.zeros(self.rate, config.head_dim))
@@ -556,7 +654,12 @@ class HCACompressor(nn.Module):
         values = self.norm((kv * weights).sum(dim=2))
 
         rope_positions = chunk_positions[:, :, 0]
-        cos, sin = rope_cos_sin(rope_positions, self.rope_dim, self.compress_rope_theta)
+        cos, sin = rope_cos_sin(
+            rope_positions,
+            self.rope_dim,
+            self.compress_rope_theta,
+            self.rope_scaling,
+        )
         kv = apply_partial_rope(values.unsqueeze(1), cos, sin)
         end_positions = chunk_positions[:, :, -1]
         compressed = kv.squeeze(1)
@@ -577,6 +680,7 @@ class CSAIndexer(nn.Module):
         if self.rope_dim % 2 != 0:
             self.rope_dim -= 1
         self.compress_rope_theta = config.compress_rope_theta
+        self.rope_scaling = config.rope_scaling
         self.q_b_proj = nn.Linear(config.q_lora_rank, config.index_n_heads * config.index_head_dim, bias=False)
         self.weights_proj = nn.Linear(config.hidden_size, config.index_n_heads, bias=False)
         self.kv_proj = nn.Linear(config.hidden_size, 2 * config.index_head_dim, bias=False)
@@ -631,7 +735,12 @@ class CSAIndexer(nn.Module):
         weights = slot_gate.softmax(dim=2, dtype=torch.float32).to(slots.dtype)
         compressed = self.norm((slots * weights).sum(dim=2))
         rope_positions = chunk_positions[:, :, 0]
-        cos, sin = rope_cos_sin(rope_positions, self.rope_dim, self.compress_rope_theta)
+        cos, sin = rope_cos_sin(
+            rope_positions,
+            self.rope_dim,
+            self.compress_rope_theta,
+            self.rope_scaling,
+        )
         compressed = apply_partial_rope(compressed.unsqueeze(1), cos, sin).squeeze(1)
         end_positions = chunk_positions[:, :, -1]
         if cache is not None:
@@ -651,7 +760,12 @@ class CSAIndexer(nn.Module):
 
         batch, seq_len, _ = hidden_states.shape
         q = self.q_b_proj(q_residual).view(batch, seq_len, self.num_heads, self.head_dim)
-        cos, sin = rope_cos_sin(position_ids, self.rope_dim, self.compress_rope_theta)
+        cos, sin = rope_cos_sin(
+            position_ids,
+            self.rope_dim,
+            self.compress_rope_theta,
+            self.rope_scaling,
+        )
         q = apply_partial_rope(q.transpose(1, 2), cos, sin).transpose(1, 2)
         scores = torch.matmul(q.float(), compressed.transpose(-1, -2).float().unsqueeze(1))
         scores = F.relu(scores) * (self.head_dim**-0.5)
@@ -675,6 +789,7 @@ class CSACompressor(nn.Module):
         self.head_dim = config.head_dim
         self.rope_dim = config.qk_rope_head_dim
         self.compress_rope_theta = config.compress_rope_theta
+        self.rope_scaling = config.rope_scaling
         self.kv_proj = nn.Linear(config.hidden_size, 2 * config.head_dim, bias=False)
         self.gate_proj = nn.Linear(config.hidden_size, 2 * config.head_dim, bias=False)
         self.position_bias = nn.Parameter(torch.zeros(self.rate, 2 * config.head_dim))
@@ -732,7 +847,12 @@ class CSACompressor(nn.Module):
         weights = slot_gate.softmax(dim=2, dtype=torch.float32).to(slots.dtype)
         values = self.norm((slots * weights).sum(dim=2))
         rope_positions = chunk_positions[:, :, 0]
-        cos, sin = rope_cos_sin(rope_positions, self.rope_dim, self.compress_rope_theta)
+        cos, sin = rope_cos_sin(
+            rope_positions,
+            self.rope_dim,
+            self.compress_rope_theta,
+            self.rope_scaling,
+        )
         kv = apply_partial_rope(values.unsqueeze(1), cos, sin)
         end_positions = chunk_positions[:, :, -1]
         compressed = kv.squeeze(1)
@@ -751,6 +871,14 @@ class DeepSeekV4Attention(nn.Module):
         self.num_heads = config.num_attention_heads
         self.head_dim = config.head_dim
         self.rope_dim = config.qk_rope_head_dim
+        self.rope_theta = (
+            config.rope_theta
+            if layer_type == "sliding_attention"
+            else config.compress_rope_theta
+        )
+        self.rope_scaling = (
+            None if layer_type == "sliding_attention" else config.rope_scaling
+        )
         self.sliding_window = config.sliding_window
         self.q_a_proj = nn.Linear(config.hidden_size, config.q_lora_rank, bias=False)
         self.q_a_norm = RMSNorm(config.q_lora_rank, config.rms_norm_eps)
@@ -806,7 +934,12 @@ class DeepSeekV4Attention(nn.Module):
         q_mid = self.q_a_norm(self.q_a_proj(hidden_states))
         q = self.q_b_proj(q_mid).view(batch, seq_len, self.num_heads, self.head_dim).transpose(1, 2)
         q = self.q_b_norm(q)
-        cos, sin = rope_cos_sin(position_ids, self.rope_dim, self.config.rope_theta)
+        cos, sin = rope_cos_sin(
+            position_ids,
+            self.rope_dim,
+            self.rope_theta,
+            self.rope_scaling,
+        )
         q = apply_partial_rope(q, cos, sin)
 
         local_kv = self.kv_norm(self.kv_proj(hidden_states)).unsqueeze(1)
@@ -865,8 +998,18 @@ class DeepSeekV4MoE(nn.Module):
         self.gate = nn.Linear(config.hidden_size, config.n_routed_experts, bias=False)
         self.experts = nn.ModuleList([SwiGLUExpert(config) for _ in range(config.n_routed_experts)])
         self.shared_experts = nn.ModuleList([SwiGLUExpert(config) for _ in range(config.n_shared_experts)])
-        self.register_buffer("e_score_correction_bias", torch.zeros(config.n_routed_experts), persistent=True)
-        self.register_buffer("tid2eid", self._build_hash_table(config), persistent=True)
+        self.e_score_correction_bias: torch.Tensor | None
+        self.tid2eid: torch.Tensor | None
+        if layer_type == "hash_moe":
+            self.register_buffer("e_score_correction_bias", None, persistent=False)
+            self.register_buffer("tid2eid", self._build_hash_table(config), persistent=True)
+        else:
+            self.register_buffer(
+                "e_score_correction_bias",
+                torch.zeros(config.n_routed_experts),
+                persistent=True,
+            )
+            self.register_buffer("tid2eid", None, persistent=False)
 
     @staticmethod
     def _build_hash_table(config: DeepSeekV4Config) -> torch.Tensor:
@@ -882,18 +1025,22 @@ class DeepSeekV4MoE(nn.Module):
         hidden_states: torch.Tensor,
         input_ids: torch.Tensor | None,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        logits = self.gate(hidden_states)
+        logits = F.linear(hidden_states.float(), self.gate.weight.float())
         affinity = torch.sqrt(F.softplus(logits))
         if self.layer_type == "hash_moe":
             if input_ids is None:
                 raise ValueError("hash_moe routing requires input_ids.")
+            if self.tid2eid is None:
+                raise RuntimeError("hash_moe routing table was not initialized.")
             topk_idx = self.tid2eid[input_ids]
         else:
+            if self.e_score_correction_bias is None:
+                raise RuntimeError("learned MoE correction bias was not initialized.")
             selection = affinity + self.e_score_correction_bias
             topk_idx = selection.topk(self.topk, dim=-1).indices
         weights = affinity.gather(-1, topk_idx)
         if self.config.norm_topk_prob:
-            weights = weights / weights.sum(dim=-1, keepdim=True).clamp_min(1e-6)
+            weights = weights / (weights.sum(dim=-1, keepdim=True) + 1e-20)
         weights = weights * self.config.routed_scaling_factor
         return topk_idx, weights, logits
 
@@ -901,6 +1048,8 @@ class DeepSeekV4MoE(nn.Module):
     def update_balance_bias(self, topk_idx: torch.Tensor, speed: float | None = None) -> torch.Tensor:
         """Auxiliary-loss-free routing-bias update from observed expert load."""
 
+        if self.e_score_correction_bias is None:
+            raise ValueError("balance bias is available only for learned MoE layers.")
         speed = self.config.router_bias_update_speed if speed is None else speed
         counts = torch.bincount(topk_idx.reshape(-1), minlength=self.config.n_routed_experts).float()
         if counts.sum() == 0:
@@ -911,6 +1060,8 @@ class DeepSeekV4MoE(nn.Module):
         return self.e_score_correction_bias
 
     def set_hash_routing_table(self, table: torch.Tensor) -> None:
+        if self.tid2eid is None:
+            raise ValueError("hash routing tables are available only for hash MoE layers.")
         expected = (self.config.vocab_size, self.config.num_experts_per_tok)
         if tuple(table.shape) != expected:
             raise ValueError(f"tid2eid table must have shape {expected}, got {tuple(table.shape)}.")
@@ -943,12 +1094,27 @@ class DeepSeekV4MoE(nn.Module):
 
 
 class DeepSeekV4DecoderLayer(nn.Module):
-    def __init__(self, config: DeepSeekV4Config, layer_idx: int) -> None:
+    def __init__(
+        self,
+        config: DeepSeekV4Config,
+        layer_idx: int,
+        *,
+        attention_layer_type: str | None = None,
+        mlp_layer_type: str | None = None,
+    ) -> None:
         super().__init__()
         if config.layer_types is None or config.mlp_layer_types is None:
             raise RuntimeError("config layer schedules were not initialized.")
-        self.self_attn = DeepSeekV4Attention(config, config.layer_types[layer_idx])
-        self.moe = DeepSeekV4MoE(config, config.mlp_layer_types[layer_idx])
+        resolved_attention_type = (
+            config.layer_types[layer_idx]
+            if attention_layer_type is None
+            else attention_layer_type
+        )
+        self.self_attn = DeepSeekV4Attention(config, resolved_attention_type)
+        self.moe = DeepSeekV4MoE(
+            config,
+            config.mlp_layer_types[layer_idx] if mlp_layer_type is None else mlp_layer_type,
+        )
         self.attn_norm = RMSNorm(config.hidden_size, config.rms_norm_eps)
         self.ffn_norm = RMSNorm(config.hidden_size, config.rms_norm_eps)
         self.attn_hc = HyperConnection(config)
@@ -964,12 +1130,17 @@ class DeepSeekV4DecoderLayer(nn.Module):
     ) -> tuple[torch.Tensor, torch.Tensor]:
         post, comb, collapsed = self.attn_hc(streams)
         attn_output = self.self_attn(self.attn_norm(collapsed), position_ids, attention_mask, cache)
-        streams = post.unsqueeze(-1) * attn_output.unsqueeze(-2) + torch.matmul(comb, streams)
+        dtype = streams.dtype
+        streams = post.to(dtype).unsqueeze(-1) * attn_output.unsqueeze(-2) + torch.matmul(
+            comb.to(dtype).transpose(-1, -2), streams
+        )
         router_logits: torch.Tensor | None = None
 
         post, comb, collapsed = self.ffn_hc(streams)
         ffn_output, router_logits = self.moe(self.ffn_norm(collapsed), input_ids)
-        streams = post.unsqueeze(-1) * ffn_output.unsqueeze(-2) + torch.matmul(comb, streams)
+        streams = post.to(dtype).unsqueeze(-1) * ffn_output.unsqueeze(-2) + torch.matmul(
+            comb.to(dtype).transpose(-1, -2), streams
+        )
         if router_logits is None:
             raise RuntimeError("MoE did not produce router logits.")
         return streams, router_logits
@@ -978,37 +1149,60 @@ class DeepSeekV4DecoderLayer(nn.Module):
 class DeepSeekV4MTPModule(nn.Module):
     """One DeepSeek-style Multi-Token Prediction depth.
 
-    The module combines the previous-depth hidden state at position i with the
-    embedding of token i+k, runs a Transformer block, and reuses the main output
-    head outside this module to predict token i+k+1.
+    The module combines every previous-depth mHC residual stream at position i
+    with the embedding of token i+k, runs a Transformer block, and reuses the
+    main output head outside this module to predict token i+k+1.
     """
 
-    def __init__(self, config: DeepSeekV4Config, layer_idx: int = 0) -> None:
+    def __init__(self, config: DeepSeekV4Config, mtp_idx: int = 0) -> None:
         super().__init__()
+        if config.mtp_layer_types is None:
+            raise RuntimeError("config MTP attention schedule was not initialized.")
+        if not 0 <= mtp_idx < len(config.mtp_layer_types):
+            raise ValueError("mtp_idx is outside the configured MTP schedule.")
         self.enorm = RMSNorm(config.hidden_size, config.rms_norm_eps)
         self.hnorm = RMSNorm(config.hidden_size, config.rms_norm_eps)
         self.e_proj = nn.Linear(config.hidden_size, config.hidden_size, bias=False)
         self.h_proj = nn.Linear(config.hidden_size, config.hidden_size, bias=False)
-        self.layer = DeepSeekV4DecoderLayer(config, layer_idx)
+        # Official MTP blocks use learned routing even when the first backbone
+        # layers are still in the hash-routed bootstrap phase.
+        self.layer = DeepSeekV4DecoderLayer(
+            config,
+            config.num_hidden_layers + mtp_idx,
+            attention_layer_type=config.mtp_layer_types[mtp_idx],
+            mlp_layer_type="moe",
+        )
         self.hc_head = HyperHead(config)
         self.norm = RMSNorm(config.hidden_size, config.rms_norm_eps)
 
     def forward(
         self,
-        previous_hidden: torch.Tensor,
+        previous_streams: torch.Tensor,
         future_token_embeds: torch.Tensor,
         input_ids: torch.Tensor,
         position_ids: torch.Tensor,
-    ) -> torch.Tensor:
-        hidden_states = self.h_proj(self.hnorm(previous_hidden)) + self.e_proj(self.enorm(future_token_embeds))
-        streams = hidden_states.unsqueeze(2).expand(-1, -1, self.layer.attn_hc.hc_mult, -1).contiguous()
-        streams, _ = self.layer(streams, input_ids, position_ids, attention_mask=None)
-        return self.norm(self.hc_head(streams))
+        attention_mask: torch.Tensor | None = None,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        streams = self.h_proj(self.hnorm(previous_streams)) + self.e_proj(
+            self.enorm(future_token_embeds)
+        ).unsqueeze(2)
+        streams, _ = self.layer(
+            streams,
+            input_ids,
+            position_ids,
+            attention_mask=attention_mask,
+        )
+        return streams, self.norm(self.hc_head(streams))
 
 
 class DeepSeekV4Model(nn.Module):
     def __init__(self, config: DeepSeekV4Config) -> None:
         super().__init__()
+        if config.has_dspark:
+            raise NotImplementedError(
+                "DSpark metadata inspection is supported, but the native DSpark "
+                "runtime is not implemented."
+            )
         self.config = config
         self.embed_tokens = nn.Embedding(config.vocab_size, config.hidden_size)
         self.layers = nn.ModuleList(
@@ -1027,7 +1221,7 @@ class DeepSeekV4Model(nn.Module):
             elif isinstance(module, nn.Embedding):
                 nn.init.normal_(module.weight, mean=0.0, std=self.config.initializer_range)
 
-    def forward(
+    def _forward_with_streams(
         self,
         input_ids: torch.Tensor,
         attention_mask: torch.Tensor | None = None,
@@ -1035,7 +1229,12 @@ class DeepSeekV4Model(nn.Module):
         output_router_logits: bool = False,
         past_key_values: DeepSeekV4Cache | None = None,
         use_cache: bool = False,
-    ) -> tuple[torch.Tensor, list[torch.Tensor] | None, DeepSeekV4Cache | None]:
+    ) -> tuple[
+        torch.Tensor,
+        list[torch.Tensor] | None,
+        DeepSeekV4Cache | None,
+        torch.Tensor,
+    ]:
         if input_ids.ndim != 2 or input_ids.shape[0] == 0 or input_ids.shape[1] == 0:
             raise ValueError("input_ids must be a non-empty [batch, seq] tensor.")
         if position_ids is not None and position_ids.shape != input_ids.shape:
@@ -1075,17 +1274,49 @@ class DeepSeekV4Model(nn.Module):
         hidden_states = self.norm(self.hc_head(streams))
         if active_cache is not None:
             active_cache.advance(input_ids.shape[1])
-        return hidden_states, router_logits if output_router_logits else None, active_cache if use_cache else None
+        return (
+            hidden_states,
+            router_logits if output_router_logits else None,
+            active_cache if use_cache else None,
+            streams,
+        )
+
+    def forward(
+        self,
+        input_ids: torch.Tensor,
+        attention_mask: torch.Tensor | None = None,
+        position_ids: torch.Tensor | None = None,
+        output_router_logits: bool = False,
+        past_key_values: DeepSeekV4Cache | None = None,
+        use_cache: bool = False,
+    ) -> tuple[torch.Tensor, list[torch.Tensor] | None, DeepSeekV4Cache | None]:
+        hidden_states, router_logits, next_cache, _ = self._forward_with_streams(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            position_ids=position_ids,
+            output_router_logits=output_router_logits,
+            past_key_values=past_key_values,
+            use_cache=use_cache,
+        )
+        return hidden_states, router_logits, next_cache
 
 
 class DeepSeekV4ForCausalLM(nn.Module):
     def __init__(self, config: DeepSeekV4Config) -> None:
         super().__init__()
+        if config.has_dspark:
+            raise NotImplementedError(
+                "DSpark metadata inspection is supported, but the native DSpark "
+                "runtime is not implemented."
+            )
         self.config = config
         self.model = DeepSeekV4Model(config)
         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
         self.mtp_modules = nn.ModuleList(
-            [DeepSeekV4MTPModule(config, 0) for _ in range(config.num_nextn_predict_layers)]
+            [
+                DeepSeekV4MTPModule(config, mtp_idx)
+                for mtp_idx in range(config.num_nextn_predict_layers)
+            ]
         )
         if config.tie_word_embeddings:
             self.lm_head.weight = self.model.embed_tokens.weight
@@ -1100,6 +1331,46 @@ class DeepSeekV4ForCausalLM(nn.Module):
                 if module.bias is not None:
                     nn.init.zeros_(module.bias)
 
+    def save_pretrained(
+        self,
+        save_directory: str | Path,
+        *,
+        max_shard_size_bytes: int = 1024**3,
+        tokenizer: ByteTokenizer | None = None,
+    ) -> Path:
+        """Save this model as a checksummed native checkpoint bundle."""
+
+        from .checkpoint import save_deepseek_v4_pretrained
+
+        return save_deepseek_v4_pretrained(
+            self,
+            save_directory,
+            max_shard_size_bytes=max_shard_size_bytes,
+            tokenizer=tokenizer,
+        )
+
+    @classmethod
+    def from_pretrained(
+        cls,
+        pretrained_directory: str | Path,
+        *,
+        device: torch.device | str = "cpu",
+        dtype: torch.dtype | None = None,
+        verify_checksums: bool = True,
+    ) -> DeepSeekV4ForCausalLM:
+        """Load a native bundle without first allocating initialized weights."""
+
+        from .checkpoint import load_deepseek_v4_pretrained
+
+        if cls is not DeepSeekV4ForCausalLM:
+            raise TypeError("from_pretrained currently supports DeepSeekV4ForCausalLM directly.")
+        return load_deepseek_v4_pretrained(
+            pretrained_directory,
+            device=device,
+            dtype=dtype,
+            verify_checksums=verify_checksums,
+        )
+
     def load_hash_routing_tables(self, tables: torch.Tensor | dict[int, torch.Tensor]) -> None:
         """Load checkpoint-provided `tid2eid` tables into hash-routed MoE layers."""
 
@@ -1111,24 +1382,44 @@ class DeepSeekV4ForCausalLM(nn.Module):
 
     def _mtp_forward(
         self,
-        hidden_states: torch.Tensor,
+        residual_streams: torch.Tensor,
         input_ids: torch.Tensor,
         labels: torch.Tensor,
+        attention_mask: torch.Tensor | None,
+        position_ids: torch.Tensor | None,
     ) -> tuple[list[torch.Tensor], torch.Tensor | None]:
         mtp_logits: list[torch.Tensor] = []
         losses: list[torch.Tensor] = []
-        previous_hidden = hidden_states
+        previous_streams = residual_streams
 
         for depth, module in enumerate(self.mtp_modules, start=1):
             if input_ids.shape[1] <= depth + 1:
                 break
-            previous_hidden = previous_hidden[:, :-1, :]
-            future_ids = input_ids[:, depth : depth + previous_hidden.shape[1]]
+            previous_streams = previous_streams[:, :-1]
+            sequence_length = previous_streams.shape[1]
+            future_ids = input_ids[:, depth : depth + sequence_length]
             future_embeds = self.model.embed_tokens(future_ids)
-            position_ids = torch.arange(previous_hidden.shape[1], device=input_ids.device).unsqueeze(0)
-            position_ids = position_ids.expand(input_ids.shape[0], -1)
-            previous_hidden = module(previous_hidden, future_embeds, input_ids[:, : previous_hidden.shape[1]], position_ids)
-            logits = self.lm_head(previous_hidden)
+            if position_ids is None:
+                mtp_position_ids = torch.arange(
+                    sequence_length,
+                    device=input_ids.device,
+                ).unsqueeze(0)
+                mtp_position_ids = mtp_position_ids.expand(input_ids.shape[0], -1)
+            else:
+                mtp_position_ids = position_ids[:, :sequence_length]
+            mtp_attention_mask = (
+                attention_mask[:, :sequence_length]
+                if attention_mask is not None
+                else None
+            )
+            previous_streams, mtp_hidden = module(
+                previous_streams,
+                future_embeds,
+                future_ids,
+                mtp_position_ids,
+                attention_mask=mtp_attention_mask,
+            )
+            logits = self.lm_head(mtp_hidden)
             mtp_logits.append(logits)
             target = labels[:, depth + 1 : depth + 1 + logits.shape[1] - 1]
             if target.numel() > 0:
@@ -1154,23 +1445,31 @@ class DeepSeekV4ForCausalLM(nn.Module):
         past_key_values: DeepSeekV4Cache | None = None,
         use_cache: bool = False,
     ) -> CausalLMOutput:
-        hidden_states, router_logits, next_cache = self.model(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            position_ids=position_ids,
-            output_router_logits=output_router_logits,
-            past_key_values=past_key_values,
-            use_cache=use_cache,
+        if labels is not None:
+            if labels.shape != input_ids.shape:
+                raise ValueError("labels must have the same shape as input_ids.")
+            if input_ids.shape[1] < 2:
+                raise ValueError("at least two tokens are required to compute causal LM loss.")
+            if self.mtp_modules and past_key_values is not None:
+                raise ValueError(
+                    "MTP loss with past_key_values is unsupported because prediction-depth "
+                    "cache state is not implemented."
+                )
+        hidden_states, router_logits, next_cache, residual_streams = (
+            self.model._forward_with_streams(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                position_ids=position_ids,
+                output_router_logits=output_router_logits,
+                past_key_values=past_key_values,
+                use_cache=use_cache,
+            )
         )
         logits = self.lm_head(hidden_states)
         loss = None
         mtp_loss = None
         mtp_logits = None
         if labels is not None:
-            if labels.shape != input_ids.shape:
-                raise ValueError("labels must have the same shape as input_ids.")
-            if input_ids.shape[1] < 2:
-                raise ValueError("at least two tokens are required to compute causal LM loss.")
             shift_logits = logits[:, :-1].contiguous()
             shift_labels = labels[:, 1:].contiguous()
             loss = F.cross_entropy(
@@ -1179,7 +1478,13 @@ class DeepSeekV4ForCausalLM(nn.Module):
                 ignore_index=-100,
             )
             if self.mtp_modules:
-                mtp_logits, mtp_loss = self._mtp_forward(hidden_states, input_ids, labels)
+                mtp_logits, mtp_loss = self._mtp_forward(
+                    residual_streams,
+                    input_ids,
+                    labels,
+                    attention_mask,
+                    position_ids,
+                )
                 if mtp_loss is not None:
                     loss = loss + self.config.mtp_loss_weight * mtp_loss
         return CausalLMOutput(
@@ -1205,26 +1510,65 @@ class DeepSeekV4ForCausalLM(nn.Module):
         input_ids: torch.Tensor,
         max_new_tokens: int,
         eos_token_id: int | None = None,
+        *,
+        do_sample: bool = False,
+        temperature: float = 1.0,
+        top_p: float = 1.0,
+        generator: torch.Generator | None = None,
+        stop_on_eos: bool = True,
     ) -> torch.Tensor:
         if max_new_tokens < 0:
             raise ValueError("max_new_tokens must be non-negative.")
         if max_new_tokens == 0:
             return input_ids
-        eos = self._resolve_eos_token_id(eos_token_id)
+        if not isinstance(do_sample, bool):
+            raise TypeError("do_sample must be a bool.")
+        if not isinstance(stop_on_eos, bool):
+            raise TypeError("stop_on_eos must be a bool.")
+        temperature, top_p = _validate_sampling_parameters(temperature, top_p)
+        eos = self._resolve_eos_token_id(eos_token_id) if stop_on_eos else None
         output = self(input_ids, use_cache=True)
         cache = output.past_key_values
-        next_token = output.logits[:, -1].argmax(dim=-1, keepdim=True)
+        if do_sample:
+            next_token, _ = _sample_next_token(
+                output.logits[:, -1],
+                temperature=temperature,
+                top_p=top_p,
+                generator=generator,
+            )
+        else:
+            next_token = output.logits[:, -1].argmax(dim=-1, keepdim=True)
         generated = [input_ids, next_token]
-        finished = next_token.eq(eos)
+        finished = (
+            next_token.eq(eos)
+            if eos is not None
+            else torch.zeros_like(next_token, dtype=torch.bool)
+        )
 
         for _ in range(max_new_tokens - 1):
+            if eos is not None and bool(finished.all()):
+                break
             output = self(next_token, past_key_values=cache, use_cache=True)
             cache = output.past_key_values
-            next_token = output.logits[:, -1].argmax(dim=-1, keepdim=True)
-            next_token = torch.where(finished, torch.full_like(next_token, eos), next_token)
+            if do_sample:
+                next_token, _ = _sample_next_token(
+                    output.logits[:, -1],
+                    temperature=temperature,
+                    top_p=top_p,
+                    generator=generator,
+                )
+            else:
+                next_token = output.logits[:, -1].argmax(dim=-1, keepdim=True)
+            if eos is not None:
+                next_token = torch.where(
+                    finished,
+                    torch.full_like(next_token, eos),
+                    next_token,
+                )
             generated.append(next_token)
-            finished = finished | next_token.eq(eos)
-            if bool(finished.all()):
+            if eos is not None:
+                finished = finished | next_token.eq(eos)
+            if eos is not None and bool(finished.all()):
                 break
         return torch.cat(generated, dim=1)
 

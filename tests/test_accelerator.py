@@ -14,18 +14,25 @@ from nano_deepseek_v4 import (
     train_step,
 )
 
-pytestmark = [
-    pytest.mark.gpu,
-    pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is not available"),
-]
+_requires_cuda = pytest.mark.skipif(
+    not torch.cuda.is_available(),
+    reason="CUDA is not available",
+)
+
+_GPU_LAYER_TYPES = (
+    "sliding_attention",
+    "sliding_attention",
+    "compressed_sparse_attention",
+    "heavily_compressed_attention",
+)
 
 
 def _gpu_config() -> DeepSeekV4Config:
-    return DeepSeekV4Config(
+    config = DeepSeekV4Config(
         vocab_size=64,
         hidden_size=32,
         moe_intermediate_size=48,
-        num_hidden_layers=2,
+        num_hidden_layers=len(_GPU_LAYER_TYPES),
         num_attention_heads=4,
         head_dim=8,
         q_lora_rank=16,
@@ -34,6 +41,11 @@ def _gpu_config() -> DeepSeekV4Config:
         num_hash_layers=1,
         hc_mult=2,
         sliding_window=4,
+        compress_rates={
+            "compressed_sparse_attention": 2,
+            "heavily_compressed_attention": 4,
+        },
+        layer_types=list(_GPU_LAYER_TYPES),
         o_groups=2,
         o_lora_rank=8,
         index_n_heads=2,
@@ -41,8 +53,23 @@ def _gpu_config() -> DeepSeekV4Config:
         index_topk=2,
         partial_rotary_factor=0.5,
     )
+    if tuple(config.layer_types or ()) != _GPU_LAYER_TYPES:
+        raise AssertionError("CUDA fixture must cover sliding, CSA, and HCA layers")
+    return config
 
 
+def test_gpu_config_covers_every_native_attention_family():
+    config = _gpu_config()
+
+    assert config.layer_types == list(_GPU_LAYER_TYPES)
+    assert config.compress_rates == {
+        "compressed_sparse_attention": 2,
+        "heavily_compressed_attention": 4,
+    }
+
+
+@pytest.mark.gpu
+@_requires_cuda
 @pytest.mark.parametrize("dtype", [torch.bfloat16, torch.float16])
 def test_cuda_autocast_cache_matches_full_forward(dtype: torch.dtype):
     torch.manual_seed(0)
@@ -66,6 +93,8 @@ def test_cuda_autocast_cache_matches_full_forward(dtype: torch.dtype):
     assert torch.allclose(chunked, full, atol=2e-3, rtol=2e-3)
 
 
+@pytest.mark.gpu
+@_requires_cuda
 def test_cuda_native_bfloat16_training_step_is_finite():
     torch.manual_seed(0)
     config = _gpu_config()
@@ -79,6 +108,8 @@ def test_cuda_native_bfloat16_training_step_is_finite():
     assert torch.isfinite(loss)
 
 
+@pytest.mark.gpu
+@_requires_cuda
 def test_cuda_cache_can_round_trip_through_cpu_storage(tmp_path: Path):
     torch.manual_seed(0)
     config = _gpu_config()

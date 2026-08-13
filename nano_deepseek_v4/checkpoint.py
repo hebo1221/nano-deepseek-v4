@@ -3,24 +3,41 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
+import shutil
 import struct
 import tempfile
 from collections.abc import Callable
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import torch
-from safetensors import safe_open
+from safetensors import SafetensorError, safe_open
 from safetensors.torch import load_file, save_file
 
 from .config import DeepSeekV4Config
+from .tokenizer import (
+    BYTE_TOKENIZER_FILENAME,
+    BYTE_TOKENIZER_FORMAT,
+    BYTE_TOKENIZER_FORMAT_VERSION,
+    BYTE_TOKENIZER_TYPE,
+    ByteTokenizer,
+)
 
 if TYPE_CHECKING:
-    from .modeling import DeepSeekV4Cache, DeepSeekV4LayerCache
+    from .modeling import DeepSeekV4Cache, DeepSeekV4ForCausalLM, DeepSeekV4LayerCache
 
 
 _CACHE_FORMAT_VERSION = 2
+_PRETRAINED_FORMAT = "nano-deepseek-v4-pretrained"
+_PRETRAINED_FORMAT_VERSION = 1
+_PRETRAINED_FORMAT_VERSION_WITH_TOKENIZER = 2
+_PRETRAINED_MANIFEST_NAME = "nano_deepseek_v4.json"
+_PRETRAINED_CONFIG_NAME = "config.json"
+_PRETRAINED_INDEX_NAME = "model.safetensors.index.json"
+_PRETRAINED_TOKENIZER_NAME = BYTE_TOKENIZER_FILENAME
+_DEFAULT_PRETRAINED_SHARD_SIZE_BYTES = 1024**3
 _CACHE_TENSOR_ATTRIBUTES = {"local_kv", "local_positions"}
 _CACHE_DICT_ATTRIBUTES = {
     "buffer_kv",
@@ -43,12 +60,62 @@ _CACHE_INTEGER_DTYPES = {
     torch.uint8,
 }
 _SAFETENSORS_INTEGER_DTYPES = {"I8", "I16", "I32", "I64", "U8"}
+_SCALE_REQUIRED_DTYPES = {"F8_E4M3", "F8_E5M2", "I8", "U8"}
+_SAFETENSORS_DTYPE_BYTES = {
+    "BOOL": 1,
+    "BF16": 2,
+    "F16": 2,
+    "F32": 4,
+    "F64": 8,
+    "F8_E4M3": 1,
+    "F8_E5M2": 1,
+    "F8_E8M0": 1,
+    "I8": 1,
+    "I16": 2,
+    "I32": 4,
+    "I64": 8,
+    "U8": 1,
+    "U16": 2,
+    "U32": 4,
+    "U64": 8,
+}
 
 
 @dataclass
 class CheckpointLoadReport:
     missing_keys: list[str]
     unexpected_keys: list[str]
+
+
+@dataclass
+class PretrainedBundleReport:
+    is_complete: bool
+    bundle_path: str
+    format: str
+    format_version: int | None
+    model_class: str
+    tokenizer_file: str | None
+    tokenizer_format: str | None
+    tokenizer_format_version: int | None
+    tokenizer_type: str | None
+    tokenizer_sha256: str
+    tokenizer_verified: bool
+    generation_ready: bool
+    config_sha256: str
+    manifest_sha256: str
+    index_sha256: str
+    checksums_verified: bool
+    shard_headers_verified: bool
+    file_count: int
+    shard_count: int
+    tensor_count: int
+    tensor_bytes: int
+    index_total_size_bytes: int | None
+    shard_files: list[str]
+    errors: list[str]
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
 
 
 @dataclass
@@ -126,6 +193,97 @@ class OfficialCheckpointSnapshotReport:
     is_complete: bool
 
 
+@dataclass
+class OfficialCheckpointNamespaceReport:
+    """Header-only integrity and shape inventory for one checkpoint namespace."""
+
+    namespace: str
+    key_prefix: str
+    index_path: str
+    index_sha256: str
+    inventory_sha256: str
+    snapshot_preflight_complete: bool
+    indexed_tensor_count: int
+    inspected_tensor_count: int
+    non_scale_tensor_count: int
+    scale_tensor_count: int
+    scaled_tensor_count: int
+    quantized_tensor_count: int
+    stored_tensor_bytes: int
+    logical_model_parameter_count: int
+    non_parameter_routing_state_count: int
+    dtype_counts: dict[str, int]
+    shard_files: list[str]
+    missing_expected_keys: list[str]
+    missing_keys_in_shards: list[str]
+    unexpected_keys_in_shards: list[str]
+    unrecognized_keys: list[str]
+    shape_mismatches: list[str]
+    unchecked_shape_keys: list[str]
+    checkpoint_family: str
+    namespace_kind: str
+    dspark_stage_count: int
+    schema_compatible: bool
+    verification_scope: str
+    scale_metadata_verified: bool
+    payload_integrity_verified: bool
+    runtime_load_supported: bool
+    errors: list[str]
+    is_complete: bool
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class OfficialHubCheckpointInspection:
+    """Metadata-only inspection of one namespace in a Hub checkpoint."""
+
+    repo_id: str
+    requested_revision: str
+    resolved_revision: str
+    huggingface_hub_version: str
+    config_sha256: str
+    index_sha256: str
+    total_indexed_tensor_count: int
+    total_shard_count: int
+    index_total_size_bytes: int | None
+    metadata_document_bytes: int
+    inspected_shard_count: int
+    inspected_shard_files: list[str]
+    metadata_only: bool
+    namespace: OfficialCheckpointNamespaceReport
+    is_complete: bool
+    config: DeepSeekV4Config = field(repr=False)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "repo_id": self.repo_id,
+            "requested_revision": self.requested_revision,
+            "resolved_revision": self.resolved_revision,
+            "huggingface_hub_version": self.huggingface_hub_version,
+            "config_sha256": self.config_sha256,
+            "index_sha256": self.index_sha256,
+            "total_indexed_tensor_count": self.total_indexed_tensor_count,
+            "total_shard_count": self.total_shard_count,
+            "index_total_size_bytes": self.index_total_size_bytes,
+            "metadata_document_bytes": self.metadata_document_bytes,
+            "inspected_shard_count": self.inspected_shard_count,
+            "inspected_shard_files": self.inspected_shard_files,
+            "metadata_only": self.metadata_only,
+            "namespace": self.namespace.to_dict(),
+            "is_complete": self.is_complete,
+        }
+
+
+@dataclass(frozen=True)
+class _OfficialTensorMetadata:
+    dtype: str
+    shape: tuple[int, ...]
+    stored_bytes: int
+    data_offsets: tuple[int, int] | None = None
+
+
 def _resolve_index_shard(root: Path, shard: str) -> Path:
     shard_path = Path(shard)
     if shard_path.is_absolute():
@@ -193,27 +351,257 @@ def _checkpoint_shard_names(checkpoint_path: Path, shards: list[Path]) -> list[s
     return [str(shard.resolve().relative_to(root)) for shard in shards]
 
 
+def _map_checkpoint_key(
+    source_key: str,
+    key_mapping: Callable[[str], str] | dict[str, str] | None,
+) -> str:
+    if callable(key_mapping):
+        return key_mapping(source_key)
+    if isinstance(key_mapping, dict):
+        return key_mapping.get(source_key, source_key)
+    return source_key
+
+
+def _checkpoint_index_weight_map(checkpoint: Path) -> dict[str, str] | None:
+    if not checkpoint.is_dir():
+        return None
+    index_path = checkpoint / _PRETRAINED_INDEX_NAME
+    if not index_path.exists():
+        return None
+    index = json.loads(index_path.read_text(encoding="utf-8"))
+    if not isinstance(index, dict) or not isinstance(index.get("weight_map"), dict):
+        raise ValueError(f"Checkpoint index {index_path} must contain a weight_map object.")
+    weight_map = index["weight_map"]
+    if not weight_map or any(
+        not isinstance(key, str) or not isinstance(shard, str)
+        for key, shard in weight_map.items()
+    ):
+        raise ValueError(f"Checkpoint index {index_path} has an invalid weight_map.")
+    return dict(weight_map)
+
+
+def _preflight_progressive_checkpoint(
+    model: torch.nn.Module,
+    checkpoint: str | Path,
+    key_mapping: Callable[[str], str] | dict[str, str] | None,
+) -> tuple[list[Path], dict[Path, dict[str, str]], list[str], list[str]]:
+    """Validate a checkpoint inventory without materializing tensor payloads."""
+
+    checkpoint_path = Path(checkpoint)
+    shards = _resolve_shards(checkpoint_path)
+    target_state = model.state_dict()
+    target_keys = set(target_state)
+    shard_mappings: dict[Path, dict[str, str]] = {}
+    mapped_sources: dict[str, str] = {}
+    raw_sources: dict[str, Path] = {}
+    shape_errors: list[str] = []
+
+    for shard in shards:
+        mapping: dict[str, str] = {}
+        with safe_open(shard, framework="pt", device="cpu") as handle:
+            for source_key in handle.keys():
+                if source_key in raw_sources:
+                    raise ValueError(
+                        f"Checkpoint tensor {source_key!r} appears in both "
+                        f"{raw_sources[source_key]} and {shard}."
+                    )
+                raw_sources[source_key] = shard
+                target_key = _map_checkpoint_key(source_key, key_mapping)
+                if target_key in mapped_sources:
+                    raise ValueError(
+                        f"Checkpoint key collision: {mapped_sources[target_key]!r} and "
+                        f"{f'{shard}:{source_key}'!r} both map to {target_key!r}."
+                    )
+                mapped_sources[target_key] = f"{shard}:{source_key}"
+                mapping[source_key] = target_key
+                if target_key in target_state:
+                    source_shape = tuple(handle.get_slice(source_key).get_shape())
+                    target_shape = tuple(target_state[target_key].shape)
+                    if source_shape != target_shape:
+                        shape_errors.append(
+                            f"size mismatch for {target_key}: checkpoint shape {source_shape} "
+                            f"does not match model shape {target_shape}"
+                        )
+        shard_mappings[shard] = mapping
+
+    index_weight_map = _checkpoint_index_weight_map(checkpoint_path)
+    if index_weight_map is not None:
+        for source_key, shard_name in index_weight_map.items():
+            expected_shard = _resolve_index_shard(checkpoint_path, shard_name)
+            actual_shard = raw_sources.get(source_key)
+            if actual_shard is None:
+                raise ValueError(
+                    f"Checkpoint index maps {source_key!r}, but that tensor is absent from "
+                    f"{expected_shard}."
+                )
+            if actual_shard.resolve() != expected_shard.resolve():
+                raise ValueError(
+                    f"Checkpoint index maps {source_key!r} to {expected_shard}, "
+                    f"but the tensor is stored in {actual_shard}."
+                )
+        unindexed = set(raw_sources) - index_weight_map.keys()
+        if unindexed:
+            raise ValueError(
+                "Checkpoint shards contain tensors missing from the index: "
+                f"{sorted(unindexed)}"
+            )
+
+    if shape_errors:
+        details = "\n\t".join(shape_errors)
+        raise RuntimeError(f"Checkpoint tensor shapes are incompatible:\n\t{details}")
+    mapped_keys = set(mapped_sources)
+    return (
+        shards,
+        shard_mappings,
+        sorted(target_keys - mapped_keys),
+        sorted(mapped_keys - target_keys),
+    )
+
+
+def _raise_strict_checkpoint_error(
+    model: torch.nn.Module,
+    missing_keys: list[str],
+    unexpected_keys: list[str],
+) -> None:
+    errors: list[str] = []
+    if missing_keys:
+        errors.append(f"Missing key(s): {missing_keys}")
+    if unexpected_keys:
+        errors.append(f"Unexpected key(s): {unexpected_keys}")
+    if errors:
+        details = "\n\t".join(errors)
+        raise RuntimeError(
+            f"Error(s) in loading state_dict for {model.__class__.__name__}:\n\t{details}"
+        )
+
+
+def _shared_module_tensor_groups(
+    model: torch.nn.Module,
+) -> list[tuple[str, list[str]]]:
+    groups: list[tuple[str, list[str]]] = []
+    for kind, named_tensors in (
+        ("parameter", model.named_parameters(remove_duplicate=False)),
+        ("buffer", model.named_buffers(remove_duplicate=False)),
+    ):
+        names_by_identity: dict[int, list[str]] = {}
+        for name, tensor in named_tensors:
+            names_by_identity.setdefault(id(tensor), []).append(name)
+        groups.extend(
+            (kind, names)
+            for names in names_by_identity.values()
+            if len(names) > 1
+        )
+    return groups
+
+
+def _restore_shared_module_tensors(
+    model: torch.nn.Module,
+    groups: list[tuple[str, list[str]]],
+    loaded_keys: set[str],
+) -> None:
+    for kind, names in groups:
+        loaded_names = [name for name in names if name in loaded_keys]
+        primary_name = loaded_names[0] if loaded_names else names[0]
+        if kind == "parameter":
+            primary = model.get_parameter(primary_name)
+        else:
+            primary = model.get_buffer(primary_name)
+        for alias_name in names:
+            if alias_name == primary_name:
+                continue
+            parent_name, _, attribute = alias_name.rpartition(".")
+            parent = model.get_submodule(parent_name) if parent_name else model
+            setattr(parent, attribute, primary)
+
+
+def _load_safetensors_checkpoint_progressively(
+    model: torch.nn.Module,
+    checkpoint: str | Path,
+    *,
+    strict: bool,
+    key_mapping: Callable[[str], str] | dict[str, str] | None,
+    assign: bool,
+    device: torch.device | str | None,
+    dtype: torch.dtype | None,
+) -> CheckpointLoadReport:
+    if not assign and (device is not None or dtype is not None):
+        raise ValueError("device and dtype require assign=True for progressive loading.")
+    if dtype is not None and not isinstance(dtype, torch.dtype):
+        raise TypeError("dtype must be a torch.dtype or None.")
+
+    shared_groups = _shared_module_tensor_groups(model) if assign else []
+    shards, shard_mappings, missing_keys, unexpected_keys = (
+        _preflight_progressive_checkpoint(model, checkpoint, key_mapping)
+    )
+    if strict:
+        _raise_strict_checkpoint_error(model, missing_keys, unexpected_keys)
+    target_keys = set(model.state_dict())
+    if not assign and any(value.is_meta for value in model.state_dict().values()):
+        raise ValueError("loading into a meta model requires assign=True.")
+
+    load_device = str(torch.device(device)) if device is not None else "cpu"
+    for shard in shards:
+        shard_state = load_file(shard, device=load_device)
+        mapping = shard_mappings[shard]
+        if set(shard_state) != set(mapping):
+            raise RuntimeError(f"Checkpoint shard changed after preflight: {shard}.")
+        mapped_state: dict[str, torch.Tensor] = {}
+        for source_key, tensor in shard_state.items():
+            target_key = mapping[source_key]
+            if target_key not in target_keys:
+                continue
+            if dtype is not None and tensor.is_floating_point():
+                tensor = tensor.to(dtype=dtype)
+            mapped_state[target_key] = tensor
+        model.load_state_dict(mapped_state, strict=False, assign=assign)
+
+    if shared_groups:
+        _restore_shared_module_tensors(model, shared_groups, target_keys - set(missing_keys))
+
+    return CheckpointLoadReport(
+        missing_keys=missing_keys,
+        unexpected_keys=unexpected_keys,
+    )
+
+
 def load_safetensors_checkpoint(
     model: torch.nn.Module,
     checkpoint: str | Path,
     strict: bool = True,
     key_mapping: Callable[[str], str] | dict[str, str] | None = None,
+    *,
+    low_memory: bool = False,
+    assign: bool = False,
+    device: torch.device | str | None = None,
+    dtype: torch.dtype | None = None,
 ) -> CheckpointLoadReport:
     """Load a single-file or sharded safetensors checkpoint.
 
     `key_mapping` exists so official or converted checkpoint names can be mapped
     onto this compact reference model without rewriting checkpoint shards.
+    `low_memory=True` preflights tensor metadata, then loads one shard at a time.
+    `assign=True` supports materializing a meta-device model without allocating a
+    second full set of initialized parameters.
     """
+
+    if low_memory:
+        return _load_safetensors_checkpoint_progressively(
+            model,
+            checkpoint,
+            strict=strict,
+            key_mapping=key_mapping,
+            assign=assign,
+            device=device,
+            dtype=dtype,
+        )
+    if assign or device is not None or dtype is not None:
+        raise ValueError("assign, device, and dtype require low_memory=True.")
 
     state_dict: dict[str, torch.Tensor] = {}
     source_keys: dict[str, str] = {}
     for shard in _resolve_shards(checkpoint):
         for source_key, value in load_file(shard).items():
-            key = source_key
-            if callable(key_mapping):
-                key = key_mapping(key)
-            elif isinstance(key_mapping, dict):
-                key = key_mapping.get(key, key)
+            key = _map_checkpoint_key(source_key, key_mapping)
             if key in state_dict:
                 previous = source_keys[key]
                 current = f"{shard}:{source_key}"
@@ -335,6 +723,14 @@ def _is_official_complex_key(key: str) -> bool:
     if len(parts) < 3 or parts[0] not in {"layers", "mtp"}:
         return False
     rest = ".".join(parts[2:])
+    if parts[0] == "mtp" and rest in {
+        "main_proj.weight",
+        "main_norm.weight",
+        "markov_head.markov_w1.weight",
+        "markov_head.markov_w2.weight",
+        "confidence_head.proj.weight",
+    }:
+        return True
     if rest == "attn.wo_a.weight":
         return True
     if rest in {
@@ -358,9 +754,8 @@ def _is_official_complex_key(key: str) -> bool:
     return False
 
 
-def analyze_deepseek_official_index(index_path: str | Path) -> OfficialIndexCoverageReport:
-    index = json.loads(Path(index_path).read_text())
-    keys = sorted(index["weight_map"])
+def _analyze_deepseek_official_keys(keys: list[str]) -> OfficialIndexCoverageReport:
+    keys = sorted(keys)
     key_set = set(keys)
     recognized: list[str] = []
     scale_keys: list[str] = []
@@ -382,6 +777,96 @@ def analyze_deepseek_official_index(index_path: str | Path) -> OfficialIndexCove
         scale_keys=scale_keys,
         unrecognized_keys=unrecognized,
     )
+
+
+def analyze_deepseek_official_index(index_path: str | Path) -> OfficialIndexCoverageReport:
+    index = json.loads(Path(index_path).read_text())
+    return _analyze_deepseek_official_keys(list(index["weight_map"]))
+
+
+def _validate_official_namespace(namespace: str) -> str:
+    if not isinstance(namespace, str) or not re.fullmatch(
+        r"[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*",
+        namespace,
+    ):
+        raise ValueError(
+            "namespace must be a non-empty dot-separated identifier such as 'mtp' or 'mtp.0'."
+        )
+    return f"{namespace}."
+
+
+def _validate_hub_repo_id(repo_id: str) -> None:
+    component = r"[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?"
+    if not isinstance(repo_id, str) or re.fullmatch(f"{component}/{component}", repo_id) is None:
+        raise ValueError("repo_id must use the 'owner/name' form.")
+
+
+def _validate_hub_revision(revision: str) -> None:
+    if (
+        not isinstance(revision, str)
+        or not revision.strip()
+        or revision != revision.strip()
+        or any(ord(character) < 32 for character in revision)
+    ):
+        raise ValueError("revision must be a non-empty branch, tag, or commit identifier.")
+
+
+def _validate_hub_shard_filename(filename: str) -> None:
+    path = Path(filename)
+    if (
+        not filename
+        or "\\" in filename
+        or path.is_absolute()
+        or any(part in {"", ".", ".."} for part in filename.split("/"))
+        or path.suffix != ".safetensors"
+    ):
+        raise ValueError(f"Unsafe safetensors shard path in checkpoint index: {filename!r}")
+
+
+def _validated_official_weight_map(index: Any) -> dict[str, str]:
+    if not isinstance(index, dict):
+        raise ValueError("safetensors index must be a JSON object")
+    weight_map = index.get("weight_map")
+    if not isinstance(weight_map, dict) or not weight_map:
+        raise ValueError("safetensors index must contain a non-empty weight_map object")
+    if any(
+        not isinstance(key, str)
+        or not key
+        or not isinstance(shard, str)
+        for key, shard in weight_map.items()
+    ):
+        raise ValueError("safetensors index weight_map must map non-empty strings to strings")
+    for shard in set(weight_map.values()):
+        _validate_hub_shard_filename(shard)
+    return dict(weight_map)
+
+
+def _validate_safetensors_offset_layout(
+    shard: str,
+    tensors: dict[str, _OfficialTensorMetadata],
+) -> list[str]:
+    if not tensors:
+        return [f"{shard}: safetensors header contains no tensors"]
+    if any(tensor.data_offsets is None for tensor in tensors.values()):
+        return []
+    offset_intervals = sorted(
+        (*tensor.data_offsets, key)
+        for key, tensor in tensors.items()
+        if tensor.data_offsets is not None
+    )
+    errors: list[str] = []
+    previous_end = 0
+    previous_key = "payload start"
+    for start, end, key in offset_intervals:
+        if start != previous_end:
+            relation = "overlaps" if start < previous_end else "leaves a gap after"
+            errors.append(
+                f"{shard}:{key}: data offset {start} {relation} "
+                f"{previous_key} ending at {previous_end}"
+            )
+        previous_end = max(previous_end, end)
+        previous_key = key
+    return errors
 
 
 def _resolve_index_path(path: str | Path) -> Path:
@@ -618,16 +1103,53 @@ def _expected_official_tensor_shapes(config: DeepSeekV4Config) -> dict[str, tupl
     for layer_idx, layer_type in enumerate(config.layer_types or []):
         mlp_layer_type = (config.mlp_layer_types or [])[layer_idx]
         _add_block_shapes(shapes, f"layers.{layer_idx}", config, layer_type, mlp_layer_type)
-    mtp_layer_type = (config.layer_types or ["sliding_attention"])[0]
-    for mtp_idx in range(config.num_nextn_predict_layers):
-        prefix = f"mtp.{mtp_idx}"
-        shapes[f"{prefix}.e_proj.weight"] = (config.hidden_size, config.hidden_size)
-        shapes[f"{prefix}.h_proj.weight"] = (config.hidden_size, config.hidden_size)
-        shapes[f"{prefix}.enorm.weight"] = (config.hidden_size,)
-        shapes[f"{prefix}.hnorm.weight"] = (config.hidden_size,)
-        shapes[f"{prefix}.norm.weight"] = (config.hidden_size,)
-        _add_hc_head_shapes(shapes, f"{prefix}.hc_head", config)
-        _add_block_shapes(shapes, prefix, config, mtp_layer_type, "moe")
+    if config.has_dspark:
+        if not config.dspark_layer_types:
+            raise RuntimeError("config DSpark stage schedule was not initialized.")
+        last_stage = config.dspark_stage_count - 1
+        for stage_idx, layer_type in enumerate(config.dspark_layer_types):
+            prefix = f"mtp.{stage_idx}"
+            _add_block_shapes(shapes, prefix, config, layer_type, "moe")
+            if stage_idx == 0:
+                shapes[f"{prefix}.main_proj.weight"] = (
+                    config.hidden_size,
+                    config.hidden_size * len(config.dspark_target_layer_ids),
+                )
+                shapes[f"{prefix}.main_norm.weight"] = (config.hidden_size,)
+            if stage_idx == last_stage:
+                shapes[f"{prefix}.norm.weight"] = (config.hidden_size,)
+                _add_hc_head_shapes(shapes, f"{prefix}.hc_head", config)
+                markov_shape = (config.vocab_size, config.dspark_markov_rank)
+                shapes[f"{prefix}.markov_head.markov_w1.weight"] = markov_shape
+                shapes[f"{prefix}.markov_head.markov_w2.weight"] = markov_shape
+                shapes[f"{prefix}.confidence_head.proj.weight"] = (
+                    1,
+                    config.hidden_size + config.dspark_markov_rank,
+                )
+    else:
+        if config.mtp_layer_types is None:
+            raise RuntimeError("config MTP attention schedule was not initialized.")
+        for mtp_idx in range(config.num_nextn_predict_layers):
+            prefix = f"mtp.{mtp_idx}"
+            shapes[f"{prefix}.e_proj.weight"] = (
+                config.hidden_size,
+                config.hidden_size,
+            )
+            shapes[f"{prefix}.h_proj.weight"] = (
+                config.hidden_size,
+                config.hidden_size,
+            )
+            shapes[f"{prefix}.enorm.weight"] = (config.hidden_size,)
+            shapes[f"{prefix}.hnorm.weight"] = (config.hidden_size,)
+            shapes[f"{prefix}.norm.weight"] = (config.hidden_size,)
+            _add_hc_head_shapes(shapes, f"{prefix}.hc_head", config)
+            _add_block_shapes(
+                shapes,
+                prefix,
+                config,
+                config.mtp_layer_types[mtp_idx],
+                "moe",
+            )
     return shapes
 
 
@@ -636,6 +1158,123 @@ def _shape_numel(shape: tuple[int, ...]) -> int:
     for dim in shape:
         numel *= int(dim)
     return numel
+
+
+def _scale_sidecars_for_weight(
+    key: str,
+    indexed_keys: set[str],
+) -> list[str]:
+    candidates = {f"{key}.scale"}
+    if key.endswith(".weight"):
+        candidates.add(f"{key.removesuffix('.weight')}.scale")
+    return sorted(candidates & indexed_keys)
+
+
+def _weight_keys_for_scale_sidecar(
+    key: str,
+    indexed_keys: set[str],
+) -> list[str]:
+    if not key.endswith(".scale"):
+        return []
+    stem = key.removesuffix(".scale")
+    return sorted({stem, f"{stem}.weight"} & indexed_keys)
+
+
+def _expected_low_precision_scale_contract(
+    config: DeepSeekV4Config,
+    key: str,
+    tensor: _OfficialTensorMetadata,
+) -> tuple[str, tuple[int, int]] | None:
+    if len(tensor.shape) != 2:
+        return None
+    out_features, stored_in_features = tensor.shape
+    if (
+        tensor.dtype in {"I8", "U8"}
+        and config.expert_dtype == "fp4"
+        and ".ffn.experts." in key
+        and key.endswith(".weight")
+    ):
+        logical_in_features = stored_in_features * 2
+        return (
+            "F8_E8M0",
+            (
+                out_features,
+                (logical_in_features + 31) // 32,
+            ),
+        )
+    if (
+        tensor.dtype in {"F8_E4M3", "F8_E5M2"}
+        and config.quantization_weight_block_size is not None
+    ):
+        out_block, in_block = config.quantization_weight_block_size
+        return (
+            "F8_E8M0",
+            (
+                (out_features + out_block - 1) // out_block,
+                (stored_in_features + in_block - 1) // in_block,
+            ),
+        )
+    return None
+
+
+def _validate_scale_sidecar_metadata(
+    config: DeepSeekV4Config,
+    indexed_keys: set[str],
+    tensor_metadata: dict[str, _OfficialTensorMetadata],
+) -> list[str]:
+    errors: list[str] = []
+    for scale_key in sorted(key for key in indexed_keys if key.endswith(".scale")):
+        base_keys = _weight_keys_for_scale_sidecar(scale_key, indexed_keys)
+        if len(base_keys) > 1:
+            errors.append(
+                f"{scale_key}: scale sidecar matches multiple tensors: {base_keys}"
+            )
+        if scale_key not in tensor_metadata:
+            errors.append(f"{scale_key}: scale sidecar metadata was not inspected")
+        if len(base_keys) == 1 and base_keys[0] not in tensor_metadata:
+            errors.append(
+                f"{scale_key}: scaled tensor metadata was not inspected for "
+                f"{base_keys[0]}"
+            )
+
+    for key, tensor in sorted(tensor_metadata.items()):
+        if key.endswith(".scale"):
+            continue
+        sidecars = _scale_sidecars_for_weight(key, indexed_keys)
+        if len(sidecars) > 1:
+            errors.append(f"{key}: multiple scale sidecars are indexed: {sidecars}")
+            continue
+        if tensor.dtype not in _SCALE_REQUIRED_DTYPES:
+            if sidecars:
+                errors.append(
+                    f"{key}: unexpected scale sidecar for non-quantized dtype "
+                    f"{tensor.dtype}: {sidecars[0]}"
+                )
+            continue
+        if not sidecars:
+            errors.append(f"{key}: scaled low-precision tensor is missing scale sidecar")
+            continue
+        scale_key = sidecars[0]
+        scale = tensor_metadata.get(scale_key)
+        if scale is None:
+            continue
+        contract = _expected_low_precision_scale_contract(config, key, tensor)
+        if contract is None:
+            errors.append(
+                f"{key}: no supported scale metadata contract for dtype "
+                f"{tensor.dtype} and this configuration"
+            )
+            continue
+        expected_dtype, expected_shape = contract
+        if scale.dtype != expected_dtype:
+            errors.append(
+                f"{scale_key}: expected scale dtype {expected_dtype}, got {scale.dtype}"
+            )
+        if scale.shape != expected_shape:
+            errors.append(
+                f"{scale_key}: expected scale shape {expected_shape}, got {scale.shape}"
+            )
+    return errors
 
 
 def _logical_parameter_numel(
@@ -655,22 +1294,68 @@ def estimate_deepseek_v4_parameter_counts(config: DeepSeekV4Config) -> dict[str,
     total_parameters = 0
     non_routed_parameters = 0
     routed_expert_parameters = 0
+    non_parameter_routing_state = 0
+    speculative_parameters = 0
+    speculative_non_routed_parameters = 0
+    speculative_routed_expert_parameters = 0
+    speculative_non_parameter_routing_state = 0
     for key, shape in _expected_official_tensor_shapes(config).items():
         if key.endswith(".scale") or key.endswith("tid2eid"):
             continue
         numel = _logical_parameter_numel(config, key, shape)
+        is_speculative = config.has_dspark and key.startswith("mtp.")
         total_parameters += numel
+        if key.endswith(".ffn.gate.bias"):
+            non_parameter_routing_state += numel
+            if is_speculative:
+                speculative_non_parameter_routing_state += numel
         if ".ffn.experts." in key:
             routed_expert_parameters += numel
+            if is_speculative:
+                speculative_routed_expert_parameters += numel
         else:
             non_routed_parameters += numel
+            if is_speculative:
+                speculative_non_routed_parameters += numel
+        if is_speculative:
+            speculative_parameters += numel
 
     activated_routed_parameters = (
         routed_expert_parameters * config.num_experts_per_tok // config.n_routed_experts
     )
+    speculative_activated_routed_parameters = (
+        speculative_routed_expert_parameters
+        * config.num_experts_per_tok
+        // config.n_routed_experts
+    )
+    speculative_activated_parameters = (
+        speculative_non_routed_parameters
+        + speculative_activated_routed_parameters
+        - speculative_non_parameter_routing_state
+    )
+    tied_output_parameters = (
+        config.vocab_size * config.hidden_size if config.tie_word_embeddings else 0
+    )
     return {
         "total_parameters": total_parameters,
-        "activated_parameters": non_routed_parameters + activated_routed_parameters,
+        "model_parameters": (
+            total_parameters
+            - non_parameter_routing_state
+            - tied_output_parameters
+        ),
+        "non_parameter_routing_state": non_parameter_routing_state,
+        "speculative_parameters": (
+            speculative_parameters - speculative_non_parameter_routing_state
+        ),
+        "speculative_non_parameter_routing_state": (
+            speculative_non_parameter_routing_state
+        ),
+        "speculative_activated_parameters": speculative_activated_parameters,
+        "activated_parameters": (
+            non_routed_parameters
+            + activated_routed_parameters
+            - tied_output_parameters
+        ),
     }
 
 
@@ -741,6 +1426,7 @@ def verify_deepseek_checkpoint_snapshot(
     quantized_tensor_count = 0
     scale_tensor_count = sum(1 for key in weight_map if key.endswith(".scale"))
     indexed_keys = set(weight_map)
+    tensor_metadata: dict[str, _OfficialTensorMetadata] = {}
     if inspect_shards:
         for shard in present_shards:
             expected = set(shard_to_keys[shard])
@@ -752,16 +1438,21 @@ def verify_deepseek_checkpoint_snapshot(
                     for key in sorted(expected & actual):
                         tensor_slice = tensors.get_slice(key)
                         dtype = str(tensor_slice.get_dtype())
+                        actual_shape = tuple(
+                            int(dim) for dim in tensor_slice.get_shape()
+                        )
                         dtype_counts[dtype] = dtype_counts.get(dtype, 0) + 1
-                        if dtype in {"I8", "U8"} and not key.endswith(".scale"):
-                            quantized_tensor_count += 1
-                            if not _has_scale_sidecar(key, indexed_keys):
-                                dtype_metadata_errors.append(
-                                    f"{shard}:{key}: 8-bit packed tensor is missing scale sidecar"
-                                )
+                        dtype_bytes = _SAFETENSORS_DTYPE_BYTES.get(dtype, 0)
+                        tensor_metadata[key] = _OfficialTensorMetadata(
+                            dtype=dtype,
+                            shape=actual_shape,
+                            stored_bytes=_shape_numel(actual_shape) * dtype_bytes,
+                        )
+                        if not key.endswith(".scale"):
+                            if dtype in {"I8", "U8"}:
+                                quantized_tensor_count += 1
                         if key.endswith(".scale"):
                             continue
-                        actual_shape = tuple(int(dim) for dim in tensor_slice.get_shape())
                         expected_shape = expected_shapes.get(key)
                         if expected_shape is None:
                             if key not in unchecked_shape_key_set:
@@ -776,6 +1467,11 @@ def verify_deepseek_checkpoint_snapshot(
                 continue
             missing_keys.extend(f"{shard}:{key}" for key in sorted(expected - actual))
             unexpected_keys.extend(f"{shard}:{key}" for key in sorted(actual - expected))
+
+    if inspect_shards and config is not None:
+        dtype_metadata_errors.extend(
+            _validate_scale_sidecar_metadata(config, indexed_keys, tensor_metadata)
+        )
 
     is_complete = (
         not missing_shards
@@ -811,11 +1507,395 @@ def verify_deepseek_checkpoint_snapshot(
     )
 
 
+def _build_official_namespace_report(
+    config: DeepSeekV4Config,
+    namespace: str,
+    weight_map: dict[str, str],
+    *,
+    index_path: str,
+    index_sha256: str,
+    snapshot_preflight_complete: bool,
+    shard_metadata: dict[str, dict[str, _OfficialTensorMetadata]],
+    verification_scope: str,
+    payload_integrity_verified: bool = False,
+    initial_errors: list[str] | None = None,
+) -> OfficialCheckpointNamespaceReport:
+    key_prefix = _validate_official_namespace(namespace)
+    indexed_keys = sorted(key for key in weight_map if key.startswith(key_prefix))
+    if not indexed_keys:
+        raise ValueError(f"checkpoint contains no keys in namespace {namespace!r}.")
+
+    expected_shapes = _expected_official_tensor_shapes(config)
+    expected_namespace_keys = {
+        key for key in expected_shapes if key.startswith(key_prefix)
+    }
+    missing_expected_keys = sorted(expected_namespace_keys - set(indexed_keys))
+    coverage = _analyze_deepseek_official_keys(list(weight_map))
+    unrecognized_keys = sorted(
+        key for key in coverage.unrecognized_keys if key.startswith(key_prefix)
+    )
+    indexed_key_set = set(indexed_keys)
+    shard_to_keys: dict[str, set[str]] = {}
+    for key in indexed_keys:
+        shard_to_keys.setdefault(weight_map[key], set()).add(key)
+
+    inventory: dict[str, dict[str, Any]] = {}
+    tensor_metadata: dict[str, _OfficialTensorMetadata] = {}
+    dtype_counts: dict[str, int] = {}
+    missing_keys: list[str] = []
+    unexpected_keys: list[str] = []
+    shape_mismatches: list[str] = []
+    unchecked_shape_keys: list[str] = []
+    errors = list(initial_errors or [])
+    quantized_tensor_count = 0
+    scaled_tensor_count = 0
+    stored_tensor_bytes = 0
+    logical_model_parameter_count = 0
+    non_parameter_routing_state_count = 0
+
+    for shard, assigned_keys in sorted(shard_to_keys.items()):
+        actual_metadata = shard_metadata.get(shard, {})
+        actual_keys = set(actual_metadata)
+        missing_keys.extend(f"{shard}:{key}" for key in sorted(assigned_keys - actual_keys))
+        unexpected_keys.extend(f"{shard}:{key}" for key in sorted(actual_keys - assigned_keys))
+        for key in sorted(actual_keys):
+            tensor = actual_metadata[key]
+            if key in inventory:
+                errors.append(f"{shard}:{key}: tensor appears in more than one shard")
+            inventory[key] = {"dtype": tensor.dtype, "shape": list(tensor.shape)}
+            tensor_metadata[key] = tensor
+            dtype_counts[tensor.dtype] = dtype_counts.get(tensor.dtype, 0) + 1
+            stored_tensor_bytes += tensor.stored_bytes
+            dtype_bytes = _SAFETENSORS_DTYPE_BYTES.get(tensor.dtype)
+            if dtype_bytes is None:
+                errors.append(
+                    f"{shard}:{key}: unsupported safetensors dtype {tensor.dtype}"
+                )
+            else:
+                expected_stored_bytes = _shape_numel(tensor.shape) * dtype_bytes
+                if tensor.stored_bytes != expected_stored_bytes:
+                    errors.append(
+                        f"{shard}:{key}: data offsets span {tensor.stored_bytes} bytes, "
+                        f"but dtype and shape require {expected_stored_bytes}"
+                    )
+
+            if key.endswith(".scale"):
+                continue
+            has_scale_sidecar = _has_scale_sidecar(key, indexed_key_set)
+            if has_scale_sidecar:
+                scaled_tensor_count += 1
+            if tensor.dtype in {"I8", "U8"}:
+                quantized_tensor_count += 1
+            expected_shape = expected_shapes.get(key)
+            if expected_shape is None:
+                unchecked_shape_keys.append(key)
+                continue
+            if tensor.shape != expected_shape:
+                shape_mismatches.append(
+                    f"{shard}:{key}: expected shape {expected_shape}, got {tensor.shape}"
+                )
+                continue
+            logical_count = _logical_parameter_numel(config, key, expected_shape)
+            if key.endswith(("ffn.gate.bias", "ffn.gate.tid2eid")):
+                non_parameter_routing_state_count += logical_count
+            else:
+                logical_model_parameter_count += logical_count
+
+    scale_metadata_errors = _validate_scale_sidecar_metadata(
+        config,
+        indexed_key_set,
+        tensor_metadata,
+    )
+    errors.extend(scale_metadata_errors)
+
+    canonical_inventory = json.dumps(
+        inventory,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    inventory_sha256 = hashlib.sha256(canonical_inventory).hexdigest()
+    scale_tensor_count = sum(key.endswith(".scale") for key in inventory)
+    non_scale_tensor_count = len(inventory) - scale_tensor_count
+    is_complete = not any(
+        (
+            errors,
+            missing_expected_keys,
+            missing_keys,
+            unexpected_keys,
+            unrecognized_keys,
+            shape_mismatches,
+            unchecked_shape_keys,
+        )
+    )
+    namespace_kind = (
+        "dspark"
+        if config.has_dspark and namespace.split(".", 1)[0] == "mtp"
+        else "model"
+    )
+    return OfficialCheckpointNamespaceReport(
+        namespace=namespace,
+        key_prefix=key_prefix,
+        index_path=index_path,
+        index_sha256=index_sha256,
+        inventory_sha256=inventory_sha256,
+        snapshot_preflight_complete=snapshot_preflight_complete,
+        indexed_tensor_count=len(indexed_keys),
+        inspected_tensor_count=len(inventory),
+        non_scale_tensor_count=non_scale_tensor_count,
+        scale_tensor_count=scale_tensor_count,
+        scaled_tensor_count=scaled_tensor_count,
+        quantized_tensor_count=quantized_tensor_count,
+        stored_tensor_bytes=stored_tensor_bytes,
+        logical_model_parameter_count=logical_model_parameter_count,
+        non_parameter_routing_state_count=non_parameter_routing_state_count,
+        dtype_counts=dict(sorted(dtype_counts.items())),
+        shard_files=sorted(shard_to_keys),
+        missing_expected_keys=missing_expected_keys,
+        missing_keys_in_shards=missing_keys,
+        unexpected_keys_in_shards=unexpected_keys,
+        unrecognized_keys=unrecognized_keys,
+        shape_mismatches=shape_mismatches,
+        unchecked_shape_keys=sorted(set(unchecked_shape_keys)),
+        checkpoint_family=(
+            "deepseek_v4_dspark" if config.has_dspark else "deepseek_v4"
+        ),
+        namespace_kind=namespace_kind,
+        dspark_stage_count=config.dspark_stage_count,
+        schema_compatible=is_complete,
+        verification_scope=verification_scope,
+        scale_metadata_verified=not scale_metadata_errors,
+        payload_integrity_verified=payload_integrity_verified,
+        runtime_load_supported=not config.has_dspark,
+        errors=errors,
+        is_complete=is_complete,
+    )
+
+
+def inspect_deepseek_checkpoint_namespace(
+    checkpoint: str | Path,
+    namespace: str,
+) -> OfficialCheckpointNamespaceReport:
+    """Inspect one local checkpoint namespace without loading tensor payloads."""
+
+    key_prefix = _validate_official_namespace(namespace)
+    index_path = _resolve_index_path(checkpoint)
+    root = index_path.parent
+    snapshot = verify_deepseek_checkpoint_snapshot(checkpoint, inspect_shards=True)
+    config = _checkpoint_config_for_shapes(root)
+    if config is None:
+        raise ValueError("checkpoint namespace inspection requires config.json.")
+
+    index = json.loads(index_path.read_text())
+    weight_map = _validated_official_weight_map(index)
+    indexed_keys = sorted(key for key in weight_map if key.startswith(key_prefix))
+    if not indexed_keys:
+        raise ValueError(f"checkpoint contains no keys in namespace {namespace!r}.")
+    shard_files = sorted({weight_map[key] for key in indexed_keys})
+    shard_metadata: dict[str, dict[str, _OfficialTensorMetadata]] = {}
+    errors = [] if snapshot.is_complete else ["checkpoint snapshot preflight is incomplete"]
+    for shard in shard_files:
+        try:
+            shard_path = _resolve_index_shard(root, shard)
+            with safe_open(shard_path, framework="pt", device="cpu") as tensors:
+                metadata: dict[str, _OfficialTensorMetadata] = {}
+                for key in tensors.keys():
+                    if not key.startswith(key_prefix):
+                        continue
+                    tensor_slice = tensors.get_slice(key)
+                    shape = tuple(int(dim) for dim in tensor_slice.get_shape())
+                    dtype = str(tensor_slice.get_dtype())
+                    dtype_bytes = _SAFETENSORS_DTYPE_BYTES.get(dtype, 0)
+                    metadata[key] = _OfficialTensorMetadata(
+                        dtype=dtype,
+                        shape=shape,
+                        stored_bytes=_shape_numel(shape) * dtype_bytes,
+                    )
+                shard_metadata[shard] = metadata
+        except Exception as exc:
+            errors.append(f"{shard}: safetensors metadata check failed: {exc}")
+            shard_metadata[shard] = {}
+
+    return _build_official_namespace_report(
+        config,
+        namespace,
+        weight_map,
+        index_path=str(index_path),
+        index_sha256=_sha256_file(index_path),
+        snapshot_preflight_complete=snapshot.is_complete,
+        shard_metadata=shard_metadata,
+        verification_scope="config_index_local_headers",
+        initial_errors=errors,
+    )
+
+
+def inspect_deepseek_hub_checkpoint_namespace(
+    repo_id: str,
+    revision: str,
+    namespace: str,
+    *,
+    cache_dir: str | Path | None = None,
+    token: str | bool | None = None,
+) -> OfficialHubCheckpointInspection:
+    """Inspect a Hub checkpoint namespace from documents and shard headers only.
+
+    The requested revision is resolved to an immutable commit before any files
+    or headers are read. The Hub client uses bounded range requests to parse
+    headers; this function never caches weight files or materializes tensors.
+    Full-snapshot presence and payload integrity therefore remain out of scope
+    and are reported as not preflighted.
+    """
+
+    _validate_hub_repo_id(repo_id)
+    _validate_hub_revision(revision)
+    key_prefix = _validate_official_namespace(namespace)
+    try:
+        from huggingface_hub import HfApi, hf_hub_download
+        from huggingface_hub import __version__ as huggingface_hub_version
+    except ImportError as exc:
+        raise ImportError(
+            'Hub inspection requires `pip install "nano-deepseek-v4[official]"`.'
+        ) from exc
+
+    api = HfApi(token=token)
+    try:
+        model_info = api.model_info(repo_id=repo_id, revision=revision)
+    except Exception as exc:
+        raise RuntimeError(
+            f"could not resolve Hugging Face model {repo_id!r} at {revision!r}: {exc}"
+        ) from exc
+    resolved_revision = getattr(model_info, "sha", None)
+    if not isinstance(resolved_revision, str) or re.fullmatch(
+        r"[0-9a-fA-F]{40}", resolved_revision
+    ) is None:
+        raise RuntimeError("Hugging Face did not return an immutable 40-character commit SHA.")
+    resolved_revision = resolved_revision.lower()
+
+    download_options: dict[str, Any] = {
+        "repo_id": repo_id,
+        "repo_type": "model",
+        "revision": resolved_revision,
+        "token": token,
+    }
+    if cache_dir is not None:
+        download_options["cache_dir"] = str(cache_dir)
+    try:
+        config_path = Path(hf_hub_download(filename="config.json", **download_options))
+        index_path = Path(
+            hf_hub_download(filename=_PRETRAINED_INDEX_NAME, **download_options)
+        )
+    except Exception as exc:
+        raise RuntimeError(
+            f"could not download checkpoint metadata for {repo_id}@{resolved_revision}: {exc}"
+        ) from exc
+
+    config_bytes = config_path.read_bytes()
+    index_bytes = index_path.read_bytes()
+    try:
+        index = json.loads(index_bytes)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError("Hub checkpoint index is not valid UTF-8 JSON.") from exc
+    weight_map = _validated_official_weight_map(index)
+    indexed_keys = sorted(key for key in weight_map if key.startswith(key_prefix))
+    if not indexed_keys:
+        raise ValueError(f"checkpoint contains no keys in namespace {namespace!r}.")
+    inspected_shards = sorted({weight_map[key] for key in indexed_keys})
+    index_total_size_bytes, index_errors = _index_total_size(index)
+    config = DeepSeekV4Config.from_official_json(config_path)
+
+    shard_metadata: dict[str, dict[str, _OfficialTensorMetadata]] = {}
+    metadata_errors = list(index_errors)
+    for shard in inspected_shards:
+        file_metadata = api.parse_safetensors_file_metadata(
+            repo_id=repo_id,
+            filename=shard,
+            repo_type="model",
+            revision=resolved_revision,
+            token=token,
+        )
+        try:
+            tensors = getattr(file_metadata, "tensors", None)
+            if not isinstance(tensors, dict):
+                raise ValueError("Hub response has no safetensors tensor map")
+            parsed_all: dict[str, _OfficialTensorMetadata] = {}
+            for key, tensor in tensors.items():
+                if not isinstance(key, str):
+                    metadata_errors.append(f"{shard}: safetensors tensor key is not a string")
+                    continue
+                dtype = getattr(tensor, "dtype", None)
+                shape_value = getattr(tensor, "shape", None)
+                offsets = getattr(tensor, "data_offsets", None)
+                if not isinstance(dtype, str) or not dtype:
+                    metadata_errors.append(f"{shard}:{key}: invalid safetensors dtype")
+                    continue
+                if not (
+                    isinstance(shape_value, (list, tuple))
+                    and all(type(dim) is int and dim >= 0 for dim in shape_value)
+                ):
+                    metadata_errors.append(f"{shard}:{key}: invalid safetensors shape")
+                    continue
+                if not (
+                    isinstance(offsets, (list, tuple))
+                    and len(offsets) == 2
+                    and all(type(offset) is int for offset in offsets)
+                    and offsets[0] >= 0
+                    and offsets[1] >= offsets[0]
+                ):
+                    metadata_errors.append(f"{shard}:{key}: invalid safetensors data offsets")
+                    continue
+                parsed_all[key] = _OfficialTensorMetadata(
+                    dtype=dtype,
+                    shape=tuple(shape_value),
+                    stored_bytes=offsets[1] - offsets[0],
+                    data_offsets=(offsets[0], offsets[1]),
+                )
+            metadata_errors.extend(
+                _validate_safetensors_offset_layout(shard, parsed_all)
+            )
+            shard_metadata[shard] = {
+                key: tensor
+                for key, tensor in parsed_all.items()
+                if key.startswith(key_prefix)
+            }
+        except Exception as exc:
+            metadata_errors.append(f"{shard}: safetensors metadata request failed: {exc}")
+            shard_metadata[shard] = {}
+
+    index_sha256 = hashlib.sha256(index_bytes).hexdigest()
+    namespace_report = _build_official_namespace_report(
+        config,
+        namespace,
+        weight_map,
+        index_path=(
+            f"hf://models/{repo_id}@{resolved_revision}/{_PRETRAINED_INDEX_NAME}"
+        ),
+        index_sha256=index_sha256,
+        snapshot_preflight_complete=False,
+        shard_metadata=shard_metadata,
+        verification_scope="config_index_selected_headers",
+        initial_errors=metadata_errors,
+    )
+    return OfficialHubCheckpointInspection(
+        repo_id=repo_id,
+        requested_revision=revision,
+        resolved_revision=resolved_revision,
+        huggingface_hub_version=huggingface_hub_version,
+        config_sha256=hashlib.sha256(config_bytes).hexdigest(),
+        index_sha256=index_sha256,
+        total_indexed_tensor_count=len(weight_map),
+        total_shard_count=len(set(weight_map.values())),
+        index_total_size_bytes=index_total_size_bytes,
+        metadata_document_bytes=len(config_bytes) + len(index_bytes),
+        inspected_shard_count=len(inspected_shards),
+        inspected_shard_files=inspected_shards,
+        metadata_only=True,
+        namespace=namespace_report,
+        is_complete=namespace_report.is_complete,
+        config=config,
+    )
+
+
 def _has_scale_sidecar(key: str, indexed_keys: set[str]) -> bool:
-    candidates = {f"{key}.scale"}
-    if key.endswith(".weight"):
-        candidates.add(f"{key.removesuffix('.weight')}.scale")
-    return bool(candidates & indexed_keys)
+    return bool(_scale_sidecars_for_weight(key, indexed_keys))
 
 
 def _copy_if_shape_matches(
@@ -937,9 +2017,9 @@ def convert_deepseek_official_state_dict(
     """Convert DeepSeek original checkpoint keys into this reference model layout.
 
     The converter supports tensors with matching shapes, plus scale sidecars for
-    FP8/floating weights and packed E2M1 FP4 uint8 weights. Separate official
-    SwiGLU `w1`/`w3` matrices are concatenated into this model's
-    `gate_up_proj.weight`.
+    FP8/floating weights and signed or unsigned byte-packed E2M1 FP4 weights.
+    Separate official SwiGLU `w1`/`w3` matrices are concatenated into this
+    model's `gate_up_proj.weight`.
     """
 
     target_shapes = {key: value.shape for key, value in model.state_dict().items()}
@@ -1271,11 +2351,16 @@ def build_deepseek_official_checkpoint_streaming_load_report(
                         )
                         del tensor
                         continue
-                    if tensor.dtype in {torch.int8, torch.uint8} and not _has_scale_sidecar(
-                        key, actual_keys
-                    ):
+                    dtype_requires_scale = str(tensor.dtype) in {
+                        "torch.float8_e4m3fn",
+                        "torch.float8_e5m2",
+                        "torch.int8",
+                        "torch.uint8",
+                    }
+                    if dtype_requires_scale and not _has_scale_sidecar(key, actual_keys):
                         dtype_errors.append(
-                            f"{shard.name}:{key}: 8-bit packed tensor is missing scale sidecar"
+                            f"{shard.name}:{key}: scaled low-precision tensor is missing "
+                            "scale sidecar"
                         )
                     converted_tensor_count += 1
                     converted_keys.append(key)
@@ -2200,7 +3285,13 @@ def save_sharded_safetensors(
     for shard_idx, start in enumerate(range(0, len(items), max_tensors_per_shard), start=1):
         shard_items = items[start : start + max_tensors_per_shard]
         shard_name = f"model-{shard_idx:05d}-of-{((len(items) - 1) // max_tensors_per_shard) + 1:05d}.safetensors"
-        save_file({key: value.detach().cpu() for key, value in shard_items}, checkpoint_dir / shard_name)
+        save_file(
+            {
+                key: value.detach().cpu().contiguous().clone()
+                for key, value in shard_items
+            },
+            checkpoint_dir / shard_name,
+        )
         for key, _ in shard_items:
             weight_map[key] = shard_name
     total_size = 0
@@ -2208,3 +3299,495 @@ def save_sharded_safetensors(
         total_size += _safetensors_payload_size(checkpoint_dir / shard_name)
     index = {"metadata": {"format": "pt", "total_size": total_size}, "weight_map": weight_map}
     (checkpoint_dir / "model.safetensors.index.json").write_text(json.dumps(index, indent=2, sort_keys=True))
+
+
+def _split_state_dict_by_size(
+    state_dict: dict[str, torch.Tensor],
+    max_shard_size_bytes: int,
+) -> list[list[tuple[str, torch.Tensor]]]:
+    if (
+        isinstance(max_shard_size_bytes, bool)
+        or not isinstance(max_shard_size_bytes, int)
+        or max_shard_size_bytes <= 0
+    ):
+        raise ValueError("max_shard_size_bytes must be a positive integer.")
+    if not state_dict:
+        raise ValueError("model state_dict must contain at least one tensor.")
+
+    shards: list[list[tuple[str, torch.Tensor]]] = []
+    current: list[tuple[str, torch.Tensor]] = []
+    current_size = 0
+    for key, tensor in sorted(state_dict.items()):
+        if not isinstance(key, str) or not isinstance(tensor, torch.Tensor):
+            raise TypeError("model state_dict must map string keys to tensors.")
+        if tensor.is_meta:
+            raise ValueError(f"cannot save unmaterialized meta tensor {key!r}.")
+        if tensor.layout != torch.strided:
+            raise ValueError(f"cannot save non-strided tensor {key!r}.")
+        tensor_size = int(tensor.numel() * tensor.element_size())
+        if current and current_size + tensor_size > max_shard_size_bytes:
+            shards.append(current)
+            current = []
+            current_size = 0
+        current.append((key, tensor))
+        current_size += tensor_size
+    if current:
+        shards.append(current)
+    return shards
+
+
+def _write_json(path: Path, value: dict[str, Any]) -> None:
+    path.write_text(
+        json.dumps(value, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
+def save_deepseek_v4_pretrained(
+    model: DeepSeekV4ForCausalLM,
+    save_directory: str | Path,
+    *,
+    max_shard_size_bytes: int = _DEFAULT_PRETRAINED_SHARD_SIZE_BYTES,
+    tokenizer: ByteTokenizer | None = None,
+) -> Path:
+    """Save a self-contained native model bundle into a new or empty directory.
+
+    The bundle is assembled in a sibling temporary directory and renamed into
+    place only after every shard and checksum has been written. Existing
+    non-empty directories are rejected to avoid mixing checkpoint generations.
+    """
+
+    from .modeling import DeepSeekV4ForCausalLM
+
+    if type(model) is not DeepSeekV4ForCausalLM:
+        raise TypeError("model must be a DeepSeekV4ForCausalLM instance.")
+    config = getattr(model, "config", None)
+    if not isinstance(config, DeepSeekV4Config):
+        raise TypeError("model.config must be a DeepSeekV4Config.")
+    if tokenizer is not None:
+        if not isinstance(tokenizer, ByteTokenizer):
+            raise TypeError("tokenizer must be a ByteTokenizer or None.")
+        tokenizer.validate_config(config)
+    state_dict = dict(model.state_dict())
+    shards = _split_state_dict_by_size(state_dict, max_shard_size_bytes)
+
+    target = Path(save_directory)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if target.exists():
+        if not target.is_dir():
+            raise FileExistsError(f"save_directory exists and is not a directory: {target}")
+        if any(target.iterdir()):
+            raise FileExistsError(
+                f"save_directory must be empty to avoid mixing checkpoints: {target}"
+            )
+
+    staging = Path(tempfile.mkdtemp(prefix=f".{target.name}-", dir=target.parent))
+    try:
+        config.to_json_file(staging / _PRETRAINED_CONFIG_NAME)
+        if tokenizer is not None:
+            tokenizer.to_json_file(staging / _PRETRAINED_TOKENIZER_NAME)
+        weight_map: dict[str, str] = {}
+        total_shards = len(shards)
+        for shard_index, shard_items in enumerate(shards, start=1):
+            shard_name = (
+                f"model-{shard_index:05d}-of-{total_shards:05d}.safetensors"
+            )
+            payload = {
+                key: tensor.detach().to(device="cpu").contiguous().clone()
+                for key, tensor in shard_items
+            }
+            save_file(payload, staging / shard_name, metadata={"format": "pt"})
+            for key, _ in shard_items:
+                weight_map[key] = shard_name
+
+        total_size = sum(
+            _safetensors_payload_size(staging / shard_name)
+            for shard_name in sorted(set(weight_map.values()))
+        )
+        index = {
+            "metadata": {"format": "pt", "total_size": total_size},
+            "weight_map": weight_map,
+        }
+        _write_json(staging / _PRETRAINED_INDEX_NAME, index)
+
+        bundle_files = {
+            _PRETRAINED_CONFIG_NAME,
+            _PRETRAINED_INDEX_NAME,
+            *weight_map.values(),
+        }
+        if tokenizer is not None:
+            bundle_files.add(_PRETRAINED_TOKENIZER_NAME)
+        checksums = {
+            name: _sha256_file(staging / name) for name in sorted(bundle_files)
+        }
+        manifest = {
+            "format": _PRETRAINED_FORMAT,
+            "format_version": (
+                _PRETRAINED_FORMAT_VERSION_WITH_TOKENIZER
+                if tokenizer is not None
+                else _PRETRAINED_FORMAT_VERSION
+            ),
+            "model_class": "DeepSeekV4ForCausalLM",
+            "config_file": _PRETRAINED_CONFIG_NAME,
+            "weights_index": _PRETRAINED_INDEX_NAME,
+            "sha256": checksums,
+        }
+        if tokenizer is not None:
+            manifest["tokenizer_file"] = _PRETRAINED_TOKENIZER_NAME
+        _write_json(staging / _PRETRAINED_MANIFEST_NAME, manifest)
+
+        staging.chmod(0o755)
+        if target.exists():
+            target.rmdir()
+        os.replace(staging, target)
+    finally:
+        if staging.exists():
+            shutil.rmtree(staging)
+    return target
+
+
+def _load_pretrained_config(
+    pretrained_directory: Path,
+    *,
+    verify_checksums: bool,
+) -> DeepSeekV4Config:
+    if not pretrained_directory.is_dir():
+        raise FileNotFoundError(f"pretrained model directory not found: {pretrained_directory}")
+    manifest_path = pretrained_directory / _PRETRAINED_MANIFEST_NAME
+    if not manifest_path.exists():
+        raise FileNotFoundError(
+            f"No native {_PRETRAINED_MANIFEST_NAME} found at {pretrained_directory}. "
+            "Official DeepSeek snapshots must use from_official_json and "
+            "load_deepseek_official_checkpoint instead."
+        )
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if not isinstance(manifest, dict):
+        raise ValueError("pretrained manifest root must be an object.")
+    if manifest.get("format") != _PRETRAINED_FORMAT:
+        raise ValueError(f"unsupported pretrained format: {manifest.get('format')!r}")
+    format_version = manifest.get("format_version")
+    if format_version not in {
+        _PRETRAINED_FORMAT_VERSION,
+        _PRETRAINED_FORMAT_VERSION_WITH_TOKENIZER,
+    }:
+        raise ValueError(
+            f"unsupported pretrained format_version: {format_version!r}"
+        )
+    if manifest.get("model_class") != "DeepSeekV4ForCausalLM":
+        raise ValueError(f"unsupported pretrained model_class: {manifest.get('model_class')!r}")
+    if manifest.get("config_file") != _PRETRAINED_CONFIG_NAME:
+        raise ValueError("pretrained manifest must reference config.json.")
+    if manifest.get("weights_index") != _PRETRAINED_INDEX_NAME:
+        raise ValueError("pretrained manifest must reference model.safetensors.index.json.")
+    if format_version == _PRETRAINED_FORMAT_VERSION:
+        if "tokenizer_file" in manifest:
+            raise ValueError("pretrained format_version 1 cannot declare a tokenizer file.")
+    elif manifest.get("tokenizer_file") != _PRETRAINED_TOKENIZER_NAME:
+        raise ValueError(
+            "pretrained format_version 2 must reference "
+            f"{_PRETRAINED_TOKENIZER_NAME}."
+        )
+
+    weight_map = _checkpoint_index_weight_map(pretrained_directory)
+    if weight_map is None:
+        raise FileNotFoundError(
+            f"No {_PRETRAINED_INDEX_NAME} found at {pretrained_directory}."
+        )
+    expected_files = {
+        _PRETRAINED_CONFIG_NAME,
+        _PRETRAINED_INDEX_NAME,
+        *weight_map.values(),
+    }
+    if format_version == _PRETRAINED_FORMAT_VERSION_WITH_TOKENIZER:
+        expected_files.add(_PRETRAINED_TOKENIZER_NAME)
+    checksums = manifest.get("sha256")
+    if not isinstance(checksums, dict) or set(checksums) != expected_files:
+        raise ValueError("pretrained manifest checksum inventory does not match the bundle.")
+
+    for name in sorted(expected_files):
+        path = _resolve_index_shard(pretrained_directory, name)
+        if not path.is_file():
+            raise FileNotFoundError(f"pretrained bundle file is missing: {name}")
+        expected_digest = checksums[name]
+        if not isinstance(expected_digest, str):
+            raise ValueError(f"invalid SHA-256 digest for pretrained file {name!r}.")
+        normalized_digest = expected_digest.lower()
+        if len(normalized_digest) != 64 or any(
+            character not in "0123456789abcdef" for character in normalized_digest
+        ):
+            raise ValueError(f"invalid SHA-256 digest for pretrained file {name!r}.")
+        if verify_checksums:
+            actual_digest = _sha256_file(path)
+            if actual_digest != normalized_digest:
+                raise ValueError(
+                    f"pretrained bundle checksum mismatch for {name!r}: "
+                    f"expected {normalized_digest}, got {actual_digest}."
+                )
+    config = DeepSeekV4Config.from_json_file(
+        pretrained_directory / _PRETRAINED_CONFIG_NAME
+    )
+    if format_version == _PRETRAINED_FORMAT_VERSION_WITH_TOKENIZER:
+        tokenizer = ByteTokenizer.from_json_file(
+            pretrained_directory / _PRETRAINED_TOKENIZER_NAME
+        )
+        tokenizer.validate_config(config)
+    return config
+
+
+def load_deepseek_v4_pretrained_tokenizer(
+    pretrained_directory: str | Path,
+    *,
+    verify_checksums: bool = True,
+) -> ByteTokenizer:
+    """Load a tokenizer only when it is checksum-bound to a native bundle."""
+
+    root = Path(pretrained_directory)
+    config = _load_pretrained_config(root, verify_checksums=verify_checksums)
+    manifest_path = root / _PRETRAINED_MANIFEST_NAME
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if manifest.get("format_version") != _PRETRAINED_FORMAT_VERSION_WITH_TOKENIZER:
+        raise ValueError(
+            "pretrained bundle has no checksum-bound tokenizer; create a format_version 2 "
+            "bundle or explicitly select a tokenizer outside this trust boundary."
+        )
+    tokenizer = ByteTokenizer.from_json_file(root / _PRETRAINED_TOKENIZER_NAME)
+    tokenizer.validate_config(config)
+    return tokenizer
+
+
+def _canonical_config_sha256(config: DeepSeekV4Config) -> str:
+    payload = json.dumps(
+        config.to_dict(),
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _summarize_bundle_keys(keys: set[str]) -> str:
+    ordered = sorted(keys)
+    preview = ", ".join(repr(key) for key in ordered[:5])
+    if len(ordered) > 5:
+        preview += f", ... ({len(ordered)} total)"
+    return preview
+
+
+def verify_deepseek_v4_pretrained_bundle(
+    pretrained_directory: str | Path,
+    *,
+    verify_checksums: bool = True,
+) -> PretrainedBundleReport:
+    """Verify a native bundle's files and shard inventory without a model.
+
+    This validates the native manifest, optional SHA-256 checksums, canonical
+    configuration, index metadata, safetensors headers, and the exact mapping
+    between indexed keys and shard contents. It does not authenticate the
+    publisher or prove that the configuration describes a particular source
+    checkpoint.
+    """
+
+    root = Path(pretrained_directory)
+    errors: list[str] = []
+    bundle_format = ""
+    format_version: int | None = None
+    model_class = ""
+    tokenizer_file: str | None = None
+    tokenizer_format: str | None = None
+    tokenizer_format_version: int | None = None
+    tokenizer_type: str | None = None
+    tokenizer_sha256 = ""
+    tokenizer_verified = False
+    config_sha256 = ""
+    manifest_sha256 = ""
+    index_sha256 = ""
+    checksums_verified = False
+    shard_headers_verified = False
+    file_count = 0
+    shard_files: list[str] = []
+    tensor_count = 0
+    tensor_bytes = 0
+    index_total_size: int | None = None
+
+    manifest_path = root / _PRETRAINED_MANIFEST_NAME
+    index_path = root / _PRETRAINED_INDEX_NAME
+    tokenizer_path = root / _PRETRAINED_TOKENIZER_NAME
+    if manifest_path.is_file():
+        manifest_sha256 = _sha256_file(manifest_path)
+        try:
+            manifest_preview = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            manifest_preview = None
+        if isinstance(manifest_preview, dict):
+            if isinstance(manifest_preview.get("format"), str):
+                bundle_format = manifest_preview["format"]
+            if type(manifest_preview.get("format_version")) is int:
+                format_version = manifest_preview["format_version"]
+            if isinstance(manifest_preview.get("model_class"), str):
+                model_class = manifest_preview["model_class"]
+            if isinstance(manifest_preview.get("tokenizer_file"), str):
+                tokenizer_file = manifest_preview["tokenizer_file"]
+    if tokenizer_path.is_file():
+        tokenizer_sha256 = _sha256_file(tokenizer_path)
+        try:
+            tokenizer_preview = json.loads(tokenizer_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            tokenizer_preview = None
+        if isinstance(tokenizer_preview, dict):
+            if isinstance(tokenizer_preview.get("format"), str):
+                tokenizer_format = tokenizer_preview["format"]
+            if type(tokenizer_preview.get("format_version")) is int:
+                tokenizer_format_version = tokenizer_preview["format_version"]
+            if isinstance(tokenizer_preview.get("tokenizer_type"), str):
+                tokenizer_type = tokenizer_preview["tokenizer_type"]
+    if index_path.is_file():
+        index_sha256 = _sha256_file(index_path)
+
+    try:
+        config = _load_pretrained_config(root, verify_checksums=verify_checksums)
+        checksums_verified = verify_checksums
+        config_sha256 = _canonical_config_sha256(config)
+
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        bundle_format = manifest["format"]
+        format_version = manifest["format_version"]
+        model_class = manifest["model_class"]
+        if format_version == _PRETRAINED_FORMAT_VERSION_WITH_TOKENIZER:
+            tokenizer_file = _PRETRAINED_TOKENIZER_NAME
+            tokenizer_format = BYTE_TOKENIZER_FORMAT
+            tokenizer_format_version = BYTE_TOKENIZER_FORMAT_VERSION
+            tokenizer_type = BYTE_TOKENIZER_TYPE
+            tokenizer_verified = verify_checksums
+        checksums = manifest["sha256"]
+        file_count = len(checksums) + 1
+        weight_map = _checkpoint_index_weight_map(root)
+        if weight_map is None:
+            raise FileNotFoundError(f"No {_PRETRAINED_INDEX_NAME} found at {root}.")
+
+        index = json.loads(index_path.read_text(encoding="utf-8"))
+        index_total_size, index_errors = _index_total_size(index)
+        errors.extend(index_errors)
+
+        resolved_root = root.resolve()
+        canonical_weight_map: dict[str, str] = {}
+        for key, shard_name in weight_map.items():
+            shard_path = _resolve_index_shard(root, shard_name)
+            canonical_weight_map[key] = shard_path.relative_to(resolved_root).as_posix()
+        shard_files = sorted(set(canonical_weight_map.values()))
+
+        indexed_shards = set(shard_files)
+        present_shards = {
+            path.resolve().relative_to(resolved_root).as_posix()
+            for path in root.rglob("*.safetensors")
+            if path.is_file()
+        }
+        unindexed_shards = present_shards - indexed_shards
+        if unindexed_shards:
+            errors.append(
+                "pretrained bundle contains unindexed safetensors shards: "
+                f"{_summarize_bundle_keys(unindexed_shards)}"
+            )
+
+        header_error_count = len(errors)
+        for shard_name in shard_files:
+            shard_path = _resolve_index_shard(root, shard_name)
+            expected_keys = {
+                key
+                for key, mapped_shard in canonical_weight_map.items()
+                if mapped_shard == shard_name
+            }
+            with safe_open(shard_path, framework="pt", device="cpu") as handle:
+                actual_keys = set(handle.keys())
+            missing_keys = expected_keys - actual_keys
+            unexpected_keys = actual_keys - expected_keys
+            if missing_keys:
+                errors.append(
+                    f"{shard_name} is missing indexed tensors: "
+                    f"{_summarize_bundle_keys(missing_keys)}"
+                )
+            if unexpected_keys:
+                errors.append(
+                    f"{shard_name} contains unindexed tensors: "
+                    f"{_summarize_bundle_keys(unexpected_keys)}"
+                )
+            tensor_count += len(actual_keys)
+            tensor_bytes += _safetensors_payload_size(shard_path)
+        shard_headers_verified = len(errors) == header_error_count
+
+        if index_total_size is not None and index_total_size != tensor_bytes:
+            errors.append(
+                "safetensors index total_size does not match shard payloads: "
+                f"expected {index_total_size}, got {tensor_bytes}."
+            )
+    except (FileNotFoundError, OSError, TypeError, ValueError, SafetensorError) as exc:
+        errors.append(str(exc))
+
+    return PretrainedBundleReport(
+        is_complete=not errors,
+        bundle_path=str(root),
+        format=bundle_format,
+        format_version=format_version,
+        model_class=model_class,
+        tokenizer_file=tokenizer_file,
+        tokenizer_format=tokenizer_format,
+        tokenizer_format_version=tokenizer_format_version,
+        tokenizer_type=tokenizer_type,
+        tokenizer_sha256=tokenizer_sha256,
+        tokenizer_verified=tokenizer_verified,
+        generation_ready=(
+            not errors
+            and format_version == _PRETRAINED_FORMAT_VERSION_WITH_TOKENIZER
+            and checksums_verified
+            and tokenizer_verified
+        ),
+        config_sha256=config_sha256,
+        manifest_sha256=manifest_sha256,
+        index_sha256=index_sha256,
+        checksums_verified=checksums_verified,
+        shard_headers_verified=shard_headers_verified,
+        file_count=file_count,
+        shard_count=len(shard_files),
+        tensor_count=tensor_count,
+        tensor_bytes=tensor_bytes,
+        index_total_size_bytes=index_total_size,
+        shard_files=shard_files,
+        errors=errors,
+    )
+
+
+def load_deepseek_v4_pretrained(
+    pretrained_directory: str | Path,
+    *,
+    device: torch.device | str = "cpu",
+    dtype: torch.dtype | None = None,
+    verify_checksums: bool = True,
+) -> DeepSeekV4ForCausalLM:
+    """Load a native model bundle with at most one checkpoint shard in flight."""
+
+    from .modeling import DeepSeekV4ForCausalLM
+
+    root = Path(pretrained_directory)
+    config = _load_pretrained_config(root, verify_checksums=verify_checksums)
+    target_device = torch.device(device)
+    if target_device.type == "meta":
+        raise ValueError("device='meta' cannot produce a runnable pretrained model.")
+    if dtype is not None and not isinstance(dtype, torch.dtype):
+        raise TypeError("dtype must be a torch.dtype or None.")
+
+    with torch.device("meta"):
+        model = DeepSeekV4ForCausalLM(config)
+    load_safetensors_checkpoint(
+        model,
+        root,
+        strict=True,
+        low_memory=True,
+        assign=True,
+        device=target_device,
+        dtype=dtype,
+    )
+    if config.tie_word_embeddings:
+        model.lm_head.weight = model.model.embed_tokens.weight
+    meta_keys = [key for key, tensor in model.state_dict().items() if tensor.is_meta]
+    if meta_keys:
+        raise RuntimeError(f"pretrained load left unmaterialized tensors: {meta_keys}")
+    model.eval()
+    return model
