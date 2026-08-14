@@ -93,6 +93,27 @@
         "tokenizer_round_trip_match": true,
         "tokenizer_sha256": "ed2f19ce752f7a537fa58751fc0b72f9cae48ceb3acf137ae82a73f0edc54abd"
       }
+    },
+    {
+      "environment": {
+        "device": "cpu",
+        "machine": "aarch64",
+        "python_version": "3.11.15",
+        "torch_version": "2.13.0+cu130"
+      },
+      "id": "linux-aarch64-py311-torch2.13-cu130-32ee4b85",
+      "implementation_sha256": "32ee4b851dff4d839c34e6af899ede72f83218c3887ff0d413a7eddaa96f818b",
+      "observations": {
+        "bundle_format_version": 2,
+        "bundle_manifest_sha256": "507bdc302dcf3895579eeac0b2c6fc507a71d0c1de147ab691754dcfbaad7626",
+        "checkpoint_round_trip_match": true,
+        "final_eval_loss": 4.558489203453064,
+        "final_train_loss": 4.654114723205566,
+        "initial_eval_loss": 7.240200519561768,
+        "sample_text": ".\nHeavily compreeeeeeeeneeeeeeeeeeeeeeeeeeeeeeee",
+        "tokenizer_round_trip_match": true,
+        "tokenizer_sha256": "ed2f19ce752f7a537fa58751fc0b72f9cae48ceb3acf137ae82a73f0edc54abd"
+      }
     }
   ],
   "kind": "tiny-text-cpu-reproduction-contract",

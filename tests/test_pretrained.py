@@ -351,6 +351,31 @@ def test_progressive_assign_preserves_shared_parameters(tmp_path: Path):
     assert torch.equal(loaded.lm_head.weight, source.lm_head.weight)
 
 
+def test_progressive_assign_rejects_conflicting_shared_parameter_payloads(
+    tmp_path: Path,
+):
+    config = _tiny_config(tie_word_embeddings=True)
+    source = DeepSeekV4ForCausalLM(config)
+    state = {key: tensor.clone() for key, tensor in source.state_dict().items()}
+    state["model.embed_tokens.weight"].zero_()
+    state["lm_head.weight"].fill_(1)
+    checkpoint = tmp_path / "conflicting-shared"
+    save_sharded_safetensors(state, checkpoint, max_tensors_per_shard=1)
+    with torch.device("meta"):
+        loaded = DeepSeekV4ForCausalLM(config)
+
+    with pytest.raises(RuntimeError, match="shared parameter keys") as exc_info:
+        load_safetensors_checkpoint(
+            loaded,
+            checkpoint,
+            low_memory=True,
+            assign=True,
+        )
+    message = str(exc_info.value)
+    assert "model.embed_tokens.weight" in message
+    assert "lm_head.weight" in message
+
+
 def test_pretrained_load_can_convert_floating_dtype(tmp_path: Path):
     model = DeepSeekV4ForCausalLM(_tiny_config())
     bundle = tmp_path / "dtype"

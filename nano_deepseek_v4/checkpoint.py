@@ -514,6 +514,30 @@ def _restore_shared_module_tensors(
             setattr(parent, attribute, primary)
 
 
+def _checkpoint_tensors_equal(
+    left: torch.Tensor,
+    right: torch.Tensor,
+) -> bool:
+    if left.shape != right.shape or left.dtype != right.dtype:
+        return False
+    if torch.equal(left, right):
+        return True
+    if left.is_floating_point() or left.is_complex():
+        try:
+            return bool(
+                torch.allclose(
+                    left,
+                    right,
+                    rtol=0.0,
+                    atol=0.0,
+                    equal_nan=True,
+                )
+            )
+        except RuntimeError:
+            return False
+    return False
+
+
 def _load_safetensors_checkpoint_progressively(
     model: torch.nn.Module,
     checkpoint: str | Path,
@@ -530,6 +554,12 @@ def _load_safetensors_checkpoint_progressively(
         raise TypeError("dtype must be a torch.dtype or None.")
 
     shared_groups = _shared_module_tensor_groups(model) if assign else []
+    shared_group_by_name = {
+        name: group_index
+        for group_index, (_, names) in enumerate(shared_groups)
+        for name in names
+    }
+    shared_group_references: dict[int, tuple[str, torch.Tensor]] = {}
     shards, shard_mappings, missing_keys, unexpected_keys = (
         _preflight_progressive_checkpoint(model, checkpoint, key_mapping)
     )
@@ -552,6 +582,17 @@ def _load_safetensors_checkpoint_progressively(
                 continue
             if dtype is not None and tensor.is_floating_point():
                 tensor = tensor.to(dtype=dtype)
+            shared_group_index = shared_group_by_name.get(target_key)
+            if shared_group_index is not None:
+                reference = shared_group_references.get(shared_group_index)
+                if reference is None:
+                    shared_group_references[shared_group_index] = (target_key, tensor)
+                elif not _checkpoint_tensors_equal(reference[1], tensor):
+                    kind, _ = shared_groups[shared_group_index]
+                    raise RuntimeError(
+                        f"Checkpoint tensors for shared {kind} keys "
+                        f"{reference[0]!r} and {target_key!r} differ."
+                    )
             mapped_state[target_key] = tensor
         model.load_state_dict(mapped_state, strict=False, assign=assign)
 
