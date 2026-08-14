@@ -427,8 +427,8 @@ def test_offline_conformance_receipts_use_verified_network_namespaces():
     assert ci_offline_calls == 4
     assert release_offline_calls == 3
     # In addition to every core/offline profile, isolate sdist and wheel
-    # reproduce/generate plus the installed notebook test and execution.
-    isolated_non_conformance_calls = 6
+    # reproduce/generate/tour plus the installed notebook test and execution.
+    isolated_non_conformance_calls = 8
     assert ci.count('"$GITHUB_WORKSPACE/scripts/run_no_network.py"') == (
         ci_offline_calls + isolated_non_conformance_calls
     )
@@ -680,9 +680,13 @@ def test_installed_base_artifacts_run_and_validate_the_unified_user_journey():
             dspark = re.search(
                 r'/bin/nano-deepseek-v4"? dspark \\', installed_smoke
             )
+            tour = re.search(
+                r'/bin/nano-deepseek-v4"? tour --json', installed_smoke
+            )
             assert reproduce is not None, label
             assert generate is not None, label
             assert dspark is not None, label
+            assert tour is not None, label
             conformance = re.compile(
                 r'/bin/nano-deepseek-v4"? conformance \\'
             ).search(installed_smoke, dspark.end())

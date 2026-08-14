@@ -27,6 +27,7 @@ TRANSITIONAL_FRAGMENTS: dict[str, tuple[str, ...]] = {
         "The Unreleased unified CLI",
         "For every Unreleased command",
         "The current source also provides one discoverable command surface",
+        "The current source can turn that smoke test into a guided trace",
         "The current source combines the local execution checks",
         "requires the **current source checkout** until the next release",
         "A wheel built from the current Unreleased source",

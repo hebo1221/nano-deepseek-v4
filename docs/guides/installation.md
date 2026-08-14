@@ -46,6 +46,7 @@ Check the installation without downloading a checkpoint:
 ```bash
 nano-deepseek-v4 --version
 nano-deepseek-v4 demo
+nano-deepseek-v4 tour
 nano-deepseek-v4 dspark
 nano-deepseek-v4 dspark-scheduler
 # Equivalent module entry point:
@@ -55,6 +56,10 @@ python -m nano_deepseek_v4 demo
 Both DSpark commands are CPU-only, no-download checks. `dspark` covers the tiny
 draft equations; `dspark-scheduler` covers Algorithm 1 and Section 5.2
 arithmetic on packaged calibrated probabilities and synthetic SPS tables.
+`tour` traces real tensor shapes through every attention and routing family in
+the tiny model, then points to the
+[modeling walkthrough](modeling-walkthrough.md). It is also CPU-only and
+no-download.
 
 The current source keeps the legacy commands such as
 `nano-deepseek-v4-demo` for compatibility.

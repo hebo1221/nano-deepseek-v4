@@ -274,6 +274,8 @@ jobs:
           "${NANO_SDIST_ROOT}/venv/bin/nano-deepseek-v4" --help
           "${NANO_SDIST_PYTHON}" -m nano_deepseek_v4 --help
           "${NANO_SDIST_ROOT}/venv/bin/nano-deepseek-v4" demo
+          "${NANO_SDIST_PYTHON}" "$GITHUB_WORKSPACE/scripts/run_no_network.py" \
+            "${NANO_SDIST_ROOT}/venv/bin/nano-deepseek-v4" tour --json
           (
             cd /tmp
             "${NANO_SDIST_PYTHON}" "$GITHUB_WORKSPACE/scripts/run_no_network.py" \
@@ -622,6 +624,9 @@ jobs:
           /tmp/nano-deepseek-v4-wheel/bin/nano-deepseek-v4 --help
           /tmp/nano-deepseek-v4-wheel/bin/python -m nano_deepseek_v4 --help
           /tmp/nano-deepseek-v4-wheel/bin/nano-deepseek-v4 demo
+          /tmp/nano-deepseek-v4-wheel/bin/python \
+            "$GITHUB_WORKSPACE/scripts/run_no_network.py" \
+            /tmp/nano-deepseek-v4-wheel/bin/nano-deepseek-v4 tour --json
           /tmp/nano-deepseek-v4-wheel/bin/nano-deepseek-v4-verify-flash-0731 --help
           /tmp/nano-deepseek-v4-wheel/bin/nano-deepseek-v4-demo
           /tmp/nano-deepseek-v4-wheel/bin/nano-deepseek-v4-attention-reach \

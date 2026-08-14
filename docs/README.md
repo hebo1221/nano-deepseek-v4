@@ -13,6 +13,9 @@ says otherwise.
 
 - [Installation](guides/installation.md): CPU-safe PyPI and editable installs,
   accelerator setup, optional extras, and the first no-download check.
+- [Read the model in ten minutes](guides/modeling-walkthrough.md): run
+  `nano-deepseek-v4 tour` and follow one real tensor through mHC, sliding,
+  CSA/HCA memory, MoE routing, MTP, and cached decoding.
 - [Train and generate](guides/train-and-generate.md): verify the fixed CPU
   learning contract, customize byte-text training, save a generation-ready
   bundle, and use a local or user-owned Hugging Face repository.

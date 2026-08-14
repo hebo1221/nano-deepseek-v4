@@ -113,6 +113,25 @@ router layers: 4
 The weights and token IDs are random. This proves that the architecture and
 chunked cache path execute consistently; it is not a text-quality demo.
 
+## Read the model in ten minutes
+
+The current source can turn that smoke test into a guided trace through the
+actual modules:
+
+```bash
+nano-deepseek-v4 tour
+```
+
+It reports observed tensor shapes through mHC residual streams, sliding, CSA,
+and HCA memory, hash and learned MoE routing, the language-model head, MTP, and
+cached decoding. The fixture runs on CPU and downloads nothing. It is an
+architecture walkthrough, not a model or performance benchmark.
+
+Follow the output alongside the
+[modeling walkthrough](https://github.com/hebo1221/nano-deepseek-v4/blob/main/docs/guides/modeling-walkthrough.md),
+which maps each step back to the report concept and source symbol. Add `--json`
+to capture the same trace as structured data.
+
 ## Run a conformance profile
 
 The current source combines the local execution checks into one fixed,

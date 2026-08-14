@@ -70,6 +70,7 @@ review enabled as separate security gates.
    mypy nano_deepseek_v4 scripts tests
    pytest --cov=nano_deepseek_v4 --cov-report=term-missing --cov-fail-under=75
    nano-deepseek-v4 attention-reach
+   nano-deepseek-v4 tour --json
    nano-deepseek-v4 dspark --json --output /tmp/dspark.json
    nano-deepseek-v4 dspark-scheduler --json --output /tmp/dspark-scheduler.json
    nano-deepseek-v4 parity
@@ -184,6 +185,7 @@ review enabled as separate security gates.
    python -m pip install "nano-deepseek-v4[official,parity]==X.Y.Z"
    nano-deepseek-v4 --version
    nano-deepseek-v4 demo
+   nano-deepseek-v4 tour
    python -m nano_deepseek_v4 --help
    nano-deepseek-v4 inspect --preset flash
    nano-deepseek-v4 inspect --preset flash-0731 --json

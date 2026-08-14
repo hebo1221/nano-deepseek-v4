@@ -46,6 +46,7 @@ nano_deepseek_v4/
 ├── checkpoint.py      # native/official safetensors, DSpark metadata, cache persistence
 ├── data.py            # CLM packing and SFT label masking
 ├── training.py        # train step, GRPO, and distillation losses
+├── tour.py            # executable tiny-model tensor and routing walkthrough
 ├── evaluation.py      # language-model and multiple-choice evaluation
 ├── architecture.py    # allocation-free inspection CLI
 ├── conformance.py     # fixed profiles and aggregate machine receipts

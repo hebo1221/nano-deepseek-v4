@@ -8,6 +8,12 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- An executable `nano-deepseek-v4 tour` that traces observed tensor shapes
+  through mHC streams, all three tiny attention families, hash and learned MoE
+  routing, the LM head, native MTP, and cached decoding without downloads. A
+  ten-minute source walkthrough maps the trace to the implementation. The
+  command remains an educational CPU fixture, not a benchmark or
+  official-weight runtime claim.
 - Fixed, wheel-packaged DSpark semantic vectors and a no-download
   `nano-deepseek-v4 dspark` checker. A separately written native path and dense
   FP32 oracle reproduce 39 intermediate/output tensors and exact proposals for

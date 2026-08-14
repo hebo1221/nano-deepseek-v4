@@ -34,6 +34,12 @@ COMMANDS = (
         "First run",
     ),
     CommandSpec(
+        "tour",
+        "nano_deepseek_v4.tour",
+        "trace the native tiny model through attention, MoE, MTP, and cache",
+        "First run",
+    ),
+    CommandSpec(
         "train",
         "nano_deepseek_v4.train_text",
         "train a tiny byte-text model and optionally save a native bundle",
