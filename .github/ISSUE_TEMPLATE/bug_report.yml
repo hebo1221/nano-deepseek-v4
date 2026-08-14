@@ -1,0 +1,140 @@
+name: Bug report
+description: Report reproducible incorrect behavior in nano-deepseek-v4
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to provide a reproducible report.
+
+        Use [Q&A](https://github.com/hebo1221/nano-deepseek-v4/discussions/categories/q-a)
+        for usage questions and
+        [Ideas](https://github.com/hebo1221/nano-deepseek-v4/discussions/categories/ideas)
+        for feature proposals. Report suspected vulnerabilities through the
+        [private security form](https://github.com/hebo1221/nano-deepseek-v4/security/advisories/new),
+        not a public issue. Do not paste tokens, credentials, private repository URLs, or private model data.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Preflight
+      options:
+        - label: I searched existing issues and discussions for the same behavior.
+          required: true
+        - label: I can reproduce this with the minimal command or code below.
+          required: true
+        - label: I removed secrets, credentials, and private data from this report.
+          required: true
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Affected surface
+      description: Choose the narrowest surface that reproduces the problem.
+      options:
+        - Installation or packaging
+        - CPU demo
+        - Training
+        - Generation
+        - Native bundle save, inspect, or load
+        - Architecture or checkpoint inspection
+        - Transformers parity
+        - Attention reachability
+        - Inference-cache persistence
+        - Hugging Face Hub or official checkpoint handling
+        - Python API or model equations
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install_origin
+    attributes:
+      label: Installation origin
+      options:
+        - PyPI release
+        - Current source checkout
+        - Locally built wheel
+        - Locally built source distribution
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Package version and source commit
+      description: >-
+        Run `python -c 'from importlib.metadata import version; print(version("nano-deepseek-v4"))'`.
+        For a current source checkout, also include `nano-deepseek-v4 --version`
+        and the full `git rev-parse HEAD` commit.
+      placeholder: "0.2.0; source commit 0123456789abcdef..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: >-
+        Include OS and architecture, Python, PyTorch, CPU or accelerator, and
+        device model. State whether CUDA is available.
+      placeholder: |
+        OS/architecture: Ubuntu 24.04, aarch64
+        Python: 3.12.4
+        PyTorch: 2.8.0+cpu
+        Device: CPU
+        CUDA available: false
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Provide the smallest complete command or code sample that still fails.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should have happened?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What happened instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: output
+    attributes:
+      label: Complete output or traceback
+      description: Paste the complete output after removing secrets and private paths or data.
+      render: shell
+    validations:
+      required: true
+
+  - type: input
+    id: hub_revision
+    attributes:
+      label: Hugging Face repository and immutable revision
+      description: >-
+        For Hub or checkpoint behavior, provide `owner/repository` and the
+        resolved commit SHA, not a moving branch or tag.
+      placeholder: "deepseek-ai/DeepSeek-V4-Flash-0731 @ 0123456789abcdef..."
+
+  - type: textarea
+    id: additional_context
+    attributes:
+      label: Additional context
+      description: Add only details that help distinguish or reproduce the failure.

@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "cli_report_schema_version": 3,
+  "source": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash-0731",
+  "source_revision": "7872f01b1d1fe23eabc4c98b48bffcef5a386062",
+  "validated_at": "2026-08-11",
+  "metadata_probe_command": "nano-deepseek-v4-inspect --hf-repo deepseek-ai/DeepSeek-V4-Flash-0731 --revision 7872f01b1d1fe23eabc4c98b48bffcef5a386062 --namespace mtp --hf-cache-dir /path/to/empty-cache --json",
+  "official_source_sha256": {
+    "config.json": "6c8f3d2d3b48707541b88f32f22ef3f0f8a6b57d8523281e2b8d3cdb0ae9a023",
+    "model.safetensors.index.json": "98efab455cf08dfbbbaaba6f570e1bf10bf927d2b4c3c453a59c2f6f0e3be92b",
+    "inference/config.json": "c90861f3d10a9e4ef5954f8f1a34c529d480da1c5799f84660028f4e38e14e71",
+    "inference/model.py": "c0c19e6c9fa439bac7fbb1c5bc1868232dfd5aa2f439a548d0e33dcc2a9edd3f"
+  },
+  "architecture": {
+    "backbone_layer_count": 43,
+    "raw_num_nextn_predict_layers": 1,
+    "dspark_stage_count": 3,
+    "dspark_layer_types": [
+      "sliding_attention",
+      "sliding_attention",
+      "sliding_attention"
+    ],
+    "dspark_block_size": 5,
+    "dspark_noise_token_id": 128799,
+    "dspark_target_layer_ids": [
+      40,
+      41,
+      42
+    ],
+    "dspark_markov_rank": 256,
+    "runtime_load_supported": false
+  },
+  "checkpoint_index": {
+    "indexed_tensor_count": 72317,
+    "shard_count": 48,
+    "indexed_tensor_bytes": 166878536440
+  },
+  "hub_metadata_probe": {
+    "huggingface_hub_version": "1.27.0",
+    "requested_revision": "7872f01b1d1fe23eabc4c98b48bffcef5a386062",
+    "resolved_revision": "7872f01b1d1fe23eabc4c98b48bffcef5a386062",
+    "metadata_only": true,
+    "verification_scope": "config_index_selected_headers",
+    "metadata_document_bytes": 5604759,
+    "inspected_shard_count": 3,
+    "inspected_shard_files": [
+      "model-00046-of-00048.safetensors",
+      "model-00047-of-00048.safetensors",
+      "model-00048-of-00048.safetensors"
+    ],
+    "cached_safetensors_file_count": 0,
+    "snapshot_preflight_complete": false,
+    "payload_integrity_verified": false
+  },
+  "dspark_namespace": {
+    "checkpoint_family": "deepseek_v4_dspark",
+    "namespace": "mtp",
+    "namespace_kind": "dspark",
+    "schema_compatible": true,
+    "verification_scope": "config_index_selected_headers",
+    "snapshot_preflight_complete": false,
+    "scale_metadata_verified": true,
+    "payload_integrity_verified": false,
+    "runtime_load_supported": false,
+    "indexed_tensor_count": 4705,
+    "inspected_tensor_count": 4705,
+    "non_scale_tensor_count": 2376,
+    "scale_tensor_count": 2329,
+    "scaled_tensor_count": 2329,
+    "quantized_tensor_count": 2304,
+    "scale_sidecar_validation": {
+      "metadata_verified": true,
+      "one_to_one": true,
+      "dtype": "F8_E8M0",
+      "fp8_weight_shape_rule": "ceil(out/128) x ceil(in/128)",
+      "packed_fp4_expert_shape_rule": "out x ceil(logical_in/32)"
+    },
+    "stored_tensor_bytes": 10862838300,
+    "logical_model_parameter_count": 19845850215,
+    "non_parameter_routing_state_count": 768,
+    "dtype_counts": {
+      "BF16": 20,
+      "F32": 27,
+      "F8_E4M3": 25,
+      "F8_E8M0": 2329,
+      "I8": 2304
+    },
+    "inventory_sha256": "e404f70fb47572253d4d3b3f2f1977611c4a65701bf16c81422303cbdbb4cf0b",
+    "inventory_sha256_scope": "canonical sorted JSON mapping DSpark namespace keys to safetensors dtype and shape",
+    "missing_expected_key_count": 0,
+    "missing_key_count": 0,
+    "unexpected_key_count": 0,
+    "unrecognized_key_count": 0,
+    "shape_mismatch_count": 0,
+    "unchecked_shape_key_count": 0,
+    "error_count": 0,
+    "is_complete": true
+  },
+  "scope_boundary": "The result verifies the pinned config, checkpoint index, and selected DSpark shard headers. It does not verify weight payload integrity, full-snapshot presence, model quality, or native DSpark execution."
+}

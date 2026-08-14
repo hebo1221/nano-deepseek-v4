@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import torch
 import torch.nn.functional as F
 
-from .modeling import DeepSeekV4ForCausalLM
+from .modeling import DeepSeekV4ForCausalLM, _sample_next_token
 from .optim import Muon, deepseek_v4_optimizer_groups
 
 
@@ -116,32 +116,6 @@ def next_token_logprobs(logits: torch.Tensor, input_ids: torch.Tensor) -> torch.
     log_probs = logits[:, :-1].log_softmax(dim=-1)
     labels = input_ids[:, 1:].unsqueeze(-1)
     return log_probs.gather(-1, labels).squeeze(-1)
-
-
-def _sample_next_token(
-    logits: torch.Tensor,
-    temperature: float = 1.0,
-    top_p: float = 1.0,
-) -> tuple[torch.Tensor, torch.Tensor]:
-    if temperature <= 0:
-        raise ValueError("temperature must be positive.")
-    if not 0 < top_p <= 1:
-        raise ValueError("top_p must be in (0, 1].")
-    scaled = logits.float() / temperature
-    if top_p < 1.0:
-        sorted_logits, sorted_indices = scaled.sort(dim=-1, descending=True)
-        sorted_probs = sorted_logits.softmax(dim=-1)
-        cumulative = sorted_probs.cumsum(dim=-1)
-        # Keep the first token that crosses the threshold; otherwise the
-        # retained set can have total probability strictly below `top_p`.
-        keep = cumulative - sorted_probs < top_p
-        filtered = torch.full_like(scaled, float("-inf"))
-        filtered.scatter_(-1, sorted_indices, sorted_logits.masked_fill(~keep, float("-inf")))
-        scaled = filtered
-    probs = scaled.softmax(dim=-1)
-    token = torch.multinomial(probs, num_samples=1)
-    logprob = probs.gather(-1, token).clamp_min(1e-45).log()
-    return token, logprob
 
 
 @torch.no_grad()

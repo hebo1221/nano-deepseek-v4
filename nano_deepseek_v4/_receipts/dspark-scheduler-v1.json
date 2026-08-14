@@ -1,0 +1,445 @@
+{
+  "cases": [
+    {
+      "case_id": "smooth-causal",
+      "confidence_probabilities": [
+        [
+          0.9,
+          0.5,
+          0.5
+        ],
+        [
+          0.8,
+          0.75,
+          0.25
+        ]
+      ],
+      "expected": {
+        "allocation_expected_tokens": 3.7,
+        "allocation_order": [
+          {
+            "position": 1,
+            "request_index": 0,
+            "survival_probability": 0.9
+          },
+          {
+            "position": 1,
+            "request_index": 1,
+            "survival_probability": 0.8
+          }
+        ],
+        "allocation_throughput": 2.9600000000000004,
+        "baseline_throughput": 2.0,
+        "batch_size": 4,
+        "capacity": 2,
+        "capacity_expected_tokens": 3.7,
+        "capacity_order": [
+          {
+            "position": 1,
+            "request_index": 0,
+            "survival_probability": 0.9
+          },
+          {
+            "position": 1,
+            "request_index": 1,
+            "survival_probability": 0.8
+          },
+          {
+            "position": 2,
+            "request_index": 1,
+            "survival_probability": 0.6000000000000001
+          },
+          {
+            "position": 2,
+            "request_index": 0,
+            "survival_probability": 0.45
+          },
+          {
+            "position": 3,
+            "request_index": 0,
+            "survival_probability": 0.225
+          },
+          {
+            "position": 3,
+            "request_index": 1,
+            "survival_probability": 0.15000000000000002
+          }
+        ],
+        "capacity_throughput": 2.9600000000000004,
+        "lengths": [
+          1,
+          1
+        ],
+        "mode": "causal_greedy",
+        "stopped_early": true,
+        "trace": [
+          {
+            "batch_size": 3,
+            "candidate": {
+              "position": 1,
+              "request_index": 0,
+              "survival_probability": 0.9
+            },
+            "capacity": 1,
+            "expected_tokens": 2.9,
+            "improved": true,
+            "steps_per_second": 0.9,
+            "stopped": false,
+            "throughput": 2.61
+          },
+          {
+            "batch_size": 4,
+            "candidate": {
+              "position": 1,
+              "request_index": 1,
+              "survival_probability": 0.8
+            },
+            "capacity": 2,
+            "expected_tokens": 3.7,
+            "improved": true,
+            "steps_per_second": 0.8,
+            "stopped": false,
+            "throughput": 2.9600000000000004
+          },
+          {
+            "batch_size": 5,
+            "candidate": {
+              "position": 2,
+              "request_index": 1,
+              "survival_probability": 0.6000000000000001
+            },
+            "capacity": 3,
+            "expected_tokens": 4.3,
+            "improved": false,
+            "steps_per_second": 0.65,
+            "stopped": true,
+            "throughput": 2.795
+          }
+        ]
+      },
+      "historical_confidence_probabilities": null,
+      "mode": "causal_greedy",
+      "steps_per_second": {
+        "2": 1.0,
+        "3": 0.9,
+        "4": 0.8,
+        "5": 0.65,
+        "6": 0.55,
+        "7": 0.5,
+        "8": 0.45
+      }
+    },
+    {
+      "case_id": "appendix-a-high",
+      "confidence_probabilities": [
+        [
+          0.8,
+          0.9
+        ]
+      ],
+      "expected": {
+        "allocation_expected_tokens": 1.0,
+        "allocation_order": [],
+        "allocation_throughput": 1.0,
+        "baseline_throughput": 1.0,
+        "batch_size": 1,
+        "capacity": 0,
+        "capacity_expected_tokens": 1.0,
+        "capacity_order": [
+          {
+            "position": 1,
+            "request_index": 0,
+            "survival_probability": 0.8
+          },
+          {
+            "position": 2,
+            "request_index": 0,
+            "survival_probability": 0.7200000000000001
+          }
+        ],
+        "capacity_throughput": 1.0,
+        "lengths": [
+          0
+        ],
+        "mode": "causal_greedy",
+        "stopped_early": true,
+        "trace": [
+          {
+            "batch_size": 2,
+            "candidate": {
+              "position": 1,
+              "request_index": 0,
+              "survival_probability": 0.8
+            },
+            "capacity": 1,
+            "expected_tokens": 1.8,
+            "improved": false,
+            "steps_per_second": 0.5,
+            "stopped": true,
+            "throughput": 0.9
+          }
+        ]
+      },
+      "historical_confidence_probabilities": null,
+      "mode": "causal_greedy",
+      "steps_per_second": {
+        "1": 1.0,
+        "2": 0.5,
+        "3": 0.45
+      }
+    },
+    {
+      "case_id": "appendix-a-low",
+      "confidence_probabilities": [
+        [
+          0.8,
+          0.0
+        ]
+      ],
+      "expected": {
+        "allocation_expected_tokens": 1.0,
+        "allocation_order": [],
+        "allocation_throughput": 1.0,
+        "baseline_throughput": 1.0,
+        "batch_size": 1,
+        "capacity": 0,
+        "capacity_expected_tokens": 1.0,
+        "capacity_order": [
+          {
+            "position": 1,
+            "request_index": 0,
+            "survival_probability": 0.8
+          }
+        ],
+        "capacity_throughput": 1.0,
+        "lengths": [
+          0
+        ],
+        "mode": "causal_greedy",
+        "stopped_early": true,
+        "trace": [
+          {
+            "batch_size": 2,
+            "candidate": {
+              "position": 1,
+              "request_index": 0,
+              "survival_probability": 0.8
+            },
+            "capacity": 1,
+            "expected_tokens": 1.8,
+            "improved": false,
+            "steps_per_second": 0.5,
+            "stopped": true,
+            "throughput": 0.9
+          }
+        ]
+      },
+      "historical_confidence_probabilities": null,
+      "mode": "causal_greedy",
+      "steps_per_second": {
+        "1": 1.0,
+        "2": 0.5,
+        "3": 0.45
+      }
+    },
+    {
+      "case_id": "jagged-lagged",
+      "confidence_probabilities": [
+        [
+          0.55,
+          0.4,
+          0.4
+        ],
+        [
+          0.9,
+          0.85,
+          0.2
+        ]
+      ],
+      "expected": {
+        "allocation_expected_tokens": 4.215,
+        "allocation_order": [
+          {
+            "position": 1,
+            "request_index": 1,
+            "survival_probability": 0.9
+          },
+          {
+            "position": 2,
+            "request_index": 1,
+            "survival_probability": 0.765
+          },
+          {
+            "position": 1,
+            "request_index": 0,
+            "survival_probability": 0.55
+          }
+        ],
+        "allocation_throughput": 2.48685,
+        "baseline_throughput": 2.0,
+        "batch_size": 5,
+        "capacity": 3,
+        "capacity_expected_tokens": 4.61,
+        "capacity_order": [
+          {
+            "position": 1,
+            "request_index": 0,
+            "survival_probability": 0.95
+          },
+          {
+            "position": 1,
+            "request_index": 1,
+            "survival_probability": 0.9
+          },
+          {
+            "position": 2,
+            "request_index": 0,
+            "survival_probability": 0.76
+          },
+          {
+            "position": 3,
+            "request_index": 0,
+            "survival_probability": 0.6080000000000001
+          },
+          {
+            "position": 2,
+            "request_index": 1,
+            "survival_probability": 0.45
+          },
+          {
+            "position": 3,
+            "request_index": 1,
+            "survival_probability": 0.225
+          }
+        ],
+        "capacity_throughput": 2.7199,
+        "lengths": [
+          1,
+          2
+        ],
+        "mode": "lagged_topk",
+        "stopped_early": false,
+        "trace": [
+          {
+            "batch_size": 3,
+            "candidate": {
+              "position": 1,
+              "request_index": 0,
+              "survival_probability": 0.95
+            },
+            "capacity": 1,
+            "expected_tokens": 2.95,
+            "improved": true,
+            "steps_per_second": 0.9,
+            "stopped": false,
+            "throughput": 2.6550000000000002
+          },
+          {
+            "batch_size": 4,
+            "candidate": {
+              "position": 1,
+              "request_index": 1,
+              "survival_probability": 0.9
+            },
+            "capacity": 2,
+            "expected_tokens": 3.85,
+            "improved": false,
+            "steps_per_second": 0.6,
+            "stopped": false,
+            "throughput": 2.31
+          },
+          {
+            "batch_size": 5,
+            "candidate": {
+              "position": 2,
+              "request_index": 0,
+              "survival_probability": 0.76
+            },
+            "capacity": 3,
+            "expected_tokens": 4.61,
+            "improved": true,
+            "steps_per_second": 0.59,
+            "stopped": false,
+            "throughput": 2.7199
+          },
+          {
+            "batch_size": 6,
+            "candidate": {
+              "position": 3,
+              "request_index": 0,
+              "survival_probability": 0.6080000000000001
+            },
+            "capacity": 4,
+            "expected_tokens": 5.218,
+            "improved": false,
+            "steps_per_second": 0.45,
+            "stopped": false,
+            "throughput": 2.3481
+          },
+          {
+            "batch_size": 7,
+            "candidate": {
+              "position": 2,
+              "request_index": 1,
+              "survival_probability": 0.45
+            },
+            "capacity": 5,
+            "expected_tokens": 5.668,
+            "improved": false,
+            "steps_per_second": 0.4,
+            "stopped": false,
+            "throughput": 2.2672000000000003
+          },
+          {
+            "batch_size": 8,
+            "candidate": {
+              "position": 3,
+              "request_index": 1,
+              "survival_probability": 0.225
+            },
+            "capacity": 6,
+            "expected_tokens": 5.893,
+            "improved": false,
+            "steps_per_second": 0.35,
+            "stopped": false,
+            "throughput": 2.06255
+          }
+        ]
+      },
+      "historical_confidence_probabilities": [
+        [
+          0.95,
+          0.8,
+          0.8
+        ],
+        [
+          0.9,
+          0.5,
+          0.5
+        ]
+      ],
+      "mode": "lagged_topk",
+      "steps_per_second": {
+        "2": 1.0,
+        "3": 0.9,
+        "4": 0.6,
+        "5": 0.59,
+        "6": 0.45,
+        "7": 0.4,
+        "8": 0.35
+      }
+    }
+  ],
+  "claim_boundary": "CPU arithmetic and causal-trace conformance for DSpark Algorithm 1 and Section 5.2 on supplied calibrated probability and SPS tables; not input temporal provenance or request-slot alignment, STS calibration, target rejection sampling, end-to-end distribution preservation, hardware profiling, optimized kernels, serving throughput, or model-quality evidence.",
+  "expected_sha256": "a6c94a51ef6dccf186d4180bb137ae4280c6e2b09671e16c1d6f33f4f666b05a",
+  "fixture_sha256": "1a61f7ff2fa70d2c73042eed3bccb85583ce3f5fb2a7bd07f8763d55ca71093f",
+  "kind": "dspark-scheduler-vectors",
+  "schema_version": 1,
+  "source": {
+    "paper": "arXiv:2607.05147v1",
+    "paper_markdown_sha256": "6a0b9338cf1b6eb062a2a73b2bd91831fd3eae542683e1b24801c067acb654e4",
+    "scheduler_sections": "Algorithm 1, Section 5.2, Appendix A"
+  },
+  "tie_break": "survival descending, one-based position ascending, request index ascending",
+  "vector_set_id": "dspark-scheduler-v1"
+}

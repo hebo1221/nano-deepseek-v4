@@ -1,0 +1,134 @@
+{
+  "acceptance": {
+    "minimum_validation_loss_reduction": 2.0
+  },
+  "contract_id": "tiny-text-cpu-v1",
+  "expected_result": {
+    "bundle_format": "nano-deepseek-v4-pretrained",
+    "bundle_format_version": 2,
+    "bundle_verification": {
+      "checksums_verified": true,
+      "generation_ready": true,
+      "is_complete": true,
+      "shard_headers_verified": true,
+      "tokenizer_verified": true
+    },
+    "checkpoint_round_trip_match": true,
+    "config_sha256": "3829a174d4f1102e001c66cc1e29a885b2f9960a5fde8499dd629cd63f1ca623",
+    "corpus_sha256": "8c6c2bce0af2b9ec6936306952fc3e8c74b15dcdc140d6255dd3d5124d17a846",
+    "optimizer_names": [
+      "Muon",
+      "AdamW"
+    ],
+    "parameter_count": 246590,
+    "prompt_text": ".\nHeavily compre",
+    "result_schema_version": 3,
+    "tokenizer_format": "nano-deepseek-v4-tokenizer",
+    "tokenizer_format_version": 1,
+    "tokenizer_round_trip_match": true,
+    "tokenizer_type": "byte-v1",
+    "trainable_parameter_count": 246590,
+    "trained_tokens": 2560
+  },
+  "historical_runs": [
+    {
+      "environment": {
+        "device": "cpu",
+        "machine": "aarch64",
+        "python_version": "3.11.15",
+        "torch_version": "2.13.0+cu130"
+      },
+      "id": "linux-aarch64-py311-torch2.13-cu130-4de50c44",
+      "implementation_sha256": "4de50c44bfa2be7b33d7920536bbb7fb733bc0061cc9338093cf83cd4e86678e",
+      "observations": {
+        "bundle_format_version": 2,
+        "bundle_manifest_sha256": "507bdc302dcf3895579eeac0b2c6fc507a71d0c1de147ab691754dcfbaad7626",
+        "checkpoint_round_trip_match": true,
+        "final_eval_loss": 4.558489203453064,
+        "final_train_loss": 4.654114723205566,
+        "initial_eval_loss": 7.240200519561768,
+        "sample_text": ".\nHeavily compreeeeeeeeneeeeeeeeeeeeeeeeeeeeeeee",
+        "tokenizer_round_trip_match": true,
+        "tokenizer_sha256": "ed2f19ce752f7a537fa58751fc0b72f9cae48ceb3acf137ae82a73f0edc54abd"
+      }
+    },
+    {
+      "environment": {
+        "device": "cpu",
+        "machine": "aarch64",
+        "python_version": "3.11.15",
+        "torch_version": "2.13.0+cu130"
+      },
+      "id": "linux-aarch64-py311-torch2.13-cu130-fa973450",
+      "implementation_sha256": "fa97345078d24972e9f05486595858e6f71b0c53a2eed115d3270fe119401549",
+      "observations": {
+        "bundle_format_version": 2,
+        "bundle_manifest_sha256": "507bdc302dcf3895579eeac0b2c6fc507a71d0c1de147ab691754dcfbaad7626",
+        "checkpoint_round_trip_match": true,
+        "final_eval_loss": 4.558489203453064,
+        "final_train_loss": 4.654114723205566,
+        "initial_eval_loss": 7.240200519561768,
+        "sample_text": ".\nHeavily compreeeeeeeeneeeeeeeeeeeeeeeeeeeeeeee",
+        "tokenizer_round_trip_match": true,
+        "tokenizer_sha256": "ed2f19ce752f7a537fa58751fc0b72f9cae48ceb3acf137ae82a73f0edc54abd"
+      }
+    },
+    {
+      "environment": {
+        "device": "cpu",
+        "machine": "aarch64",
+        "python_version": "3.11.15",
+        "torch_version": "2.13.0+cu130"
+      },
+      "id": "linux-aarch64-py311-torch2.13-cu130-dad61a66",
+      "implementation_sha256": "dad61a6668ca59b6b86cb4adf1bfb253ef0c9b178b650b7d7ca96ff2eb2565b0",
+      "observations": {
+        "bundle_format_version": 2,
+        "bundle_manifest_sha256": "507bdc302dcf3895579eeac0b2c6fc507a71d0c1de147ab691754dcfbaad7626",
+        "checkpoint_round_trip_match": true,
+        "final_eval_loss": 4.558489203453064,
+        "final_train_loss": 4.654114723205566,
+        "initial_eval_loss": 7.240200519561768,
+        "sample_text": ".\nHeavily compreeeeeeeeneeeeeeeeeeeeeeeeeeeeeeee",
+        "tokenizer_round_trip_match": true,
+        "tokenizer_sha256": "ed2f19ce752f7a537fa58751fc0b72f9cae48ceb3acf137ae82a73f0edc54abd"
+      }
+    },
+    {
+      "environment": {
+        "device": "cpu",
+        "machine": "aarch64",
+        "python_version": "3.11.15",
+        "torch_version": "2.13.0+cu130"
+      },
+      "id": "linux-aarch64-py311-torch2.13-cu130-32ee4b85",
+      "implementation_sha256": "32ee4b851dff4d839c34e6af899ede72f83218c3887ff0d413a7eddaa96f818b",
+      "observations": {
+        "bundle_format_version": 2,
+        "bundle_manifest_sha256": "507bdc302dcf3895579eeac0b2c6fc507a71d0c1de147ab691754dcfbaad7626",
+        "checkpoint_round_trip_match": true,
+        "final_eval_loss": 4.558489203453064,
+        "final_train_loss": 4.654114723205566,
+        "initial_eval_loss": 7.240200519561768,
+        "sample_text": ".\nHeavily compreeeeeeeeneeeeeeeeeeeeeeeeeeeeeeee",
+        "tokenizer_round_trip_match": true,
+        "tokenizer_sha256": "ed2f19ce752f7a537fa58751fc0b72f9cae48ceb3acf137ae82a73f0edc54abd"
+      }
+    }
+  ],
+  "kind": "tiny-text-cpu-reproduction-contract",
+  "recipe": {
+    "batch_size": 4,
+    "context_length": 32,
+    "device": "cpu",
+    "eval_batches": 4,
+    "learning_rate": 0.002,
+    "max_new_tokens": 32,
+    "prompt": null,
+    "seed": 0,
+    "steps": 20,
+    "temperature": null,
+    "top_p": 1.0
+  },
+  "schema_version": 3
+}

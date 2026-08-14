@@ -16,6 +16,8 @@ from nano_deepseek_v4 import (
     build_deepseek_official_checkpoint_streaming_load_report,
     convert_deepseek_official_state_dict,
     dequantize_with_scale,
+    estimate_deepseek_v4_parameter_counts,
+    inspect_deepseek_checkpoint_namespace,
     load_deepseek_official_checkpoint,
     load_deepseek_v4_cache,
     load_safetensors_checkpoint,
@@ -100,6 +102,65 @@ def _streaming_test_config() -> DeepSeekV4Config:
         num_nextn_predict_layers=0,
         partial_rotary_factor=0.5,
     )
+
+
+def _namespace_test_config() -> DeepSeekV4Config:
+    return DeepSeekV4Config(
+        **{
+            **_streaming_test_config().to_dict(),
+            "num_nextn_predict_layers": 1,
+            "mtp_layer_types": ["sliding_attention"],
+        }
+    )
+
+
+def _write_official_config(path: Path, config: DeepSeekV4Config) -> None:
+    ratio_by_type = {
+        "sliding_attention": 0,
+        "compressed_sparse_attention": config.compress_rates[
+            "compressed_sparse_attention"
+        ],
+        "heavily_compressed_attention": config.compress_rates[
+            "heavily_compressed_attention"
+        ],
+    }
+    payload = {
+        "vocab_size": config.vocab_size,
+        "hidden_size": config.hidden_size,
+        "moe_intermediate_size": config.moe_intermediate_size,
+        "num_hidden_layers": config.num_hidden_layers,
+        "num_attention_heads": config.num_attention_heads,
+        "num_key_value_heads": config.num_key_value_heads,
+        "head_dim": config.head_dim,
+        "q_lora_rank": config.q_lora_rank,
+        "num_experts_per_tok": config.num_experts_per_tok,
+        "n_routed_experts": config.n_routed_experts,
+        "n_shared_experts": config.n_shared_experts,
+        "routed_scaling_factor": config.routed_scaling_factor,
+        "max_position_embeddings": config.max_position_embeddings,
+        "compress_rate_csa": config.compress_rates["compressed_sparse_attention"],
+        "compress_rate_hca": config.compress_rates[
+            "heavily_compressed_attention"
+        ],
+        "compress_ratios": [
+            ratio_by_type[layer_type]
+            for layer_type in [*(config.layer_types or []), *(config.mtp_layer_types or [])]
+        ],
+        "num_hash_layers": config.num_hash_layers,
+        "hc_mult": config.hc_mult,
+        "hc_sinkhorn_iters": config.hc_sinkhorn_iters,
+        "hc_eps": config.hc_eps,
+        "sliding_window": config.sliding_window,
+        "o_groups": config.o_groups,
+        "o_lora_rank": config.o_lora_rank,
+        "index_n_heads": config.index_n_heads,
+        "index_head_dim": config.index_head_dim,
+        "index_topk": config.index_topk,
+        "num_nextn_predict_layers": config.num_nextn_predict_layers,
+        "qk_rope_head_dim": config.qk_rope_head_dim,
+        "rms_norm_eps": config.rms_norm_eps,
+    }
+    path.write_text(json.dumps(payload))
 
 
 def test_official_converter_maps_simple_model_and_layer_keys():
@@ -189,6 +250,91 @@ def test_checkpoint_snapshot_reports_corrupt_safetensors_header(tmp_path: Path):
     assert any("metadata check failed" in error for error in report.index_metadata_errors)
 
 
+def test_checkpoint_namespace_inspection_binds_shapes_dtypes_and_counts(
+    tmp_path: Path,
+):
+    config = _namespace_test_config()
+    checkpoint = tmp_path / "namespace"
+    expected_shapes = _expected_official_tensor_shapes(config)
+    tensors = {key: torch.zeros(shape) for key, shape in expected_shapes.items()}
+    save_sharded_safetensors(tensors, checkpoint, max_tensors_per_shard=16)
+    _write_official_config(checkpoint / "config.json", config)
+
+    report = inspect_deepseek_checkpoint_namespace(checkpoint, "mtp.0")
+    without_mtp = DeepSeekV4Config.from_dict(
+        config.to_dict(),
+        num_nextn_predict_layers=0,
+        mtp_layer_types=[],
+    )
+    with_counts = estimate_deepseek_v4_parameter_counts(config)
+    without_counts = estimate_deepseek_v4_parameter_counts(without_mtp)
+    expected_mtp_keys = {
+        key for key in expected_shapes if key.startswith("mtp.0.")
+    }
+
+    assert report.is_complete
+    assert report.snapshot_preflight_complete
+    assert report.indexed_tensor_count == len(expected_mtp_keys)
+    assert report.inspected_tensor_count == report.indexed_tensor_count
+    assert report.non_scale_tensor_count == len(expected_mtp_keys)
+    assert report.scale_tensor_count == 0
+    assert report.scaled_tensor_count == 0
+    assert report.quantized_tensor_count == 0
+    assert report.dtype_counts == {"F32": report.indexed_tensor_count}
+    assert report.logical_model_parameter_count == (
+        with_counts["model_parameters"] - without_counts["model_parameters"]
+    )
+    assert report.non_parameter_routing_state_count == (
+        with_counts["non_parameter_routing_state"]
+        - without_counts["non_parameter_routing_state"]
+    )
+    assert len(report.index_sha256) == 64
+    assert len(report.inventory_sha256) == 64
+    assert report.stored_tensor_bytes > 0
+    assert report.errors == []
+
+    invalid = tmp_path / "invalid-namespace"
+    tensors["mtp.0.e_proj.weight"] = torch.zeros(1, 1)
+    save_sharded_safetensors(tensors, invalid, max_tensors_per_shard=16)
+    _write_official_config(invalid / "config.json", config)
+    invalid_report = inspect_deepseek_checkpoint_namespace(invalid, "mtp")
+
+    assert not invalid_report.is_complete
+    assert any("mtp.0.e_proj.weight" in item for item in invalid_report.shape_mismatches)
+
+    missing_scale = tmp_path / "missing-scale"
+    tensors["mtp.0.e_proj.weight"] = torch.zeros(
+        expected_shapes["mtp.0.e_proj.weight"],
+        dtype=torch.float8_e4m3fn,
+    )
+    save_sharded_safetensors(tensors, missing_scale, max_tensors_per_shard=16)
+    _write_official_config(missing_scale / "config.json", config)
+    missing_scale_report = inspect_deepseek_checkpoint_namespace(
+        missing_scale,
+        "mtp",
+    )
+
+    assert not missing_scale_report.is_complete
+    assert any("missing scale sidecar" in item for item in missing_scale_report.errors)
+
+
+def test_checkpoint_namespace_rejects_invalid_or_absent_names(tmp_path: Path):
+    with pytest.raises(ValueError, match="dot-separated identifier"):
+        inspect_deepseek_checkpoint_namespace(tmp_path, "../mtp")
+
+    config = _namespace_test_config()
+    checkpoint = tmp_path / "absent"
+    tensors = {
+        key: torch.zeros(shape)
+        for key, shape in _expected_official_tensor_shapes(config).items()
+    }
+    save_sharded_safetensors(tensors, checkpoint)
+    _write_official_config(checkpoint / "config.json", config)
+
+    with pytest.raises(ValueError, match="no keys in namespace"):
+        inspect_deepseek_checkpoint_namespace(checkpoint, "mtp.9")
+
+
 @pytest.mark.parametrize("shard_path", ["../outside.safetensors", "/tmp/outside.safetensors"])
 def test_checkpoint_index_rejects_paths_outside_snapshot(tmp_path: Path, shard_path: str):
     checkpoint = tmp_path / "unsafe"
@@ -251,17 +397,31 @@ def test_cache_persistence_accepts_compression_boundaries(
     remainder = seen_tokens % 4
     windows = seen_tokens // 4
     assert restored.layers[0].buffer_kv == {}
-    assert restored.layers[1].buffer_kv["compressor"].shape == (1, remainder, 4)
-    assert restored.layers[1].compressed_kv.get("compressor", torch.empty(1, 0, 4)).shape == (
+    csa_buffer = restored.layers[1].buffer_kv["compressor"]
+    csa_compressed = restored.layers[1].compressed_kv.get(
+        "compressor", torch.empty(1, 0, 4)
+    )
+    hca_compressor_buffer = restored.layers[2].buffer_kv["compressor"]
+    hca_indexer_buffer = restored.layers[2].buffer_kv["indexer"]
+    assert csa_buffer is not None
+    assert csa_compressed is not None
+    assert hca_compressor_buffer is not None
+    assert hca_indexer_buffer is not None
+    assert csa_buffer.shape == (1, remainder, 4)
+    assert csa_compressed.shape == (
         1,
         windows,
         4,
     )
-    assert restored.layers[2].buffer_kv["compressor"].shape == (1, remainder, 8)
-    assert restored.layers[2].buffer_kv["indexer"].shape == (1, remainder, 8)
+    assert hca_compressor_buffer.shape == (1, remainder, 8)
+    assert hca_indexer_buffer.shape == (1, remainder, 8)
     if windows:
-        assert restored.layers[2].overlap_kv["compressor"].shape == (1, 4, 4)
-        assert restored.layers[2].overlap_kv["indexer"].shape == (1, 4, 4)
+        hca_compressor_overlap = restored.layers[2].overlap_kv["compressor"]
+        hca_indexer_overlap = restored.layers[2].overlap_kv["indexer"]
+        assert hca_compressor_overlap is not None
+        assert hca_indexer_overlap is not None
+        assert hca_compressor_overlap.shape == (1, 4, 4)
+        assert hca_indexer_overlap.shape == (1, 4, 4)
     else:
         assert restored.layers[2].overlap_kv == {}
 
@@ -293,9 +453,15 @@ def test_cache_persistence_accepts_pristine_and_cropped_short_states(tmp_path: P
             model_revision=_MODEL_REVISION,
         )
         assert restored.seen_tokens == target
-        assert restored.layers[0].local_positions.shape == (1, target)
-        assert restored.layers[1].compressed_positions["compressor"].shape == (1, 0)
-        assert restored.layers[2].compressed_positions["indexer"].shape == (1, 0)
+        local_positions = restored.layers[0].local_positions
+        csa_compressed_positions = restored.layers[1].compressed_positions["compressor"]
+        hca_indexer_positions = restored.layers[2].compressed_positions["indexer"]
+        assert local_positions is not None
+        assert csa_compressed_positions is not None
+        assert hca_indexer_positions is not None
+        assert local_positions.shape == (1, target)
+        assert csa_compressed_positions.shape == (1, 0)
+        assert hca_indexer_positions.shape == (1, 0)
         assert restored.layers[2].overlap_positions == {}
 
 
@@ -545,6 +711,41 @@ def test_streaming_checkpoint_report_validates_every_tensor_shape(tmp_path: Path
     assert not invalid.is_complete
     assert invalid.converted_tensor_count == len(expected_shapes) - 1
     assert any("embed.weight" in error and "shape mismatch" in error for error in invalid.errors)
+
+
+def test_official_routing_state_strictly_matches_mixed_backbone_and_mtp():
+    config = DeepSeekV4Config(
+        vocab_size=16,
+        hidden_size=8,
+        moe_intermediate_size=12,
+        num_hidden_layers=2,
+        num_attention_heads=2,
+        head_dim=4,
+        q_lora_rank=4,
+        num_experts_per_tok=1,
+        n_routed_experts=2,
+        num_hash_layers=1,
+        hc_mult=2,
+        o_groups=1,
+        o_lora_rank=4,
+        index_n_heads=2,
+        index_head_dim=4,
+        index_topk=2,
+        num_nextn_predict_layers=1,
+        partial_rotary_factor=0.5,
+    )
+    model = DeepSeekV4ForCausalLM(config)
+    official = {
+        key: torch.zeros(shape)
+        for key, shape in _expected_official_tensor_shapes(config).items()
+    }
+
+    converted, report = convert_deepseek_official_state_dict(official, model)
+    incompatible = model.load_state_dict(converted, strict=True)
+
+    assert report.unconverted_keys == []
+    assert incompatible.missing_keys == []
+    assert incompatible.unexpected_keys == []
 
 
 def test_streaming_report_accepts_relative_checkpoint_directory(

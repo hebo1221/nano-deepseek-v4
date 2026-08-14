@@ -1,0 +1,177 @@
+{
+  "acceptance": {
+    "checkpoint_round_trip_match": true,
+    "maximum_final_eval_loss": 2.5,
+    "minimum_validation_loss_reduction": 4.0
+  },
+  "artifacts": {
+    "all_sliding_bundle_manifest_sha256": "34cec0044da75eb47832c8d6c105139ad05039be406e0f45d60e45b2ee293170",
+    "all_sliding_config_file": "references/tiny-shakespeare-all-sliding-control-config.json",
+    "all_sliding_config_file_sha256": "f9e067e0fc1ca83dcba38aa0b573467dabdabba6824718ee16d2faa1ebbcc246",
+    "evaluation_report": "references/tiny-shakespeare-attention-control-evaluation.json",
+    "evaluation_report_sha256": "9aea68f6fb7343efde60ddf0017fd88c94fab912175be0b8e5c025919319868f",
+    "evaluator_source": "nano_deepseek_v4/compare_bundles.py",
+    "evaluator_source_sha256": "b33d26fe697d1cf768391ab861cd6a00c26b80135d4fdbbc47207c9f6bad498c",
+    "hybrid_receipt": "references/tiny-shakespeare-training-baseline.json",
+    "hybrid_receipt_sha256": "3ecf1a69529aa9e7ca9bf51e2d2653c510307cc7ccdfd530ff595c771c90f930"
+  },
+  "claim_boundary": [
+    "This is a single-training-seed, short-context control experiment, not an architecture superiority result.",
+    "The 256 paired validation batches reduce evaluation-sample noise but do not measure training-seed variance.",
+    "Randomly sampled byte windows overlap, so normal-approximation intervals are descriptive rather than inferential confidence intervals.",
+    "The observed throughput applies to this eager PyTorch implementation on one NVIDIA GB10."
+  ],
+  "command": [
+    "nano-deepseek-v4-train",
+    "--text-file",
+    "data/tiny-shakespeare/input.txt",
+    "--config",
+    "references/tiny-shakespeare-all-sliding-control-config.json",
+    "--steps",
+    "5000",
+    "--context-length",
+    "128",
+    "--batch-size",
+    "4",
+    "--eval-batches",
+    "8",
+    "--learning-rate",
+    "3e-4",
+    "--seed",
+    "1337",
+    "--device",
+    "cuda",
+    "--max-new-tokens",
+    "300",
+    "--prompt",
+    "\nROMEO:",
+    "--temperature",
+    "0.8",
+    "--top-p",
+    "0.9",
+    "--save-directory",
+    "checkpoints/tiny-shakespeare-all-sliding-5000",
+    "--json"
+  ],
+  "corpus_sha256": "86c4e6aa9db7c042ec79f339dcb96d42b0075e16b8fc2e86bf0ca57e2dc565ed",
+  "derived_comparison": {
+    "all_sliding_parameter_percent_smaller": 0.7220761807307574,
+    "all_sliding_throughput_percent_higher": 5.756098615808192,
+    "final_eval_loss_hybrid_minus_all_sliding": 0.011266499757766724,
+    "interpretation": "No quality separation is supported here; all-sliding was measurably faster in this short-context eager run."
+  },
+  "design": {
+    "attention_factor": {
+      "all_sliding": [
+        "sliding_attention",
+        "sliding_attention",
+        "sliding_attention"
+      ],
+      "hybrid": [
+        "sliding_attention",
+        "compressed_sparse_attention",
+        "heavily_compressed_attention"
+      ]
+    },
+    "controlled_fields": [
+      "corpus bytes and 90/10 split",
+      "training and validation random seeds",
+      "training steps, batch size, context length, and sampled byte windows",
+      "hidden size, MoE dimensions and routing schedule, MTP schedule, tokenizer, optimizer, and learning rate",
+      "generation prompts, sampling parameters, and prompt-specific seeds"
+    ],
+    "implementation_sha256": "ee41cd36f812dcf683986de6e7fb45bd200c65cbad7268acd5a88e58da156584",
+    "training_seed": 1337
+  },
+  "generation_probes": [
+    {
+      "prompt": "\nJULIET:",
+      "seed": 20260811,
+      "text": "\nJULIET:\nOn my mastershires, and thy work of my son\nThat would breathe that he will die: I do distray\nthee, thou knows not it in their throne: he shall\nnot find at Prince should be records alone.\n\nKING RICHARD III:\nMy doubt, her love in Sicilia, an"
+    },
+    {
+      "prompt": "\nKING RICHARD III:",
+      "seed": 20260812,
+      "text": "\nKING RICHARD III:\nI am not in the ground.\n\nGREMIO:\nThou dost to come, come, that they did.\nTherefore, gentle mothers in my wife,\nAnd he did make me are bear a lord: and hear\nAnd with him first. I cannot be salt,\nAnd dear bark out of me, he said in me.\nThe g"
+    },
+    {
+      "prompt": "\nFirst Citizen:",
+      "seed": 20260813,
+      "text": "\nFirst Citizen:\nWhich in the loss of mine own for what may sweet pale,\nAnd savage his sovereign them to thee with her;\nAnd they that they will say it is to follow.\nAnd me the presence of the charges\nBy walk in our face that chang the speak.\n\nJULIET:\nWhat "
+    }
+  ],
+  "paired_evaluation": {
+    "batch_size": 4,
+    "batches": 256,
+    "context_length": 128,
+    "models": {
+      "all_sliding": {
+        "causal_lm_loss_mean": 1.5577523119281977,
+        "mtp_loss_mean": 1.5441063814796507,
+        "total_loss_mean": 2.020984226372093
+      },
+      "hybrid": {
+        "causal_lm_loss_mean": 1.560833995323628,
+        "mtp_loss_mean": 1.5477152522653341,
+        "total_loss_mean": 2.0251485710032284
+      }
+    },
+    "paired_hybrid_minus_all_sliding": {
+      "causal_lm": {
+        "descriptive_normal_approx_95pct_interval": [
+          -0.0008544634826712274,
+          0.0070178302735321475
+        ],
+        "mean": 0.00308168339543046,
+        "sample_std": 0.0321318112498097,
+        "standard_error": 0.002008238203113106
+      },
+      "mtp": {
+        "descriptive_normal_approx_95pct_interval": [
+          -0.0002270090630309275,
+          0.007444750634397715
+        ],
+        "mean": 0.0036088707856833935,
+        "sample_std": 0.031313304887463846,
+        "standard_error": 0.0019570815554664904
+      },
+      "total": {
+        "descriptive_normal_approx_95pct_interval": [
+          -0.00009461928131125792,
+          0.008423308543582185
+        ],
+        "mean": 0.004164344631135464,
+        "sample_std": 0.03476705234650385,
+        "standard_error": 0.002172940771656491
+      }
+    },
+    "validation_seed": 1338
+  },
+  "runs": {
+    "all_sliding": {
+      "bundle_manifest_sha256": "34cec0044da75eb47832c8d6c105139ad05039be406e0f45d60e45b2ee293170",
+      "checkpoint_round_trip_match": true,
+      "config_sha256": "47b330867d60e0acb4187585788336f9606fb1d135ba5a31d9a768a463c0a65b",
+      "elapsed_seconds": 454.6846755730221,
+      "final_eval_loss": 1.9643919616937637,
+      "final_train_loss": 1.7752259969711304,
+      "initial_eval_loss": 7.228212833404541,
+      "parameter_count": 8440758,
+      "sample_text": "\nROMEO:\nHow, and here is more purse my father's loudes.\n\nBRUTUS:\nYes, by the people have I to the prove.\n\nRIVERS:\nWhere lies you say, to heart your lordships, and we\ndear was you in her seat and lose a person.\nThe approach think to the while will seem.\n\nKING RICHARD III:\nSay he be content where the very sp",
+      "tokens_per_second": 5630.275523963343
+    },
+    "hybrid": {
+      "bundle_manifest_sha256": "2caf6c357f2c75622b70fbbac44a6ea914a6227d264ccd1de7ec0ad29a3f500e",
+      "checkpoint_round_trip_match": true,
+      "config_sha256": "f32f6a5001932fb53856964228062cc893d9ec91c08da225e1ddf7a435c7b5a3",
+      "elapsed_seconds": 480.8567738899728,
+      "final_eval_loss": 1.9756584614515305,
+      "final_train_loss": 1.7517584562301636,
+      "initial_eval_loss": 7.249098360538483,
+      "parameter_count": 8502150,
+      "tokens_per_second": 5323.830585333017
+    }
+  },
+  "schema_version": 1,
+  "status": "complete"
+}

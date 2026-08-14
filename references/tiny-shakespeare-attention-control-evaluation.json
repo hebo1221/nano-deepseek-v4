@@ -1,0 +1,88 @@
+{
+  "batch_size": 4,
+  "batches": 256,
+  "context_length": 128,
+  "corpus_sha256": "86c4e6aa9db7c042ec79f339dcb96d42b0075e16b8fc2e86bf0ca57e2dc565ed",
+  "device": "cuda",
+  "evaluator_sha256": "b33d26fe697d1cf768391ab861cd6a00c26b80135d4fdbbc47207c9f6bad498c",
+  "independent_window_assumption": false,
+  "interval_kind": "descriptive_normal_approximation_over_overlapping_windows",
+  "left": {
+    "bundle_path": "artifacts/tiny-shakespeare/run-5000",
+    "causal_lm_loss": {
+      "mean": 1.560833995323628,
+      "sample_std": 0.13742309080200643,
+      "standard_error": 0.008588943175125402
+    },
+    "config_sha256": "f32f6a5001932fb53856964228062cc893d9ec91c08da225e1ddf7a435c7b5a3",
+    "label": "hybrid",
+    "manifest_sha256": "2caf6c357f2c75622b70fbbac44a6ea914a6227d264ccd1de7ec0ad29a3f500e",
+    "mtp_loss": {
+      "mean": 1.5477152522653341,
+      "sample_std": 0.130100657401377,
+      "standard_error": 0.008131291087586062
+    },
+    "parameter_count": 8502150,
+    "total_loss": {
+      "mean": 2.0251485710032284,
+      "sample_std": 0.1754509149168395,
+      "standard_error": 0.01096568218230247
+    }
+  },
+  "machine": "aarch64",
+  "paired_left_minus_right_causal_lm": {
+    "descriptive_normal_approx_95pct_interval": [
+      -0.0008544634826712274,
+      0.0070178302735321475
+    ],
+    "mean": 0.00308168339543046,
+    "sample_std": 0.0321318112498097,
+    "standard_error": 0.002008238203113106
+  },
+  "paired_left_minus_right_mtp": {
+    "descriptive_normal_approx_95pct_interval": [
+      -0.0002270090630309275,
+      0.007444750634397715
+    ],
+    "mean": 0.0036088707856833935,
+    "sample_std": 0.031313304887463846,
+    "standard_error": 0.0019570815554664904
+  },
+  "paired_left_minus_right_total": {
+    "descriptive_normal_approx_95pct_interval": [
+      -9.461928131125792e-05,
+      0.008423308543582185
+    ],
+    "mean": 0.004164344631135464,
+    "sample_std": 0.03476705234650385,
+    "standard_error": 0.002172940771656491
+  },
+  "python_version": "3.11.15",
+  "right": {
+    "bundle_path": "artifacts/tiny-shakespeare/all-sliding-5000",
+    "causal_lm_loss": {
+      "mean": 1.5577523119281977,
+      "sample_std": 0.13062998219257232,
+      "standard_error": 0.00816437388703577
+    },
+    "config_sha256": "47b330867d60e0acb4187585788336f9606fb1d135ba5a31d9a768a463c0a65b",
+    "label": "all_sliding",
+    "manifest_sha256": "34cec0044da75eb47832c8d6c105139ad05039be406e0f45d60e45b2ee293170",
+    "mtp_loss": {
+      "mean": 1.5441063814796507,
+      "sample_std": 0.12728400627212014,
+      "standard_error": 0.007955250392007509
+    },
+    "parameter_count": 8440758,
+    "total_loss": {
+      "mean": 2.020984226372093,
+      "sample_std": 0.16791834732140107,
+      "standard_error": 0.010494896707587567
+    }
+  },
+  "schema_version": 1,
+  "source": "artifacts/tiny-shakespeare/input.txt",
+  "torch_version": "2.13.0+cu130",
+  "training_seed_variance_measured": false,
+  "validation_seed": 1338
+}

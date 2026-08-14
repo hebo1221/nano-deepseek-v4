@@ -1,0 +1,121 @@
+{
+  "backward_gradients": {
+    "allclose": true,
+    "element_count": 23279,
+    "max_abs_error": 4.656612873077393e-10,
+    "mean_abs_error": 2.7528441938906284e-12
+  },
+  "cache_chunk_sizes": [
+    3,
+    2,
+    1,
+    3
+  ],
+  "cached_decode": {
+    "allclose": true,
+    "element_count": 576,
+    "max_abs_error": 2.9802322387695312e-08,
+    "mean_abs_error": 3.4900343356033168e-09
+  },
+  "compressed_rope": {
+    "allclose": true,
+    "element_count": 384,
+    "max_abs_error": 5.960464477539063e-08,
+    "mean_abs_error": 3.104408582051595e-10
+  },
+  "compressed_rope_inv_freq": {
+    "allclose": true,
+    "element_count": 32,
+    "max_abs_error": 0.0,
+    "mean_abs_error": 0.0
+  },
+  "compressed_rope_theta": 160000.0,
+  "config_sha256": "21a1dce6cc59b95208e38b3ca800357a26cdf195ac72f384ee488ff7cc1eb33e",
+  "full_forward": {
+    "allclose": true,
+    "element_count": 576,
+    "max_abs_error": 0.0,
+    "mean_abs_error": 0.0
+  },
+  "gradient_tensor_count": 101,
+  "input_sha256": "df0e6ced59d9d5b9302ce37f9295ba81d6cdcd9264d781a363dba7d5ed9482c2",
+  "input_shape": [
+    2,
+    9
+  ],
+  "main_rope": {
+    "allclose": true,
+    "element_count": 384,
+    "max_abs_error": 5.960464477539063e-08,
+    "mean_abs_error": 3.104408582051595e-10
+  },
+  "main_rope_inv_freq": {
+    "allclose": true,
+    "element_count": 32,
+    "max_abs_error": 0.0,
+    "mean_abs_error": 0.0
+  },
+  "main_rope_theta": 10000.0,
+  "mapped_tensor_count": 104,
+  "mtp_equation_source_revision": "fd53f944496234770ba80e15004f9b6d269a71f5",
+  "mtp_equation_source_sha256": "ce962f1face79d4f633d36436576214057a7e11443c9789935e1deb5c6cd1d71",
+  "mtp_equation_source_url": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash/blob/fd53f944496234770ba80e15004f9b6d269a71f5/inference/model.py",
+  "mtp_hidden_states": {
+    "allclose": true,
+    "element_count": 192,
+    "max_abs_error": 1.4901161193847656e-08,
+    "mean_abs_error": 7.761021455128987e-11
+  },
+  "mtp_residual_streams": {
+    "allclose": true,
+    "element_count": 384,
+    "max_abs_error": 1.4901161193847656e-08,
+    "mean_abs_error": 1.1641532182693481e-10
+  },
+  "native_cache_equivalence": {
+    "allclose": true,
+    "element_count": 576,
+    "max_abs_error": 4.470348358154297e-08,
+    "mean_abs_error": 5.097414638536672e-09
+  },
+  "native_modeling_sha256": "0aaf3fc056b0944e120677b43a8a9c18af623ccf27a11d4f6a69d19127abda96",
+  "passed": true,
+  "python_version": "3.11.15",
+  "reference_cache_equivalence": {
+    "allclose": true,
+    "element_count": 576,
+    "max_abs_error": 4.470348358154297e-08,
+    "mean_abs_error": 4.251382455954121e-09
+  },
+  "reference_config_sha256": "b510849a189785e8467b8e415cbce5f051705025ee40b9a1c13b9add2695505f",
+  "reference_config_source_url": "https://github.com/huggingface/transformers/blob/v5.15.0/src/transformers/models/deepseek_v4/configuration_deepseek_v4.py",
+  "reference_git_commit": "5eddc12edfaf8cafde8c9bae4ccb12f8a139b4f9",
+  "reference_git_tag": "v5.15.0",
+  "reference_modeling_blob": "42f72379de5dcbbd62491dad861c731726ce1bf5",
+  "reference_modeling_sha256": "2452ac70a09875800287f22f86aba6bececd2383f939b4110a1d9ae27965b7b7",
+  "reference_package": "transformers",
+  "reference_rope_utils_sha256": "a8bf3f6a53760366fb5fa51cecc06a8707d3cded36fd8f3ac51e140c0718af21",
+  "reference_rope_utils_source_url": "https://github.com/huggingface/transformers/blob/v5.15.0/src/transformers/modeling_rope_utils.py",
+  "reference_source_url": "https://github.com/huggingface/transformers/blob/v5.15.0/src/transformers/models/deepseek_v4/modeling_deepseek_v4.py",
+  "reference_tensor_count": 89,
+  "reference_version": "5.15.0",
+  "rope_dimension": 64,
+  "rope_position_ids": [
+    0,
+    1,
+    127,
+    65535,
+    65536,
+    1048575
+  ],
+  "rope_scaling": {
+    "beta_fast": 32,
+    "beta_slow": 1,
+    "factor": 16,
+    "original_max_position_embeddings": 65536,
+    "type": "yarn"
+  },
+  "schema_version": 3,
+  "seed": 123,
+  "torch_version": "2.13.0+cu130"
+}
