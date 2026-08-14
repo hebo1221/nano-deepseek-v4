@@ -397,7 +397,7 @@ def _os_network_isolation() -> str:
         return "none"
     try:
         current_netns = os.readlink("/proc/self/ns/net")
-        interfaces = {path.name for path in Path("/sys/class/net").iterdir()}
+        interfaces = {name for _, name in socket.if_nameindex()}
         status_text = Path("/proc/self/status").read_text(encoding="utf-8")
     except OSError:
         return "none"

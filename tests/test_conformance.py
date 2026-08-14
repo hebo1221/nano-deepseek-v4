@@ -1000,6 +1000,39 @@ def test_required_os_network_isolation_is_fail_closed_and_recorded(
     )
 
 
+def test_os_network_isolation_reads_current_namespace_interfaces(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    status = """\
+CapInh:\t0000000000000000
+CapPrm:\t0000000000000000
+CapEff:\t0000000000000000
+CapBnd:\t0000000000000000
+CapAmb:\t0000000000000000
+NoNewPrivs:\t1
+"""
+    monkeypatch.setenv(conformance._OS_ISOLATION_ENV, conformance._LINUX_NETNS)
+    monkeypatch.setenv(conformance._PARENT_NETNS_ENV, "net:[1]")
+    monkeypatch.setenv(conformance._EXPECTED_UID_ENV, "1001")
+    monkeypatch.setenv(conformance._EXPECTED_GID_ENV, "1002")
+    monkeypatch.setattr(conformance.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(conformance.os, "readlink", lambda _path: "net:[2]")
+    monkeypatch.setattr(conformance.os, "geteuid", lambda: 1001)
+    monkeypatch.setattr(conformance.os, "getegid", lambda: 1002)
+    monkeypatch.setattr(conformance.os, "getgroups", lambda: [])
+    monkeypatch.setattr(conformance.Path, "read_text", lambda *_args, **_kwargs: status)
+    monkeypatch.setattr(conformance.socket, "if_nameindex", lambda: [(1, "lo")])
+
+    assert conformance._os_network_isolation() == conformance._LINUX_NETNS
+
+    monkeypatch.setattr(
+        conformance.socket,
+        "if_nameindex",
+        lambda: [(1, "lo"), (2, "eth0")],
+    )
+    assert conformance._os_network_isolation() == "none"
+
+
 def test_process_isolation_receipt_requires_dropped_privileges():
     status = """\
 CapInh:\t0000000000000000
