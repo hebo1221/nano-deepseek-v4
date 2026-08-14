@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import fcntl
 import os
+import socket
 import stat
+import struct
 import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -26,6 +29,22 @@ _TRUSTED_BINARY_PATHS: dict[str, tuple[Path, ...]] = {
 
 class NetworkIsolationError(RuntimeError):
     """Raised when the requested no-network execution boundary is not active."""
+
+
+def _current_network_state() -> tuple[set[str], int]:
+    """Read interfaces and loopback flags from the current network namespace."""
+
+    try:
+        interfaces = {name for _, name in socket.if_nameindex()}
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+            request = struct.pack("256s", b"lo")
+            response = fcntl.ioctl(probe.fileno(), 0x8913, request)
+        loopback_flags = struct.unpack("H", response[16:18])[0]
+    except (OSError, struct.error) as exc:
+        raise NetworkIsolationError(
+            "cannot inspect isolated network interfaces"
+        ) from exc
+    return interfaces, loopback_flags
 
 
 def _status_integer(status_text: str, name: str, *, base: int) -> int:
@@ -170,17 +189,11 @@ def _validate_current_isolation(
     expected_uid: int,
     expected_gid: int,
 ) -> None:
-    try:
-        loopback_flags = int(
-            Path("/sys/class/net/lo/flags").read_text(encoding="utf-8").strip(),
-            16,
-        )
-    except (OSError, ValueError) as exc:
-        raise NetworkIsolationError("cannot read isolated loopback flags") from exc
+    interfaces, loopback_flags = _current_network_state()
     validate_isolation(
         parent_netns=parent_netns,
         current_netns=os.readlink("/proc/self/ns/net"),
-        interfaces={path.name for path in Path("/sys/class/net").iterdir()},
+        interfaces=interfaces,
         loopback_flags=loopback_flags,
         status_text=Path("/proc/self/status").read_text(encoding="utf-8"),
         expected_uid=expected_uid,

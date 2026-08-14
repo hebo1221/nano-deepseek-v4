@@ -335,7 +335,8 @@ def test_minimum_dependencies_job_is_pinned_and_required():
     assert '"torch==2.4.0"' in install
     assert '"numpy==1.24.0"' in install
     assert '"safetensors==0.6.1"' in install
-    assert '"torch": "2.4.0"' in install
+    assert "from packaging.version import Version" in install
+    assert 'Version(torch_version).base_version != "2.4.0"' in install
     assert "torch.version.cuda is not None" in install
     assert 'python -m pip install -e ".[dev]"' in install
     assert "python -m pip check" in install

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import struct
 from pathlib import Path
 
 import pytest
@@ -17,6 +18,36 @@ CapBnd:\t0000000000000000
 CapAmb:\t0000000000000000
 NoNewPrivs:\t1
 """
+
+
+def test_current_network_state_uses_namespace_aware_socket_probes(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    class Probe:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+        def fileno(self) -> int:
+            return 17
+
+    def ioctl(file_descriptor: int, operation: int, request: bytes) -> bytes:
+        assert file_descriptor == 17
+        assert operation == 0x8913
+        response = bytearray(request)
+        response[16:18] = struct.pack("H", 0x9)
+        return bytes(response)
+
+    monkeypatch.setattr(runner.socket, "if_nameindex", lambda: [(1, "lo")])
+    monkeypatch.setattr(runner.socket, "socket", lambda *args: Probe())
+    monkeypatch.setattr(runner.fcntl, "ioctl", ioctl)
+
+    interfaces, loopback_flags = runner._current_network_state()
+
+    assert interfaces == {"lo"}
+    assert loopback_flags == 0x9
 
 
 def test_isolation_validation_accepts_only_loopback_without_capabilities():

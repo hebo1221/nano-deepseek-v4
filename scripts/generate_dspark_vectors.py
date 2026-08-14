@@ -13,9 +13,10 @@ import argparse
 import hashlib
 import json
 import sys
+from collections.abc import Mapping
 from dataclasses import asdict
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import torch
 
@@ -29,6 +30,11 @@ from nano_deepseek_v4.dspark_oracle import (
 )
 
 _DEFAULT_OUTPUT = Path("nano_deepseek_v4/_receipts/dspark-semantic-v1.json")
+_FLOAT_ATOL = 1e-6
+_FLOAT_RTOL = 1e-6
+_INTEGER_RESULT_KEYS = frozenset(
+    {"draft_input_ids", "token_chain", "greedy_token_ids"}
+)
 _VECTOR_SET_ID = "dspark-semantic-v1"
 _CLAIM_BOUNDARY = (
     "Tiny eager FP32 CPU conformance for the DSpark outer draft equations: ordered "
@@ -129,6 +135,84 @@ def _expected_payload(result: DSparkOracleResult) -> dict[str, Any]:
     }
 
 
+def _contains_boolean(value: object) -> bool:
+    if isinstance(value, bool):
+        return True
+    if isinstance(value, list):
+        return any(_contains_boolean(item) for item in value)
+    return False
+
+
+def _expected_tensor_mapping(
+    value: object,
+) -> dict[str, torch.Tensor] | None:
+    if not isinstance(value, dict) or not all(
+        isinstance(key, str) for key in value
+    ):
+        return None
+    payload = cast(dict[str, Any], value)
+    tensors: dict[str, torch.Tensor] = {}
+    for key, item in payload.items():
+        if _contains_boolean(item):
+            return None
+        dtype = torch.int64 if key in _INTEGER_RESULT_KEYS else torch.float32
+        try:
+            tensors[key] = torch.tensor(item, dtype=dtype)
+        except (TypeError, ValueError, RuntimeError):
+            return None
+    return tensors
+
+
+def _tensor_mappings_close(
+    observed: Mapping[str, torch.Tensor],
+    generated: Mapping[str, torch.Tensor],
+) -> bool:
+    if observed.keys() != generated.keys():
+        return False
+    for key in observed:
+        left = observed[key]
+        right = generated[key]
+        if left.shape != right.shape or left.dtype != right.dtype:
+            return False
+        if left.is_floating_point():
+            if not torch.allclose(
+                left,
+                right,
+                atol=_FLOAT_ATOL,
+                rtol=_FLOAT_RTOL,
+            ):
+                return False
+        elif not torch.equal(left, right):
+            return False
+    return True
+
+
+def _payloads_semantically_match(observed_bytes: bytes, generated_bytes: bytes) -> bool:
+    try:
+        observed_value = json.loads(observed_bytes)
+        generated_value = json.loads(generated_bytes)
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return False
+    if not isinstance(observed_value, dict) or not isinstance(generated_value, dict):
+        return False
+    observed = cast(dict[str, Any], observed_value)
+    generated = cast(dict[str, Any], generated_value)
+    ignored = {"expected", "expected_sha256"}
+    observed_static = {key: value for key, value in observed.items() if key not in ignored}
+    generated_static = {key: value for key, value in generated.items() if key not in ignored}
+    if _canonical_json_bytes(observed_static) != _canonical_json_bytes(generated_static):
+        return False
+    observed_tensors = _expected_tensor_mapping(observed.get("expected"))
+    generated_tensors = _expected_tensor_mapping(generated.get("expected"))
+    if observed_tensors is None or generated_tensors is None:
+        return False
+    if observed.get("expected_sha256") != _tensor_stream_sha256(observed_tensors):
+        return False
+    if generated.get("expected_sha256") != _tensor_stream_sha256(generated_tensors):
+        return False
+    return _tensor_mappings_close(observed_tensors, generated_tensors)
+
+
 def build_payload() -> dict[str, Any]:
     fixture = make_tiny_dspark_oracle_fixture()
     result = run_dspark_oracle(fixture.config, fixture.inputs, fixture.weights)
@@ -175,7 +259,7 @@ def main(argv: list[str] | None = None) -> int:
         except OSError as exc:
             print(f"could not read DSpark vectors: {type(exc).__name__}", file=sys.stderr)
             return 1
-        if observed != payload:
+        if observed != payload and not _payloads_semantically_match(observed, payload):
             print("packaged DSpark vectors do not match the generator", file=sys.stderr)
             return 1
         return 0

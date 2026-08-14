@@ -300,7 +300,11 @@ def test_packaged_vector_is_portable_complete_and_hash_bound():
     assert fixture.config.block_size == 5
     assert _fixture_sha256(fixture) == _FIXTURE_SHA256
     oracle = run_dspark_oracle(fixture.config, fixture.inputs, fixture.weights)
-    assert payload["expected_sha256"] == _tensor_mapping_sha256(result_tensor_dict(oracle))
+    assert payload["expected_sha256"] == _tensor_mapping_sha256(fixture.expected)
+    _assert_tensor_mappings_equal(
+        result_tensor_dict(oracle),
+        fixture.expected,
+    )
     _assert_tensor_mappings_equal(
         _tensor_snapshot(rebuilt),
         _tensor_snapshot(fixture),
@@ -707,6 +711,22 @@ def test_vector_generator_check_mode_is_rng_independent_and_non_mutating(
     generator_main = namespace["main"]
     checked_in = Path(__file__).resolve().parents[1] / "nano_deepseek_v4" / _VECTOR_RESOURCE
     checked_in_before = checked_in.read_bytes()
+
+    assert generator_main(["--check", "--output", str(checked_in)]) == 0
+    assert checked_in.read_bytes() == checked_in_before
+    assert capsys.readouterr().err == ""
+
+    drifted = json.loads(checked_in_before)
+    drifted["expected"]["base_logits"][0][0][0] += 5e-7
+    drifted_tensors = namespace["_expected_tensor_mapping"](drifted["expected"])
+    assert drifted_tensors is not None
+    drifted["expected_sha256"] = namespace["_tensor_stream_sha256"](
+        drifted_tensors
+    )
+    drifted_bytes = (
+        json.dumps(drifted, indent=2, sort_keys=True, allow_nan=False) + "\n"
+    ).encode()
+    generator_main.__globals__["_payload_bytes"] = lambda: drifted_bytes
 
     assert generator_main(["--check", "--output", str(checked_in)]) == 0
     assert checked_in.read_bytes() == checked_in_before

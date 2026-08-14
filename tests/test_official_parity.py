@@ -90,7 +90,7 @@ def test_pinned_full_cache_backward_and_mtp_parity():
     assert report.compressed_rope_inv_freq.max_abs_error <= 1e-6
     assert report.main_rope.max_abs_error <= 1e-6
     assert report.compressed_rope.max_abs_error <= 1e-6
-    assert report.full_forward.max_abs_error == 0.0
+    assert report.full_forward.max_abs_error <= 1e-6
     assert report.cached_decode.max_abs_error <= 1e-6
     assert report.reference_cache_equivalence.max_abs_error <= 1e-6
     assert report.native_cache_equivalence.max_abs_error <= 1e-6

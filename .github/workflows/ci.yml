@@ -90,17 +90,22 @@ jobs:
           python -m pip check
           python - <<'PY'
           from importlib.metadata import version
+          from packaging.version import Version
 
           import torch
 
           expected = {
               "numpy": "1.24.0",
               "safetensors": "0.6.1",
-              "torch": "2.4.0",
           }
           actual = {name: version(name) for name in expected}
           if actual != expected:
               raise SystemExit(f"minimum dependency versions drifted: {actual}")
+          torch_version = version("torch")
+          if Version(torch_version).base_version != "2.4.0":
+              raise SystemExit(
+                  f"minimum torch version drifted: {torch_version}"
+              )
           if torch.version.cuda is not None:
               raise SystemExit(f"minimum torch build is not CPU-only: {torch.version.cuda}")
           PY
